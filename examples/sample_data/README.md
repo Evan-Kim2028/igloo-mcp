@@ -1,6 +1,6 @@
 # DeFi DEX Trading Sample Dataset
 
-This sample dataset is **extracted from a real production DeFi analytics pipeline** that processes cryptocurrency trading data from multiple decentralized exchanges (DEXs). It provides realistic, complex data relationships perfect for demonstrating nanuk-mcp capabilities.
+This sample dataset is **extracted from a real production DeFi analytics pipeline** that processes cryptocurrency trading data from multiple decentralized exchanges (DEXs). It provides realistic, complex data relationships perfect for demonstrating igloo-mcp capabilities.
 
 ## Real-World Context
 
@@ -97,7 +97,7 @@ External Data
 - ✅ **Cross-joins**: Price and liquidity data enrichment
 - ✅ **Dynamic Dependencies**: Tables that update each other
 
-## Usage with nanuk-mcp
+## Usage with igloo-mcp
 
 ### Installation
 First, set up the sample dataset:
@@ -208,4 +208,4 @@ examples/sample_data/
     └── mcp_conversation_examples.md
 ```
 
-This dataset provides a rich, realistic foundation for demonstrating all nanuk-mcp capabilities while remaining general enough for any user to understand and extend.
+This dataset provides a rich, realistic foundation for demonstrating all igloo-mcp capabilities while remaining general enough for any user to understand and extend.

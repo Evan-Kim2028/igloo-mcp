@@ -27,8 +27,8 @@ import json
 import sys
 from pathlib import Path
 
-from nanuk_mcp.lineage import LineageQueryService
-from nanuk_mcp.lineage.queries import LineageQueryResult
+from igloo_mcp.lineage import LineageQueryService
+from igloo_mcp.lineage.queries import LineageQueryResult
 
 
 def build_cache(service: LineageQueryService) -> None:

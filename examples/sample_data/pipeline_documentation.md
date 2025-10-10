@@ -178,7 +178,7 @@ The pipeline demonstrates several advanced lineage patterns:
 3. **Complex Views**: FILTERED_DEX_TRADES_VIEW has non-obvious dependencies
 4. **Cross-database References**: BTC analysis references external price data
 
-## Usage Patterns for nanuk-mcp
+## Usage Patterns for igloo-mcp
 
 ### Catalog Generation
 ```bash
@@ -255,4 +255,4 @@ The pipeline handles differences across DEX protocols:
 - Consistent trade direction logic (A_TO_B)
 - Protocol-specific pool naming conventions
 
-This real-world pipeline demonstrates the complexity and business value that nanuk-mcp can help analyze and understand through automated cataloging, lineage analysis, and dependency mapping.
+This real-world pipeline demonstrates the complexity and business value that igloo-mcp can help analyze and understand through automated cataloging, lineage analysis, and dependency mapping.

@@ -1,12 +1,10 @@
 {
   "mcpServers": {
-    "nanuk-mcp": {
-      "command": "uv",
+    "igloo-mcp": {
+      "command": "igloo-mcp",
       "args": [
-        "--directory",
-        "/path/to/nanuk-mcp",
-        "run",
-        "nanuk-mcp"
+        "--profile",
+        "your-profile-name"
       ],
       "env": {
         "SNOWFLAKE_PROFILE": "your-profile-name"
