@@ -30,12 +30,12 @@ For example, asking "What tables are in my database?" triggers the AI to use the
 1. **Install Nanuk MCP**: All MCP functionality is included by default:
    ```bash
    # Standard installation (includes MCP server)
-   pip install nanuk-mcp
+   pip install igloo-mcp
    ```
 
    Or with uv:
    ```bash
-   uv pip install nanuk-mcp
+   uv pip install igloo-mcp
    ```
 
 2. **Configure Snowflake Connection**: Set up a Snowflake CLI connection profile
@@ -65,7 +65,7 @@ The MCP server starts automatically when your AI assistant connects. Simply conf
 **For Manual Testing** (Advanced):
 
 ```bash
-nanuk-mcp
+igloo-mcp
 ```
 
 This starts the server in stdio mode, which is useful for debugging but not needed for normal AI assistant usage. Press `Ctrl+C` to stop the server.
@@ -118,7 +118,7 @@ Create or update your MCP configuration file (usually `~/.vscode/mcp.json`):
     "igloo-tools": {
       "command": "uv",
       "args": ["run", "igloo-mcp"],
-      "cwd": "/path/to/your/nanuk-mcp"
+      "cwd": "/path/to/your/igloo-mcp"
     }
   }
 }
@@ -134,7 +134,7 @@ Add to your Claude Code MCP settings:
     "igloo-tools": {
       "command": "uv",
       "args": ["run", "igloo-mcp"],
-      "cwd": "/path/to/your/nanuk-mcp"
+      "cwd": "/path/to/your/igloo-mcp"
     }
   }
 }

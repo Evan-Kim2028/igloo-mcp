@@ -27,9 +27,9 @@ The MCP server is the primary interface for Nanuk MCP (v2.0+). It exposes Snowfl
 
 ### Core Files
 
-- **`src/nanuk_mcp/mcp_server.py`** - Main MCP server implementation
-- **`src/nanuk_mcp/mcp/tools/`** - MCP tool implementations
-- **`src/nanuk_mcp/service_layer/`** - Business logic services
+- **`src/igloo_mcp/mcp_server.py`** - Main MCP server implementation
+- **`src/igloo_mcp/mcp/tools/`** - MCP tool implementations
+- **`src/igloo_mcp/service_layer/`** - Business logic services
 - **`tests/test_mcp_server.py`** - Comprehensive test suite
 - **`.mcp.json.example`** - Example MCP client configuration
 
@@ -179,8 +179,8 @@ def __init__(self):
 
 #### Mock Strategy
 ```python
-@patch('nanuk_mcp.mcp_server.SnowCLI')
-@patch('nanuk_mcp.mcp_server.get_config')
+@patch('igloo_mcp.mcp_server.SnowCLI')
+@patch('igloo_mcp.mcp_server.get_config')
 def test_tool_functionality(self, mock_get_config, mock_snow_cli_class):
     # Setup mocks
     # Test tool behavior
