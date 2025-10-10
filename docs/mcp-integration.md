@@ -6,12 +6,12 @@ Nanuk MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 
 1. **Install Nanuk MCP**:
    ```bash
-   pip install nanuk-mcp
+   pip install igloo-mcp-mcp
    ```
 
 2. **Start the MCP server**:
    ```bash
-   SNOWFLAKE_PROFILE=my-profile nanuk-mcp
+   SNOWFLAKE_PROFILE=my-profile igloo-mcp-mcp
    ```
 
 3. **Configure your AI assistant** using the examples below.
@@ -25,8 +25,8 @@ Nanuk MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "nanuk-mcp": {
-      "command": "nanuk-mcp",
+    "igloo-mcp-mcp": {
+      "command": "igloo-mcp-mcp",
       "args": ["--profile", "my-profile"],
       "env": {}
     }
@@ -38,8 +38,8 @@ Nanuk MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "nanuk-mcp": {
-      "command": "nanuk-mcp",
+    "igloo-mcp-mcp": {
+      "command": "igloo-mcp-mcp",
       "env": {
         "SNOWFLAKE_PROFILE": "my-profile"
       }
@@ -61,8 +61,8 @@ Nanuk MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "nanuk-mcp": {
-      "command": "nanuk-mcp",
+    "igloo-mcp-mcp": {
+      "command": "igloo-mcp-mcp",
       "args": ["--profile", "my-profile"],
       "cwd": "/path/to/your/project"
     }
@@ -83,8 +83,8 @@ Nanuk MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "nanuk-mcp": {
-      "command": "nanuk-mcp",
+    "igloo-mcp-mcp": {
+      "command": "igloo-mcp-mcp",
       "args": ["--profile", "my-profile"]
     }
   }
@@ -103,8 +103,8 @@ Nanuk MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "nanuk-mcp": {
-      "command": "nanuk-mcp",
+    "igloo-mcp-mcp": {
+      "command": "igloo-mcp-mcp",
       "args": ["--profile", "your-profile-name"]
     }
   }
@@ -115,8 +115,8 @@ Nanuk MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "nanuk-mcp": {
-      "command": "nanuk-mcp",
+    "igloo-mcp-mcp": {
+      "command": "igloo-mcp-mcp",
       "env": {
         "SNOWFLAKE_PROFILE": "your-profile-name"
       }
@@ -157,18 +157,18 @@ ls -la ~/.snowflake/config.toml
 ### AI Assistant Can't Connect
 1. **Verify MCP server is running**:
    ```bash
-   SNOWFLAKE_PROFILE=my-profile nanuk-mcp
+   SNOWFLAKE_PROFILE=my-profile igloo-mcp-mcp
    # Should show "FastMCP 2.0 Server Starting..."
    ```
 
 2. **Check configuration file**:
-   - Ensure correct path to `nanuk`
+   - Ensure correct path to `igloo-mcp`
    - Verify profile name matches
    - Check file permissions
 
 3. **Test with simple query**:
    ```bash
-   echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | SNOWFLAKE_PROFILE=my-profile nanuk-mcp
+   echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | SNOWFLAKE_PROFILE=my-profile igloo-mcp-mcp
    ```
 
 ### Common Errors
@@ -193,12 +193,12 @@ ls -la ~/.snowflake/config.toml
 ```json
 {
   "mcpServers": {
-    "nanuk-mcp-prod": {
-      "command": "nanuk-mcp",
+    "igloo-mcp-mcp-prod": {
+      "command": "igloo-mcp-mcp",
       "args": ["--profile", "prod-profile"]
     },
-    "nanuk-mcp-dev": {
-      "command": "nanuk-mcp",
+    "igloo-mcp-mcp-dev": {
+      "command": "igloo-mcp-mcp",
       "args": ["--profile", "dev-profile"]
     }
   }
@@ -209,8 +209,8 @@ ls -la ~/.snowflake/config.toml
 ```json
 {
   "mcpServers": {
-    "nanuk-mcp": {
-      "command": "nanuk-mcp",
+    "igloo-mcp-mcp": {
+      "command": "igloo-mcp-mcp",
       "args": ["--profile", "my-profile"],
       "env": {
         "SNOWCLI_CATALOG_DIR": "/path/to/custom/catalog"

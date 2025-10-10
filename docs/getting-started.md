@@ -28,14 +28,14 @@
 
 **Option 1: PyPI Installation (Recommended for most users)**
 ```bash
-pip install nanuk-mcp
+pip install igloo-mcp
 ```
 
 **Option 2: Development Installation (For contributors)**
 ```bash
 # Clone and install the project
-git clone https://github.com/Evan-Kim2028/nanuk-mcp
-cd nanuk-mcp
+git clone https://github.com/Evan-Kim2028/igloo-mcp
+cd igloo-mcp
 
 # Install with uv (recommended)
 uv sync
@@ -100,7 +100,7 @@ snow sql -q "SELECT CURRENT_VERSION()" --connection my-profile
 
 ## Step 3: Configure MCP Server
 
-Add nanuk-mcp to your AI assistant's MCP configuration.
+Add igloo-mcp to your AI assistant's MCP configuration.
 
 ### Claude Code Configuration
 
@@ -111,7 +111,7 @@ Edit your Claude Code MCP settings (`~/.config/claude-code/mcp.json`):
 {
   "mcpServers": {
     "snowflake": {
-      "command": "nanuk-mcp",
+      "command": "igloo-mcp",
       "args": ["--profile", "my-profile"]
     }
   }
@@ -126,9 +126,9 @@ Edit your Claude Code MCP settings (`~/.config/claude-code/mcp.json`):
       "command": "uv",
       "args": [
         "--directory",
-        "/path/to/nanuk-mcp",
+        "/path/to/igloo-mcp",
         "run",
-        "nanuk-mcp",
+        "igloo-mcp",
         "--profile",
         "my-profile"
       ]
@@ -142,7 +142,7 @@ Edit your Claude Code MCP settings (`~/.config/claude-code/mcp.json`):
 {
   "mcpServers": {
     "snowflake": {
-      "command": "nanuk-mcp",
+      "command": "igloo-mcp",
       "env": {
         "SNOWFLAKE_PROFILE": "my-profile"
       }
@@ -160,7 +160,7 @@ For other MCP-compatible clients (Cline, Continue, Zed, etc.), use similar confi
 {
   "mcpServers": {
     "snowflake": {
-      "command": "nanuk-mcp",
+      "command": "igloo-mcp",
       "args": ["--profile", "my-profile"]
     }
   }
@@ -230,12 +230,12 @@ Switch between environments by changing the `SNOWFLAKE_PROFILE`:
 ```json
 {
   "mcpServers": {
-    "nanuk-dev": {
-      "command": "nanuk-mcp",
+    "igloo-dev": {
+      "command": "igloo-mcp",
       "env": {"SNOWFLAKE_PROFILE": "dev"}
     },
-    "nanuk-prod": {
-      "command": "nanuk-mcp",
+    "igloo-prod": {
+      "command": "igloo-mcp",
       "env": {"SNOWFLAKE_PROFILE": "prod"}
     }
   }
@@ -282,4 +282,4 @@ If you were using the old CLI interface from snowcli-tools, see the [Migration G
 
 ---
 
-*Questions? Check our [GitHub Discussions](https://github.com/Evan-Kim2028/nanuk-mcp/discussions)*
+*Questions? Check our [GitHub Discussions](https://github.com/Evan-Kim2028/igloo-mcp/discussions)*

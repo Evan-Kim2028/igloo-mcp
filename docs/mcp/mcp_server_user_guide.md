@@ -115,9 +115,9 @@ Create or update your MCP configuration file (usually `~/.vscode/mcp.json`):
 ```json
 {
   "mcpServers": {
-    "nanuk-tools": {
+    "igloo-tools": {
       "command": "uv",
-      "args": ["run", "nanuk", "mcp"],
+      "args": ["run", "igloo-mcp"],
       "cwd": "/path/to/your/nanuk-mcp"
     }
   }
@@ -131,9 +131,9 @@ Add to your Claude Code MCP settings:
 ```json
 {
   "mcp": {
-    "nanuk-tools": {
+    "igloo-tools": {
       "command": "uv",
-      "args": ["run", "nanuk", "mcp"],
+      "args": ["run", "igloo-mcp"],
       "cwd": "/path/to/your/nanuk-mcp"
     }
   }

@@ -156,11 +156,11 @@ except Exception as e:
 
 ### Authentication and Configuration
 
-The MCP server inherits authentication from the nanuk-mcp configuration:
+The MCP server inherits authentication from the igloo-mcp configuration:
 
 ```python
 def __init__(self):
-    self.server = Server("nanuk-tools")
+    self.server = Server("igloo-tools")
     self.snow_cli = SnowCLI()  # Uses configured profile
     self.config = get_config()  # Uses existing configuration
 ```
@@ -189,7 +189,7 @@ def test_tool_functionality(self, mock_get_config, mock_snow_cli_class):
 ## Configuration Management
 
 ### Environment Variables
-The MCP server respects all nanuk-mcp environment variables:
+The MCP server respects all igloo-mcp environment variables:
 - `SNOWFLAKE_PROFILE`
 - `SNOWFLAKE_WAREHOUSE`
 - `SNOWFLAKE_DATABASE`
@@ -197,8 +197,8 @@ The MCP server respects all nanuk-mcp environment variables:
 - `SNOWFLAKE_ROLE`
 
 ### Configuration Files
-- MCP client configuration is separate from nanuk-mcp config
-- The server uses existing nanuk-mcp configuration for Snowflake access
+- MCP client configuration is separate from igloo-mcp config
+- The server uses existing igloo-mcp configuration for Snowflake access
 - No additional configuration files are required
 
 ## Deployment and Distribution
@@ -210,7 +210,7 @@ The MCP server respects all nanuk-mcp environment variables:
 
 ### Dependencies
 - MCP SDK: `mcp>=1.0.0`
-- All other dependencies are inherited from nanuk-mcp
+- All other dependencies are inherited from igloo-mcp
 - Add new dependencies to `pyproject.toml` in the main dependencies list
 
 ### Testing Requirements
@@ -222,7 +222,7 @@ The MCP server respects all nanuk-mcp environment variables:
 ## Monitoring and Debugging
 
 ### Logging
-The MCP server uses the same logging configuration as nanuk-mcp. Enable debug logging:
+The MCP server uses the same logging configuration as igloo-mcp. Enable debug logging:
 
 ```bash
 export NANUK_MCP_DEBUG=1
@@ -290,7 +290,7 @@ When making changes, also verify:
 
 - [ ] Does the change affect core service layer? (Review impact)
 - [ ] Update installation documentation if needed
-- [ ] Test production install (`pip install nanuk-mcp`)
+- [ ] Test production install (`pip install igloo-mcp`)
 - [ ] Verify graceful error handling for missing dependencies
 - [ ] Update CI to test installation modes
 
