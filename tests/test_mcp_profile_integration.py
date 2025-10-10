@@ -3,6 +3,7 @@
 Tests the complete profile validation flow during MCP server startup,
 including error handling and user experience.
 """
+# pylint: disable=redefined-outer-name,unused-variable
 
 from __future__ import annotations
 
@@ -139,7 +140,7 @@ class TestMCPToolProfileCheck:
                 from igloo_mcp.profile_utils import get_profile_summary
 
                 summary = get_profile_summary()
-                recommendations = _get_profile_recommendations(summary, "dev")
+                recommendations = _get_profile_recommendations("dev")
 
                 assert isinstance(recommendations, list)
                 assert len(recommendations) > 0
@@ -152,7 +153,7 @@ class TestMCPToolProfileCheck:
                 from igloo_mcp.profile_utils import get_profile_summary
 
                 summary = get_profile_summary()
-                recommendations = _get_profile_recommendations(summary, None)
+                recommendations = _get_profile_recommendations(None)
 
                 assert isinstance(recommendations, list)
                 assert len(recommendations) > 0

@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from nanuk_mcp.circuit_breaker import (
+from igloo_mcp.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerError,
@@ -15,8 +15,6 @@ from nanuk_mcp.circuit_breaker import (
 
 class CircuitBreakerTestException(Exception):
     """Test exception for circuit breaker tests."""
-
-    pass
 
 
 def test_circuit_breaker_config():

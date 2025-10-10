@@ -8,7 +8,6 @@ from typing import Any, List
 from unittest.mock import MagicMock, patch
 
 from igloo_mcp import mcp_server
-from igloo_mcp.config import Config, SnowflakeConfig
 
 
 class StubService:
@@ -22,10 +21,10 @@ class StubService:
         cursor = self.cursor or MagicMock()
 
         class _ConnCtx:
-            def __enter__(self_inner):
+            def __enter__(self):
                 return None, cursor
 
-            def __exit__(self_inner, exc_type, exc, tb):
+            def __exit__(self, exc_type, exc, tb):
                 return False
 
         return _ConnCtx()
@@ -91,34 +90,7 @@ def test_execute_query_sync_applies_overrides():
     snapshot.assert_called_once_with(cursor)
 
 
-def test_query_lineage_sync_not_found(tmp_path: Path):
-    catalog_dir = tmp_path / "catalog"
-    cache_dir = tmp_path / "cache"
-    catalog_dir.mkdir()
-    cache_dir.mkdir()
-
-    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-
-    with patch("igloo_mcp.mcp_server.LineageQueryService") as mock_service:
-        instance = mock_service.return_value
-        instance.object_subgraph.side_effect = KeyError("missing")
-
-        # Should raise ValueError instead of returning error object
-        import pytest
-
-        with pytest.raises(ValueError) as exc_info:
-            mcp_server._query_lineage_sync(
-                object_name="missing.object",
-                direction="both",
-                depth=2,
-                fmt="json",
-                catalog_dir=str(catalog_dir),
-                cache_dir=str(cache_dir),
-                config=cfg,
-            )
-
-    assert "not found in lineage graph" in str(exc_info.value)
-    assert "missing.object" in str(exc_info.value)
+# Lineage functionality removed - test removed
 
 
 def test_get_catalog_summary_sync_missing(tmp_path: Path):
@@ -128,7 +100,7 @@ def test_get_catalog_summary_sync_missing(tmp_path: Path):
     with pytest.raises(FileNotFoundError) as exc_info:
         mcp_server._get_catalog_summary_sync(str(tmp_path))
 
-    assert "No catalog summary found" in str(exc_info.value)
+    assert "Catalog summary not found" in str(exc_info.value)
     assert str(tmp_path) in str(exc_info.value)
 
 
@@ -137,7 +109,7 @@ def test_register_igloo_mcp_registers_once():
         def __init__(self) -> None:
             self.names: List[str] = []
 
-        def tool(self, *, name: str, description: str):
+        def tool(self, *, name: str, description: str):  # noqa: ARG002, unused-argument
             def decorator(func):  # pragma: no cover - executed by registration
                 self.names.append(name)
                 return func

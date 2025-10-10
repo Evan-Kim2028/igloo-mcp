@@ -1,1 +1,1 @@
-# Test package for snowflake-cli-tools-py
+# Test package for igloo-mcp
