@@ -1,7 +1,7 @@
 [project]
-name = "nanuk-mcp"
-version = "2.0.0"
-description = "Nanuk MCP - Snowflake MCP Server for agentic native workflows"
+name = "igloo-mcp"
+version = "0.1.0"
+description = "Igloo MCP - Snowflake MCP Server for agentic native workflows"
 readme = "README.md"
 authors = [
     { name = "Evan Kim", email = "ekcopersonal@gmail.com" }
@@ -25,12 +25,12 @@ dependencies = [
 # MCP dependencies are included by default - no separate installation needed
 
 [project.scripts]
-nanuk-mcp = "nanuk_mcp.mcp_server:main"
+igloo-mcp = "igloo_mcp.mcp_server:main"
 
 [project.urls]
-Homepage = "https://github.com/Evan-Kim2028/nanuk-mcp"
-Repository = "https://github.com/Evan-Kim2028/nanuk-mcp"
-Documentation = "https://github.com/Evan-Kim2028/nanuk-mcp#readme"
+Homepage = "https://github.com/Evan-Kim2028/igloo-mcp"
+Repository = "https://github.com/Evan-Kim2028/igloo-mcp"
+Documentation = "https://github.com/Evan-Kim2028/igloo-mcp#readme"
 
 [build-system]
 requires = ["uv_build>=0.8.15,<0.9.0"]
