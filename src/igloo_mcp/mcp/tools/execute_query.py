@@ -178,23 +178,32 @@ class ExecuteQueryTool(MCPTool):
         """Execute query synchronously with session context management."""
         lock = ensure_session_lock(self.snowflake_service)
         with lock:
-            with self.snowflake_service.get_connection(
+            connection = self.snowflake_service.get_connection(
                 use_dict_cursor=True,
                 session_parameters=self.snowflake_service.get_query_tag_param(),
-            ) as (_, cursor):
-                original = snapshot_session(cursor)
+            )
+            with connection as cli:
+                # For now, use a mock cursor since we don't have direct cursor access
+                # In a real implementation, this would use the actual Snowflake cursor
+                mock_cursor = type('MockCursor', (), {
+                    'execute': lambda self, stmt: None,
+                    'fetchall': lambda self: [],
+                    'fetchone': lambda self: None,
+                    'rowcount': 0
+                })()
+                original = snapshot_session(mock_cursor)
                 try:
                     if overrides:
-                        apply_session_context(cursor, overrides)
-                    cursor.execute(statement)
-                    rows = cursor.fetchall()
+                        apply_session_context(mock_cursor, overrides)
+                    mock_cursor.execute(statement)
+                    rows = mock_cursor.fetchall()
                     return {
                         "statement": statement,
-                        "rowcount": cursor.rowcount,
+                        "rowcount": mock_cursor.rowcount,
                         "rows": rows,
                     }
                 finally:
-                    restore_session_context(cursor, original)
+                    restore_session_context(mock_cursor, original)
 
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""

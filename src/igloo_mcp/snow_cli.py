@@ -265,3 +265,11 @@ class SnowCLI:
             raise SnowCLIError(
                 proc.stderr.strip() or "Failed to set default connection"
             )
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        pass

@@ -1,6 +1,6 @@
 # 5-Minute Quickstart
 
-Get Nanuk MCP running with your AI assistant in under 5 minutes!
+Get igloo-mcp running with your AI assistant in under 5 minutes!
 
 **Who this is for**: Users new to Snowflake and MCP who want to get started quickly.
 
@@ -22,18 +22,18 @@ pip install snowflake-cli-labs
 - AI assistant that supports MCP (Claude Code, Continue, Cline, Zed, etc.)
 - Your Snowflake account identifier (looks like: `mycompany-prod.us-east-1`)
 
-## Step 1: Install Nanuk MCP (1 minute)
+## Step 1: Install igloo-mcp (1 minute)
 
 ```bash
 # Install from PyPI
-uv pip install nanuk-mcp
+uv pip install igloo-mcp
 
 # Verify installation
-python -c "import nanuk_mcp; print(nanuk_mcp.__version__)"
-# Expected: 2.0.0
+python -c "import igloo_mcp; print('igloo-mcp installed successfully')"
+# Expected: igloo-mcp installed successfully
 ```
 
-> **Note**: nanuk-mcp automatically installs `snowflake-cli-labs` as a dependency
+> **Note**: igloo-mcp automatically installs `snowflake-cli-labs` as a dependency
 
 ## Step 2: Create Snowflake Profile (2 minutes)
 
@@ -98,12 +98,26 @@ Edit `~/.continue/config.json`:
 
 ### Zed Editor
 Add via Settings → MCP Servers:
-- **Command**: `nanuk-mcp`
+- **Command**: `igloo-mcp`
 - **Args**: `["--profile", "quickstart"]`
 
 **Restart your AI assistant** after configuring.
 
-## Step 4: Test It! (30 seconds)
+## Step 4: Test Your Setup (30 seconds)
+
+### Verify Snowflake Connection
+```bash
+# Test your profile
+snow sql -q "SELECT CURRENT_VERSION()" --connection quickstart
+```
+
+### Verify MCP Server
+```bash
+# Start MCP server (should show help without errors)
+igloo-mcp --profile quickstart --help
+```
+
+## Step 5: Test It! (30 seconds)
 
 In your AI assistant, try these prompts:
 
@@ -128,7 +142,7 @@ Expected: List of tables (if you have access)
 ## Success! 🎉
 
 You've successfully:
-- ✅ Installed Nanuk MCP
+- ✅ Installed igloo-mcp
 - ✅ Configured Snowflake connection
 - ✅ Connected your AI assistant
 - ✅ Ran your first Snowflake queries via AI
@@ -213,7 +227,7 @@ snow connection list
 
 ### "MCP tools not showing up"
 **Fix**:
-1. Verify nanuk-mcp is installed: `which nanuk-mcp`
+1. Verify igloo-mcp is installed: `which igloo-mcp`
 2. Check MCP config JSON syntax is valid
 3. **Restart your AI assistant completely**
 4. Check AI assistant logs for errors
@@ -226,12 +240,12 @@ snow connection list
 
 ### Still stuck?
 
-- 💬 [GitHub Discussions](https://github.com/Evan-Kim2028/nanuk-mcp/discussions) - Community help
-- 🐛 [GitHub Issues](https://github.com/Evan-Kim2028/nanuk-mcp/issues) - Report bugs
+- 💬 [GitHub Discussions](https://github.com/Evan-Kim2028/igloo-mcp/discussions) - Community help
+- 🐛 [GitHub Issues](https://github.com/Evan-Kim2028/igloo-mcp/issues) - Report bugs
 - 📖 [Full Documentation](getting-started.md) - Comprehensive guides
 
 ---
 
-**🐻‍❄️ Nanuk MCP v2.0.0 - MCP-Only Architecture**
+**🐻‍❄️ igloo-mcp v0.1.0 - MCP-Only Architecture**
 
-*For users migrating from v1.x CLI: See [CLI Migration Guide](cli-to-mcp-migration.md)*
+*For users migrating from CLI tools: See [Migration Guide](migration-guide.md)*

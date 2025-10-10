@@ -1,6 +1,6 @@
-# Getting Started with Nanuk MCP
+# Getting Started with igloo-mcp
 
-> **Quick Start**: Set up your Snowflake profile → Install Nanuk MCP → Start using with your AI assistant
+> **Quick Start**: Set up your Snowflake profile → Install igloo-mcp → Start using with your AI assistant
 
 ## Prerequisites
 
@@ -22,13 +22,13 @@
 
 4. **AI Assistant** that supports MCP (e.g., Claude Code, Cline, etc.)
 
-## Step 1: Install Nanuk MCP
+## Step 1: Install igloo-mcp
 
 ### Installation Methods
 
 **Option 1: PyPI Installation (Recommended for most users)**
 ```bash
-pip install igloo-mcp
+uv pip install igloo-mcp
 ```
 
 **Option 2: Development Installation (For contributors)**
@@ -43,7 +43,7 @@ uv sync
 
 ## Step 2: Set Up Your Snowflake Profile
 
-**Critical**: Nanuk MCP uses Snowflake CLI profiles for authentication.
+**Critical**: igloo-mcp uses Snowflake CLI profiles for authentication.
 
 ### Snowflake Parameters
 
@@ -172,9 +172,23 @@ For other MCP-compatible clients (Cline, Continue, Zed, etc.), use similar confi
 - Environment variable: `"env": {"SNOWFLAKE_PROFILE": "my-profile"}`
 - Default profile: Omit args/env if you set a default with `snow connection set-default`
 
-## Step 4: Start Using MCP Tools
+## Step 4: Test Your Setup
 
-Once configured, interact with Nanuk MCP through your AI assistant:
+### Verify Snowflake Connection
+```bash
+# Test your profile
+snow sql -q "SELECT CURRENT_VERSION()" --connection my-profile
+```
+
+### Verify MCP Server
+```bash
+# Start MCP server (should show help without errors)
+igloo-mcp --profile my-profile --help
+```
+
+## Step 5: Start Using MCP Tools
+
+Once configured, interact with igloo-mcp through your AI assistant:
 
 ### Example Prompts
 

@@ -175,14 +175,14 @@ class HealthCheckTool(MCPTool):
                 "status": "valid",
                 "profile": resolved_profile,
                 "config": {
-                    "account": summary.get("account"),
-                    "warehouse": summary.get("warehouse"),
-                    "database": summary.get("database"),
-                    "schema": summary.get("schema"),
-                    "role": summary.get("role"),
-                    "authenticator": summary.get("authenticator"),
+                    "config_path": str(summary.config_path),
+                    "config_exists": summary.config_exists,
+                    "available_profiles": summary.available_profiles,
+                    "default_profile": summary.default_profile,
+                    "current_profile": summary.current_profile,
+                    "profile_count": summary.profile_count,
                 },
-                "warnings": summary.get("warnings", []),
+                "warnings": [],
             }
 
         except ProfileValidationError as e:

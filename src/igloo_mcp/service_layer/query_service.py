@@ -23,6 +23,8 @@ class QueryService:
         query: str,
         output_format: Optional[str] = None,
         timeout: Optional[int] = None,
+        session: Optional[Dict[str, Any]] = None,
+        **kwargs
     ) -> QueryOutput:
         """Execute a query.
         
@@ -30,6 +32,8 @@ class QueryService:
             query: SQL query to execute
             output_format: Output format ('table', 'json', 'csv')
             timeout: Query timeout in seconds
+            session: Session context overrides
+            **kwargs: Additional parameters
             
         Returns:
             Query execution result
@@ -37,7 +41,8 @@ class QueryService:
         return self.cli.run_query(
             query,
             output_format=output_format,
-            timeout=timeout
+            timeout=timeout,
+            ctx_overrides=session
         )
 
     def session_from_mapping(self, mapping: Dict[str, Any]) -> Dict[str, Any]:
@@ -49,6 +54,6 @@ class QueryService:
             "role": mapping.get("role"),
         }
 
-    def execute_with_service(self, query: str, **kwargs) -> QueryOutput:
+    def execute_with_service(self, query: str, service: Any = None, **kwargs) -> QueryOutput:
         """Execute query with service."""
         return self.execute(query, **kwargs)
