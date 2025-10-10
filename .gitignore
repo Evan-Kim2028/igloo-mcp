@@ -124,6 +124,7 @@ config*.yaml
 config*.yml
 secrets*.yaml
 secrets*.yml
+service_config.yml
 
 # OS generated files
 .DS_Store
