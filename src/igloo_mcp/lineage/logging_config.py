@@ -32,7 +32,7 @@ def setup_logging(
     formatter = logging.Formatter(format_string)
 
     # Get root logger for the lineage module
-    logger = logging.getLogger("nanuk_mcp.lineage")
+    logger = logging.getLogger("igloo_mcp.lineage")
     logger.setLevel(getattr(logging, level.upper()))
 
     # Remove existing handlers
@@ -90,7 +90,7 @@ class LoggingContext:
         self.level = level
         self.suppress = suppress
         self.original_level = None
-        self.logger = logging.getLogger("nanuk_mcp.lineage")
+        self.logger = logging.getLogger("igloo_mcp.lineage")
 
     def __enter__(self):
         """Enter the context and modify logging."""
@@ -109,7 +109,7 @@ class LoggingContext:
 
 def get_logger(name: str) -> logging.Logger:
     """Get a logger instance for the given name."""
-    return logging.getLogger(f"nanuk_mcp.lineage.{name}")
+    return logging.getLogger(f"igloo_mcp.lineage.{name}")
 
 
 # Module-specific loggers

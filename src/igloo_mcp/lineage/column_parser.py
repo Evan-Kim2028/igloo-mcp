@@ -1,9 +1,7 @@
 """Column-level lineage extraction utilities.
 
-This module restores the lightweight column lineage functionality that existed
-prior to the v1.9.0 simplification. The focus is on safe SQL parsing and
-producing actionable metadata for downstream tooling without reintroducing the
-previous thousand-line implementation.
+This module provides lightweight column lineage functionality with a focus on
+safe SQL parsing and producing actionable metadata for downstream tooling.
 """
 
 from __future__ import annotations

@@ -1,10 +1,7 @@
 """Simplified lineage package for building and querying Snowflake lineage graphs.
 
 This module provides core lineage functionality with a focus on simplicity and
-maintainability. Complex features like column-level lineage, cross-database analysis,
-and impact tracking have been removed in v1.9.0.
-
-For backward compatibility, LineageGraph is aliased to Graph.
+maintainability.
 """
 
 # Backward compatibility - keep existing builder and loader
