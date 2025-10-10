@@ -181,7 +181,7 @@ def validate_profile(profile_name: str | None) -> str:
             f"Available profiles: {', '.join(available_list)}\n\n"
             "Quick fix (choose one):\n"
             f"  1. Set environment variable: export SNOWFLAKE_PROFILE=\"{available_list[0]}\"\n"
-            f"  2. Pass profile flag: nanuk-mcp --profile \"{available_list[0]}\"\n"
+            f"  2. Pass profile flag: igloo-mcp --profile \"{available_list[0]}\"\n"
             f"  3. Set default: snow connection set-default \"{available_list[0]}\"\n\n"
             f"Config location: {config_path}"
         )
@@ -199,7 +199,7 @@ def validate_profile(profile_name: str | None) -> str:
             f"Snowflake profile '{profile_name}' not found.\n\n"
             f"Available profiles ({len(available_list)}): {', '.join(available_list)}\n\n"
             "Quick fix:\n"
-            f"  1. Use existing profile: nanuk-mcp --profile \"{available_list[0] if available_list else 'PROFILE_NAME'}\"\n"
+            f"  1. Use existing profile: igloo-mcp --profile \"{available_list[0] if available_list else 'PROFILE_NAME'}\"\n"
             "  2. Create new profile: snow connection add --connection-name \"" + profile_name + "\" ...\n"
             "  3. List all profiles: snow connection list\n\n"
             f"Config location: {config_path}"

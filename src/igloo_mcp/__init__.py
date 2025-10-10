@@ -1,4 +1,4 @@
-"""nanuk-mcp — AI-first Snowflake operations via Model Context Protocol."""
+"""igloo-mcp — AI-first Snowflake operations via Model Context Protocol."""
 
 from .catalog import build_catalog
 from .config import Config, get_config, set_config

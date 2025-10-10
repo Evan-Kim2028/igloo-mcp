@@ -6,14 +6,17 @@ from typing import Any, Dict, Optional
 class DependencyService:
     """Service for building dependency graphs."""
     
-    def __init__(self, context: Optional[Dict[str, Any]] = None):
+    def __init__(self, context: Optional[Any] = None):
         """Initialize dependency service.
         
         Args:
-            context: Session context with profile information
+            context: Service context with profile information
         """
-        self.context = context or {}
-        self.profile = self.context.get("profile")
+        self.context = context
+        if hasattr(context, 'config') and hasattr(context.config, 'snowflake'):
+            self.profile = context.config.snowflake.profile
+        else:
+            self.profile = None
     
     def build_dependency_graph(
         self,

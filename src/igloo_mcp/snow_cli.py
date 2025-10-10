@@ -90,14 +90,14 @@ class SnowCLI:
         if output_format in {"csv", "json"}:
             args.extend(["--format", output_format])
 
-        if os.getenv("NANUK_MCP_DEBUG") == "1":
+        if os.getenv("IGLOO_MCP_DEBUG") == "1":
             try:
                 # Log the command about to run (without printing sensitive env)
                 debug_cmd = " ".join(args)
-                print(f"[NANUK-MCP DEBUG] Executing: {debug_cmd}")
+                print(f"[IGLOO-MCP DEBUG] Executing: {debug_cmd}")
                 # Also echo the SQL in a trimmed form for readability
                 trimmed = " ".join(query.split())
-                print(f"[NANUK-MCP DEBUG] SQL: {trimmed}")
+                print(f"[IGLOO-MCP DEBUG] SQL: {trimmed}")
             except Exception:
                 pass
 
@@ -121,10 +121,16 @@ class SnowCLI:
                 # Expect either a list of rows or an object with data
                 if isinstance(data, list):
                     out.rows = data
+                    # Extract column names from first row if available
+                    if data and isinstance(data[0], dict):
+                        out.columns = list(data[0].keys())
                 elif isinstance(data, dict):
                     rows = data.get("data") or data.get("rows")
                     if isinstance(rows, list):
                         out.rows = rows
+                        # Extract column names from first row if available
+                        if rows and isinstance(rows[0], dict):
+                            out.columns = list(rows[0].keys())
             except json.JSONDecodeError:
                 pass
         elif output_format == "csv":
@@ -152,11 +158,11 @@ class SnowCLI:
         if output_format in {"csv", "json"}:
             args.extend(["--format", output_format])
 
-        if os.getenv("NANUK_MCP_DEBUG") == "1":
+        if os.getenv("IGLOO_MCP_DEBUG") == "1":
             try:
                 debug_cmd = " ".join(args)
-                print(f"[NANUK-MCP DEBUG] Executing file: {debug_cmd}")
-                print(f"[NANUK-MCP DEBUG] File: {file_path}")
+                print(f"[IGLOO-MCP DEBUG] Executing file: {debug_cmd}")
+                print(f"[IGLOO-MCP DEBUG] File: {file_path}")
             except Exception:
                 pass
 

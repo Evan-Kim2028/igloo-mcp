@@ -1,4 +1,4 @@
-"""Unified configuration and session management for nanuk-mcp."""
+"""Unified configuration and session management for igloo-mcp."""
 
 from __future__ import annotations
 

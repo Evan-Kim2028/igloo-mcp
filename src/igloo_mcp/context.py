@@ -1,4 +1,4 @@
-"""Service context helpers for Nanuk MCP."""
+"""Service context helpers for Igloo MCP."""
 
 from __future__ import annotations
 

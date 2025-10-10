@@ -149,7 +149,7 @@ def register_igloo_mcp(
     snow_cli: SnowCLI | None = SnowCLI() if enable_cli_bridge else None
 
     # Instantiate all extracted tool classes
-    execute_query_inst = ExecuteQueryTool(config, snowflake_service, _health_monitor)
+    execute_query_inst = ExecuteQueryTool(config, snowflake_service, query_service, _health_monitor)
     preview_table_inst = PreviewTableTool(config, snowflake_service, query_service)
     # query_lineage_inst = QueryLineageTool(config)  # Removed - lineage functionality not part of igloo-mcp
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
@@ -417,7 +417,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--service-config-file",
         required=False,
-        help="Path to Snowflake MCP service configuration YAML",
+        help="Path to Snowflake MCP service configuration YAML (optional for advanced users)",
     )
     parser.add_argument(
         "--transport",
@@ -469,7 +469,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--instructions",
         required=False,
-        default="Nanuk MCP server combining Snowflake official tools with catalog/lineage helpers.",
+        default="Igloo MCP server combining Snowflake official tools with catalog/lineage helpers.",
         help="Instructions string surfaced to MCP clients",
     )
 
@@ -483,6 +483,28 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def create_combined_lifespan(args: argparse.Namespace):
+    # Create a temporary config file if none is provided
+    if not getattr(args, "service_config_file", None):
+        import tempfile
+        import yaml
+        
+        # Create minimal config with just the profile
+        config_data = {
+            "snowflake": {
+                "profile": args.profile or "mystenlabs-keypair"
+            }
+        }
+        
+        # Create temporary file
+        temp_fd, temp_path = tempfile.mkstemp(suffix='.yml', prefix='igloo_mcp_')
+        try:
+            with os.fdopen(temp_fd, 'w') as f:
+                yaml.dump(config_data, f)
+            args.service_config_file = temp_path
+        except Exception:
+            os.close(temp_fd)
+            raise
+    
     snowflake_lifespan = create_snowflake_lifespan(args)
 
     @asynccontextmanager

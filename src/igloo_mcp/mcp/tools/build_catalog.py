@@ -9,8 +9,8 @@ from typing import Any, Dict, Optional
 
 import anyio
 
-from ...catalog import CatalogService
-from ...config import Config
+from igloo_mcp.catalog import CatalogService
+from igloo_mcp.config import Config
 from .base import MCPTool
 
 
@@ -33,33 +33,44 @@ class BuildCatalogTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return "Build Snowflake catalog metadata from INFORMATION_SCHEMA"
+        return "Build comprehensive Snowflake catalog metadata from INFORMATION_SCHEMA. Includes databases, schemas, tables, views, materialized views, dynamic tables, tasks, user-defined functions, procedures, and columns. Only includes user-defined functions (excludes built-in Snowflake operators)."
 
     async def execute(
         self,
         output_dir: str = "./data_catalogue",
         database: Optional[str] = None,
         account: bool = False,
-        format: str = "json",
+        output_format: str = "json",
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Build catalog metadata.
+        """Build comprehensive Snowflake catalog metadata.
+
+        This tool queries Snowflake INFORMATION_SCHEMA to build a comprehensive
+        metadata catalog including all database objects. It uses optimized
+        queries and proper filtering to ensure accurate and relevant results.
+
+        Key Features:
+        - Real Snowflake metadata queries (not mock data)
+        - Comprehensive coverage: databases, schemas, tables, views, materialized views, dynamic tables, tasks, functions, procedures, columns
+        - Function filtering: Only user-defined functions (excludes built-in operators like !=, %, *, +, -)
+        - Structured JSON output with detailed metadata
+        - Account-wide or database-specific catalog building
 
         Args:
             output_dir: Catalog output directory (default: ./data_catalogue)
             database: Specific database to introspect (default: current)
             account: Include entire account (default: False)
-            format: Output format - 'json' or 'jsonl' (default: json)
+            output_format: Output format - 'json' or 'jsonl' (default: json)
 
         Returns:
-            Catalog build results with totals
+            Catalog build results with totals for each object type
 
         Raises:
             ValueError: If parameters are invalid
             RuntimeError: If catalog build fails
         """
-        if format not in ("json", "jsonl"):
-            raise ValueError(f"Invalid format '{format}'. Must be 'json' or 'jsonl'")
+        if output_format not in ("json", "jsonl"):
+            raise ValueError(f"Invalid output_format '{output_format}'. Must be 'json' or 'jsonl'")
 
         try:
             result = await anyio.to_thread.run_sync(
@@ -67,7 +78,7 @@ class BuildCatalogTool(MCPTool):
                     output_dir=output_dir,
                     database=database,
                     account_scope=account,
-                    output_format=format,
+                    output_format=output_format,
                     include_ddl=True,
                     max_ddl_concurrency=8,
                     catalog_concurrency=16,
@@ -80,7 +91,7 @@ class BuildCatalogTool(MCPTool):
                 "output_dir": output_dir,
                 "database": database or "current",
                 "account_scope": account,
-                "format": format,
+                "format": output_format,
                 "totals": {
                     "databases": result.totals.databases,
                     "schemas": result.totals.schemas,

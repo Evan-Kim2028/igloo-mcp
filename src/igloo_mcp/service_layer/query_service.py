@@ -8,14 +8,17 @@ from ..snow_cli import SnowCLI, QueryOutput
 class QueryService:
     """Service for executing Snowflake queries."""
     
-    def __init__(self, context: Optional[Dict[str, Any]] = None):
+    def __init__(self, context: Optional[Any] = None):
         """Initialize query service.
         
         Args:
-            context: Session context with profile information
+            context: Service context with profile information
         """
-        self.context = context or {}
-        self.profile = self.context.get("profile")
+        self.context = context
+        if hasattr(context, 'config') and hasattr(context.config, 'snowflake'):
+            self.profile = context.config.snowflake.profile
+        else:
+            self.profile = None
         self.cli = SnowCLI(self.profile)
     
     def execute(

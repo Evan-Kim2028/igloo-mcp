@@ -1,4 +1,4 @@
-"""Comprehensive error handling strategy for nanuk-mcp."""
+"""Comprehensive error handling strategy for igloo-mcp."""
 
 from __future__ import annotations
 

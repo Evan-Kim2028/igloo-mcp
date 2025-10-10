@@ -95,6 +95,7 @@ class PreviewTableTool(MCPTool):
                     statement,
                     service=self.snowflake_service,
                     session=session_ctx,
+                    output_format="json",
                 )
             )
 

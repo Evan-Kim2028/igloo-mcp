@@ -9,16 +9,10 @@ from typing import Any, Dict, Optional
 
 import anyio
 
-from ...config import Config
-from ...mcp_health import MCPHealthMonitor
-from ...session_utils import (
-    SessionContext,
-    apply_session_context,
-    ensure_session_lock,
-    restore_session_context,
-    snapshot_session,
-)
-from ...sql_validation import validate_sql_statement
+from igloo_mcp.config import Config
+from igloo_mcp.mcp_health import MCPHealthMonitor
+from igloo_mcp.service_layer import QueryService
+from igloo_mcp.sql_validation import validate_sql_statement
 from .base import MCPTool
 
 
@@ -29,6 +23,7 @@ class ExecuteQueryTool(MCPTool):
         self,
         config: Config,
         snowflake_service: Any,
+        query_service: QueryService,
         health_monitor: Optional[MCPHealthMonitor] = None,
     ):
         """Initialize execute query tool.
@@ -36,10 +31,12 @@ class ExecuteQueryTool(MCPTool):
         Args:
             config: Application configuration
             snowflake_service: Snowflake service instance from mcp-server-snowflake
+            query_service: Query service for execution
             health_monitor: Optional health monitoring instance
         """
         self.config = config
         self.snowflake_service = snowflake_service
+        self.query_service = query_service
         self.health_monitor = health_monitor
 
     @property
@@ -121,12 +118,14 @@ class ExecuteQueryTool(MCPTool):
             raise ValueError(error_msg)
 
         # Prepare session context overrides
-        overrides: SessionContext = SessionContext(
-            warehouse=warehouse,
-            database=database,
-            schema=schema,
-            role=role,
-        )
+        overrides = {
+            "warehouse": warehouse,
+            "database": database,
+            "schema": schema,
+            "role": role,
+        }
+        # Filter out None values
+        overrides = {k: v for k, v in overrides.items() if v is not None}
 
         # Execute query with session context management
         timeout = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
@@ -172,38 +171,27 @@ class ExecuteQueryTool(MCPTool):
     def _execute_query_sync(
         self,
         statement: str,
-        overrides: SessionContext,
+        overrides: Dict[str, Any],
         timeout: int,
     ) -> Dict[str, Any]:
         """Execute query synchronously with session context management."""
-        lock = ensure_session_lock(self.snowflake_service)
-        with lock:
-            connection = self.snowflake_service.get_connection(
-                use_dict_cursor=True,
-                session_parameters=self.snowflake_service.get_query_tag_param(),
+        try:
+            # Use QueryService to execute the query
+            result = self.query_service.execute_with_service(
+                statement,
+                service=self.snowflake_service,
+                session=overrides,
+                output_format="json",
+                timeout=timeout
             )
-            with connection as cli:
-                # For now, use a mock cursor since we don't have direct cursor access
-                # In a real implementation, this would use the actual Snowflake cursor
-                mock_cursor = type('MockCursor', (), {
-                    'execute': lambda self, stmt: None,
-                    'fetchall': lambda self: [],
-                    'fetchone': lambda self: None,
-                    'rowcount': 0
-                })()
-                original = snapshot_session(mock_cursor)
-                try:
-                    if overrides:
-                        apply_session_context(mock_cursor, overrides)
-                    mock_cursor.execute(statement)
-                    rows = mock_cursor.fetchall()
-                    return {
-                        "statement": statement,
-                        "rowcount": mock_cursor.rowcount,
-                        "rows": rows,
-                    }
-                finally:
-                    restore_session_context(mock_cursor, original)
+            
+            return {
+                "statement": statement,
+                "rowcount": len(result.rows) if result.rows else 0,
+                "rows": result.rows or [],
+            }
+        except Exception as e:
+            raise RuntimeError(f"Query execution failed: {e}") from e
 
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
