@@ -88,6 +88,14 @@ class RobustSnowflakeService:
             logger.error(f"Connection test failed: {e}")
             raise
 
+    def get_connection(self, **kwargs) -> SnowCLI:
+        """Get the underlying SnowCLI connection."""
+        return self.cli
+
+    def get_query_tag_param(self) -> Optional[str]:
+        """Get query tag parameter."""
+        return None
+
     def get_health_status(self) -> HealthStatus:
         """Get current health status."""
         try:

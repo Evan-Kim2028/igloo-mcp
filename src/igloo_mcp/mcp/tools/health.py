@@ -163,12 +163,12 @@ class HealthCheckTool(MCPTool):
         try:
             # Validate profile
             resolved_profile = await anyio.to_thread.run_sync(
-                validate_and_resolve_profile, profile
+                validate_and_resolve_profile
             )
 
             # Get profile summary
             summary = await anyio.to_thread.run_sync(
-                get_profile_summary, resolved_profile
+                get_profile_summary
             )
 
             return {
