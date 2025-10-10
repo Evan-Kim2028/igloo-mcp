@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import yaml  # type: ignore[import-untyped]
 
-from nanuk_mcp.config import Config, SnowflakeConfig, get_config, set_config
+from igloo_mcp.config import Config, SnowflakeConfig, get_config, set_config
 
 
 class TestConfig:

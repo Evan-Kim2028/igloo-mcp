@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Any, List
 from unittest.mock import MagicMock, patch
 
-from nanuk_mcp import mcp_server
-from nanuk_mcp.config import Config, SnowflakeConfig
+from igloo_mcp import mcp_server
+from igloo_mcp.config import Config, SnowflakeConfig
 
 
 class StubService:
@@ -55,14 +55,14 @@ def test_execute_query_sync_applies_overrides():
 
     with (
         patch(
-            "nanuk_mcp.mcp_server.ensure_session_lock",
+            "igloo_mcp.mcp_server.ensure_session_lock",
             return_value=threading.Lock(),
         ),
         patch(
-            "nanuk_mcp.mcp_server.snapshot_session", return_value=original_state
+            "igloo_mcp.mcp_server.snapshot_session", return_value=original_state
         ) as snapshot,
-        patch("nanuk_mcp.mcp_server.apply_session_context") as apply_ctx,
-        patch("nanuk_mcp.mcp_server.restore_session_context") as restore_ctx,
+        patch("igloo_mcp.mcp_server.apply_session_context") as apply_ctx,
+        patch("igloo_mcp.mcp_server.restore_session_context") as restore_ctx,
     ):
         result = mcp_server._execute_query_sync(
             service,
@@ -99,7 +99,7 @@ def test_query_lineage_sync_not_found(tmp_path: Path):
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
 
-    with patch("nanuk_mcp.mcp_server.LineageQueryService") as mock_service:
+    with patch("igloo_mcp.mcp_server.LineageQueryService") as mock_service:
         instance = mock_service.return_value
         instance.object_subgraph.side_effect = KeyError("missing")
 
@@ -132,7 +132,7 @@ def test_get_catalog_summary_sync_missing(tmp_path: Path):
     assert str(tmp_path) in str(exc_info.value)
 
 
-def test_register_nanuk_mcp_registers_once():
+def test_register_igloo_mcp_registers_once():
     class DummyServer:
         def __init__(self) -> None:
             self.names: List[str] = []
@@ -147,11 +147,11 @@ def test_register_nanuk_mcp_registers_once():
     server = DummyServer()
     service = StubService()
 
-    with patch("nanuk_mcp.mcp_server.SnowCLI"):
-        mcp_server.register_nanuk_mcp(server, service)
+    with patch("igloo_mcp.mcp_server.SnowCLI"):
+        mcp_server.register_igloo_mcp(server, service)
         assert server.names  # ensure tools registered
 
     # Second call should not duplicate registrations
-    with patch("nanuk_mcp.mcp_server.SnowCLI"):
-        mcp_server.register_nanuk_mcp(server, service)
+    with patch("igloo_mcp.mcp_server.SnowCLI"):
+        mcp_server.register_igloo_mcp(server, service)
     assert server.names == list(dict.fromkeys(server.names))

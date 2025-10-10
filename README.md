@@ -120,7 +120,7 @@ See [Getting Started Guide](docs/getting-started.md) for detailed setup instruct
 ## Python API
 
 ```python
-from nanuk_mcp import QueryService, CatalogService
+from igloo_mcp import QueryService, CatalogService
 
 # Execute query
 query_service = QueryService(profile="my-profile")

@@ -1,4 +1,4 @@
-"""Developer task runner for nanuk-mcp."""
+"""Developer task runner for igloo-mcp."""
 
 from __future__ import annotations
 

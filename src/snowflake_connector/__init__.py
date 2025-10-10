@@ -1,11 +1,11 @@
 """Compatibility shim for the old package name `snowflake_connector`.
 
-Please import from `nanuk_mcp` going forward.
+Please import from `igloo_mcp` going forward.
 """
 
 from warnings import warn
 
-from nanuk_mcp import (
+from igloo_mcp import (
     Config,
     ParallelQueryConfig,
     ParallelQueryExecutor,
@@ -16,7 +16,7 @@ from nanuk_mcp import (
 )
 
 warn(
-    "`snowflake_connector` is deprecated; use `nanuk_mcp` instead.",
+    "`snowflake_connector` is deprecated; use `igloo_mcp` instead.",
     DeprecationWarning,
     stacklevel=2,
 )

@@ -1,4 +1,4 @@
-"""SQL validation and safe alternative generation for nanuk-mcp.
+"""SQL validation and safe alternative generation for igloo-mcp.
 
 This module provides SQL statement type validation and generates safe alternatives
 for blocked operations like DELETE, DROP, and TRUNCATE.

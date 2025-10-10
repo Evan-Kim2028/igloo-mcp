@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from nanuk_mcp.error_handling import (
+from igloo_mcp.error_handling import (
     ErrorAggregator,
     ErrorContext,
     SnowflakeConnectionError,
@@ -14,7 +14,7 @@ from nanuk_mcp.error_handling import (
     handle_snowflake_errors,
     safe_execute,
 )
-from nanuk_mcp.snow_cli import SnowCLIError
+from igloo_mcp.snow_cli import SnowCLIError
 
 
 def test_error_context_creation():
@@ -253,7 +253,7 @@ def test_error_aggregator_summary():
     assert summary["warnings"]["warn2"] == "warning2"
 
 
-@patch("nanuk_mcp.error_handling.logger")
+@patch("igloo_mcp.error_handling.logger")
 def test_error_handling_logging(mock_logger):
     """Test that error handling properly logs errors."""
 

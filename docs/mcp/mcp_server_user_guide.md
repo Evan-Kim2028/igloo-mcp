@@ -228,7 +228,7 @@ AI: "The DEX_TRADES_STABLE table has 23 columns tracking trades across 6 protoco
    snow sql -q "SELECT CURRENT_USER()" --connection my-profile
    
    # Or test via Python API
-   python -c "from nanuk_mcp import QueryService; QueryService(profile='my-profile')"
+   python -c "from igloo_mcp import QueryService; QueryService(profile='my-profile')"
    ```
 
 2. Check that your profile is configured correctly:

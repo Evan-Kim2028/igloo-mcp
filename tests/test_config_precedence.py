@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-from nanuk_mcp.config import Config
+from igloo_mcp.config import Config
 
 
 def test_cli_override_precedence(monkeypatch):
@@ -12,7 +12,7 @@ def test_cli_override_precedence(monkeypatch):
         assert cfg.snowflake.profile == "env_profile"
 
         # Simulate loader applying CLI override on top of env
-        from nanuk_mcp.config import ConfigLoader
+        from igloo_mcp.config import ConfigLoader
 
         loader = ConfigLoader()
         merged = loader.build(cli_overrides={"profile": "cli_profile"})

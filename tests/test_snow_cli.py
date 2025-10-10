@@ -4,11 +4,11 @@ from unittest.mock import patch
 
 import pytest
 
-from nanuk_mcp.snow_cli import QueryOutput, SnowCLI, SnowCLIError
+from igloo_mcp.snow_cli import QueryOutput, SnowCLI, SnowCLIError
 
 
-@patch("nanuk_mcp.snow_cli.shutil.which", return_value="/usr/bin/snow")
-@patch("nanuk_mcp.snow_cli.subprocess.run")
+@patch("igloo_mcp.snow_cli.shutil.which", return_value="/usr/bin/snow")
+@patch("igloo_mcp.snow_cli.subprocess.run")
 def test_run_query_csv_parsing(mock_run, _):
     mock_run.return_value = type(
         "CP",
@@ -27,8 +27,8 @@ def test_run_query_csv_parsing(mock_run, _):
     assert out.rows[0]["col1"] == "1"
 
 
-@patch("nanuk_mcp.snow_cli.shutil.which", return_value="/usr/bin/snow")
-@patch("nanuk_mcp.snow_cli.subprocess.run")
+@patch("igloo_mcp.snow_cli.shutil.which", return_value="/usr/bin/snow")
+@patch("igloo_mcp.snow_cli.subprocess.run")
 def test_run_query_json_parsing(mock_run, _):
     mock_run.return_value = type(
         "CP",
@@ -42,8 +42,8 @@ def test_run_query_json_parsing(mock_run, _):
     assert isinstance(out.rows, list)
 
 
-@patch("nanuk_mcp.snow_cli.shutil.which", return_value="/usr/bin/snow")
-@patch("nanuk_mcp.snow_cli.subprocess.run")
+@patch("igloo_mcp.snow_cli.shutil.which", return_value="/usr/bin/snow")
+@patch("igloo_mcp.snow_cli.subprocess.run")
 def test_run_query_error_raises(mock_run, _):
     mock_run.return_value = type(
         "CP",
@@ -56,7 +56,7 @@ def test_run_query_error_raises(mock_run, _):
         cli.run_query("SELECT 1")
 
 
-@patch("nanuk_mcp.snow_cli.SnowCLI.run_query")
+@patch("igloo_mcp.snow_cli.SnowCLI.run_query")
 def test_test_connection_success(mock_run_query):
     mock_run_query.return_value = QueryOutput(
         raw_stdout="1\n", raw_stderr="", returncode=0, rows=[{"1": "1"}]

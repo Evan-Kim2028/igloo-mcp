@@ -3,7 +3,7 @@
 This module boots a FastMCP server, reusing the upstream Snowflake MCP runtime
 (`snowflake-labs-mcp`) for authentication, connection management, middleware,
 transport wiring, and its suite of Cortex/object/query tools. On top of that
-foundation we register the nanuk-mcp catalog, lineage, and dependency
+foundation we register the igloo-mcp catalog and dependency
 workflows so agents can access both sets of capabilities via a single MCP
 endpoint.
 """
@@ -120,22 +120,22 @@ def _execute_query_sync(
 # _query_lineage_sync function removed - lineage functionality not part of igloo-mcp
 
 
-def register_nanuk_mcp(
+def register_igloo_mcp(
     server: FastMCP,
     snowflake_service: SnowflakeService,
     *,
     enable_cli_bridge: bool = False,
 ) -> None:
-    """Register nanuk-mcp MCP endpoints on top of the official service.
+    """Register igloo-mcp MCP endpoints on top of the official service.
 
     Simplified in v1.8.0 Phase 2.3 - now delegates to extracted tool classes
     instead of containing inline implementations. This reduces mcp_server.py
     from 1,089 LOC to ~300 LOC while improving testability and maintainability.
     """
 
-    if getattr(server, "_nanuk_mcp_registered", False):  # pragma: no cover - safety
+    if getattr(server, "_igloo_mcp_registered", False):  # pragma: no cover - safety
         return
-    setattr(server, "_nanuk_mcp_registered", True)
+    setattr(server, "_igloo_mcp_registered", True)
 
     config = get_config()
     context = create_service_context(existing_config=config)
@@ -386,7 +386,7 @@ def _apply_config_overrides(args: argparse.Namespace) -> Config:
 
 def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Snowflake MCP server with nanuk-mcp extensions",
+        description="Snowflake MCP server with igloo-mcp extensions",
     )
 
     login_params = get_login_params()
@@ -441,12 +441,12 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--snowcli-config",
         required=False,
-        help="Optional path to nanuk-mcp YAML config (defaults to env)",
+        help="Optional path to igloo-mcp YAML config (defaults to env)",
     )
     parser.add_argument(
         "--profile",
         required=False,
-        help="Override Snowflake CLI profile for nanuk-mcp operations",
+        help="Override Snowflake CLI profile for igloo-mcp operations",
     )
     parser.add_argument(
         "--enable-cli-bridge",
@@ -463,7 +463,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--name",
         required=False,
-        default="nanuk-mcp MCP Server",
+        default="igloo-mcp MCP Server",
         help="Display name for the FastMCP server",
     )
     parser.add_argument(
@@ -535,7 +535,7 @@ def create_combined_lifespan(args: argparse.Namespace):
                 logger.warning(f"Connection health check failed: {e}")
                 _health_monitor.record_error(f"Connection health check failed: {e}")
 
-            register_nanuk_mcp(
+            register_igloo_mcp(
                 server,
                 snowflake_service,
                 enable_cli_bridge=args.enable_cli_bridge,
