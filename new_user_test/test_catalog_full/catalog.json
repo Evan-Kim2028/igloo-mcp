@@ -1,0 +1,13 @@
+{
+  "metadata": {
+    "database": "PIPELINE_V2_GROOT_DB",
+    "account_scope": false,
+    "format": "json",
+    "timestamp": "2024-01-01T00:00:00Z"
+  },
+  "databases": [],
+  "schemas": [],
+  "tables": [],
+  "views": [],
+  "columns": []
+}

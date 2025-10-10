@@ -92,17 +92,21 @@ class PreviewTableTool(MCPTool):
             result = await anyio.to_thread.run_sync(
                 partial(
                     self.query_service.execute_with_service,
-                    self.snowflake_service,
                     statement,
+                    service=self.snowflake_service,
                     session=session_ctx,
                 )
             )
 
             return {
+                "status": "success",
                 "table_name": table_name,
                 "limit": limit,
-                "rowcount": result["rowcount"],
-                "rows": result["rows"],
+                "preview": {
+                    "columns": result.columns,
+                    "rows": result.rows,
+                    "limit": limit
+                }
             }
 
         except Exception as e:

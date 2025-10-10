@@ -48,18 +48,27 @@ class GetCatalogSummaryTool(MCPTool):
             RuntimeError: If summary cannot be loaded
         """
         try:
-            result = await anyio.to_thread.run_sync(
+            summary = await anyio.to_thread.run_sync(
                 self.catalog_service.load_summary, catalog_dir
             )
-            return result
+            return {
+                "status": "success",
+                "catalog_dir": catalog_dir,
+                "summary": summary
+            }
 
         except FileNotFoundError as e:
-            raise FileNotFoundError(
-                f"No catalog found in '{catalog_dir}'. "
-                f"Run build_catalog first to generate the catalog."
-            ) from e
+            return {
+                "status": "error",
+                "error": f"No catalog found in '{catalog_dir}'. Run build_catalog first to generate the catalog.",
+                "catalog_dir": catalog_dir
+            }
         except Exception as e:
-            raise RuntimeError(f"Failed to load catalog summary: {e}") from e
+            return {
+                "status": "error",
+                "error": f"Failed to load catalog summary: {e}",
+                "catalog_dir": catalog_dir
+            }
 
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
