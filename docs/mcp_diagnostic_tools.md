@@ -2,7 +2,7 @@
 
 ## Overview
 
-Nanuk MCP v2.0.0 provides comprehensive diagnostic tools for the MCP server that provide real-time health monitoring, profile validation, and resource dependency checking. These tools help quickly identify and resolve configuration issues.
+Igloo MCP v2.0.0 provides comprehensive diagnostic tools for the MCP server that provide real-time health monitoring, profile validation, and resource dependency checking. These tools help quickly identify and resolve configuration issues.
 
 ## Tool Categories
 

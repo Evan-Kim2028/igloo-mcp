@@ -2,7 +2,7 @@
 
 ## What is the MCP Server?
 
-The MCP (Model Context Protocol) server is the primary interface for Nanuk MCP. It enables AI assistants to interact with your Snowflake database, acting as a bridge between natural language requests and structured database operations.
+The MCP (Model Context Protocol) server is the primary interface for Igloo MCP. It enables AI assistants to interact with your Snowflake database, acting as a bridge between natural language requests and structured database operations.
 
 ### Key Benefits
 
@@ -27,7 +27,7 @@ For example, asking "What tables are in my database?" triggers the AI to use the
 
 ### Prerequisites
 
-1. **Install Nanuk MCP**: All MCP functionality is included by default:
+1. **Install Igloo MCP**: All MCP functionality is included by default:
    ```bash
    # Standard installation (includes MCP server)
    pip install igloo-mcp
@@ -268,4 +268,4 @@ For issues with the MCP server:
 3. Review the MCP client logs for detailed error messages
 4. Check that you're using compatible versions of all components
 
-The MCP server exposes Nanuk MCP functionality through structured tools, so most issues can be diagnosed by checking the service layer or testing with the Python API directly.
+The MCP server exposes Igloo MCP functionality through structured tools, so most issues can be diagnosed by checking the service layer or testing with the Python API directly.

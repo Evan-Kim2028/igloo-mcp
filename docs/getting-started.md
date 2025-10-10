@@ -98,31 +98,19 @@ snow connection list
 snow sql -q "SELECT CURRENT_VERSION()" --connection my-profile
 ```
 
-## Step 3: Configure MCP Server
+## Step 3: Configure Cursor MCP
 
-Add igloo-mcp to your AI assistant's MCP configuration.
+Add igloo-mcp to Cursor's MCP configuration.
 
-### Claude Code Configuration
+### Cursor Configuration
 
-Edit your Claude Code MCP settings (`~/.config/claude-code/mcp.json`):
+Edit your Cursor MCP settings (`~/.cursor/mcp.json`):
 
-**For PyPI installation** (recommended):
+**For development installation** (recommended):
 ```json
 {
   "mcpServers": {
-    "snowflake": {
-      "command": "igloo-mcp",
-      "args": ["--profile", "my-profile"]
-    }
-  }
-}
-```
-
-**For development installation**:
-```json
-{
-  "mcpServers": {
-    "snowflake": {
+    "igloo-mcp": {
       "command": "uv",
       "args": [
         "--directory",
@@ -131,18 +119,7 @@ Edit your Claude Code MCP settings (`~/.config/claude-code/mcp.json`):
         "igloo-mcp",
         "--profile",
         "my-profile"
-      ]
-    }
-  }
-}
-```
-
-**Alternative: Environment variable** (for advanced users):
-```json
-{
-  "mcpServers": {
-    "snowflake": {
-      "command": "igloo-mcp",
+      ],
       "env": {
         "SNOWFLAKE_PROFILE": "my-profile"
       }
@@ -151,21 +128,7 @@ Edit your Claude Code MCP settings (`~/.config/claude-code/mcp.json`):
 }
 ```
 
-### Other MCP Clients
-
-For other MCP-compatible clients (Cline, Continue, Zed, etc.), use similar configuration:
-
-**PyPI installation**:
-```json
-{
-  "mcpServers": {
-    "snowflake": {
-      "command": "igloo-mcp",
-      "args": ["--profile", "my-profile"]
-    }
-  }
-}
-```
+> **Note**: No `service_config.yml` needed! igloo-mcp uses Snowflake CLI profiles directly for authentication.
 
 **Profile selection options**:
 - `--profile` flag (recommended): `"args": ["--profile", "my-profile"]`
@@ -188,7 +151,7 @@ igloo-mcp --profile my-profile --help
 
 ## Step 5: Start Using MCP Tools
 
-Once configured, interact with igloo-mcp through your AI assistant:
+Once configured, interact with igloo-mcp through Cursor:
 
 ### Example Prompts
 
@@ -214,7 +177,7 @@ Once configured, interact with igloo-mcp through your AI assistant:
 | Tool Name | Description | Key Parameters |
 |-----------|-------------|----------------|
 | `test_connection` | Test Snowflake connection | profile (optional) |
-| `build_catalog` | Build database catalog | database, output_dir |
+| `build_catalog` | Build comprehensive database catalog from INFORMATION_SCHEMA | database, output_dir, account |
 | `query_lineage` | Analyze table lineage | object_name, direction, depth |
 | `build_dependency_graph` | Generate dependency graph | database, format |
 | `execute_query` | Execute SQL query | statement, output_format |
@@ -222,7 +185,49 @@ Once configured, interact with igloo-mcp through your AI assistant:
 | `health_check` | Check MCP server health | - |
 | `get_catalog_summary` | Get catalog statistics | catalog_dir |
 
+**Catalog Building Details**:
+- Queries Snowflake `INFORMATION_SCHEMA` for comprehensive metadata
+- Includes: databases, schemas, tables, views, materialized views, dynamic tables, tasks, functions, procedures, columns
+- **Functions**: Only user-defined functions (excludes built-in Snowflake functions like operators `!=`, `%`, `*`, etc.)
+- **Performance**: Optimized queries with proper filtering and ordering
+- **Output**: Structured JSON with detailed metadata for each object type
+
 ## Advanced Configuration
+
+### Multiple Profiles
+
+Switch between environments by changing the `SNOWFLAKE_PROFILE`:
+
+```json
+{
+  "mcpServers": {
+    "igloo-dev": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/igloo-mcp",
+        "run",
+        "igloo-mcp",
+        "--profile",
+        "dev"
+      ],
+      "env": {"SNOWFLAKE_PROFILE": "dev"}
+    },
+    "igloo-prod": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/igloo-mcp",
+        "run",
+        "igloo-mcp",
+        "--profile",
+        "prod"
+      ],
+      "env": {"SNOWFLAKE_PROFILE": "prod"}
+    }
+  }
+}
+```
 
 ### Environment Variables
 
@@ -235,25 +240,6 @@ export SNOWCLI_CATALOG_DIR=./my_catalog
 
 # Set default lineage directory
 export SNOWCLI_LINEAGE_DIR=./my_lineage
-```
-
-### Multiple Profiles
-
-Switch between environments by changing the `SNOWFLAKE_PROFILE`:
-
-```json
-{
-  "mcpServers": {
-    "igloo-dev": {
-      "command": "igloo-mcp",
-      "env": {"SNOWFLAKE_PROFILE": "dev"}
-    },
-    "igloo-prod": {
-      "command": "igloo-mcp",
-      "env": {"SNOWFLAKE_PROFILE": "prod"}
-    }
-  }
-}
 ```
 
 ## Troubleshooting
@@ -277,14 +263,16 @@ Switch between environments by changing the `SNOWFLAKE_PROFILE`:
 
 ### Tool Not Found
 
-**Issue**: AI assistant can't find MCP tools
+**Issue**: Cursor can't find MCP tools
 **Solution**:
-1. Restart your AI assistant
+1. Restart Cursor completely
 2. Verify MCP server is configured correctly
 3. Check command path in MCP configuration
+4. Ensure igloo-mcp is installed and accessible
 
 ## Next Steps
 
+- 🎯 [Cursor MCP Setup Guide](cursor-mcp-setup.md) - **Recommended for Cursor users**
 - 📖 [MCP Tools Reference](mcp/tools-reference.md) - Detailed tool documentation
 - 🔧 [Configuration Guide](configuration.md) - Advanced settings
 - 🐛 [Troubleshooting Guide](troubleshooting.md) - Common issues

@@ -2,7 +2,7 @@
  
  ## Overview
  
- Nanuk MCP can be configured through multiple methods, with the following precedence:
+ Igloo MCP can be configured through multiple methods, with the following precedence:
  1. MCP server arguments (highest priority)
  2. Environment variables
  3. Configuration files
@@ -34,7 +34,7 @@
  
  ### 2. Configuration File
  
- Create `~/.nanuk-mcp/config.yml`:
+ Create `~/.igloo-mcp/config.yml`:
  
  ```yaml
  # Snowflake connection configuration
@@ -79,12 +79,12 @@
  
  ```bash
  # Start MCP server with specific profile
- nanuk-mcp --profile prod-profile
+ igloo-mcp --profile prod-profile
  
  # Set environment variables for MCP session
  export SNOWFLAKE_WAREHOUSE=LARGE_WH
  export SNOWFLAKE_DATABASE=PROD_DB
- nanuk-mcp
+ igloo-mcp
  ```
  
  ### 4. Python API Configuration
@@ -92,8 +92,8 @@
  Configure directly in Python code:
  
  ```python
- from nanuk_mcp import CatalogService, QueryService
- from nanuk_mcp.config import Config, SnowflakeConfig
+ from igloo_mcp import CatalogService, QueryService
+from igloo_mcp.config import Config, SnowflakeConfig
  
  # Create custom configuration
  config = Config(
@@ -128,7 +128,7 @@
  # Test a profile via MCP
  # In your AI assistant, ask: "Test my Snowflake connection"
  # Or use the Python API:
- # python -c "from nanuk_mcp import QueryService; QueryService(profile='my-profile')"
+ # python -c "from igloo_mcp import QueryService; QueryService(profile='my-profile')"
  ```
  
  ### Profile Locations
@@ -138,7 +138,7 @@
  
  ## Output Directory Structure
  
- Nanuk MCP creates the following directory structure:
+ Igloo MCP creates the following directory structure:
  
  ```
  project-root/
@@ -203,10 +203,10 @@
  
  ```bash
  # Check if config file exists
- ls -la ~/.nanuk-mcp/config.yml
+ ls -la ~/.igloo-mcp/config.yml
  
  # Validate YAML syntax
- python -c "import yaml; yaml.safe_load(open('~/.nanuk-mcp/config.yml'))"
+ python -c "import yaml; yaml.safe_load(open('~/.igloo-mcp/config.yml'))"
  ```
  
  ### Profile Issues

@@ -1,6 +1,6 @@
 # Error Catalog
 
-This document provides a comprehensive catalog of errors that can occur when using Nanuk MCP, along with solutions and troubleshooting steps.
+This document provides a comprehensive catalog of errors that can occur when using Igloo MCP, along with solutions and troubleshooting steps.
 
 ## Common Error Types
 
@@ -99,7 +99,7 @@ This document provides a comprehensive catalog of errors that can occur when usi
 Enable verbose mode via environment variable:
 ```bash
 export SNOWCLI_MCP_LOG_LEVEL=DEBUG
-nanuk-mcp --profile my-profile
+igloo-mcp --profile my-profile
 ```
 
 ## Troubleshooting Steps
@@ -112,8 +112,8 @@ python --version
 # Check Snowflake CLI
 snow --version
 
-# Check Nanuk MCP installation
-python -c "import nanuk_mcp; print(nanuk_mcp.__version__)"
+# Check Igloo MCP installation
+python -c "import igloo_mcp; print(igloo_mcp.__version__)"
 ```
 
 ### 2. Test Basic Connectivity
@@ -122,7 +122,7 @@ python -c "import nanuk_mcp; print(nanuk_mcp.__version__)"
 snow sql -q "SELECT CURRENT_USER()" --connection my-profile
 
 # Test via Python API
-python -c "from nanuk_mcp import QueryService; print(QueryService(profile='my-profile'))"
+python -c "from igloo_mcp import QueryService; print(QueryService(profile='my-profile'))"
 
 # Or use MCP tools in your AI assistant:
 # "Test my Snowflake connection"
@@ -144,7 +144,7 @@ snow connection show my-profile
 export SNOWCLI_MCP_LOG_LEVEL=DEBUG
 
 # Start MCP server with debug logging
-nanuk-mcp --profile my-profile
+igloo-mcp --profile my-profile
 
 # Or enable debug in Python API
 import logging
@@ -185,7 +185,7 @@ When reporting errors, please include:
 
 **Error**: JWT token invalid
 **Command**: MCP tool `test_connection` via AI assistant
-**Environment**: Python 3.12, macOS, Snowflake CLI 2.0.0, Nanuk MCP 2.0.0
+**Environment**: Python 3.12, macOS, Snowflake CLI 2.0.0, Igloo MCP 2.0.0
 **Steps**:
 1. Generated key pair with openssl
 2. Uploaded public key to Snowflake

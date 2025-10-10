@@ -1,6 +1,6 @@
-# Nanuk MCP Architecture (v2.0.0)
+# Igloo MCP Architecture (v2.0.0)
 
-> **Overview**: Nanuk MCP uses a layered service architecture that provides AI assistant integration through MCP (Model Context Protocol) and a Python API for programmatic access.
+> **Overview**: Igloo MCP uses a layered service architecture that provides AI assistant integration through MCP (Model Context Protocol) and a Python API for programmatic access.
 
 ## Architectural Principles
 
@@ -36,9 +36,9 @@
 
 ## Core Components
 
-### Service Layer (`src/nanuk_mcp/service_layer/`)
+### Service Layer (`src/igloo_mcp/service_layer/`)
 
-The service layer provides the core business logic for Nanuk MCP operations:
+The service layer provides the core business logic for Igloo MCP operations:
 
 ```python
 # Service interfaces are clean and focused
@@ -62,14 +62,14 @@ class DependencyService:
 - **Strategy Pattern**: Different execution strategies for sync/async operations
 - **Factory Pattern**: Session context creation from various inputs
 
-### MCP Integration (`src/nanuk_mcp/mcp_server.py`)
+### MCP Integration (`src/igloo_mcp/mcp_server.py`)
 
 The MCP server provides AI assistant integration through a layered approach:
 
 ```python
 # Layered MCP Architecture
 ┌─────────────────────────────────────┐
-│     Nanuk MCP MCP Layer         │
+│     Igloo MCP MCP Layer         │
 │  • catalog, lineage, dependencies   │
 │  • Enhanced query tools             │
 │  • Custom diagnostics               │
@@ -87,7 +87,7 @@ The MCP server provides AI assistant integration through a layered approach:
 - **Resource Management**: Efficient resource lifecycle management
 - **Profile Validation**: Enhanced Snowflake profile validation
 
-### Configuration Management (`src/nanuk_mcp/config.py`)
+### Configuration Management (`src/igloo_mcp/config.py`)
 
 Centralized configuration with override precedence:
 
@@ -106,14 +106,14 @@ Centralized configuration with override precedence:
 - **Validated**: All values are validated at load time
 - **Extensible**: Easy to add new configuration options
 
-### MCP Server Interface (`src/nanuk_mcp/mcp_server.py`)
+### MCP Server Interface (`src/igloo_mcp/mcp_server.py`)
 
 MCP server provides AI assistant integration:
 
 ```bash
 # Start MCP server (MCP-only interface in v2.0+)
-nanuk-mcp                    # Use default or env profile
-nanuk-mcp --profile <name>   # Specify profile explicitly
+igloo-mcp                    # Use default or env profile
+igloo-mcp --profile <name>   # Specify profile explicitly
 
 # All operations via MCP tools:
 # - execute_query           # SQL execution
@@ -279,7 +279,7 @@ class AnalyticsService:
 
 ### Migration Steps (v1.x to v2.0)
 1. **Remove CLI usage**: Replace with MCP tool calls or Python API
-2. **Update Integration**: Configure AI assistants with nanuk-mcp
+2. **Update Integration**: Configure AI assistants with igloo-mcp
 3. **Update Profiles**: Ensure Snowflake CLI profiles are valid
 4. **Test MCP tools**: Verify all operations work via MCP
 5. **See Migration Guide**: [CLI to MCP Migration](cli-to-mcp-migration.md)

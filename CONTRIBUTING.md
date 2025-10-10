@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thank you for your interest in contributing to Nanuk MCP! This guide will help you get started with development and submitting contributions.
+Thank you for your interest in contributing to Igloo MCP! This guide will help you get started with development and submitting contributions.
 
 ## Getting Started
 
@@ -15,8 +15,8 @@ Thank you for your interest in contributing to Nanuk MCP! This guide will help y
 
 1. **Fork and clone the repository**:
    ```bash
-   git clone https://github.com/Evan-Kim2028/nanuk-mcp.git
-   cd nanuk-mcp
+   git clone https://github.com/Evan-Kim2028/igloo-mcp.git
+   cd igloo-mcp
    ```
 
 2. **Install dependencies**:
@@ -32,11 +32,11 @@ Thank you for your interest in contributing to Nanuk MCP! This guide will help y
 4. **Verify installation**:
    ```bash
    # Check MCP server is available
-   uv run nanuk-mcp --help
-   # Should show: nanuk-mcp MCP Server
+   uv run igloo-mcp --help
+   # Should show: igloo-mcp MCP Server
    
    # Verify Python package
-   python -c "import nanuk_mcp; print(nanuk_mcp.__version__)"
+   python -c "import igloo_mcp; print(igloo_mcp.__version__)"
    ```
 
 ## Making Changes
@@ -71,7 +71,7 @@ Run the test suite:
 uv run pytest
 
 # Run with coverage
-uv run pytest --cov=src/nanuk_mcp
+uv run pytest --cov=src/igloo_mcp
 
 # Run specific test file
 uv run pytest tests/test_specific.py
@@ -140,7 +140,7 @@ Closes #123
 
 ### Architecture
 
-- Follow the service layer pattern (see `src/nanuk_mcp/service_layer/`)
+- Follow the service layer pattern (see `src/igloo_mcp/service_layer/`)
 - Keep MCP interface as thin wrapper around services
 - Use dependency injection for testability
 - Maintain backward compatibility when possible
@@ -166,7 +166,7 @@ Closes #123
 
 - Update version in `pyproject.toml`
 - Update version references in documentation
-- Update `__version__` in `src/nanuk_mcp/__init__.py`
+- Update `__version__` in `src/igloo_mcp/__init__.py`
 - Create release notes in CHANGELOG.md
 
 ### Release Checklist
@@ -194,4 +194,4 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ---
 
-Thank you for contributing to Nanuk MCP! 🐻‍❄️
+Thank you for contributing to Igloo MCP! 🐻‍❄️

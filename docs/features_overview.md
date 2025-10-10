@@ -1,4 +1,4 @@
-# nanuk-mcp Features Overview
+# igloo-mcp Features Overview
 
 ## 🚀 Core Features
 
@@ -135,11 +135,11 @@
 **MCP Server Usage**:
 ```bash
 # Start MCP server with profile validation (v2.0+)
-nanuk-mcp  # Shows validation success/failure immediately
+igloo-mcp  # Shows validation success/failure immediately
 export SNOWFLAKE_PROFILE=my-profile  # Clear profile selection
 
 # Profile selection via command line
-nanuk-mcp --profile my-profile
+igloo-mcp --profile my-profile
 ```
 
 **MCP Tools**:
@@ -200,7 +200,7 @@ nanuk-mcp --profile my-profile
 **CLI Usage**:
 ```bash
 # Startup with validation
-nanuk-mcp  # Shows immediate validation feedback
+igloo-mcp  # Shows immediate validation feedback
 
 # Expected successful startup:
 # ✓ Snowflake profile validation successful: dev
@@ -495,7 +495,7 @@ def test_partial_failure_handling():
 
 ## 🎉 Conclusion
 
-nanuk-mcp provides a comprehensive suite of features for Snowflake data management, with particularly strong coverage in:
+igloo-mcp provides a comprehensive suite of features for Snowflake data management, with particularly strong coverage in:
 - Core CLI functionality
 - Circuit breaker and reliability patterns
 - Error handling and monitoring

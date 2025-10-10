@@ -2,7 +2,7 @@
 
 ## Overview
 
-The MCP (Model Context Protocol) server in nanuk-mcp provides a structured interface between AI assistants and Snowflake databases. This document details the complete architecture, data flow, and implementation patterns.
+The MCP (Model Context Protocol) server in igloo-mcp provides a structured interface between AI assistants and Snowflake databases. This document details the complete architecture, data flow, and implementation patterns.
 
 ## System Components
 
@@ -16,7 +16,7 @@ The MCP server implements the Model Context Protocol specification, which define
 ### 2. Server Implementation
 
 ```
-src/nanuk_mcp/mcp_server.py
+src/igloo_mcp/mcp_server.py
 ├── SnowflakeMCPServer (Main Class)
 │   ├── __init__()           # Initialize server, CLI wrapper, config
 │   ├── run()                # Async server lifecycle
@@ -34,7 +34,7 @@ src/nanuk_mcp/mcp_server.py
 
 ### 3. Integration Points
 
-The MCP server integrates with multiple nanuk-mcp components:
+The MCP server integrates with multiple igloo-mcp components:
 
 ```
 MCP Server
@@ -89,7 +89,7 @@ Each tool follows this execution pattern:
    - Use profile defaults otherwise
 
 3. **Operation Execution**
-   - Call underlying nanuk-mcp function
+   - Call underlying igloo-mcp function
    - Handle errors gracefully
 
 4. **Response Formatting**
@@ -186,7 +186,7 @@ with ThreadPoolExecutor(max_workers=concurrency) as executor:
 ### Authentication Flow
 
 ```
-AI Assistant → MCP Server → nanuk-mcp → Snowflake CLI → Snowflake
+AI Assistant → MCP Server → igloo-mcp → Snowflake CLI → Snowflake
                                                     ↓
                                           Profile Authentication
                                           (Key-pair/SSO/OAuth)
@@ -263,10 +263,10 @@ BATCH_SIZE = 1000           # Objects per batch
 
 ```
 Standard Installation (includes MCP)
-    pip install nanuk-mcp
+    pip install igloo-mcp
 
 Development Installation
-    pip install nanuk-mcp[dev]
+    pip install igloo-mcp[dev]
 
 Development Installation
     uv sync --dev
@@ -276,7 +276,7 @@ Development Installation
 ### Runtime Dependencies
 
 ```
-nanuk-mcp
+igloo-mcp
     ├── fastmcp (>= 2.8.1)  # MCP framework
     ├── mcp (>= 1.0.0)               # Protocol implementation
     ├── sqlglot (>= 27.16.3)         # SQL parsing
@@ -364,4 +364,4 @@ Phase 3: Microservice Architecture
 - [MCP Specification](https://modelcontextprotocol.io/specification)
 - [Snowflake CLI Documentation](https://docs.snowflake.com/en/user-guide/snowcli)
 - [JSON-RPC 2.0 Specification](https://www.jsonrpc.org/specification)
-- [nanuk-mcp Repository](https://github.com/Evan-Kim2028/nanuk-mcp)
+- [igloo-mcp Repository](https://github.com/Evan-Kim2028/igloo-mcp)

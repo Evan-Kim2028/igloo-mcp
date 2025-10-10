@@ -9,24 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### BREAKING CHANGES
 
-**🐻‍❄️ Package Rebrand: snowcli-tools → nanuk-mcp**
+**🐻‍❄️ Package Rebrand: snowcli-tools → igloo-mcp**
 
 The package has been renamed to better reflect its MCP-first architecture and create a unique brand identity.
 
 #### Changed
-- **Package name**: `snowcli-tools` → `nanuk-mcp`
-- **Import namespace**: `from snowcli_tools` → `from nanuk_mcp`
-- **PyPI package**: `pip install snowcli-tools` → `pip install nanuk-mcp`
-- **MCP command**: `snowcli-mcp` → `nanuk-mcp`
-- **GitHub repository**: `Evan-Kim2028/snowcli-tools` → `Evan-Kim2028/nanuk-mcp`
+- **Package name**: `snowcli-tools` → `igloo-mcp`
+- **Import namespace**: `from snowcli_tools` → `from igloo_mcp`
+- **PyPI package**: `pip install snowcli-tools` → `pip install igloo-mcp`
+- **MCP command**: `snowcli-mcp` → `igloo-mcp`
+- **GitHub repository**: `Evan-Kim2028/snowcli-tools` → `Evan-Kim2028/igloo-mcp`
 
 **CLI Interface Removed**
 
-The legacy CLI interface (`nanuk` command) has been removed. Nanuk is now MCP-only.
+The legacy CLI interface (`nanuk` command) has been removed. Igloo is now MCP-only.
 
 #### Removed
 - `nanuk` CLI command and all subcommands
-- `src/nanuk_mcp/cli.py` and `src/nanuk_mcp/commands/` directory (~774 LOC)
+- `src/igloo_mcp/cli.py` and `src/igloo_mcp/commands/` directory (~774 LOC)
 - CLI-specific dependency: `click>=8.0.0`
 - CLI-specific tests
 

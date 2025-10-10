@@ -1,10 +1,10 @@
 # MCP Integration Guide
 
-Nanuk MCP provides MCP (Model Context Protocol) integration for AI assistants, enabling natural language interaction with your Snowflake data.
+Igloo MCP provides MCP (Model Context Protocol) integration for AI assistants, enabling natural language interaction with your Snowflake data.
 
 ## Quick Start
 
-1. **Install Nanuk MCP**:
+1. **Install Igloo MCP**:
    ```bash
    pip install igloo-mcp-mcp
    ```
@@ -127,7 +127,7 @@ Nanuk MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 
 ## Available MCP Tools
 
-Nanuk MCP provides these MCP tools for AI assistants:
+Igloo MCP provides these MCP tools for AI assistants:
 
 | Tool | Purpose | Example Use |
 |------|---------|-------------|

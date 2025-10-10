@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-The MCP server is the primary interface for Nanuk MCP (v2.0+). It exposes Snowflake operations as structured tools that AI assistants can call through the MCP protocol.
+The MCP server is the primary interface for Igloo MCP (v2.0+). It exposes Snowflake operations as structured tools that AI assistants can call through the MCP protocol.
 
 ### Core Architecture
 - MCP server built on FastMCP framework
@@ -225,7 +225,7 @@ The MCP server respects all igloo-mcp environment variables:
 The MCP server uses the same logging configuration as igloo-mcp. Enable debug logging:
 
 ```bash
-export NANUK_MCP_DEBUG=1
+export IGLOO_MCP_DEBUG=1
 ```
 
 ### Error Reporting

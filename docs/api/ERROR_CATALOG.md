@@ -1,6 +1,6 @@
 # Error Catalog
 
-Complete reference for nanuk-mcp errors and solutions.
+Complete reference for igloo-mcp errors and solutions.
 
 ## ValueError Errors
 

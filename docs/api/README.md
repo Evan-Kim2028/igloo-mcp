@@ -1,8 +1,8 @@
-# Nanuk MCP MCP API Documentation
+# Igloo MCP MCP API Documentation
 
 ## Overview
 
-Nanuk MCP provides 11 MCP tools for Snowflake data operations, built on top of the official `snowflake-labs-mcp` service.
+Igloo MCP provides 11 MCP tools for Snowflake data operations, built on top of the official `snowflake-labs-mcp` service.
 
 ## Quick Links
 
@@ -42,7 +42,7 @@ Nanuk MCP provides 11 MCP tools for Snowflake data operations, built on top of t
 
 - Snowflake account with valid credentials
 - Snowflake CLI configured with connection profile
-- nanuk-mcp installed
+- igloo-mcp installed
 
 ### Basic Usage
 
