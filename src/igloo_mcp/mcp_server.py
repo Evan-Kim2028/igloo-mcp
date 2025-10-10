@@ -42,8 +42,7 @@ from mcp_server_snowflake.utils import (  # type: ignore[import-untyped]
 
 from .config import Config, ConfigError, apply_config_overrides, get_config, load_config
 from .context import create_service_context
-from .lineage import LineageQueryService
-from .lineage.identifiers import parse_table_name
+# Lineage functionality removed - not part of igloo-mcp
 from .mcp.tools import (
     BuildCatalogTool,
     BuildDependencyGraphTool,
@@ -52,7 +51,7 @@ from .mcp.tools import (
     GetCatalogSummaryTool,
     HealthCheckTool,
     PreviewTableTool,
-    QueryLineageTool,
+    # QueryLineageTool,  # Removed - lineage functionality not part of igloo-mcp
 )
 from .mcp.utils import get_profile_recommendations, json_compatible
 from .mcp_health import (
@@ -118,73 +117,7 @@ def _execute_query_sync(
                 restore_session_context(cursor, original)
 
 
-def _query_lineage_sync(
-    object_name: str,
-    direction: str,
-    depth: int,
-    fmt: str,
-    catalog_dir: str,
-    cache_dir: str,
-    config: Config,
-) -> Dict[str, Any]:
-    """Query lineage graph for a specific object.
-
-    Raises:
-        ValueError: If object is not found in lineage graph
-    """
-    service = LineageQueryService(
-        catalog_dir=Path(catalog_dir), cache_root=Path(cache_dir)
-    )
-
-    default_db = config.snowflake.database
-    default_schema = config.snowflake.schema
-    qualified = parse_table_name(object_name).with_defaults(default_db, default_schema)
-    base_key = qualified.key()
-    candidates = [base_key]
-    if not base_key.endswith("::task"):
-        candidates.append(f"{base_key}::task")
-
-    result = None
-    resolved_key: Optional[str] = None
-    for candidate in candidates:
-        try:
-            result = service.object_subgraph(
-                candidate, direction=direction, depth=depth
-            )
-        except KeyError:
-            continue
-        resolved_key = candidate
-        break
-
-    if result is None or resolved_key is None:
-        raise ValueError(
-            f"Object '{object_name}' not found in lineage graph. "
-            f"Run build_catalog first or verify the object name. "
-            f"Catalog directory: {catalog_dir}"
-        )
-
-    payload: Dict[str, Any] = {
-        "object": resolved_key,
-        "direction": direction,
-        "depth": depth,
-        "node_count": len(result.graph.nodes),
-        "edge_count": len(result.graph.edge_metadata),
-    }
-
-    if fmt == "json":
-        payload["graph"] = (
-            result.graph.to_dict()
-            if hasattr(result.graph, "to_dict")
-            else json_compatible(result.graph)
-        )
-    else:
-        summary = [
-            f"- {node.attributes.get('name', key)} ({node.node_type.value})"
-            for key, node in result.graph.nodes.items()
-        ]
-        payload["summary"] = "\n".join(summary)
-
-    return payload
+# _query_lineage_sync function removed - lineage functionality not part of igloo-mcp
 
 
 def register_nanuk_mcp(
@@ -218,7 +151,7 @@ def register_nanuk_mcp(
     # Instantiate all extracted tool classes
     execute_query_inst = ExecuteQueryTool(config, snowflake_service, _health_monitor)
     preview_table_inst = PreviewTableTool(config, snowflake_service, query_service)
-    query_lineage_inst = QueryLineageTool(config)
+    # query_lineage_inst = QueryLineageTool(config)  # Removed - lineage functionality not part of igloo-mcp
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
     build_dependency_graph_inst = BuildDependencyGraphTool(dependency_service)
     test_connection_inst = ConnectionTestTool(config, snowflake_service)
@@ -328,40 +261,7 @@ def register_nanuk_mcp(
             include_ddl=include_ddl,
         )
 
-    @server.tool(name="query_lineage", description="Query cached lineage graph")
-    async def query_lineage_tool(
-        object_name: Annotated[str, Field(description="Object name to analyze")],
-        direction: Annotated[
-            str,
-            Field(
-                description="Traversal direction (upstream/downstream/both)",
-                default="both",
-            ),
-        ] = "both",
-        depth: Annotated[
-            int, Field(description="Traversal depth", ge=1, le=10, default=3)
-        ] = 3,
-        format: Annotated[
-            str, Field(description="Output format (text/json)", default="text")
-        ] = "text",
-        catalog_dir: Annotated[
-            str,
-            Field(description="Catalog directory", default="./data_catalogue"),
-        ] = "./data_catalogue",
-        cache_dir: Annotated[
-            str,
-            Field(description="Lineage cache directory", default="./lineage"),
-        ] = "./lineage",
-    ) -> Dict[str, Any]:
-        """Query lineage graph - delegates to QueryLineageTool."""
-        return await query_lineage_inst.execute(
-            object_name=object_name,
-            direction=direction,
-            depth=depth,
-            format=format,
-            catalog_dir=catalog_dir,
-            cache_dir=cache_dir,
-        )
+    # query_lineage tool removed - lineage functionality not part of igloo-mcp
 
     @server.tool(
         name="build_dependency_graph", description="Build object dependency graph"
