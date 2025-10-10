@@ -1,7 +1,7 @@
-# Nanuk MCP - Agentic Native Snowflake Workflow with MCP
+# Igloo MCP - Snowflake MCP Server for Agentic Native Workflows
 
 
-Nanuk (Inuit for "polar bear") enhances the official [Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp) with more features for agentic native workflows.
+Igloo MCP is a standalone MCP server for Snowflake operations, designed for agentic native workflows with AI assistants. Built from the ground up with SnowCLI integration for maximum simplicity and performance.
 
 ## ✨ Features
 
@@ -13,25 +13,21 @@ Nanuk (Inuit for "polar bear") enhances the official [Snowflake Labs MCP](https:
 
 [📖 See Release Notes](./RELEASE_NOTES.md) for details.
 
-[![PyPI version](https://badge.fury.io/py/nanuk-mcp.svg)](https://pypi.org/project/nanuk-mcp/)
+[![PyPI version](https://badge.fury.io/py/igloo-mcp.svg)](https://pypi.org/project/igloo-mcp/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
 ## Available MCP Tools
 
-### Nanuk MCP Tools
+### Igloo MCP Tools
 - `execute_query` - Execute SQL queries with safety checks
 - `preview_table` - Preview table contents
 - `build_catalog` - Build metadata catalog
 - `get_catalog_summary` - Get catalog overview
-- `query_lineage` - Query data lineage
 - `build_dependency_graph` - Build dependency graph
 - `test_connection` - Test Snowflake connection
 - `health_check` - Get system health status
-
-### Upstream Snowflake Labs MCP Tools
-Nanuk MCP also provides access to all tools from the [official Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp), including Cortex AI and object management tools.
 
 See [MCP Documentation](docs/mcp/mcp_server_user_guide.md) for details.
 
@@ -45,14 +41,14 @@ See [MCP Documentation](docs/mcp/mcp_server_user_guide.md) for details.
 
 **Install from PyPI for stable releases**:
 ```bash
-uv pip install nanuk-mcp
+uv pip install igloo-mcp
 ```
 
 ## ⚡ Quickstart
 
 ```bash
 # 1. Install (1 minute)
-uv pip install nanuk-mcp  # snowflake-cli-labs installed automatically
+uv pip install igloo-mcp  # snowflake-cli-labs installed automatically
 
 # 2. Create Snowflake profile (2 minutes)
 snow connection add \
@@ -68,7 +64,7 @@ snow connection add \
 {
   "mcpServers": {
     "snowflake": {
-      "command": "nanuk-mcp",
+      "command": "igloo-mcp",
       "args": ["--profile", "quickstart"]
     }
   }
@@ -96,7 +92,7 @@ snow connection add --connection-name "my-profile" \
   --private-key-file "/path/to/key.p8" --database "DB" --warehouse "WH"
 
 # 2. Start MCP server
-SNOWFLAKE_PROFILE=my-profile nanuk-mcp
+SNOWFLAKE_PROFILE=my-profile igloo-mcp
 
 # Expected output:
 # ✓ MCP server started successfully
@@ -109,15 +105,15 @@ See [Getting Started Guide](docs/getting-started.md) for detailed setup instruct
 
 | Task | Command | Notes |
 |------|---------|-------|
-| Start MCP server | `nanuk-mcp` | For AI assistant integration |
-| Start with profile | `nanuk-mcp --profile PROF` | Specify profile explicitly |
-| Configure | `nanuk-mcp --configure` | Interactive setup |
+| Start MCP server | `igloo-mcp` | For AI assistant integration |
+| Start with profile | `igloo-mcp --profile PROF` | Specify profile explicitly |
+| Configure | `igloo-mcp --configure` | Interactive setup |
 
 > 🐻‍❄️ **MCP-Only Architecture**
 > Nanuk is MCP-only. All functionality is available through MCP tools.
 
 **Profile Selection Options**:
-- **Command flag**: `nanuk-mcp --profile PROFILE_NAME` (explicit)
+- **Command flag**: `igloo-mcp --profile PROFILE_NAME` (explicit)
 - **Environment variable**: `export SNOWFLAKE_PROFILE=PROFILE_NAME` (session)
 - **Default profile**: Set with `snow connection set-default PROFILE_NAME` (implicit)
 
