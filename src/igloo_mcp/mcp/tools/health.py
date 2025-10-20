@@ -9,12 +9,13 @@ from typing import Any, Dict, Optional
 
 import anyio
 
-from ...config import Config
-from ...profile_utils import (
+from igloo_mcp.config import Config
+from igloo_mcp.profile_utils import (
     ProfileValidationError,
     get_profile_summary,
     validate_and_resolve_profile,
 )
+
 from .base import MCPTool
 
 

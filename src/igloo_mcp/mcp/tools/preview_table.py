@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from ...config import Config
-from ...service_layer import QueryService
+from igloo_mcp.config import Config
+from igloo_mcp.service_layer import QueryService
+
 from .base import MCPTool
 
 
@@ -106,8 +107,8 @@ class PreviewTableTool(MCPTool):
                 "preview": {
                     "columns": result.columns,
                     "rows": result.rows,
-                    "limit": limit
-                }
+                    "limit": limit,
+                },
             }
 
         except Exception as e:

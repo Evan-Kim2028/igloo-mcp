@@ -9,7 +9,8 @@ from typing import Any, Dict
 
 import anyio
 
-from ...catalog import CatalogService
+from igloo_mcp.catalog import CatalogService
+
 from .base import MCPTool
 
 
@@ -51,23 +52,19 @@ class GetCatalogSummaryTool(MCPTool):
             summary = await anyio.to_thread.run_sync(
                 self.catalog_service.load_summary, catalog_dir
             )
-            return {
-                "status": "success",
-                "catalog_dir": catalog_dir,
-                "summary": summary
-            }
+            return {"status": "success", "catalog_dir": catalog_dir, "summary": summary}
 
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             return {
                 "status": "error",
                 "error": f"No catalog found in '{catalog_dir}'. Run build_catalog first to generate the catalog.",
-                "catalog_dir": catalog_dir
+                "catalog_dir": catalog_dir,
             }
         except Exception as e:
             return {
                 "status": "error",
                 "error": f"Failed to load catalog summary: {e}",
-                "catalog_dir": catalog_dir
+                "catalog_dir": catalog_dir,
             }
 
     def get_parameter_schema(self) -> Dict[str, Any]:

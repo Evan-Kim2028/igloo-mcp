@@ -54,13 +54,12 @@ def get_snowflake_config_path() -> Path:
     """
     system = platform.system()
 
-    match system:
-        case "Darwin":  # macOS - Using Python 3.12+ match statement
-            config_dir = Path.home() / "Library" / "Application Support" / "snowflake"
-        case "Windows":
-            config_dir = Path.home() / "AppData" / "Local" / "snowflake"
-        case _:  # Linux and others
-            config_dir = Path.home() / ".config" / "snowflake"
+    if system == "Darwin":  # macOS
+        config_dir = Path.home() / "Library" / "Application Support" / "snowflake"
+    elif system == "Windows":
+        config_dir = Path.home() / "AppData" / "Local" / "snowflake"
+    else:  # Linux and others
+        config_dir = Path.home() / ".config" / "snowflake"
 
     return config_dir / "config.toml"
 
@@ -155,11 +154,11 @@ def validate_profile(profile_name: str | None) -> str:
             f"No Snowflake profiles found in {config_path}.\n\n"
             "Quick fix:\n"
             "  snow connection add \\\n"
-            "    --connection-name \"quickstart\" \\\n"
-            "    --account \"<your-account>.<region>\" \\\n"
-            "    --user \"<your-username>\" \\\n"
+            '    --connection-name "quickstart" \\\n'
+            '    --account "<your-account>.<region>" \\\n'
+            '    --user "<your-username>" \\\n'
             "    --password \\\n"
-            "    --warehouse \"<your-warehouse>\"\n\n"
+            '    --warehouse "<your-warehouse>"\n\n'
             "Don't know your account identifier? See: docs/getting-started.md#finding-your-account-identifier"
         )
         raise ProfileValidationError(
@@ -181,9 +180,9 @@ def validate_profile(profile_name: str | None) -> str:
             "No Snowflake profile specified and no valid default found.\n\n"
             f"Available profiles: {', '.join(available_list)}\n\n"
             "Quick fix (choose one):\n"
-            f"  1. Set environment variable: export SNOWFLAKE_PROFILE=\"{available_list[0]}\"\n"
-            f"  2. Pass profile flag: igloo-mcp --profile \"{available_list[0]}\"\n"
-            f"  3. Set default: snow connection set-default \"{available_list[0]}\"\n\n"
+            f'  1. Set environment variable: export SNOWFLAKE_PROFILE="{available_list[0]}"\n'
+            f'  2. Pass profile flag: igloo-mcp --profile "{available_list[0]}"\n'
+            f'  3. Set default: snow connection set-default "{available_list[0]}"\n\n'
             f"Config location: {config_path}"
         )
         raise ProfileValidationError(
@@ -200,8 +199,11 @@ def validate_profile(profile_name: str | None) -> str:
             f"Snowflake profile '{profile_name}' not found.\n\n"
             f"Available profiles ({len(available_list)}): {', '.join(available_list)}\n\n"
             "Quick fix:\n"
-            f"  1. Use existing profile: igloo-mcp --profile \"{available_list[0] if available_list else 'PROFILE_NAME'}\"\n"
-            "  2. Create new profile: snow connection add --connection-name \"" + profile_name + "\" ...\n"
+            "  1. Use existing profile: igloo-mcp --profile "
+            f"\"{available_list[0] if available_list else 'PROFILE_NAME'}\"\n"
+            '  2. Create new profile: snow connection add --connection-name "'
+            + profile_name
+            + '" ...\n'
             "  3. List all profiles: snow connection list\n\n"
             f"Config location: {config_path}"
         )
@@ -249,7 +251,8 @@ def get_profile_summary() -> ProfileSummary:
     config_path = get_snowflake_config_path()
     available_profiles = get_available_profiles()
     default_profile = get_default_profile()
-    current_profile = os.environ.get("SNOWFLAKE_PROFILE")
+    env_profile = os.environ.get("SNOWFLAKE_PROFILE")
+    resolved_profile = None
 
     # Determine authenticator for the current profile if possible
     current_auth = None
@@ -259,10 +262,17 @@ def get_profile_summary() -> ProfileSummary:
             mtime = config_path.stat().st_mtime
             config_data = _load_snowflake_config(config_path, mtime)
             connections = config_data.get("connections", {})
-            active_name = current_profile or default_profile
-            if active_name and isinstance(connections, dict):
-                entry = connections.get(active_name, {}) or {}
-                current_auth = entry.get("authenticator")
+            if isinstance(connections, dict):
+                if env_profile and env_profile in connections:
+                    resolved_profile = env_profile
+                elif default_profile and default_profile in connections:
+                    resolved_profile = default_profile
+                elif connections:
+                    resolved_profile = next(iter(connections))
+
+                if resolved_profile:
+                    entry = connections.get(resolved_profile, {}) or {}
+                    current_auth = entry.get("authenticator")
     except Exception:
         # Non-fatal: leave authenticator as None if parsing fails
         current_auth = None
@@ -272,7 +282,7 @@ def get_profile_summary() -> ProfileSummary:
         config_exists=config_path.exists(),
         available_profiles=sorted(available_profiles),
         default_profile=default_profile,
-        current_profile=current_profile,
+        current_profile=resolved_profile,
         profile_count=len(available_profiles),
         current_profile_authenticator=current_auth,
     )
