@@ -11,19 +11,23 @@ This guide shows you how to set up igloo-mcp with Cursor for Snowflake data oper
 
 ## Step 1: Create Snowflake Profile
 
-First, create a Snowflake profile using the Snowflake CLI:
+First, create a Snowflake profile using the Snowflake CLI. Recommended: SSO (Okta) via external browser.
 
 ```bash
-# Create a profile with password authentication
+# Create a profile with SSO (Okta) via external browser
 snow connection add \
   --connection-name "cursor-profile" \
   --account "<your-account>.<region>" \
   --user "<your-username>" \
-  --password \
+  --authenticator externalbrowser \
   --warehouse "<your-warehouse>"
 
-# Enter password when prompted
+# A browser window opens to your Snowflake/Okta login
 ```
+
+Notes:
+- If your org requires an explicit Okta URL, use: `--authenticator https://<your_okta_domain>.okta.com`
+- If your org doesn’t use SSO, you can use `--password` instead
 
 **Finding your account identifier**:
 - Your Snowflake URL: `https://abc12345.us-east-1.snowflakecomputing.com`
@@ -159,9 +163,9 @@ You can configure multiple Snowflake profiles for different environments:
 }
 ```
 
-### Key-Pair Authentication
+### Key-Pair Authentication (advanced)
 
-For production environments, use key-pair authentication:
+Use RSA key‑pair auth when required by policy or for headless automation:
 
 1. **Generate keys**:
 ```bash

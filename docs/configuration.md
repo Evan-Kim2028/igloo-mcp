@@ -113,7 +113,7 @@ from igloo_mcp.config import Config, SnowflakeConfig
  
  ### Snowflake CLI Profiles
  
- Nanuk MCP uses Snowflake CLI profiles for authentication. Configure them with:
+ Igloo MCP uses Snowflake CLI profiles for authentication. Configure them with:
  
  ```bash
  # List existing profiles
@@ -123,7 +123,7 @@ from igloo_mcp.config import Config, SnowflakeConfig
  snow connection add --connection-name my-profile \
    --account myaccount.us-east-1 \
    --user myuser \
-   --private-key-file ~/.snowflake/rsa_key.p8
+   --authenticator externalbrowser
  
  # Test a profile via MCP
  # In your AI assistant, ask: "Test my Snowflake connection"

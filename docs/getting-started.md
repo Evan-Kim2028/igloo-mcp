@@ -53,7 +53,7 @@ Before creating your profile, gather these Snowflake parameters:
 |-----------|----------|-------------|-------------|---------|
 | **Account Identifier** | Yes | Your Snowflake account location | Snowflake URL (remove `.snowflakecomputing.com`) | `abc12345.us-east-1` |
 | **Username** | Yes | Your Snowflake username | From your Snowflake admin or login | `alex.chen` |
-| **Password or Key** | Yes | Authentication credential | Password you set, or RSA key file path | `~/.snowflake/key.pem` |
+| **Authentication** | Yes | SSO (Okta via browser), password, or key‑pair | See examples below | `externalbrowser` |
 | **Warehouse** | Recommended | Compute cluster for queries | Snowflake UI → Admin → Warehouses | `COMPUTE_WH` |
 | **Database** | Optional | Default database | Snowflake UI → Data → Databases | `MY_DB` |
 | **Schema** | Optional | Default schema | Inside database view | `PUBLIC` |
@@ -73,11 +73,40 @@ Before creating your profile, gather these Snowflake parameters:
 
 ### Create a Snowflake Profile
 
+Recommended: SSO (Okta) via external browser
+
 ```bash
 # Create a new profile (interactive)
 snow connection add
 
-# Example with key-pair authentication
+# Example with SSO (Okta)
+snow connection add \
+  --connection-name my-profile \
+  --account mycompany-prod.us-east-1 \
+  --user alex.chen \
+  --warehouse COMPUTE_WH \
+  --database MY_DB \
+  --schema PUBLIC \
+  --authenticator externalbrowser
+
+# If your org requires a direct Okta URL instead of externalbrowser
+# --authenticator https://<your_okta_domain>.okta.com
+```
+
+Fallbacks:
+
+```bash
+# Password authentication (no SSO)
+snow connection add \
+  --connection-name my-profile \
+  --account mycompany-prod.us-east-1 \
+  --user alex.chen \
+  --warehouse COMPUTE_WH \
+  --database MY_DB \
+  --schema PUBLIC \
+  --password
+
+# Key-pair authentication (advanced/headless)
 snow connection add \
   --connection-name my-profile \
   --account mycompany-prod.us-east-1 \

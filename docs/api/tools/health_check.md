@@ -10,19 +10,40 @@ None - returns full system status.
 
 ```json
 {
-  "status": "healthy",
-  "snowflake_connection": true,
+  "overall_status": "healthy",
+  "connection": {
+    "status": "connected",
+    "connected": true,
+    "profile": "quickstart",
+    "warehouse": "COMPUTE_WH",
+    "database": "ANALYTICS",
+    "schema": "PUBLIC",
+    "role": "ANALYST"
+  },
   "profile": {
-    "name": "default",
-    "valid": true
+    "status": "valid",
+    "profile": "quickstart",
+    "config": {
+      "config_path": "/Users/user/.config/snowflake/config.toml",
+      "config_exists": true,
+      "available_profiles": ["quickstart", "prod"],
+      "default_profile": "quickstart",
+      "current_profile": "quickstart",
+      "profile_count": 2
+    },
+    "authentication": {
+      "authenticator": "externalbrowser",
+      "is_externalbrowser": true,
+      "is_okta_url": false
+    }
   },
-  "resources": {
-    "catalog": "available",
-    "lineage": "available",
-    "cortex": "unavailable"
+  "catalog": {
+    "status": "ready"
   },
-  "version": "1.8.0",
-  "timestamp": 1702345678.9
+  "system": {
+    "uptime_seconds": 120,
+    "timestamp": 1702345678.9
+  }
 }
 ```
 

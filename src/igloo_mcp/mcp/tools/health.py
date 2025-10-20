@@ -166,10 +166,18 @@ class HealthCheckTool(MCPTool):
                 validate_and_resolve_profile
             )
 
-            # Get profile summary
-            summary = await anyio.to_thread.run_sync(
-                get_profile_summary
-            )
+            # Get profile summary (includes authenticator when available)
+            summary = await anyio.to_thread.run_sync(get_profile_summary)
+
+            # Derive authenticator details for troubleshooting
+            auth = summary.current_profile_authenticator
+            auth_info: Dict[str, Any] = {
+                "authenticator": auth,
+                "is_externalbrowser": (auth == "externalbrowser"),
+                "is_okta_url": (isinstance(auth, str) and auth.startswith("http")),
+            }
+            if isinstance(auth, str) and auth.startswith("http"):
+                auth_info["domain"] = auth.split("//", 1)[-1]
 
             return {
                 "status": "valid",
@@ -182,6 +190,7 @@ class HealthCheckTool(MCPTool):
                     "current_profile": summary.current_profile,
                     "profile_count": summary.profile_count,
                 },
+                "authentication": auth_info,
                 "warnings": [],
             }
 

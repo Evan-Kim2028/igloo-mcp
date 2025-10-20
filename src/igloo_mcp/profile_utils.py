@@ -43,6 +43,7 @@ class ProfileSummary(NamedTuple):
     default_profile: str | None
     current_profile: str | None
     profile_count: int
+    current_profile_authenticator: str | None
 
 
 @functools.lru_cache(maxsize=1)
@@ -250,6 +251,22 @@ def get_profile_summary() -> ProfileSummary:
     default_profile = get_default_profile()
     current_profile = os.environ.get("SNOWFLAKE_PROFILE")
 
+    # Determine authenticator for the current profile if possible
+    current_auth = None
+    try:
+        # Use mtime for cache invalidation
+        if config_path.exists():
+            mtime = config_path.stat().st_mtime
+            config_data = _load_snowflake_config(config_path, mtime)
+            connections = config_data.get("connections", {})
+            active_name = current_profile or default_profile
+            if active_name and isinstance(connections, dict):
+                entry = connections.get(active_name, {}) or {}
+                current_auth = entry.get("authenticator")
+    except Exception:
+        # Non-fatal: leave authenticator as None if parsing fails
+        current_auth = None
+
     return ProfileSummary(
         config_path=config_path,
         config_exists=config_path.exists(),
@@ -257,6 +274,7 @@ def get_profile_summary() -> ProfileSummary:
         default_profile=default_profile,
         current_profile=current_profile,
         profile_count=len(available_profiles),
+        current_profile_authenticator=current_auth,
     )
 
 

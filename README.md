@@ -6,10 +6,9 @@ Igloo MCP is a standalone MCP server for Snowflake operations, designed for agen
 ## ✨ Features
 
 - 🛡️ **SQL Safety:** Blocks destructive operations (DELETE, DROP, TRUNCATE) with safe alternatives
-- 🧠 **Intelligent Errors:** Compact mode (default) saves 70% tokens; verbose mode for debugging
+- 🧠 **Intelligent Errors:** Compact mode (default) and Verbose mode. Standard exception-based error handling
 - ⏱️ **Agent-Controlled Timeouts:** Configure query timeouts per-request (1-3600s)
 - ✅ **MCP Protocol Compliant:** Standard exception-based error handling
-- 🚀 **Zero Vendoring:** Imports from upstream, stays in sync
 
 [📖 See Release Notes](./RELEASE_NOTES.md) for details.
 
@@ -83,18 +82,24 @@ python -c "import igloo_mcp; print('igloo-mcp installed successfully')"
 
 ### Step 2: Create Snowflake Profile (2 minutes)
 
+Recommended: use your organization's SSO (Okta) via external browser.
+
 ```bash
-# Create a profile with password authentication (easiest for getting started)
+# Create a profile with SSO (Okta) via external browser
 snow connection add \
   --connection-name "quickstart" \
   --account "<your-account>.<region>" \
   --user "<your-username>" \
-  --password \
+  --authenticator externalbrowser \
   --warehouse "<your-warehouse>"
 
-# Enter password when prompted
+# A browser window opens to your Snowflake/Okta login
 # Expected: "Connection 'quickstart' added successfully"
 ```
+
+Notes:
+- If your org requires an explicit Okta URL, use: `--authenticator https://<your_okta_domain>.okta.com`
+- If your org doesn’t use SSO, see the password fallback below
 
 **Finding your account identifier**:
 - Your Snowflake URL: `https://abc12345.us-east-1.snowflakecomputing.com`
@@ -109,6 +114,19 @@ snow connection add \
 - Account identifier
 - Username & password
 - Warehouse name
+
+Fallback (no SSO): password authentication
+
+```bash
+snow connection add \
+  --connection-name "quickstart" \
+  --account "<your-account>.<region>" \
+  --user "<your-username>" \
+  --password \
+  --warehouse "<your-warehouse>"
+
+# Enter password when prompted
+```
 
 ### Step 3: Configure Cursor MCP (1 minute)
 
@@ -202,9 +220,9 @@ Try these prompts in Cursor:
 → Runs custom SQL queries
 ```
 
-#### Improve Security
+#### Alternate: Key‑Pair (advanced)
 
-Replace password auth with key-pair authentication:
+Use RSA key‑pair auth when required by security policy or for headless automation:
 
 1. **Generate keys**:
 ```bash
@@ -269,6 +287,7 @@ snow connection list
 - 💬 [GitHub Discussions](https://github.com/Evan-Kim2028/igloo-mcp/discussions) - Community help
 - 🐛 [GitHub Issues](https://github.com/Evan-Kim2028/igloo-mcp/issues) - Report bugs
 - 📖 [Full Documentation](docs/getting-started.md) - Comprehensive guides
+- 🔐 [Authentication Options](docs/authentication.md) - SSO/Okta, password, key‑pair
 
 ---
 
@@ -280,7 +299,7 @@ snow connection list
 # 1. Set up your Snowflake profile
 snow connection add --connection-name "my-profile" \
   --account "your-account.region" --user "your-username" \
-  --private-key-file "/path/to/key.p8" --database "DB" --warehouse "WH"
+  --authenticator externalbrowser --database "DB" --warehouse "WH"
 
 # 2. Configure Cursor MCP
 # Edit ~/.cursor/mcp.json:

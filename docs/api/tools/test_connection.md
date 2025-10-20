@@ -20,6 +20,8 @@ None - uses current profile configuration.
 }
 ```
 
+Note: For SSO/Okta troubleshooting (e.g., which authenticator a profile uses), prefer `health_check`, which surfaces the active profile’s authenticator details.
+
 ## Errors
 
 ```json
@@ -51,4 +53,4 @@ else:
 ## Related
 
 - [check_profile_config](check_profile_config.md) - Validate profile setup
-- [health_check](health_check.md) - Comprehensive health status
+- [health_check](health_check.md) - Comprehensive health status with authenticator details
