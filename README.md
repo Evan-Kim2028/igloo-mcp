@@ -282,6 +282,11 @@ snow connection list
 - Check database/schema access: `SHOW GRANTS TO USER <your_username>`
 - Contact your Snowflake admin for permissions
 
+#### "SQL statement type 'Union' is not permitted"
+**Fix**:
+- Upgrade to the latest igloo-mcp; UNION/INTERSECT/EXCEPT now inherit SELECT permissions
+- If you override SQL permissions, ensure `select` remains enabled in your configuration
+
 #### Still stuck?
 
 - 💬 [GitHub Discussions](https://github.com/Evan-Kim2028/igloo-mcp/discussions) - Community help

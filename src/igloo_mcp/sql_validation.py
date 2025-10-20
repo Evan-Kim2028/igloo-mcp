@@ -42,6 +42,52 @@ SAFE_ALTERNATIVES: Dict[str, Dict[str, str]] = {
     },
 }
 
+# Statement types that should inherit SELECT permissions (case insensitive).
+_SELECT_EQUIVALENT_PREFIXES = ("union", "intersect", "except", "minus")
+_SELECT_EQUIVALENT_ALLOWLIST = {
+    "union",
+    "union all",
+    "union_all",
+    "unionall",
+    "intersect",
+    "intersect all",
+    "intersect_all",
+    "intersectall",
+    "except",
+    "except all",
+    "except_all",
+    "exceptall",
+    "minus",
+    "minus all",
+    "minus_all",
+    "minusall",
+}
+
+
+def _canonicalize_statement_type(stmt_type: str | None) -> str:
+    """Return a lowercase canonical representation of a statement type."""
+
+    if not stmt_type:
+        return ""
+
+    normalized = stmt_type.replace("_", "")
+    normalized = normalized.replace(" ", "")
+    return normalized.lower()
+
+
+def _is_select_equivalent(stmt_type: str | None) -> bool:
+    """Determine if a statement type should be treated as SELECT."""
+
+    canonical = _canonicalize_statement_type(stmt_type)
+
+    if not canonical:
+        return False
+
+    if canonical.startswith(_SELECT_EQUIVALENT_PREFIXES):
+        return True
+
+    return False
+
 
 def extract_table_name(sql_statement: str) -> str:
     """Extract table name from SQL statement using sqlglot.
@@ -148,8 +194,41 @@ def validate_sql_statement(
         - is_valid: True if allowed, False if blocked
         - error_message: Detailed error with alternatives if blocked, None if valid
     """
-    # Use upstream validation
-    stmt_type, is_valid = validate_sql_type(statement, allow_list, disallow_list)
+    # Build effective allow list: include SELECT-equivalent statements when SELECT is allowed
+    allow_set = {item.lower() for item in allow_list}
+    disallow_set = {item.lower() for item in disallow_list}
+    effective_allow_list = list(allow_list)
+
+    if "select" in allow_set:
+        for extra in _SELECT_EQUIVALENT_ALLOWLIST:
+            if extra not in allow_set:
+                effective_allow_list.append(extra)
+                allow_set.add(extra)
+
+    # Use upstream validation with the expanded allow list
+    stmt_type, is_valid = validate_sql_type(
+        statement, effective_allow_list, disallow_list
+    )
+
+    canonical_stmt = _canonicalize_statement_type(stmt_type)
+
+    if canonical_stmt.startswith("with"):
+        underlying_type = get_statement_type(statement)
+        canonical_underlying = _canonicalize_statement_type(underlying_type)
+        stmt_type = underlying_type or stmt_type
+
+        if canonical_underlying == "select" and "select" in allow_set:
+            return "Select", True, None
+
+        if canonical_underlying in disallow_set:
+            is_valid = False
+
+    # Normalize statement types that should inherit SELECT permissions
+    if _is_select_equivalent(stmt_type):
+        stmt_type = "Select"
+        if "select" in allow_set and not is_valid:
+            # Treat SELECT-equivalent statements as allowed when SELECT is permitted
+            return stmt_type, True, None
 
     if is_valid:
         return stmt_type, True, None
@@ -183,4 +262,9 @@ def get_sql_statement_type(statement: str) -> str:
     Returns:
         Statement type (e.g., "Select", "Delete", "Unknown")
     """
-    return get_statement_type(statement)
+    stmt_type = get_statement_type(statement)
+
+    if _is_select_equivalent(stmt_type):
+        return "Select"
+
+    return stmt_type

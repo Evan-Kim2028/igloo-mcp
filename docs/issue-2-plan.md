@@ -23,9 +23,9 @@ Link: https://github.com/Evan-Kim2028/igloo-mcp/issues/2
 
 ## Proposed Fix
 - Post‑process upstream classification in `validate_sql_statement`:
-  - Normalize `Union` → `Select` (treat as allowed if `Select` is allowed).
-  - Consider similar normalization for `With` leading CTE selects if upstream classifies them separately.
-- Optionally, adjust `get_sql_statement_type` to map `Union` to `Select` for consistency across diagnostics.
+  - Normalize `Union`, `Union All`, `Intersect`, `Except`, `Minus`, and `With` (CTE) to `Select` (case-insensitive) when `Select` is allowed.
+  - Treat all set operators consistently so they inherit `Select`’s allowance.
+- Optionally, adjust `get_sql_statement_type` to map the same set to `Select` for diagnostics consistency.
 
 ## Edge Cases to Cover
 - UNION vs UNION ALL
@@ -52,7 +52,9 @@ Link: https://github.com/Evan-Kim2028/igloo-mcp/issues/2
 - Add a configuration toggle if needed later (not required for this bug fix).
 
 ## Tasks (TODOs)
-- [ ] Implement normalization in `src/igloo_mcp/sql_validation.py`
-- [ ] Add unit tests for UNION/UNION ALL scenarios
-- [ ] (Optional) Add a note to README Troubleshooting about UNION fix
-- [ ] Verify existing tests pass
+- [x] Implement normalization in `src/igloo_mcp/sql_validation.py`
+- [x] Ensure case-insensitive mapping for set operators and CTEs
+- [x] Add unit tests for UNION/UNION ALL/INTERSECT/EXCEPT/MINUS scenarios
+- [x] Add ExecuteQueryTool integration test covering UNION query
+- [x] (Optional) Add a note to README Troubleshooting about UNION fix
+- [ ] Verify existing tests pass *(pytest unavailable locally; pending once environment provides pytest)*
