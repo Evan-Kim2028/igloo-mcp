@@ -35,35 +35,46 @@ AI: "Give me a health report for the snowflake server"
 **Response Format**:
 ```json
 {
-  "status": "healthy|degraded|unhealthy",
-  "timestamp": 1673524800.0,
-  "server_uptime": 3600.5,
-  "components": {
-    "profile": {
-      "status": "healthy",
-      "profile_name": "dev",
-      "is_valid": true,
-      "available_profiles": ["dev", "prod", "staging"],
-      "last_validated": 1673524500.0,
-      "validation_cache_ttl": 30
+  "overall_status": "healthy",
+  "connection": {
+    "status": "connected",
+    "connected": true,
+    "profile": "dev",
+    "warehouse": "COMPUTE_WH",
+    "database": "DEV_DB",
+    "schema": "PUBLIC",
+    "role": "DEV_ROLE"
+  },
+  "profile": {
+    "status": "valid",
+    "profile": "dev",
+    "config": {
+      "config_path": "/Users/user/.config/snowflake/config.toml",
+      "config_exists": true,
+      "available_profiles": ["dev", "staging", "prod"],
+      "default_profile": "dev",
+      "current_profile": "dev",
+      "profile_count": 3
     },
-    "connection": {
-      "status": "healthy",
-      "last_tested": 1673524700.0,
-      "response_time_ms": 245,
-      "circuit_breaker_state": "closed"
-    },
-    "resources": {
-      "status": "healthy",
-      "available": {
-        "catalog": true,
-        "lineage": true,
-        "cortex_search": true,
-        "dependency_graph": true
-      },
-      "dependencies_met": true,
-      "last_checked": 1673524750.0
+    "authentication": {
+      "authenticator": "externalbrowser",
+      "is_externalbrowser": true,
+      "is_okta_url": false
     }
+  },
+  "resources": {
+    "status": "healthy",
+    "available": {
+      "catalog": true,
+      "lineage": true,
+      "cortex_search": false,
+      "dependency_graph": true
+    },
+    "dependencies_met": true
+  },
+  "system": {
+    "timestamp": 1673524800.0,
+    "server_uptime": 3600.5
   }
 }
 ```

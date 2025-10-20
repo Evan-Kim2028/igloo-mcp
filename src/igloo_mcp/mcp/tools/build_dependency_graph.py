@@ -9,7 +9,8 @@ from typing import Any, Dict, Optional
 
 import anyio
 
-from ...dependency import DependencyService
+from igloo_mcp.service_layer import DependencyService
+
 from .base import MCPTool
 
 
@@ -55,35 +56,15 @@ class BuildDependencyGraphTool(MCPTool):
             ValueError: If format is invalid
             RuntimeError: If graph build fails
         """
-        if format not in ("json", "dot"):
-            raise ValueError(f"Invalid format '{format}'. Must be 'json' or 'dot'")
-
         try:
             graph = await anyio.to_thread.run_sync(
-                lambda: self.dependency_service.build(
+                lambda: self.dependency_service.build_dependency_graph(
                     database=database,
-                    schema=schema,
-                    account_scope=account_scope,
+                    format=format,
+                    output_dir="./dependencies",
                 )
             )
-
-            if format == "dot":
-                dot_output = self.dependency_service.to_dot(graph)
-                return {
-                    "format": "dot",
-                    "content": dot_output,
-                    "node_count": graph.counts.nodes,
-                    "edge_count": graph.counts.edges,
-                }
-            else:
-                return {
-                    "format": "json",
-                    "nodes": [node.model_dump() for node in graph.nodes],
-                    "edges": [edge.model_dump() for edge in graph.edges],
-                    "counts": graph.counts.model_dump(),
-                    "scope": graph.scope.model_dump(),
-                }
-
+            return graph
         except Exception as e:
             raise RuntimeError(f"Dependency graph build failed: {e}") from e
 

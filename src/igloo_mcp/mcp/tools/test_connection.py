@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from ...config import Config
+from igloo_mcp.config import Config
+
 from .base import MCPTool
 from .health import HealthCheckTool
 
