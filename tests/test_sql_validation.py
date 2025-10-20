@@ -221,6 +221,81 @@ class TestValidateSQLStatement:
         assert is_valid is True
         assert error_msg is None
 
+    def test_select_union_is_allowed(self):
+        """UNION queries should inherit SELECT permissions."""
+        sql = "SELECT 1 UNION SELECT 2"
+        perms = SQLPermissions()
+        allow_list = perms.get_allow_list()
+        disallow_list = perms.get_disallow_list()
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            sql, allow_list, disallow_list
+        )
+
+        assert stmt_type == "Select"
+        assert is_valid is True
+        assert error_msg is None
+
+    def test_select_union_all_is_allowed(self):
+        """UNION ALL queries should inherit SELECT permissions."""
+        sql = "SELECT 1 UNION ALL SELECT 2"
+        perms = SQLPermissions()
+        allow_list = perms.get_allow_list()
+        disallow_list = perms.get_disallow_list()
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            sql, allow_list, disallow_list
+        )
+
+        assert stmt_type == "Select"
+        assert is_valid is True
+        assert error_msg is None
+
+    def test_select_intersect_is_allowed(self):
+        """INTERSECT queries should inherit SELECT permissions."""
+        sql = "SELECT 1 INTERSECT SELECT 2"
+        perms = SQLPermissions()
+        allow_list = perms.get_allow_list()
+        disallow_list = perms.get_disallow_list()
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            sql, allow_list, disallow_list
+        )
+
+        assert stmt_type == "Select"
+        assert is_valid is True
+        assert error_msg is None
+
+    def test_with_clause_is_allowed(self):
+        """CTE (WITH) queries should inherit SELECT permissions."""
+        sql = "WITH cte AS (SELECT 1) SELECT * FROM cte"
+        perms = SQLPermissions()
+        allow_list = perms.get_allow_list()
+        disallow_list = perms.get_disallow_list()
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            sql, allow_list, disallow_list
+        )
+
+        assert stmt_type == "Select"
+        assert is_valid is True
+        assert error_msg is None
+
+    def test_with_delete_remains_blocked(self):
+        """CTE followed by DELETE should stay blocked."""
+        sql = "WITH cte AS (SELECT 1) DELETE FROM users"
+        perms = SQLPermissions()
+        allow_list = perms.get_allow_list()
+        disallow_list = perms.get_disallow_list()
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            sql, allow_list, disallow_list
+        )
+
+        assert stmt_type == "Delete"
+        assert is_valid is False
+        assert error_msg is not None
+
 
 class TestGetSQLStatementType:
     """Test SQL statement type detection."""
@@ -261,3 +336,9 @@ class TestGetSQLStatementType:
         stmt_type = get_sql_statement_type(sql)
         # Upstream may return "Truncate" or "TruncateTable"
         assert stmt_type in ["Truncate", "TruncateTable"]
+
+    def test_detect_union_returns_select(self):
+        """Union statements should be reported as Select for diagnostics."""
+        sql = "SELECT 1 UNION SELECT 2"
+        stmt_type = get_sql_statement_type(sql)
+        assert stmt_type == "Select"
