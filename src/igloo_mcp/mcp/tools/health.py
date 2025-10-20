@@ -17,6 +17,7 @@ from igloo_mcp.profile_utils import (
 )
 
 from .base import MCPTool
+from .schema_utils import boolean_schema
 
 
 class HealthCheckTool(MCPTool):
@@ -58,6 +59,33 @@ class HealthCheckTool(MCPTool):
             "Comprehensive system health check including connection, "
             "profile, Cortex availability, and catalog status"
         )
+
+    @property
+    def category(self) -> str:
+        return "diagnostics"
+
+    @property
+    def tags(self) -> list[str]:
+        return ["health", "profile", "cortex", "catalog", "diagnostics"]
+
+    @property
+    def usage_examples(self) -> list[Dict[str, Any]]:
+        return [
+            {
+                "description": "Full health check including Cortex availability",
+                "parameters": {
+                    "include_cortex": True,
+                    "include_catalog": True,
+                },
+            },
+            {
+                "description": "Profile-only validation (skip Cortex and catalog)",
+                "parameters": {
+                    "include_cortex": False,
+                    "include_catalog": False,
+                },
+            },
+        ]
 
     async def execute(
         self,
@@ -300,22 +328,24 @@ class HealthCheckTool(MCPTool):
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
+            "title": "Health Check Parameters",
             "type": "object",
+            "additionalProperties": False,
             "properties": {
-                "include_cortex": {
-                    "type": "boolean",
-                    "description": "Check Cortex AI services availability",
-                    "default": True,
-                },
-                "include_profile": {
-                    "type": "boolean",
-                    "description": "Validate profile configuration",
-                    "default": True,
-                },
-                "include_catalog": {
-                    "type": "boolean",
-                    "description": "Check catalog resource availability",
-                    "default": False,
-                },
+                "include_cortex": boolean_schema(
+                    "Check Cortex AI services availability",
+                    default=True,
+                    examples=[True, False],
+                ),
+                "include_profile": boolean_schema(
+                    "Validate profile configuration and authenticator",
+                    default=True,
+                    examples=[True, False],
+                ),
+                "include_catalog": boolean_schema(
+                    "Check catalog resource availability via resource manager",
+                    default=False,
+                    examples=[True, False],
+                ),
             },
         }

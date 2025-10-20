@@ -15,13 +15,23 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `statement` | string | ✅ Yes | - | SQL statement to execute |
+| `statement` | string | ✅ Yes | - | SQL statement to execute (min length 1) |
 | `timeout_seconds` | integer | ❌ No | 120 | Query timeout in seconds (1-3600) |
 | `verbose_errors` | boolean | ❌ No | false | Include detailed optimization hints |
-| `warehouse` | string | ❌ No | profile | Warehouse override |
-| `database` | string | ❌ No | profile | Database override |
-| `schema` | string | ❌ No | profile | Schema override |
-| `role` | string | ❌ No | profile | Role override |
+| `warehouse` | string | ❌ No | profile | Warehouse override (Snowflake identifier) |
+| `database` | string | ❌ No | profile | Database override (Snowflake identifier) |
+| `schema` | string | ❌ No | profile | Schema override (Snowflake identifier) |
+| `role` | string | ❌ No | profile | Role override (Snowflake identifier) |
+
+> Identifiers accept standard Snowflake names such as `ANALYTICS_WH` or double-quoted values like `"Analytics-WH"` / `"Sales Analytics"`.
+
+## Discovery Metadata
+
+- **Category:** `query`
+- **Tags:** `sql`, `execute`, `analytics`, `warehouse`
+- **Usage Examples:**
+  1. Preview recent sales rows with an analytics warehouse override.
+  2. Run a regional revenue aggregation with an explicit analyst role and 120s timeout.
 
 ## Returns
 

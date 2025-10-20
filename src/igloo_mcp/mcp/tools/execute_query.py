@@ -13,7 +13,14 @@ from igloo_mcp.config import Config
 from igloo_mcp.mcp_health import MCPHealthMonitor
 from igloo_mcp.service_layer import QueryService
 from igloo_mcp.sql_validation import validate_sql_statement
+
 from .base import MCPTool
+from .schema_utils import (
+    boolean_schema,
+    integer_schema,
+    snowflake_identifier_schema,
+    string_schema,
+)
 
 
 class ExecuteQueryTool(MCPTool):
@@ -46,6 +53,42 @@ class ExecuteQueryTool(MCPTool):
     @property
     def description(self) -> str:
         return "Execute a SQL query against Snowflake"
+
+    @property
+    def category(self) -> str:
+        return "query"
+
+    @property
+    def tags(self) -> list[str]:
+        return ["sql", "execute", "analytics", "warehouse"]
+
+    @property
+    def usage_examples(self) -> list[Dict[str, Any]]:
+        return [
+            {
+                "description": "Preview recent sales rows",
+                "parameters": {
+                    "statement": (
+                        "SELECT * FROM ANALYTICS.SALES.FACT_ORDERS "
+                        "ORDER BY ORDER_TS DESC LIMIT 20"
+                    ),
+                    "warehouse": "ANALYTICS_WH",
+                },
+            },
+            {
+                "description": "Run aggregate by region with explicit role",
+                "parameters": {
+                    "statement": (
+                        "SELECT REGION, SUM(REVENUE) AS total_revenue "
+                        "FROM SALES.METRICS.REVENUE_BY_REGION "
+                        "GROUP BY REGION"
+                    ),
+                    "warehouse": "REPORTING_WH",
+                    "role": "ANALYST",
+                    "timeout_seconds": 120,
+                },
+            },
+        ]
 
     async def execute(
         self,
@@ -182,9 +225,9 @@ class ExecuteQueryTool(MCPTool):
                 service=self.snowflake_service,
                 session=overrides,
                 output_format="json",
-                timeout=timeout
+                timeout=timeout,
             )
-            
+
             return {
                 "statement": statement,
                 "rowcount": len(result.rows) if result.rows else 0,
@@ -196,39 +239,57 @@ class ExecuteQueryTool(MCPTool):
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
+            "title": "Execute Snowflake Query",
             "type": "object",
+            "additionalProperties": False,
+            "required": ["statement"],
             "properties": {
                 "statement": {
-                    "type": "string",
-                    "description": "SQL statement to execute",
+                    **string_schema(
+                        "SQL statement to execute. Must be permitted by the SQL allow list.",
+                        title="SQL Statement",
+                        examples=[
+                            "SELECT CURRENT_ACCOUNT(), CURRENT_REGION()",
+                            (
+                                "SELECT REGION, SUM(REVENUE) AS total "
+                                "FROM SALES.METRICS.REVENUE_BY_REGION "
+                                "GROUP BY REGION"
+                            ),
+                        ],
+                    ),
+                    "minLength": 1,
                 },
-                "warehouse": {
-                    "type": "string",
-                    "description": "Warehouse override",
-                },
-                "database": {
-                    "type": "string",
-                    "description": "Database override",
-                },
-                "schema": {
-                    "type": "string",
-                    "description": "Schema override",
-                },
-                "role": {
-                    "type": "string",
-                    "description": "Role override",
-                },
-                "timeout_seconds": {
-                    "type": "integer",
-                    "description": "Query timeout in seconds (default: 120s from config)",
-                    "minimum": 1,
-                    "maximum": 3600,
-                },
-                "verbose_errors": {
-                    "type": "boolean",
-                    "description": "Include detailed optimization hints in error messages",
-                    "default": False,
-                },
+                "warehouse": snowflake_identifier_schema(
+                    "Warehouse override. Defaults to the active profile warehouse.",
+                    title="Warehouse",
+                    examples=["ANALYTICS_WH", "REPORTING_WH"],
+                ),
+                "database": snowflake_identifier_schema(
+                    "Database override. Defaults to the current database.",
+                    title="Database",
+                    examples=["SALES", "PIPELINE_V2_GROOT_DB"],
+                ),
+                "schema": snowflake_identifier_schema(
+                    "Schema override. Defaults to the current schema.",
+                    title="Schema",
+                    examples=["PUBLIC", "PIPELINE_V2_GROOT_SCHEMA"],
+                ),
+                "role": snowflake_identifier_schema(
+                    "Role override. Defaults to the current role.",
+                    title="Role",
+                    examples=["ANALYST", "SECURITYADMIN"],
+                ),
+                "timeout_seconds": integer_schema(
+                    "Query timeout in seconds (falls back to config default).",
+                    minimum=1,
+                    maximum=3600,
+                    default=120,
+                    examples=[60, 120, 300],
+                ),
+                "verbose_errors": boolean_schema(
+                    "Include detailed optimization hints in error messages.",
+                    default=False,
+                    examples=[True],
+                ),
             },
-            "required": ["statement"],
         }

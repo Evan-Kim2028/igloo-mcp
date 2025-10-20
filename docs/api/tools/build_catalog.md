@@ -6,11 +6,20 @@ Build comprehensive metadata catalog for Snowflake databases.
 
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `output_dir` | string | ❌ No | ./data_catalogue | Catalog output directory |
-| `database` | string | ❌ No | all | Specific database to catalog |
-| `account` | boolean | ❌ No | false | Include entire account |
-| `format` | string | ❌ No | json | Output format (json/jsonl) |
-| `include_ddl` | boolean | ❌ No | true | Include object DDL statements |
+| `output_dir` | string | ❌ No | ./data_catalogue | Directory for generated catalog artifacts |
+| `database` | string | ❌ No | current | Specific database to catalog (Snowflake identifier) |
+| `account` | boolean | ❌ No | false | Include entire account (ACCOUNT_USAGE) |
+| `format` | string | ❌ No | json | Output format (`json` or `jsonl`) |
+
+> If `account` is `true`, omit `database`. Identifiers support both unquoted names (e.g., `ANALYTICS`) and quoted names (e.g., `"Sales Analytics"`).
+
+## Discovery Metadata
+
+- **Category:** `metadata`
+- **Tags:** `catalog`, `metadata`, `introspection`, `documentation`
+- **Usage Examples:**
+  1. Build an account-wide catalog to share with governance teams (`account=true`, `format=jsonl`).
+  2. Export a single database catalog into `./artifacts/catalog` for developer docs.
 
 ## Returns
 
@@ -32,7 +41,6 @@ Build comprehensive metadata catalog for Snowflake databases.
 # Build catalog for specific database
 build_catalog(
     database="ANALYTICS",
-    include_ddl=True,
     format="jsonl"
 )
 
@@ -52,4 +60,3 @@ build_catalog(
 ## Related
 
 - [get_catalog_summary](get_catalog_summary.md) - Read catalog info
-- [query_lineage](query_lineage.md) - Query dependencies

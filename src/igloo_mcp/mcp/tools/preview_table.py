@@ -11,6 +11,11 @@ from igloo_mcp.config import Config
 from igloo_mcp.service_layer import QueryService
 
 from .base import MCPTool
+from .schema_utils import (
+    fully_qualified_object_schema,
+    integer_schema,
+    snowflake_identifier_schema,
+)
 
 
 class PreviewTableTool(MCPTool):
@@ -40,6 +45,34 @@ class PreviewTableTool(MCPTool):
     @property
     def description(self) -> str:
         return "Preview table contents with configurable row limit"
+
+    @property
+    def category(self) -> str:
+        return "query"
+
+    @property
+    def tags(self) -> list[str]:
+        return ["preview", "table", "metadata", "sampling"]
+
+    @property
+    def usage_examples(self) -> list[Dict[str, Any]]:
+        return [
+            {
+                "description": "Preview latest transactions with warehouse override",
+                "parameters": {
+                    "table_name": "ANALYTICS.FINANCE.TRANSACTIONS",
+                    "limit": 20,
+                    "warehouse": "ANALYTICS_WH",
+                },
+            },
+            {
+                "description": "Sample table using default session context",
+                "parameters": {
+                    "table_name": "PIPELINE_V2_GROOT_DB.PIPELINE_V2_GROOT_SCHEMA.DEX_TRADES_STABLE",
+                    "limit": 10,
+                },
+            },
+        ]
 
     async def execute(
         self,
@@ -117,30 +150,41 @@ class PreviewTableTool(MCPTool):
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
+            "title": "Preview Table Parameters",
             "type": "object",
-            "properties": {
-                "table_name": {
-                    "type": "string",
-                    "description": "Fully qualified table name (e.g., DATABASE.SCHEMA.TABLE)",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Maximum number of rows to return",
-                    "minimum": 1,
-                    "default": 100,
-                },
-                "warehouse": {
-                    "type": "string",
-                    "description": "Warehouse override",
-                },
-                "database": {
-                    "type": "string",
-                    "description": "Database override",
-                },
-                "schema": {
-                    "type": "string",
-                    "description": "Schema override",
-                },
-            },
+            "additionalProperties": False,
             "required": ["table_name"],
+            "properties": {
+                "table_name": fully_qualified_object_schema(
+                    "Fully qualified table name. Accepts DATABASE.SCHEMA.TABLE "
+                    "or a simple table name in the current schema.",
+                    title="Table Name",
+                    examples=[
+                        "PIPELINE_V2_GROOT_DB.PIPELINE_V2_GROOT_SCHEMA.DEX_TRADES_STABLE",
+                        "PUBLIC.CUSTOMERS",
+                        "ORDERS",
+                    ],
+                ),
+                "limit": integer_schema(
+                    "Maximum number of rows to return.",
+                    minimum=1,
+                    default=100,
+                    examples=[10, 100, 500],
+                ),
+                "warehouse": snowflake_identifier_schema(
+                    "Warehouse override (defaults to profile warehouse).",
+                    title="Warehouse",
+                    examples=["ANALYTICS_WH"],
+                ),
+                "database": snowflake_identifier_schema(
+                    "Database override (defaults to current database).",
+                    title="Database",
+                    examples=["PIPELINE_V2_GROOT_DB", "ANALYTICS"],
+                ),
+                "schema": snowflake_identifier_schema(
+                    "Schema override (defaults to current schema).",
+                    title="Schema",
+                    examples=["PIPELINE_V2_GROOT_SCHEMA", "PUBLIC"],
+                ),
+            },
         }

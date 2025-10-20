@@ -11,7 +11,14 @@ import anyio
 
 from igloo_mcp.catalog import CatalogService
 from igloo_mcp.config import Config
+
 from .base import MCPTool
+from .schema_utils import (
+    boolean_schema,
+    enum_schema,
+    snowflake_identifier_schema,
+    string_schema,
+)
 
 
 class BuildCatalogTool(MCPTool):
@@ -33,7 +40,41 @@ class BuildCatalogTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return "Build comprehensive Snowflake catalog metadata from INFORMATION_SCHEMA. Includes databases, schemas, tables, views, materialized views, dynamic tables, tasks, user-defined functions, procedures, and columns. Only includes user-defined functions (excludes built-in Snowflake operators)."
+        return (
+            "Build comprehensive Snowflake catalog metadata from "
+            "INFORMATION_SCHEMA. Includes databases, schemas, tables, views, "
+            "materialized views, dynamic tables, tasks, user-defined functions, "
+            "procedures, and columns. Only includes user-defined functions "
+            "(excludes built-in Snowflake operators)."
+        )
+
+    @property
+    def category(self) -> str:
+        return "metadata"
+
+    @property
+    def tags(self) -> list[str]:
+        return ["catalog", "metadata", "introspection", "documentation"]
+
+    @property
+    def usage_examples(self) -> list[Dict[str, Any]]:
+        return [
+            {
+                "description": "Build account-wide catalog for governance export",
+                "parameters": {
+                    "output_dir": "./data_catalog",
+                    "account": True,
+                    "format": "jsonl",
+                },
+            },
+            {
+                "description": "Export product database catalog to docs folder",
+                "parameters": {
+                    "output_dir": "./artifacts/catalog",
+                    "database": "PRODUCT",
+                },
+            },
+        ]
 
     async def execute(
         self,
@@ -51,7 +92,9 @@ class BuildCatalogTool(MCPTool):
 
         Key Features:
         - Real Snowflake metadata queries (not mock data)
-        - Comprehensive coverage: databases, schemas, tables, views, materialized views, dynamic tables, tasks, functions, procedures, columns
+        - Comprehensive coverage: databases, schemas, tables, views,
+          materialized views, dynamic tables, tasks, functions, procedures,
+          columns
         - Function filtering: Only user-defined functions (excludes built-in operators like !=, %, *, +, -)
         - Structured JSON output with detailed metadata
         - Account-wide or database-specific catalog building
@@ -70,7 +113,9 @@ class BuildCatalogTool(MCPTool):
             RuntimeError: If catalog build fails
         """
         if output_format not in ("json", "jsonl"):
-            raise ValueError(f"Invalid output_format '{output_format}'. Must be 'json' or 'jsonl'")
+            raise ValueError(
+                f"Invalid output_format '{output_format}'. Must be 'json' or 'jsonl'"
+            )
 
         try:
             result = await anyio.to_thread.run_sync(
@@ -112,27 +157,50 @@ class BuildCatalogTool(MCPTool):
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
+            "title": "Build Catalog Parameters",
             "type": "object",
+            "additionalProperties": False,
             "properties": {
-                "output_dir": {
-                    "type": "string",
-                    "description": "Catalog output directory",
-                    "default": "./data_catalogue",
-                },
-                "database": {
-                    "type": "string",
-                    "description": "Specific database to introspect (default: current database)",
-                },
-                "account": {
-                    "type": "boolean",
-                    "description": "Include entire account",
-                    "default": False,
-                },
+                "output_dir": string_schema(
+                    "Target directory where catalog artifacts will be written.",
+                    title="Output Directory",
+                    default="./data_catalogue",
+                    examples=["./data_catalogue", "./artifacts/catalog"],
+                ),
+                "database": snowflake_identifier_schema(
+                    "Specific database to introspect (defaults to current database).",
+                    title="Database",
+                    examples=["PIPELINE_V2_GROOT_DB", "ANALYTICS"],
+                ),
+                "account": boolean_schema(
+                    "Include entire account metadata (ACCOUNT_USAGE). "
+                    "Must be false if database is provided.",
+                    default=False,
+                    examples=[True, False],
+                ),
                 "format": {
-                    "type": "string",
-                    "description": "Output format",
-                    "enum": ["json", "jsonl"],
-                    "default": "json",
+                    **enum_schema(
+                        "Output file format for catalog artifacts.",
+                        values=["json", "jsonl"],
+                        default="json",
+                        examples=["json"],
+                    ),
+                    "title": "Output Format",
                 },
             },
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {"account": {"const": True}},
+                        "required": ["account"],
+                    },
+                    "then": {"not": {"required": ["database"]}},
+                },
+                {
+                    "if": {"required": ["database"]},
+                    "then": {
+                        "properties": {"account": {"const": False}},
+                    },
+                },
+            ],
         }

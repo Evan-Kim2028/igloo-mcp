@@ -6,9 +6,19 @@ Retrieves summary information about a built catalog, including statistics and me
 
 ## Parameters
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `catalog_dir` | string | No | Directory containing catalog data (default: "./data_catalogue") |
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `catalog_dir` | string | ❌ No | ./data_catalogue | Directory containing catalog artifacts |
+
+> Provide a relative or absolute path. The default `./data_catalogue` matches the output from `build_catalog`.
+
+## Discovery Metadata
+
+- **Category:** `metadata`
+- **Tags:** `catalog`, `summary`, `metadata`
+- **Usage Examples:**
+  1. Retrieve summary from the default catalog directory (no parameters).
+  2. Load summary from `./artifacts/catalog` after exporting to a custom location.
 
 ## Returns
 
@@ -117,7 +127,6 @@ Use summary data to generate documentation about your data architecture.
 ## Related Tools
 
 - [build_catalog](build_catalog.md) - Build or rebuild catalog
-- [query_lineage](query_lineage.md) - Analyze object lineage
 - [build_dependency_graph](build_dependency_graph.md) - Build dependency graphs
 - [preview_table](preview_table.md) - Preview table structure
 

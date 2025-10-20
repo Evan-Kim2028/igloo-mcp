@@ -73,6 +73,25 @@ class MCPTool(ABC):
         """
         pass
 
+    @property
+    def category(self) -> str:
+        """High-level tool category used for discovery metadata.
+
+        Returns:
+            Category string (e.g., "query", "metadata", "diagnostics")
+        """
+        return "uncategorized"
+
+    @property
+    def tags(self) -> list[str]:
+        """Searchable metadata tags for MCP tool discovery."""
+        return []
+
+    @property
+    def usage_examples(self) -> list[Dict[str, Any]]:
+        """Example invocations (parameter sets) with brief context."""
+        return []
+
     def validate_parameters(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Validate and coerce parameters before execution.
 

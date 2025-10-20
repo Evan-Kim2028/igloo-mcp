@@ -12,6 +12,7 @@ import anyio
 from igloo_mcp.catalog import CatalogService
 
 from .base import MCPTool
+from .schema_utils import string_schema
 
 
 class GetCatalogSummaryTool(MCPTool):
@@ -32,6 +33,27 @@ class GetCatalogSummaryTool(MCPTool):
     @property
     def description(self) -> str:
         return "Retrieve summary information from existing catalog"
+
+    @property
+    def category(self) -> str:
+        return "metadata"
+
+    @property
+    def tags(self) -> list[str]:
+        return ["catalog", "summary", "metadata"]
+
+    @property
+    def usage_examples(self) -> list[Dict[str, Any]]:
+        return [
+            {
+                "description": "Inspect default catalog directory",
+                "parameters": {},
+            },
+            {
+                "description": "Load summary from custom artifacts folder",
+                "parameters": {"catalog_dir": "./artifacts/catalog"},
+            },
+        ]
 
     async def execute(
         self, catalog_dir: str = "./data_catalogue", **kwargs: Any
@@ -70,12 +92,15 @@ class GetCatalogSummaryTool(MCPTool):
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
+            "title": "Catalog Summary Parameters",
             "type": "object",
+            "additionalProperties": False,
             "properties": {
-                "catalog_dir": {
-                    "type": "string",
-                    "description": "Catalog directory path",
-                    "default": "./data_catalogue",
-                },
+                "catalog_dir": string_schema(
+                    "Catalog directory path containing summary artifacts.",
+                    title="Catalog Directory",
+                    default="./data_catalogue",
+                    examples=["./data_catalogue", "./artifacts/catalog"],
+                ),
             },
         }
