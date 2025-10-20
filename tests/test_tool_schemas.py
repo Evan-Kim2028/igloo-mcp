@@ -180,6 +180,30 @@ def test_build_dependency_graph_schema() -> None:
         assert {"description", "parameters"} <= set(example.keys())
 
 
+@pytest.mark.anyio
+async def test_build_dependency_graph_execute_passes_scope() -> None:
+    service = Mock()
+    service.build_dependency_graph.return_value = {"status": "success"}
+
+    tool = BuildDependencyGraphTool(dependency_service=service)
+
+    result = await tool.execute(
+        database="ANALYTICS",
+        schema="REPORTING",
+        account_scope=False,
+        format="dot",
+    )
+
+    service.build_dependency_graph.assert_called_once_with(
+        database="ANALYTICS",
+        schema="REPORTING",
+        account_scope=False,
+        format="dot",
+        output_dir="./dependencies",
+    )
+    assert result == {"status": "success"}
+
+
 def test_get_catalog_summary_schema() -> None:
     tool = GetCatalogSummaryTool(catalog_service=Mock())
 

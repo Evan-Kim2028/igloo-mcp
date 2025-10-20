@@ -86,10 +86,15 @@ class BuildDependencyGraphTool(MCPTool):
             ValueError: If format is invalid
             RuntimeError: If graph build fails
         """
+        if format not in {"json", "dot"}:
+            raise ValueError(f"Invalid format '{format}'. Must be 'json' or 'dot'")
+
         try:
             graph = await anyio.to_thread.run_sync(
                 lambda: self.dependency_service.build_dependency_graph(
                     database=database,
+                    schema=schema,
+                    account_scope=account_scope,
                     format=format,
                     output_dir="./dependencies",
                 )
