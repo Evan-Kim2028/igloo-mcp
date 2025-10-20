@@ -43,6 +43,23 @@ class ConnectionTestTool(MCPTool):
     def description(self) -> str:
         return "Quick Snowflake connection test (lightweight)"
 
+    @property
+    def category(self) -> str:
+        return "diagnostics"
+
+    @property
+    def tags(self) -> list[str]:
+        return ["connection", "health", "diagnostics"]
+
+    @property
+    def usage_examples(self) -> list[Dict[str, Any]]:
+        return [
+            {
+                "description": "Check active profile connectivity before running queries",
+                "parameters": {},
+            }
+        ]
+
     async def execute(self, **kwargs: Any) -> Dict[str, Any]:
         """Test Snowflake connection.
 
@@ -56,5 +73,6 @@ class ConnectionTestTool(MCPTool):
         """Get JSON schema for tool parameters."""
         return {
             "type": "object",
+            "additionalProperties": False,
             "properties": {},
         }

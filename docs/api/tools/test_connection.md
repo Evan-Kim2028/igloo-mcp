@@ -4,7 +4,13 @@ Test Snowflake connection and verify credentials.
 
 ## Parameters
 
-None - uses current profile configuration.
+None – uses the active Snowflake profile.
+
+## Discovery Metadata
+
+- **Category:** `diagnostics`
+- **Tags:** `connection`, `health`, `diagnostics`
+- **Usage Example:** Run with no parameters to confirm the current profile connects before executing other tools.
 
 ## Returns
 

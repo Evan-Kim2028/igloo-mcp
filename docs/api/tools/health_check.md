@@ -4,7 +4,19 @@ Get comprehensive health status for the MCP server and Snowflake connection.
 
 ## Parameters
 
-None - returns full system status.
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `include_cortex` | boolean | ❌ No | true | Check Cortex AI availability |
+| `include_profile` | boolean | ❌ No | true | Validate profile configuration |
+| `include_catalog` | boolean | ❌ No | false | Check catalog resource status |
+
+## Discovery Metadata
+
+- **Category:** `diagnostics`
+- **Tags:** `health`, `profile`, `cortex`, `catalog`, `diagnostics`
+- **Usage Examples:**
+  1. `include_cortex=true`, `include_catalog=true` to perform the full suite of checks.
+  2. `include_cortex=false`, `include_catalog=false` for a fast profile-only validation.
 
 ## Returns
 
