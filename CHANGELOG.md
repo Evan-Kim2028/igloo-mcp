@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-10-20
+
+### Changed
+- Patch release aligning packaging and version metadata after 0.1.0.
+- Published to PyPI: `igloo-mcp==0.1.1`.
+
+### Notes
+- No functional code changes beyond version bump.
+
+## [0.1.0] - 2025-10-20
+
+### Added
+- Rich MCP tool discovery metadata and JSON parameter schemas across tools.
+- `schema_utils.py` with helpers for parameter schemas.
+- Comprehensive tests for tool schemas.
+
+### Changed
+- Dependency graph tool now respects provided scope parameters.
+
+### Fixed
+- SQL validation: Treat set operators and CTE SELECTs as `SELECT`.
+  - `UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT` / `MINUS` inherit `SELECT` permissions.
+  - `WITH ... SELECT` recognized as `SELECT`.
+- Adds tests for validator and `ExecuteQuery` tool behavior.
+
+### Compatibility
+- Backward compatible. Note: tool parameter schemas use `additionalProperties=false`; clients should avoid extra parameters.
+
 ## [2.0.0] - 2025-10-07
 
 ### BREAKING CHANGES
