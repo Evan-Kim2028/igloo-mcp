@@ -1,6 +1,6 @@
 import pytest
 
-from igloo_mcp.config import Config, SnowflakeConfig
+from igloo_mcp.config import Config, SnowflakeConfig, SQLPermissions
 from igloo_mcp.mcp.tools.execute_query import ExecuteQueryTool
 from igloo_mcp.service_layer.query_service import QueryService
 
@@ -53,7 +53,10 @@ class _Service:
 
 @pytest.mark.asyncio
 async def test_dml_does_not_fetch_rows():
-    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+    cfg = Config(
+        snowflake=SnowflakeConfig(profile="test"),
+        sql_permissions=SQLPermissions(insert=True),
+    )
     tool = ExecuteQueryTool(cfg, _Service(), QueryService(context=None))
 
     res = await tool.execute(statement="INSERT INTO t VALUES (1)", timeout_seconds=2)

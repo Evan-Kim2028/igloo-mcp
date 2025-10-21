@@ -34,12 +34,12 @@ Safe alternatives:
   create_view: CREATE VIEW active_users AS SELECT * FROM users WHERE NOT (<condition>)
 ```
 
-**Cause:** Attempting dangerous SQL operation (DELETE, DROP, TRUNCATE) blocked by config
+**Cause:** Attempting a blocked SQL operation. By default igloo-mcp denies write + DDL statements (`INSERT`, `UPDATE`, `CREATE`, `ALTER`) and destructive commands (`DELETE`, `DROP`, `TRUNCATE`). Statements the Snowflake parser cannot classify fall back to `Command` and are also rejected.
 
 **Solutions:**
 1. Use suggested safe alternative (soft delete, view creation)
-2. Verify necessity of dangerous operation
-3. Note: v2.0+ uses SQL safety checks by default - destructive operations are blocked
+2. Verify necessity of the blocked statement; request a human to run it if required
+3. If you override SQL permissions, explicitly enable the needed verb and leave `select` enabled
 
 **Related Tools:** execute_query
 

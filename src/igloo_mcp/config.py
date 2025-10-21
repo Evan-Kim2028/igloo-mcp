@@ -51,10 +51,10 @@ class SQLPermissions:
     show: bool = True
     describe: bool = True
     use: bool = True
-    insert: bool = True
-    update: bool = True
-    create: bool = True
-    alter: bool = True
+    insert: bool = False
+    update: bool = False
+    create: bool = False
+    alter: bool = False
     delete: bool = False  # Blocked by default - use soft delete
     drop: bool = False  # Blocked by default - use rename
     truncate: bool = False  # Blocked by default - use DELETE with WHERE

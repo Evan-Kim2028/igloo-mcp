@@ -21,8 +21,8 @@ class TestSQLPermissions:
         perms = SQLPermissions()
 
         assert perms.select is True
-        assert perms.insert is True
-        assert perms.update is True
+        assert perms.insert is False
+        assert perms.update is False
         assert perms.delete is False  # Blocked by default
         assert perms.drop is False  # Blocked by default
         assert perms.truncate is False  # Blocked by default
@@ -34,8 +34,8 @@ class TestSQLPermissions:
 
         # Config returns lowercase to match upstream validation
         assert "select" in allow_list
-        assert "insert" in allow_list
-        assert "update" in allow_list
+        assert "insert" not in allow_list
+        assert "update" not in allow_list
         assert "delete" not in allow_list
         assert "drop" not in allow_list
         assert "truncate" not in allow_list
@@ -46,6 +46,8 @@ class TestSQLPermissions:
         disallow_list = perms.get_disallow_list()
 
         # Config returns lowercase to match upstream validation
+        assert "insert" in disallow_list
+        assert "update" in disallow_list
         assert "delete" in disallow_list
         assert "drop" in disallow_list
         assert "truncate" in disallow_list
@@ -204,6 +206,30 @@ class TestValidateSQLStatement:
         assert is_valid is False
         assert error_msg is not None
         assert "not permitted" in error_msg
+
+    def test_command_fallback_includes_parser_context(self):
+        """Parser fallback to Command should explain why statement was blocked."""
+        sql = "ALTER USER foo SET RSA_PUBLIC_KEY = 'abc'"
+        allow_list = ["select", "show", "describe", "use"]
+        disallow_list = [
+            "insert",
+            "update",
+            "create",
+            "alter",
+            "delete",
+            "drop",
+            "truncate",
+            "command",
+        ]
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            sql, allow_list, disallow_list
+        )
+
+        assert stmt_type == "Command"
+        assert is_valid is False
+        assert error_msg is not None
+        assert "Snowflake returned 'Command'" in error_msg
 
     @pytest.mark.skip(reason="Upstream validate_sql_type behavior needs investigation")
     def test_allowed_insert_statement(self):

@@ -4,7 +4,7 @@ Igloo MCP is a standalone MCP server for Snowflake operations, designed for agen
 
 ## ✨ Features
 
-- 🛡️ **SQL Guardrails**: Blocks destructive operations (DELETE, DROP, TRUNCATE) with safe alternatives
+- 🛡️ **SQL Guardrails**: Blocks write + DDL operations (INSERT, UPDATE, CREATE, ALTER, DELETE, DROP, TRUNCATE) with safe alternatives
 - ⏱️ **Timeouts + Cancellation**: Per‑request timeouts with best‑effort server‑side cancel; captures query ID when available
 - 📝 **Lightweight Query History (opt‑in)**: Write compact JSONL audit events for each query (success, timeout, error)
 - 🧠 **Smart Errors**: Compact by default; turn on verbose mode for actionable optimization hints

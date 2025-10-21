@@ -245,10 +245,21 @@ def validate_sql_statement(
     else:
         # Capitalize allow_list for display (they're lowercase for validation)
         display_allowed = [t.capitalize() for t in allow_list]
-        error_msg = (
-            f"SQL statement type '{stmt_type}' is not permitted. "
-            f"Allowed types: {', '.join(display_allowed)}"
-        )
+        canonical_stmt = _canonicalize_statement_type(stmt_type)
+        details = [f"SQL statement type '{stmt_type}' is not permitted."]
+
+        if canonical_stmt == "command":
+            details.append(
+                "Snowflake returned 'Command' for this SQL, which is a fallback when the parser "
+                "cannot classify the statement. Such statements are always blocked."
+            )
+        else:
+            details.append("Detected type is provided by the Snowflake parser.")
+
+        if display_allowed:
+            details.append(f"Allowed types: {', '.join(display_allowed)}")
+
+        error_msg = "\n".join(details)
 
     return stmt_type, False, error_msg
 

@@ -5,7 +5,7 @@
 ## How It Works
 - Your LLM calls MCP tools (execute_query, preview_table, build_catalog, etc.) exposed by igloo-mcp.
 - igloo-mcp uses your Snowflake CLI profile for authentication and session context.
-- Built-in guardrails block destructive SQL; timeouts and best‑effort cancellation keep runs responsive.
+- Built-in guardrails block write and DDL SQL (INSERT/UPDATE/CREATE/ALTER/DELETE/DROP/TRUNCATE); timeouts and best‑effort cancellation keep runs responsive.
 - Optional JSONL query history records success/timeout/error with minimal fields for auditing.
 - Configure your editor (Cursor or Claude Code) to launch igloo-mcp with your Snowflake profile.
 
