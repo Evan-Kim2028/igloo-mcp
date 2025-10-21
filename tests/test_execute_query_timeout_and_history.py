@@ -1,5 +1,6 @@
 import json
 import time
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import pytest
 
@@ -10,12 +11,12 @@ from igloo_mcp.service_layer.query_service import QueryService
 
 class _FakeCursor:
     def __init__(self, work_seconds: float = 1.0):
-        self._cancelled = False
-        self._fetchone_map = {}
-        self._rows = []
-        self.sfqid = None
+        self._cancelled: bool = False
+        self._fetchone_map: Dict[str, str] = {}
+        self._rows: List[Dict[str, int]] = []
+        self.sfqid: Optional[str] = None
         self._work_seconds = work_seconds
-        self.description = None
+        self.description: Optional[List[Tuple[str, ...]]] = None
 
     def execute(self, query: str) -> None:
         q = query.strip().upper()
@@ -45,13 +46,13 @@ class _FakeCursor:
         self.description = [("A",)]
         self._rows = [{"A": 1}, {"A": 2}]
 
-    def fetchone(self):
+    def fetchone(self) -> Dict[str, str]:
         return self._fetchone_map
 
-    def fetchall(self):
+    def fetchall(self) -> List[Dict[str, int]]:
         return self._rows
 
-    def cancel(self):
+    def cancel(self) -> None:
         self._cancelled = True
 
 
@@ -59,10 +60,10 @@ class _FakeConn:
     def __init__(self, cursor: _FakeCursor):
         self._cursor = cursor
 
-    def __enter__(self):
+    def __enter__(self) -> Tuple[None, _FakeCursor]:
         return (None, self._cursor)
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(self, exc_type, exc, tb) -> Literal[False]:  # noqa: ANN001
         return False
 
 
@@ -71,11 +72,14 @@ class _FakeService:
         self._cursor = _FakeCursor(work_seconds=work_seconds)
 
     def get_connection(
-        self, *, use_dict_cursor=True, session_parameters=None
-    ):  # noqa: ARG002
+        self,
+        *,
+        use_dict_cursor: bool = True,  # noqa: FBT001
+        session_parameters: Optional[Dict[str, Any]] = None,
+    ) -> _FakeConn:
         return _FakeConn(self._cursor)
 
-    def get_query_tag_param(self):
+    def get_query_tag_param(self) -> Dict[str, Any]:
         return {}
 
 
@@ -90,7 +94,7 @@ async def test_timeout_cancels_and_logs_history(tmp_path, monkeypatch):
     )
 
     with pytest.raises(RuntimeError) as exc:
-        await tool.execute(statement="SELECT LONG_RUNNING", timeout_seconds=0.1)
+        await tool.execute(statement="SELECT LONG_RUNNING", timeout_seconds=1)
     assert "Query timeout" in str(exc.value)
 
     # History should have a timeout record
@@ -122,3 +126,15 @@ async def test_success_returns_query_id_and_logs(tmp_path, monkeypatch):
     event = json.loads(data[-1])
     assert event["status"] == "success"
     assert event.get("query_id") == "FAKE_QID_123"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_value", ["30", 12.5, True])
+async def test_timeout_seconds_requires_integer(bad_value):
+    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+    tool = ExecuteQueryTool(
+        cfg, _FakeService(work_seconds=0.05), QueryService(context=None)
+    )
+
+    with pytest.raises((TypeError, ValueError)):
+        await tool.execute(statement="SELECT QUICK", timeout_seconds=bad_value)

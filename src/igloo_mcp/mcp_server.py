@@ -17,7 +17,7 @@ from functools import partial
 from typing import Any, Dict, Optional
 
 import anyio
-from pydantic import Field
+from pydantic import Field, StrictInt
 from typing_extensions import Annotated
 
 # NOTE: For typing, import from the fastmcp package; fallback handled at runtime.
@@ -180,13 +180,14 @@ def register_igloo_mcp(
             Optional[str],
             Field(
                 description=(
-                    "Short reason for executing this query. Stored in Snowflake QUERY_TAG and local history; avoid sensitive info."
+                    "Short reason for executing this query. Stored in Snowflake QUERY_TAG "
+                    "and local history; avoid sensitive info."
                 ),
                 default=None,
             ),
         ] = None,
         timeout_seconds: Annotated[
-            Optional[int],
+            Optional[StrictInt],
             Field(
                 description="Query timeout in seconds (default: 30s from config)",
                 ge=1,
@@ -295,7 +296,7 @@ def register_igloo_mcp(
         return await build_dependency_graph_inst.execute(
             database=database,
             schema=schema,
-            account=account,
+            account_scope=account,
             format=format,
         )
 
@@ -497,7 +498,7 @@ def create_combined_lifespan(args: argparse.Namespace):
     if not getattr(args, "service_config_file", None):
         import tempfile
 
-        import yaml
+        import yaml  # type: ignore[import-untyped]
 
         # Create minimal config with just the profile
         config_data = {"snowflake": {"profile": args.profile or "mystenlabs-keypair"}}

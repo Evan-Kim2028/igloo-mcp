@@ -10,7 +10,7 @@ from .mcp_health import MCPHealthMonitor
 from .mcp_resources import MCPResourceManager
 
 
-@dataclass(slots=True)
+@dataclass
 class ServiceContext:
     """Aggregates shared services for CLI and MCP surfaces."""
 

@@ -132,6 +132,14 @@ class ExecuteQueryTool(MCPTool):
             ValueError: If profile validation fails or SQL is blocked
             RuntimeError: If query execution fails
         """
+        if timeout_seconds is not None:
+            if isinstance(timeout_seconds, bool) or not isinstance(
+                timeout_seconds, int
+            ):
+                raise TypeError("timeout_seconds must be an integer value in seconds.")
+            if not 1 <= timeout_seconds <= 3600:
+                raise ValueError("timeout_seconds must be between 1 and 3600 seconds.")
+
         # Validate profile health before executing query
         if self.health_monitor:
             profile_health = await anyio.to_thread.run_sync(
