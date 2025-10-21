@@ -69,13 +69,14 @@ Invalid database name: contains illegal characters
 
 **Compact Message (~80 tokens):**
 ```
-Query timeout (120s). Try: timeout_seconds=480, add WHERE/LIMIT clause,
-or scale warehouse. Use verbose_errors=True for detailed hints.
+Query timeout (30s). Try: timeout_seconds=480, add WHERE/LIMIT clause,
+or scale warehouse. Use verbose_errors=True for detailed hints. Query ID may be
+unavailable on timeout.
 ```
 
 **Verbose Message (~250 tokens):**
 ```
-Query timeout after 120s.
+Query timeout after 30s.
 
 Quick fixes:
 1. Increase timeout: execute_query(..., timeout_seconds=480)
@@ -84,14 +85,18 @@ Quick fixes:
 4. Scale warehouse: Use larger warehouse for complex queries
 
 Current settings:
-  - Timeout: 120s
+  - Timeout: 30s
   - Warehouse: COMPUTE_WH
   - Database: ANALYTICS
+
+Notes:
+  - Query ID may be unavailable when a timeout triggers early cancellation.
+  - Enable JSONL history by setting IGLOO_MCP_QUERY_HISTORY=/path/to/query_history.jsonl
 
 Query preview: SELECT * FROM huge_table WHERE date >= '2024-01-01'...
 ```
 
-**Cause:** Query exceeded timeout limit (default 120s)
+**Cause:** Query exceeded timeout limit (default 30s)
 
 **Solutions by Scenario:**
 
@@ -248,7 +253,7 @@ All errors follow this structure:
 ```json
 {
   "error": "RuntimeError",
-  "message": "Query timeout (120s). Try: timeout_seconds=480...",
+  "message": "Query timeout (30s). Try: timeout_seconds=480...",
   "context": {
     "tool": "execute_query",
     "statement": "SELECT * FROM large_table",

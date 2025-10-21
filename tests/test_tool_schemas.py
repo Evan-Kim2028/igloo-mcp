@@ -60,7 +60,7 @@ def test_execute_query_schema(base_config: Config) -> None:
     timeout = props["timeout_seconds"]
     assert timeout["minimum"] == 1
     assert timeout["maximum"] == 3600
-    assert timeout["default"] == 120
+    assert timeout["default"] == 30
 
     verbose = props["verbose_errors"]
     assert verbose["type"] == "boolean"

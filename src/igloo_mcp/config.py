@@ -116,7 +116,7 @@ class Config:
     connection_pool_size: int = 10
     retry_attempts: int = 3
     retry_delay: float = 1.0
-    timeout_seconds: int = 300
+    timeout_seconds: int = 30
     log_level: str = "INFO"
     sql_permissions: SQLPermissions = field(default_factory=SQLPermissions)
 

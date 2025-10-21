@@ -16,6 +16,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
 | `statement` | string | ✅ Yes | - | SQL statement to execute (min length 1) |
+| `reason` | string | ❌ No | - | Short reason for running the query. Stored in Snowflake `QUERY_TAG` and local history; avoid sensitive information. |
 | `timeout_seconds` | integer | ❌ No | 120 | Query timeout in seconds (1-3600) |
 | `verbose_errors` | boolean | ❌ No | false | Include detailed optimization hints |
 | `warehouse` | string | ❌ No | profile | Warehouse override (Snowflake identifier) |
@@ -31,7 +32,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 - **Tags:** `sql`, `execute`, `analytics`, `warehouse`
 - **Usage Examples:**
   1. Preview recent sales rows with an analytics warehouse override.
-  2. Run a regional revenue aggregation with an explicit analyst role and 120s timeout.
+  2. Run a regional revenue aggregation with an explicit analyst role and 30s timeout.
 
 ## Returns
 
@@ -69,13 +70,13 @@ Safe alternatives:
 
 **Query timeout (compact)**
 ```
-Query timeout (120s). Try: timeout_seconds=480, add WHERE/LIMIT clause,
+Query timeout (30s). Try: timeout_seconds=480, add WHERE/LIMIT clause,
 or scale warehouse. Use verbose_errors=True for detailed hints.
 ```
 
 **Query timeout (verbose)**
 ```
-Query timeout after 120s.
+Query timeout after 30s.
 
 Quick fixes:
 1. Increase timeout: execute_query(..., timeout_seconds=480)
@@ -84,7 +85,7 @@ Quick fixes:
 4. Scale warehouse: Consider using a larger warehouse
 
 Current settings:
-  - Timeout: 120s
+  - Timeout: 30s
   - Warehouse: COMPUTE_WH
   - Database: ANALYTICS
 
@@ -112,6 +113,7 @@ result = execute_query(
     statement="SELECT * FROM large_table LIMIT 1000",
     timeout_seconds=300,
     warehouse="LARGE_WH",
+    reason="Dashboard refresh — monthly rollup",
     verbose_errors=True
 )
 ```

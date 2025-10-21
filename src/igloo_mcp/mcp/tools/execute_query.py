@@ -5,13 +5,23 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
+import json
+import threading
+import time
 from typing import Any, Dict, Optional
 
 import anyio
 
 from igloo_mcp.config import Config
+from igloo_mcp.logging import QueryHistory
 from igloo_mcp.mcp_health import MCPHealthMonitor
 from igloo_mcp.service_layer import QueryService
+from igloo_mcp.session_utils import (
+    apply_session_context,
+    ensure_session_lock,
+    restore_session_context,
+    snapshot_session,
+)
 from igloo_mcp.sql_validation import validate_sql_statement
 
 from .base import MCPTool
@@ -45,6 +55,8 @@ class ExecuteQueryTool(MCPTool):
         self.snowflake_service = snowflake_service
         self.query_service = query_service
         self.health_monitor = health_monitor
+        # Optional JSONL query history (enabled via IGLOO_MCP_QUERY_HISTORY)
+        self.history = QueryHistory.from_env()
 
     @property
     def name(self) -> str:
@@ -99,6 +111,7 @@ class ExecuteQueryTool(MCPTool):
         role: Optional[str] = None,
         timeout_seconds: Optional[int] = None,
         verbose_errors: bool = False,
+        reason: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Execute SQL query against Snowflake.
@@ -109,7 +122,7 @@ class ExecuteQueryTool(MCPTool):
             database: Optional database override
             schema: Optional schema override
             role: Optional role override
-            timeout_seconds: Query timeout in seconds (default: 120s)
+            timeout_seconds: Query timeout in seconds (default: 30s)
             verbose_errors: Include detailed optimization hints in errors
 
         Returns:
@@ -179,6 +192,7 @@ class ExecuteQueryTool(MCPTool):
                 statement,
                 overrides,
                 timeout,
+                reason,
             )
 
             if self.health_monitor and hasattr(
@@ -186,8 +200,91 @@ class ExecuteQueryTool(MCPTool):
             ):
                 self.health_monitor.record_query_success(statement[:100])  # type: ignore[attr-defined]
 
+            # Persist success history (lightweight JSONL)
+            try:
+                self.history.record(
+                    {
+                        "ts": time.time(),
+                        "status": "success",
+                        "profile": self.config.snowflake.profile,
+                        "statement_preview": statement[:200],
+                        "rowcount": result.get("rowcount", 0),
+                        "timeout_seconds": timeout,
+                        "overrides": overrides,
+                        "query_id": result.get("query_id"),
+                        "duration_ms": result.get("duration_ms"),
+                        **({"reason": reason} if reason else {}),
+                    }
+                )
+            except Exception:
+                pass
+
             return result
 
+        except TimeoutError as e:
+            # Build tailored timeout messages (compact vs verbose)
+            compact = (
+                f"Query timeout ({timeout}s). Try: timeout_seconds=480, add WHERE/LIMIT clause, "
+                f"or scale warehouse. Use verbose_errors=True for detailed hints. "
+                f"Query ID may be unavailable on timeout."
+            )
+            if self.health_monitor:
+                self.health_monitor.record_error(compact)
+
+            # Persist timeout history
+            try:
+                self.history.record(
+                    {
+                        "ts": time.time(),
+                        "status": "timeout",
+                        "profile": self.config.snowflake.profile,
+                        "statement_preview": statement[:200],
+                        "timeout_seconds": timeout,
+                        "overrides": overrides,
+                        "error": str(e),
+                        **({"reason": reason} if reason else {}),
+                    }
+                )
+            except Exception:
+                pass
+
+            if verbose_errors:
+                preview = statement[:200] + ("..." if len(statement) > 200 else "")
+                raise RuntimeError(
+                    "Query timeout after {}s.\n\n".format(timeout)
+                    + "Quick fixes:\n"
+                    + "1. Increase timeout: execute_query(..., timeout_seconds=480)\n"
+                    + "2. Add filter: Add WHERE clause to reduce data volume\n"
+                    + "3. Sample data: Add LIMIT clause for testing (e.g., LIMIT 1000)\n"
+                    + "4. Scale warehouse: Use larger warehouse for complex queries\n\n"
+                    + "Current settings:\n"
+                    + f"  - Timeout: {timeout}s\n"
+                    + (
+                        f"  - Warehouse: {overrides.get('warehouse')}\n"
+                        if overrides.get("warehouse")
+                        else ""
+                    )
+                    + (
+                        f"  - Database: {overrides.get('database')}\n"
+                        if overrides.get("database")
+                        else ""
+                    )
+                    + (
+                        f"  - Schema: {overrides.get('schema')}\n"
+                        if overrides.get("schema")
+                        else ""
+                    )
+                    + (
+                        f"  - Role: {overrides.get('role')}\n"
+                        if overrides.get("role")
+                        else ""
+                    )
+                    + "\nNotes:\n  - Query ID may be unavailable when a timeout triggers early cancellation.\n"
+                    + "\nQuery preview: "
+                    + preview
+                )
+            else:
+                raise RuntimeError(compact)
         except Exception as e:
             error_message = str(e)
 
@@ -195,6 +292,23 @@ class ExecuteQueryTool(MCPTool):
                 self.health_monitor.record_error(
                     f"Query execution failed: {error_message[:200]}"
                 )
+
+            # Persist failure history
+            try:
+                self.history.record(
+                    {
+                        "ts": time.time(),
+                        "status": "error",
+                        "profile": self.config.snowflake.profile,
+                        "statement_preview": statement[:200],
+                        "timeout_seconds": timeout,
+                        "overrides": overrides,
+                        "error": error_message,
+                        **({"reason": reason} if reason else {}),
+                    }
+                )
+            except Exception:
+                pass
 
             if verbose_errors:
                 # Return detailed error with optimization hints
@@ -216,25 +330,149 @@ class ExecuteQueryTool(MCPTool):
         statement: str,
         overrides: Dict[str, Any],
         timeout: int,
+        reason: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Execute query synchronously with session context management."""
-        try:
-            # Use QueryService to execute the query
-            result = self.query_service.execute_with_service(
-                statement,
-                service=self.snowflake_service,
-                session=overrides,
-                output_format="json",
-                timeout=timeout,
-            )
+        """Execute query synchronously using Snowflake service with robust timeout/cancel.
 
-            return {
-                "statement": statement,
-                "rowcount": len(result.rows) if result.rows else 0,
-                "rows": result.rows or [],
-            }
-        except Exception as e:
-            raise RuntimeError(f"Query execution failed: {e}") from e
+        This path uses the official MCP Snowflake service to obtain a connector
+        cursor so we can cancel server-side statements on timeout and capture
+        the Snowflake query ID when available.
+        """
+        params = {}
+        # Include igloo query tag from the upstream service if available
+        try:
+            params = dict(self.snowflake_service.get_query_tag_param())
+        except Exception:
+            params = {}
+
+        # If a reason is provided, append it to the Snowflake QUERY_TAG for auditability.
+        # We make a best-effort to preserve any existing tag from the upstream service.
+        if reason:
+            try:
+                # Truncate and sanitize reason to avoid overly long tags
+                reason_clean = " ".join(reason.split())[:240]
+                existing = params.get("QUERY_TAG")
+
+                # Try merging into existing JSON tag if present
+                merged = None
+                if isinstance(existing, str):
+                    try:
+                        obj = json.loads(existing)
+                        if isinstance(obj, dict):
+                            obj.update(
+                                {"tool": "execute_query", "reason": reason_clean}
+                            )
+                            merged = json.dumps(obj, ensure_ascii=False)
+                    except Exception:
+                        merged = None
+
+                # Fallback to concatenated string tag
+                if not merged:
+                    base = existing if isinstance(existing, str) else ""
+                    sep = " | " if base else ""
+                    merged = f"{base}{sep}tool:execute_query; reason:{reason_clean}"
+
+                params["QUERY_TAG"] = merged
+            except Exception:
+                # Never fail query execution on tag manipulation
+                pass
+
+        if timeout:
+            # Enforce server-side statement timeout as an additional safeguard
+            params["STATEMENT_TIMEOUT_IN_SECONDS"] = int(timeout)
+
+        lock = ensure_session_lock(self.snowflake_service)
+        started = time.time()
+
+        with lock:
+            with self.snowflake_service.get_connection(
+                use_dict_cursor=True,
+                session_parameters=params,
+            ) as (_, cursor):
+                original = snapshot_session(cursor)
+
+                result_box: Dict[str, Any] = {
+                    "rows": None,
+                    "rowcount": None,
+                    "error": None,
+                }
+                query_id_box: Dict[str, Optional[str]] = {"id": None}
+                done = threading.Event()
+
+                def run_query() -> None:
+                    try:
+                        # Apply session overrides (warehouse/database/schema/role)
+                        if overrides:
+                            apply_session_context(cursor, overrides)
+                        cursor.execute(statement)
+                        # Capture Snowflake query id when available
+                        try:
+                            qid = getattr(cursor, "sfqid", None)
+                        except Exception:
+                            qid = None
+                        query_id_box["id"] = qid
+                        # Only fetch rows if a result set is present
+                        has_result_set = (
+                            getattr(cursor, "description", None) is not None
+                        )
+                        if has_result_set:
+                            rows = cursor.fetchall()
+                            result_box["rows"] = rows
+                            result_box["rowcount"] = len(rows)
+                        else:
+                            # DML/DDL: no result set, use rowcount from cursor if available
+                            rc = getattr(cursor, "rowcount", 0)
+                            try:
+                                # Normalize negative/None to 0
+                                rc = int(rc) if rc and int(rc) >= 0 else 0
+                            except Exception:
+                                rc = 0
+                            result_box["rows"] = []
+                            result_box["rowcount"] = rc
+                    except Exception as exc:  # capture to re-raise on main thread
+                        result_box["error"] = exc
+                    finally:
+                        try:
+                            restore_session_context(cursor, original)
+                        except Exception:
+                            pass
+                        done.set()
+
+                worker = threading.Thread(target=run_query, daemon=True)
+                worker.start()
+
+                finished = done.wait(timeout)
+                if not finished:
+                    # Local timeout: cancel the running statement server-side
+                    try:
+                        cursor.cancel()
+                    except Exception:
+                        # Best-effort. If cancel fails, we still time out.
+                        pass
+
+                    # Give a short grace period for cancellation to propagate
+                    done.wait(5)
+                    # Signal timeout to caller
+                    raise TimeoutError(
+                        "Query execution exceeded timeout and was cancelled"
+                    )
+
+                # Worker finished: process result
+                if result_box["error"] is not None:
+                    raise result_box["error"]  # type: ignore[misc]
+
+                rows = result_box["rows"] or []
+                rowcount = result_box.get("rowcount")
+                if rowcount is None:
+                    rowcount = len(rows)
+                duration_ms = int((time.time() - started) * 1000)
+                return {
+                    "statement": statement,
+                    "rowcount": rowcount,
+                    "rows": rows,
+                    "query_id": query_id_box.get("id"),
+                    "duration_ms": duration_ms,
+                }
 
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
@@ -258,6 +496,17 @@ class ExecuteQueryTool(MCPTool):
                         ],
                     ),
                     "minLength": 1,
+                },
+                "reason": {
+                    **string_schema(
+                        "Short reason for executing this query. Stored in Snowflake QUERY_TAG and local history. Avoid sensitive information.",
+                        title="Reason",
+                        examples=[
+                            "Validate yesterday's revenue spike",
+                            "Power BI dashboard refresh",
+                            "Investigate nulls in customer_email",
+                        ],
+                    ),
                 },
                 "warehouse": snowflake_identifier_schema(
                     "Warehouse override. Defaults to the active profile warehouse.",
@@ -283,8 +532,8 @@ class ExecuteQueryTool(MCPTool):
                     "Query timeout in seconds (falls back to config default).",
                     minimum=1,
                     maximum=3600,
-                    default=120,
-                    examples=[60, 120, 300],
+                    default=30,
+                    examples=[30, 60, 300],
                 ),
                 "verbose_errors": boolean_schema(
                     "Include detailed optimization hints in error messages.",

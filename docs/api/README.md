@@ -146,7 +146,8 @@ get_resource_status()
 
 ## Performance Tips
 
-1. **Use appropriate timeouts** - Default is 120s, increase for large queries
+1. **Use appropriate timeouts** - Default is 30s, increase for large queries
+2. **Enable lightweight history (optional)** - Set `IGLOO_MCP_QUERY_HISTORY=/path/to/query_history.jsonl` to write one JSON object per executed query (status, preview, query_id when available, duration)
 2. **Batch operations** - Catalog builds are optimized for batch processing
 3. **Enable caching** - Repeated queries use Snowflake result cache
 4. **Profile your queries** - Use verbose_errors for optimization hints

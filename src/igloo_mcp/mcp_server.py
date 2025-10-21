@@ -14,7 +14,6 @@ import argparse
 import os
 from contextlib import asynccontextmanager
 from functools import partial
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 import anyio
@@ -42,8 +41,9 @@ from mcp_server_snowflake.utils import (  # type: ignore[import-untyped]
 
 from .config import Config, ConfigError, apply_config_overrides, get_config, load_config
 from .context import create_service_context
+
 # Lineage functionality removed - not part of igloo-mcp
-from .mcp.tools import (
+from .mcp.tools import (  # QueryLineageTool,  # Removed - lineage functionality not part of igloo-mcp
     BuildCatalogTool,
     BuildDependencyGraphTool,
     ConnectionTestTool,
@@ -51,9 +51,8 @@ from .mcp.tools import (
     GetCatalogSummaryTool,
     HealthCheckTool,
     PreviewTableTool,
-    # QueryLineageTool,  # Removed - lineage functionality not part of igloo-mcp
 )
-from .mcp.utils import get_profile_recommendations, json_compatible
+from .mcp.utils import get_profile_recommendations
 from .mcp_health import (
     MCPHealthMonitor,
 )
@@ -149,7 +148,9 @@ def register_igloo_mcp(
     snow_cli: SnowCLI | None = SnowCLI() if enable_cli_bridge else None
 
     # Instantiate all extracted tool classes
-    execute_query_inst = ExecuteQueryTool(config, snowflake_service, query_service, _health_monitor)
+    execute_query_inst = ExecuteQueryTool(
+        config, snowflake_service, query_service, _health_monitor
+    )
     preview_table_inst = PreviewTableTool(config, snowflake_service, query_service)
     # query_lineage_inst = QueryLineageTool(config)  # Removed - lineage functionality not part of igloo-mcp
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
@@ -175,10 +176,19 @@ def register_igloo_mcp(
         role: Annotated[
             Optional[str], Field(description="Role override", default=None)
         ] = None,
+        reason: Annotated[
+            Optional[str],
+            Field(
+                description=(
+                    "Short reason for executing this query. Stored in Snowflake QUERY_TAG and local history; avoid sensitive info."
+                ),
+                default=None,
+            ),
+        ] = None,
         timeout_seconds: Annotated[
             Optional[int],
             Field(
-                description="Query timeout in seconds (default: 120s from config)",
+                description="Query timeout in seconds (default: 30s from config)",
                 ge=1,
                 le=3600,
                 default=None,
@@ -200,6 +210,7 @@ def register_igloo_mcp(
             database=database,
             schema=schema,
             role=role,
+            reason=reason,
             timeout_seconds=timeout_seconds,
             verbose_errors=verbose_errors,
             ctx=ctx,
@@ -307,7 +318,6 @@ def register_igloo_mcp(
     ) -> Dict[str, Any]:
         """Get catalog summary - delegates to GetCatalogSummaryTool."""
         return await get_catalog_summary_inst.execute(catalog_dir=catalog_dir)
-
 
     if enable_cli_bridge and snow_cli is not None:
 
@@ -486,25 +496,22 @@ def create_combined_lifespan(args: argparse.Namespace):
     # Create a temporary config file if none is provided
     if not getattr(args, "service_config_file", None):
         import tempfile
+
         import yaml
-        
+
         # Create minimal config with just the profile
-        config_data = {
-            "snowflake": {
-                "profile": args.profile or "mystenlabs-keypair"
-            }
-        }
-        
+        config_data = {"snowflake": {"profile": args.profile or "mystenlabs-keypair"}}
+
         # Create temporary file
-        temp_fd, temp_path = tempfile.mkstemp(suffix='.yml', prefix='igloo_mcp_')
+        temp_fd, temp_path = tempfile.mkstemp(suffix=".yml", prefix="igloo_mcp_")
         try:
-            with os.fdopen(temp_fd, 'w') as f:
+            with os.fdopen(temp_fd, "w") as f:
                 yaml.dump(config_data, f)
             args.service_config_file = temp_path
         except Exception:
             os.close(temp_fd)
             raise
-    
+
     snowflake_lifespan = create_snowflake_lifespan(args)
 
     @asynccontextmanager
