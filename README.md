@@ -1,14 +1,15 @@
 # Igloo MCP - Snowflake MCP Server for Agentic Native Workflows
 
-
 Igloo MCP is a standalone MCP server for Snowflake operations, designed for agentic native workflows with AI assistants. Built from the ground up with SnowCLI integration for maximum simplicity and performance.
 
 ## ✨ Features
 
-- 🛡️ **SQL Safety:** Blocks destructive operations (DELETE, DROP, TRUNCATE) with safe alternatives
-- 🧠 **Intelligent Errors:** Compact mode (default) and Verbose mode. Standard exception-based error handling
-- ⏱️ **Agent-Controlled Timeouts:** Configure query timeouts per-request (1-3600s)
-- ✅ **MCP Protocol Compliant:** Standard exception-based error handling
+- 🛡️ **SQL Guardrails**: Blocks destructive operations (DELETE, DROP, TRUNCATE) with safe alternatives
+- ⏱️ **Timeouts + Cancellation**: Per‑request timeouts with best‑effort server‑side cancel; captures query ID when available
+- 📝 **Lightweight Query History (opt‑in)**: Write compact JSONL audit events for each query (success, timeout, error)
+- 🧠 **Smart Errors**: Compact by default; turn on verbose mode for actionable optimization hints
+- 🧩 **MCP‑Only Tooling**: Clean set of MCP tools for query, preview, catalog, dependency graph, health, and connection tests
+- ✅ **MCP Protocol Compliant**: Standard exception‑based error handling and robust health checks
 
 [📖 See Release Notes](./RELEASE_NOTES.md) for details.
 
@@ -31,9 +32,68 @@ Igloo MCP is a standalone MCP server for Snowflake operations, designed for agen
 
 See [MCP Documentation](docs/mcp/mcp_server_user_guide.md) for details.
 
+## Tool Overview
 
+| Tool | Purpose | Key Parameters |
+|------|---------|----------------|
+| `execute_query` | Run SQL with validation, timeouts, cancellation | `statement`, `timeout_seconds`, `verbose_errors`, `reason`, `warehouse`, `database`, `schema`, `role` |
+| `preview_table` | Quick table preview without writing SQL | `table_name`, `limit`, `warehouse`, `database`, `schema` |
+| `build_catalog` | Export comprehensive Snowflake metadata | `output_dir`, `database`, `account`, `format` |
+| `get_catalog_summary` | Read catalog statistics and health | `catalog_dir` |
+| `build_dependency_graph` | Build dependency relationships (JSON/DOT) | `database`, `schema`, `account`, `format` |
+| `test_connection` | Validate Snowflake connectivity | — |
+| `health_check` | Comprehensive system, profile, and resource health | `include_cortex`, `include_profile`, `include_catalog` |
 
 ---
+
+## Query Log History (opt‑in)
+
+Enable a compact, append‑only JSONL history of executed queries. Useful for auditing, debugging, or building lightweight telemetry without external systems.
+
+### Enable
+
+```bash
+export IGLOO_MCP_QUERY_HISTORY=./igloo_query_history.jsonl
+```
+
+Set to any writable file path. When set, igloo‑mcp writes one JSON object per executed query.
+
+### What Gets Logged
+
+Each line is a single JSON object with fields (subset varies by status):
+- `ts` (number) — Unix timestamp in seconds
+- `status` (string) — `success` | `timeout` | `error`
+- `profile` (string) — Snowflake profile used
+- `statement_preview` (string) — First 200 chars of SQL statement
+- `rowcount` (number) — Row count if available (success only)
+- `timeout_seconds` (number) — Effective timeout applied
+- `overrides` (object) — Any session overrides `{ warehouse, database, schema, role }`
+- `query_id` (string|null) — Snowflake query ID when available
+- `duration_ms` (number) — Execution duration in milliseconds (success only)
+- `reason` (string) — Optional short reason if provided by the caller
+- `error` (string) — Error message (timeout/error only)
+
+### Examples
+
+Success:
+```json
+{"ts": 1737412345, "status": "success", "profile": "quickstart", "statement_preview": "SELECT * FROM customers LIMIT 10", "rowcount": 10, "timeout_seconds": 30, "overrides": {"warehouse": "COMPUTE_WH"}, "query_id": "01a1b2c3d4", "duration_ms": 142}
+```
+
+Timeout (server‑side cancel attempted):
+```json
+{"ts": 1737412399, "status": "timeout", "profile": "quickstart", "statement_preview": "SELECT * FROM huge_table WHERE date >= '2024-01-01'", "timeout_seconds": 30, "overrides": {"warehouse": "COMPUTE_WH"}, "error": "Query execution exceeded timeout and was cancelled"}
+```
+
+Error:
+```json
+{"ts": 1737412468, "status": "error", "profile": "quickstart", "statement_preview": "SELECT * FROM missing_table", "timeout_seconds": 30, "overrides": {}, "error": "Object 'MISSING_TABLE' does not exist."}
+```
+
+Notes:
+- Query ID may be unavailable if a timeout triggers early cancellation.
+- History writes are best‑effort; logging never raises to the caller.
+- Do not put sensitive data in `reason`. SQL is truncated to a preview for safety.
 
 ## Installation
 
@@ -50,17 +110,18 @@ Get igloo-mcp running with Cursor in under 5 minutes!
 
 **Who this is for**: Users new to Snowflake and MCP who want to get started quickly.
 
+### How It Works
+- Your LLM calls MCP tools (execute_query, preview_table, build_catalog, etc.) exposed by igloo-mcp.
+- igloo-mcp uses your Snowflake CLI profile for authentication and session context.
+- Built-in guardrails block destructive SQL; timeouts and best‑effort cancellation keep runs responsive.
+- Optional JSONL query history records success/timeout/error with minimal fields for auditing.
+- Configure your editor (Cursor or Claude Code) to launch igloo-mcp with your Snowflake profile.
+
 ### Prerequisites Check (30 seconds)
 
 ```bash
 # Check Python version (need 3.12+)
 python --version
-
-# Check if Snowflake CLI is installed
-snow --version
-
-# If not installed, install it:
-pip install snowflake-cli-labs
 ```
 
 **What you'll need**:
@@ -79,7 +140,7 @@ python -c "import igloo_mcp; print('igloo-mcp installed successfully')"
 # Expected: igloo-mcp installed successfully
 ```
 
-> **Note**: igloo-mcp automatically installs `snowflake-cli-labs` as a dependency
+> **Note**: igloo-mcp bundles the Snowflake CLI, so `snow --version` should succeed after installation. If it does not, check that your environment PATH includes the uv-managed scripts directory or that you’re using the same virtual environment.
 
 ### Step 2: Create Snowflake Profile (2 minutes)
 
@@ -154,6 +215,24 @@ Edit `~/.cursor/mcp.json`:
 
 **Restart Cursor** after configuring.
 
+#### Claude Code (alternative)
+
+Add this to your Claude Code MCP settings:
+
+```json
+{
+  "mcp": {
+    "igloo-mcp": {
+      "command": "igloo-mcp",
+      "args": ["--profile", "quickstart"],
+      "env": { "SNOWFLAKE_PROFILE": "quickstart" }
+    }
+  }
+}
+```
+
+Then ask Claude to test the connection or list databases.
+
 ### Step 4: Test Your Setup (30 seconds)
 
 #### Verify Snowflake Connection
@@ -211,8 +290,8 @@ Try these prompts in Cursor:
 → Explores all tables, columns, views, functions, procedures, and metadata
 → Only includes user-defined functions (excludes built-in Snowflake functions)
 
-"Show me lineage for USERS table"
-→ Visualizes data dependencies
+"Build a dependency graph for USERS in MY_DB"
+→ Visualizes object dependencies (upstream/downstream) via build_dependency_graph
 
 "Preview the CUSTOMERS table with 10 rows"
 → Shows sample data from tables
@@ -401,16 +480,15 @@ catalog = catalog_service.build_catalog(database="MY_DB")
 # Note: Only includes user-defined functions (excludes built-in Snowflake functions)
 ```
 
-### Data Lineage
+### Table Preview
 
 ```python
-# Query lineage for impact analysis
+# Quickly sample rows from a table
 {
-  "tool": "query_lineage",
+  "tool": "preview_table",
   "arguments": {
-    "object_name": "MY_TABLE",
-    "direction": "both",
-    "depth": 3
+    "table_name": "PUBLIC.CUSTOMERS",
+    "limit": 5
   }
 }
 ```

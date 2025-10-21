@@ -2,6 +2,13 @@
 
 > **Quick Start**: Set up your Snowflake profile → Install igloo-mcp → Start using with your AI assistant
 
+## How It Works
+- Your LLM calls MCP tools (execute_query, preview_table, build_catalog, etc.) exposed by igloo-mcp.
+- igloo-mcp uses your Snowflake CLI profile for authentication and session context.
+- Built-in guardrails block destructive SQL; timeouts and best‑effort cancellation keep runs responsive.
+- Optional JSONL query history records success/timeout/error with minimal fields for auditing.
+- Configure your editor (Cursor or Claude Code) to launch igloo-mcp with your Snowflake profile.
+
 ## Prerequisites
 
 **Required**:
@@ -9,9 +16,8 @@
    - Check: `python --version`
    - Install: https://www.python.org/downloads/
 
-2. **Snowflake CLI** (Official package - for profile management)
-   - Install: `pip install snowflake-cli-labs`
-   - Check: `snow --version`
+2. **Snowflake CLI** (Official package - bundled with igloo-mcp)
+   - Expect: `snow --version` works after installing igloo-mcp
    - Docs: https://docs.snowflake.com/en/developer-guide/snowflake-cli/
    - Purpose: Manages Snowflake authentication profiles only
 
@@ -164,6 +170,24 @@ Edit your Cursor MCP settings (`~/.cursor/mcp.json`):
 - Environment variable: `"env": {"SNOWFLAKE_PROFILE": "my-profile"}`
 - Default profile: Omit args/env if you set a default with `snow connection set-default`
 
+### Claude Code (alternative)
+
+Add this to your Claude Code MCP settings:
+
+```json
+{
+  "mcp": {
+    "igloo-mcp": {
+      "command": "igloo-mcp",
+      "args": ["--profile", "my-profile"],
+      "env": { "SNOWFLAKE_PROFILE": "my-profile" }
+    }
+  }
+}
+```
+
+Then ask Claude to test the connection or list databases.
+
 ## Step 4: Test Your Setup
 
 ### Verify Snowflake Connection
@@ -191,28 +215,24 @@ Once configured, interact with igloo-mcp through Cursor:
 "Build a catalog for MY_DATABASE"
 → Uses: build_catalog tool
 
-"Show me lineage for USERS table"
-→ Uses: query_lineage tool
+"Build a dependency graph for USERS-related objects"
+→ Uses: build_dependency_graph tool
 
 "Execute this query: SELECT * FROM CUSTOMERS LIMIT 10"
 → Uses: execute_query tool
-
-"Build a dependency graph for MY_DATABASE"
-→ Uses: build_dependency_graph tool
 ```
 
 ## Available MCP Tools
 
 | Tool Name | Description | Key Parameters |
 |-----------|-------------|----------------|
-| `test_connection` | Test Snowflake connection | profile (optional) |
-| `build_catalog` | Build comprehensive database catalog from INFORMATION_SCHEMA | database, output_dir, account |
-| `query_lineage` | Analyze table lineage | object_name, direction, depth |
-| `build_dependency_graph` | Generate dependency graph | database, format |
-| `execute_query` | Execute SQL query | statement, output_format |
-| `preview_table` | Preview table data | table_name, limit |
-| `health_check` | Check MCP server health | - |
-| `get_catalog_summary` | Get catalog statistics | catalog_dir |
+| `execute_query` | Execute SQL with safety checks, timeouts, cancellation | statement, timeout_seconds, verbose_errors, reason, warehouse, database, schema, role |
+| `preview_table` | Preview table rows without writing SQL | table_name, limit, warehouse, database, schema, role |
+| `build_catalog` | Build comprehensive catalog from INFORMATION_SCHEMA | output_dir, database, account, format |
+| `get_catalog_summary` | Get catalog statistics and metadata | catalog_dir |
+| `build_dependency_graph` | Generate object dependency graph (JSON/DOT) | database, schema, account, format |
+| `test_connection` | Test Snowflake connection | — |
+| `health_check` | Check MCP server health | — |
 
 **Catalog Building Details**:
 - Queries Snowflake `INFORMATION_SCHEMA` for comprehensive metadata

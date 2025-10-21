@@ -7,7 +7,7 @@ The MCP (Model Context Protocol) server is the primary interface for Igloo MCP. 
 ### Key Benefits
 
 - **Natural Language Queries**: Ask questions in plain English, get SQL results
-- **Intelligent Context**: AI understands your schema, relationships, and data lineage
+- **Intelligent Context**: AI understands your schema, relationships, and dependencies
 - **Secure Integration**: Uses existing Snowflake CLI authentication
 - **Tool-based Safety**: Structured tools prevent arbitrary code execution
 - **Multi-Client Support**: Works with VS Code, Cursor, Claude Code, and other MCP clients
@@ -72,39 +72,17 @@ This starts the server in stdio mode, which is useful for debugging but not need
 
 ## Available Tools
 
-The MCP server exposes the following tools to AI assistants:
+The MCP server exposes these tools to AI assistants:
 
-### Core Data Tools
-- **`execute_query`** - Execute SQL queries against Snowflake
-  - Parameters: `query`, `warehouse`, `database`, `schema`, `role`
-  - Returns: Query results as JSON
-
-- **`preview_table`** - Preview table contents
-  - Parameters: `table_name`, `limit`, `warehouse`, `database`, `schema`, `role`
-  - Returns: Table preview data
-
-### Catalog and Metadata Tools
-- **`build_catalog`** - Generate comprehensive data catalogs
-  - Parameters: `output_dir`, `database`, `account`, `format`, `include_ddl`
-  - Returns: Catalog metadata summary
-
-- **`get_catalog_summary`** - Retrieve existing catalog summaries
-  - Parameters: `catalog_dir`
-  - Returns: Catalog statistics and metadata
-
-### Analysis Tools
-- **`query_lineage`** - Analyze data lineage and dependencies
-  - Parameters: `object_name`, `direction`, `depth`, `format`, `catalog_dir`, `cache_dir`
-  - Returns: Lineage graph in text/JSON/HTML format
-
-- **`build_dependency_graph`** - Create object dependency graphs
-  - Parameters: `database`, `schema`, `account`, `format`
-  - Returns: Dependency graph in JSON or DOT format
-
-### Utility Tools
-- **`test_connection`** - Test Snowflake connection
-  - Parameters: None
-  - Returns: Connection status
+| Tool | Description | Key Parameters | Returns |
+|------|-------------|----------------|---------|
+| `execute_query` | Execute SQL queries against Snowflake with safety checks, timeouts, and cancellation | `statement`, `timeout_seconds`, `verbose_errors`, `reason`, `warehouse`, `database`, `schema`, `role` | `{ statement, rowcount, rows, query_id?, duration_ms? }` |
+| `preview_table` | Preview table contents | `table_name`, `limit`, `warehouse`, `database`, `schema`, `role` | Column metadata and rows |
+| `build_catalog` | Generate comprehensive data catalogs | `output_dir`, `database`, `account`, `format` | Catalog totals and output location |
+| `get_catalog_summary` | Retrieve existing catalog summaries | `catalog_dir` | Catalog statistics and metadata |
+| `build_dependency_graph` | Create object dependency graphs | `database`, `schema`, `account`, `format` | Dependency graph in JSON or DOT |
+| `test_connection` | Test Snowflake connection | — | Connection status |
+| `health_check` | Comprehensive server health | — | System, profile, and resource health |
 
 ## Configuration
 
@@ -170,21 +148,21 @@ AI: "You have access to 5 databases: DEFI_SAMPLE_DB, PIPELINE_V2_GROOT_DB, ANALY
 #### Data Discovery
 ```
 You: "I need to understand the structure of our DEX trading data"
-AI: [Builds catalog for DeFi-related objects]
+AI: [Builds catalog for targeted database]
 AI: "I found the main DEX_TRADES_STABLE table with 224M+ records. Key tables are:
      - DEX_TRADES_STABLE (main fact table with all trades)
      - COIN_INFO (cryptocurrency metadata)
      - BTC_DEX_TRADES_USD_DT (BTC-focused analytics)
      Would you like me to show you the schema for any of these?"
 
-You: "Yes, show me DEX_TRADES_STABLE and how it connects to other tables"
-AI: [Queries lineage for DEX_TRADES_STABLE table]
+You: "Yes, show me DEX_TRADES_STABLE and its related objects"
+AI: [Builds dependency graph for REPORTING schema]
 AI: "The DEX_TRADES_STABLE table has 23 columns tracking trades across 6 protocols:
      [Shows schema]
 
-     It connects to:
+     Related objects include:
      - Downstream: FILTERED_DEX_TRADES_VIEW, BTC_DEX_TRADES_USD_DT
-     - Upstream: OBJECT_PARQUET2, raw DEX events"
+     - Upstream: OBJECT_PARQUET2, raw DEX events (via dependency graph)"
 ```
 
 ### Common Use Cases
@@ -226,7 +204,7 @@ AI: "The DEX_TRADES_STABLE table has 23 columns tracking trades across 6 protoco
    ```bash
    # Test Snowflake connection directly
    snow sql -q "SELECT CURRENT_USER()" --connection my-profile
-   
+
    # Or test via Python API
    python -c "from igloo_mcp import QueryService; QueryService(profile='my-profile')"
    ```
@@ -249,9 +227,9 @@ AI: "The DEX_TRADES_STABLE table has 23 columns tracking trades across 6 protoco
 - Use incremental catalog builds when possible
 
 ### Common Error Messages
-- `"Object not found in lineage graph"` - Run `build_catalog` first
 - `"Connection failed"` - Check your Snowflake CLI configuration
 - `"Permission denied"` - Ensure your role has necessary privileges
+- `"Catalog not found"` - Run `build_catalog` first or set the correct `catalog_dir`
 
 ## Security Considerations
 

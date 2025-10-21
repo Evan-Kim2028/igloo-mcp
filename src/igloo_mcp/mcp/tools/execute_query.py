@@ -14,6 +14,7 @@ import anyio
 
 from igloo_mcp.config import Config
 from igloo_mcp.logging import QueryHistory
+from igloo_mcp.mcp.utils import json_compatible
 from igloo_mcp.mcp_health import MCPHealthMonitor
 from igloo_mcp.service_layer import QueryService
 from igloo_mcp.session_utils import (
@@ -81,8 +82,7 @@ class ExecuteQueryTool(MCPTool):
                 "description": "Preview recent sales rows",
                 "parameters": {
                     "statement": (
-                        "SELECT * FROM ANALYTICS.SALES.FACT_ORDERS "
-                        "ORDER BY ORDER_TS DESC LIMIT 20"
+                        "SELECT * FROM ANALYTICS.SALES.FACT_ORDERS ORDER BY ORDER_TS DESC LIMIT 20"
                     ),
                     "warehouse": "ANALYTICS_WH",
                 },
@@ -321,8 +321,7 @@ class ExecuteQueryTool(MCPTool):
             else:
                 # Return compact error
                 raise RuntimeError(
-                    f"Query execution failed: {error_message[:150]}. "
-                    f"Use verbose_errors=true for details."
+                    f"Query execution failed: {error_message[:150]}. Use verbose_errors=true for details."
                 )
 
     def _execute_query_sync(
@@ -416,9 +415,44 @@ class ExecuteQueryTool(MCPTool):
                             getattr(cursor, "description", None) is not None
                         )
                         if has_result_set:
-                            rows = cursor.fetchall()
-                            result_box["rows"] = rows
-                            result_box["rowcount"] = len(rows)
+                            raw_rows = cursor.fetchall()
+                            description = getattr(cursor, "description", None) or []
+                            column_names = []
+                            for idx, col in enumerate(description):
+                                name = None
+                                if isinstance(col, (list, tuple)) and col:
+                                    name = col[0]
+                                else:
+                                    name = getattr(col, "name", None) or getattr(
+                                        col, "column_name", None
+                                    )
+                                if not name:
+                                    name = f"column_{idx}"
+                                column_names.append(str(name))
+
+                            processed_rows = []
+                            for raw in raw_rows:
+                                if isinstance(raw, dict):
+                                    record = raw
+                                elif hasattr(raw, "_asdict"):
+                                    record = raw._asdict()  # type: ignore[assignment]
+                                elif isinstance(raw, (list, tuple)):
+                                    record = {}
+                                    for idx, value in enumerate(raw):
+                                        key = (
+                                            column_names[idx]
+                                            if idx < len(column_names)
+                                            else f"column_{idx}"
+                                        )
+                                        record[key] = value
+                                else:
+                                    # Fallback for scalar rows or mismatched metadata
+                                    record = {"value": raw}
+
+                                processed_rows.append(json_compatible(record))
+
+                            result_box["rows"] = processed_rows
+                            result_box["rowcount"] = len(processed_rows)
                         else:
                             # DML/DDL: no result set, use rowcount from cursor if available
                             rc = getattr(cursor, "rowcount", 0)
@@ -499,7 +533,10 @@ class ExecuteQueryTool(MCPTool):
                 },
                 "reason": {
                     **string_schema(
-                        "Short reason for executing this query. Stored in Snowflake QUERY_TAG and local history. Avoid sensitive information.",
+                        (
+                            "Short reason for executing this query. Stored in Snowflake "
+                            "QUERY_TAG and local history. Avoid sensitive information."
+                        ),
                         title="Reason",
                         examples=[
                             "Validate yesterday's revenue spike",
