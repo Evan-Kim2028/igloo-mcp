@@ -13,13 +13,54 @@ class _FakeCursor:
     def __init__(self, work_seconds: float = 1.0):
         self._cancelled: bool = False
         self._fetchone_map: Dict[str, str] = {}
-        self._rows: List[Dict[str, int]] = []
+        self._rows: List[Dict[str, Any]] = []
         self.sfqid: Optional[str] = None
         self._work_seconds = work_seconds
         self.description: Optional[List[Tuple[str, ...]]] = None
+        self._session_parameters: Dict[str, Optional[str]] = {
+            "QUERY_TAG": None,
+            "STATEMENT_TIMEOUT_IN_SECONDS": "0",
+        }
+        self.query_tags_seen: List[Optional[str]] = []
+        self.statement_timeouts_seen: List[Optional[str]] = []
 
     def execute(self, query: str) -> None:
         q = query.strip().upper()
+        if q.startswith("SHOW PARAMETERS LIKE 'QUERY_TAG'"):
+            value = self._session_parameters["QUERY_TAG"]
+            self.description = [("key",), ("value",)]
+            self._rows = [{"KEY": "QUERY_TAG", "VALUE": value or ""}]
+            return
+        if q.startswith("SHOW PARAMETERS LIKE 'STATEMENT_TIMEOUT_IN_SECONDS'"):
+            value = self._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"]
+            self.description = [("key",), ("value",)]
+            self._rows = [{"KEY": "STATEMENT_TIMEOUT_IN_SECONDS", "VALUE": value or ""}]
+            return
+        if q.startswith("ALTER SESSION SET QUERY_TAG"):
+            raw = query.split("=", 1)[1].strip().rstrip(";")
+            cleaned = raw.strip().strip("'").replace("''", "'")
+            self._session_parameters["QUERY_TAG"] = cleaned or None
+            self.description = None
+            self._rows = []
+            return
+        if q.startswith("ALTER SESSION UNSET QUERY_TAG"):
+            self._session_parameters["QUERY_TAG"] = None
+            self.description = None
+            self._rows = []
+            return
+        if q.startswith("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS"):
+            raw_timeout = query.split("=", 1)[1].strip().rstrip(";")
+            self._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] = (
+                raw_timeout or None
+            )
+            self.description = None
+            self._rows = []
+            return
+        if q.startswith("ALTER SESSION UNSET STATEMENT_TIMEOUT_IN_SECONDS"):
+            self._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] = "0"
+            self.description = None
+            self._rows = []
+            return
         # Fast paths for session snapshot queries
         if q.startswith("SELECT CURRENT_ROLE()"):
             self._fetchone_map = {"ROLE": "TEST_ROLE"}
@@ -33,9 +74,22 @@ class _FakeCursor:
         if q.startswith("SELECT CURRENT_SCHEMA()"):
             self._fetchone_map = {"SCHEMA": "PUBLIC"}
             return
+        if (
+            q.startswith("USE ROLE")
+            or q.startswith("USE WAREHOUSE")
+            or q.startswith("USE DATABASE")
+            or q.startswith("USE SCHEMA")
+        ):
+            self.description = None
+            self._rows = []
+            return
 
         # Simulate long/short query returning a result set
         self.sfqid = "FAKE_QID_123"
+        self.query_tags_seen.append(self._session_parameters["QUERY_TAG"])
+        self.statement_timeouts_seen.append(
+            self._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"]
+        )
         end = time.time() + self._work_seconds
         while time.time() < end:
             if self._cancelled:
@@ -49,7 +103,7 @@ class _FakeCursor:
     def fetchone(self) -> Dict[str, str]:
         return self._fetchone_map
 
-    def fetchall(self) -> List[Dict[str, int]]:
+    def fetchall(self) -> List[Dict[str, Any]]:
         return self._rows
 
     def cancel(self) -> None:
@@ -138,3 +192,24 @@ async def test_timeout_seconds_requires_integer(bad_value):
 
     with pytest.raises((TypeError, ValueError)):
         await tool.execute(statement="SELECT QUICK", timeout_seconds=bad_value)
+
+
+@pytest.mark.asyncio
+async def test_reason_query_tag_applied_per_request_and_restored():
+    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+    service = _FakeService(work_seconds=0.05)
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
+
+    await tool.execute(statement="SELECT QUICK", timeout_seconds=2, reason="First pass")
+    await tool.execute(
+        statement="SELECT QUICK", timeout_seconds=2, reason="Second pass"
+    )
+
+    cursor = service._cursor
+    assert cursor.query_tags_seen == [
+        "tool:execute_query; reason:First pass",
+        "tool:execute_query; reason:Second pass",
+    ]
+    assert cursor._session_parameters["QUERY_TAG"] is None
+    assert cursor.statement_timeouts_seen == ["2", "2"]
+    assert cursor._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] == "0"

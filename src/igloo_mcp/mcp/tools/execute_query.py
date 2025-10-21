@@ -394,7 +394,6 @@ class ExecuteQueryTool(MCPTool):
         with lock:
             with self.snowflake_service.get_connection(
                 use_dict_cursor=True,
-                session_parameters=params,
             ) as (_, cursor):
                 original = snapshot_session(cursor)
 
@@ -406,11 +405,103 @@ class ExecuteQueryTool(MCPTool):
                 query_id_box: Dict[str, Optional[str]] = {"id": None}
                 done = threading.Event()
 
+                def _escape_tag(tag_value: str) -> str:
+                    return tag_value.replace("'", "''")
+
+                def _get_session_parameter(name: str) -> Optional[str]:
+                    try:
+                        cursor.execute(f"SHOW PARAMETERS LIKE '{name}' IN SESSION")
+                        rows = cursor.fetchall() or []
+                        if not rows:
+                            return None
+                        for row in rows:
+                            level = (row.get("level") or row.get("LEVEL") or "").upper()
+                            if level not in {"", "SESSION", "USER"}:
+                                continue
+                            value = row.get("value") or row.get("VALUE")
+                            if value in (None, ""):
+                                return None
+                            return str(value)
+                        # Fallback to first row if level filtering failed
+                        first = rows[0]
+                        value = first.get("value") or first.get("VALUE")
+                        if value in (None, ""):
+                            return None
+                        return str(value)
+                    except Exception:
+                        return None
+
+                def _set_session_parameter(name: str, value: Any) -> None:
+                    try:
+                        if name == "QUERY_TAG":
+                            if value:
+                                escaped = _escape_tag(str(value))
+                                cursor.execute(
+                                    f"ALTER SESSION SET QUERY_TAG = '{escaped}'"
+                                )
+                            else:
+                                cursor.execute("ALTER SESSION UNSET QUERY_TAG")
+                        elif name == "STATEMENT_TIMEOUT_IN_SECONDS":
+                            cursor.execute(
+                                f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {int(value)}"
+                            )
+                        else:
+                            cursor.execute(f"ALTER SESSION SET {name} = {value}")
+                    except Exception:
+                        # Session parameter adjustments are best-effort; ignore failures.
+                        pass
+
+                def _restore_session_parameters(
+                    previous: Dict[str, Optional[str]],
+                ) -> None:
+                    try:
+                        prev_tag = previous.get("QUERY_TAG")
+                        if "QUERY_TAG" in params:
+                            if prev_tag:
+                                escaped = _escape_tag(prev_tag)
+                                cursor.execute(
+                                    f"ALTER SESSION SET QUERY_TAG = '{escaped}'"
+                                )
+                            else:
+                                cursor.execute("ALTER SESSION UNSET QUERY_TAG")
+                    except Exception:
+                        pass
+
+                    try:
+                        prev_timeout = previous.get("STATEMENT_TIMEOUT_IN_SECONDS")
+                        if "STATEMENT_TIMEOUT_IN_SECONDS" in params:
+                            if prev_timeout and prev_timeout.isdigit():
+                                cursor.execute(
+                                    "ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {}".format(
+                                        int(prev_timeout)
+                                    )
+                                )
+                            else:
+                                cursor.execute(
+                                    "ALTER SESSION UNSET STATEMENT_TIMEOUT_IN_SECONDS"
+                                )
+                    except Exception:
+                        pass
+
                 def run_query() -> None:
                     try:
                         # Apply session overrides (warehouse/database/schema/role)
                         if overrides:
                             apply_session_context(cursor, overrides)
+                        previous_parameters: Dict[str, Optional[str]] = {}
+                        if "QUERY_TAG" in params:
+                            previous_parameters["QUERY_TAG"] = _get_session_parameter(
+                                "QUERY_TAG"
+                            )
+                            _set_session_parameter("QUERY_TAG", params["QUERY_TAG"])
+                        if "STATEMENT_TIMEOUT_IN_SECONDS" in params:
+                            previous_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] = (
+                                _get_session_parameter("STATEMENT_TIMEOUT_IN_SECONDS")
+                            )
+                            _set_session_parameter(
+                                "STATEMENT_TIMEOUT_IN_SECONDS",
+                                params["STATEMENT_TIMEOUT_IN_SECONDS"],
+                            )
                         cursor.execute(statement)
                         # Capture Snowflake query id when available
                         try:
@@ -474,6 +565,10 @@ class ExecuteQueryTool(MCPTool):
                     except Exception as exc:  # capture to re-raise on main thread
                         result_box["error"] = exc
                     finally:
+                        try:
+                            _restore_session_parameters(previous_parameters)
+                        except Exception:
+                            pass
                         try:
                             restore_session_context(cursor, original)
                         except Exception:
