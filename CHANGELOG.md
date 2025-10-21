@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-10-21
+
+### Added
+- Clarified SQL safety messaging when Snowflake falls back to the generic `Command` type.
+
+### Changed
+- Default SQL permissions now block INSERT/UPDATE/CREATE/ALTER alongside DELETE/DROP/TRUNCATE.
+- Documentation highlights the stricter defaults and how to opt back into write verbs.
+
+### Fixed
+- Ensure DML-only execute tests run by explicitly opting into INSERT permissions.
+
 ## [0.1.1] - 2025-10-20
 
 ### Changed
