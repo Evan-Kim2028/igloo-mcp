@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import string
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Any, Dict, Optional
@@ -88,10 +89,17 @@ _catalog_service: Optional[CatalogService] = None
 def read_sql_artifact_by_sha(sql_sha256: str) -> str:
     """Return the SQL text for the given SHA-256 hash."""
 
-    artifact_root = resolve_artifact_root()
+    if len(sql_sha256) != 64 or any(ch not in string.hexdigits for ch in sql_sha256):
+        raise ValueError("sql_sha256 must be a 64-character hexadecimal digest")
+
+    artifact_root = resolve_artifact_root().resolve()
     artifact_path = (
         artifact_root / "queries" / "by_sha" / f"{sql_sha256}.sql"
     ).resolve()
+    if not artifact_path.is_relative_to(artifact_root):
+        raise FileNotFoundError(
+            f"SQL artifact for {sql_sha256} not found under {artifact_root}"
+        )
     if not artifact_path.exists() or not artifact_path.is_file():
         raise FileNotFoundError(
             f"SQL artifact for {sql_sha256} not found under {artifact_root}"

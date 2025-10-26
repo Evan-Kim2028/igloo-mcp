@@ -6,7 +6,7 @@ Igloo MCP is a standalone MCP server for Snowflake operations, designed for agen
 
 - 🛡️ **SQL Guardrails**: Blocks write + DDL operations (INSERT, UPDATE, CREATE, ALTER, DELETE, DROP, TRUNCATE) with safe alternatives
 - ⏱️ **Timeouts + Cancellation**: Per‑request timeouts with best‑effort server‑side cancel; captures query ID when available
-- 📝 **Lightweight Query History (opt‑in)**: Write compact JSONL audit events for each query (success, timeout, error)
+- 📝 **Lightweight Query History (default)**: Auto-write compact JSONL audit events (success, timeout, error) to `logs/doc.jsonl` with SHA-indexed SQL artifacts
 - 🧠 **Smart Errors**: Compact by default; turn on verbose mode for actionable optimization hints
 - 🧩 **MCP‑Only Tooling**: Clean set of MCP tools for query, preview, catalog, dependency graph, health, and connection tests
 - ✅ **MCP Protocol Compliant**: Standard exception‑based error handling and robust health checks
@@ -46,54 +46,97 @@ See [MCP Documentation](docs/mcp/mcp_server_user_guide.md) for details.
 
 ---
 
-## Query Log History (opt‑in)
+## Query Log History (doc.jsonl + SQL artifacts)
 
-Enable a compact, append‑only JSONL history of executed queries. Useful for auditing, debugging, or building lightweight telemetry without external systems.
+Every execution writes a compact JSONL record to the repo-local `logs/doc.jsonl` (created on demand). Each record references the full SQL stored once by SHA-256 under `logs/artifacts/queries/by_sha/`.
 
-### Enable
+### Configure Paths
 
-```bash
-export IGLOO_MCP_QUERY_HISTORY=./igloo_query_history.jsonl
-```
+| Purpose | Default | Override |
+|---------|---------|----------|
+| History file | `<repo>/logs/doc.jsonl` | `IGLOO_MCP_QUERY_HISTORY=/custom/doc.jsonl` |
+| Artifact root | `<repo>/logs/artifacts/` | `IGLOO_MCP_ARTIFACT_ROOT=/custom/artifacts` |
 
-Set to any writable file path. When set, igloo‑mcp writes one JSON object per executed query.
+Set either env var to change locations. Use an empty string (`export IGLOO_MCP_QUERY_HISTORY=""`) to disable history entirely.
+When disabled, neither JSONL records nor SQL artifacts are written to disk.
 
-### What Gets Logged
+### Logged Fields (per line)
 
-Each line is a single JSON object with fields (subset varies by status):
-- `ts` (number) — Unix timestamp in seconds
-- `status` (string) — `success` | `timeout` | `error`
-- `profile` (string) — Snowflake profile used
-- `statement_preview` (string) — First 200 chars of SQL statement
-- `rowcount` (number) — Row count if available (success only)
-- `timeout_seconds` (number) — Effective timeout applied
-- `overrides` (object) — Any session overrides `{ warehouse, database, schema, role }`
-- `query_id` (string|null) — Snowflake query ID when available
-- `duration_ms` (number) — Execution duration in milliseconds (success only)
-- `reason` (string) — Optional short reason if provided by the caller
-- `error` (string) — Error message (timeout/error only)
+- `ts` — Unix timestamp (seconds)
+- `status` — `success` | `timeout` | `error`
+- `profile` — Snowflake profile used
+- `statement_preview` — First 200 characters of the SQL
+- `timeout_seconds` — Effective timeout applied
+- `sql_sha256` — SHA-256 digest of the full SQL text
+- `artifacts` — `{ "sql_path": "logs/artifacts/queries/by_sha/<sha>.sql" }`
+- `rowcount`, `duration_ms`, `query_id` — When available (success only)
+- `overrides` — Session overrides `{ warehouse, database, schema, role }`
+- `reason` — Optional short reason (also stored in Snowflake `QUERY_TAG`)
+- `error` — Error message (timeout/error only)
 
 ### Examples
 
 Success:
 ```json
-{"ts": 1737412345, "status": "success", "profile": "quickstart", "statement_preview": "SELECT * FROM customers LIMIT 10", "rowcount": 10, "timeout_seconds": 30, "overrides": {"warehouse": "COMPUTE_WH"}, "query_id": "01a1b2c3d4", "duration_ms": 142}
+{
+  "ts": 1737412345,
+  "status": "success",
+  "profile": "quickstart",
+  "statement_preview": "SELECT * FROM customers LIMIT 10",
+  "rowcount": 10,
+  "timeout_seconds": 30,
+  "query_id": "01a1b2c3d4",
+  "duration_ms": 142,
+  "sql_sha256": "4f7c1e2f...",
+  "artifacts": {"sql_path": "logs/artifacts/queries/by_sha/4f7c1e2f....sql"}
+}
 ```
 
-Timeout (server‑side cancel attempted):
+Timeout (server-side cancel attempted):
 ```json
-{"ts": 1737412399, "status": "timeout", "profile": "quickstart", "statement_preview": "SELECT * FROM huge_table WHERE date >= '2024-01-01'", "timeout_seconds": 30, "overrides": {"warehouse": "COMPUTE_WH"}, "error": "Query execution exceeded timeout and was cancelled"}
-```
-
-Error:
-```json
-{"ts": 1737412468, "status": "error", "profile": "quickstart", "statement_preview": "SELECT * FROM missing_table", "timeout_seconds": 30, "overrides": {}, "error": "Object 'MISSING_TABLE' does not exist."}
+{
+  "ts": 1737412399,
+  "status": "timeout",
+  "profile": "quickstart",
+  "statement_preview": "SELECT * FROM huge_table WHERE date >= '2024-01-01'",
+  "timeout_seconds": 30,
+  "sql_sha256": "f1c3a8c0...",
+  "artifacts": {"sql_path": "logs/artifacts/queries/by_sha/f1c3a8c0....sql"},
+  "error": "Query execution exceeded timeout and was cancelled"
+}
 ```
 
 Notes:
 - Query ID may be unavailable if a timeout triggers early cancellation.
-- History writes are best‑effort; logging never raises to the caller.
-- Do not put sensitive data in `reason`. SQL is truncated to a preview for safety.
+- History writes are best-effort; logging never raises to the caller.
+- Full SQL is stored once by hash; use the MCP resource `igloo://queries/by-sha/{sql_sha256}.sql` or the exporter (below) to read it.
+- Use `reason` for human context only; avoid sensitive data.
+
+### Bundle SQL for Audits
+
+Export a self-contained bundle (full SQL + minimal provenance) straight from `doc.jsonl`:
+
+```bash
+uv run python scripts/export_report_bundle.py \
+  --doc logs/doc.jsonl \
+  --artifact-root logs/artifacts \
+  --query-id 01a1b2c3d4 \
+  --output notes/reports/flashcrash_bundle.json
+```
+
+Or select by `reason` substring and keep only the latest run per SQL hash:
+
+```bash
+uv run python scripts/export_report_bundle.py \
+  --reason-contains "flashcrash" \
+  --latest-per-sql \
+  --output notes/reports/flashcrash_latest.json
+```
+
+Each bundle entry includes:
+- `sql_sha256`, `mcp_uri`, and the full `sql_text`
+- Any `query_id`, `reason`, `rowcount`, `duration_ms`, and overrides
+- Generator metadata with the selection criteria used
 
 ## Installation
 

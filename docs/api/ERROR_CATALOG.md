@@ -91,7 +91,7 @@ Current settings:
 
 Notes:
   - Query ID may be unavailable when a timeout triggers early cancellation.
-  - Enable JSONL history by setting IGLOO_MCP_QUERY_HISTORY=/path/to/query_history.jsonl
+  - History is written to `logs/doc.jsonl` by default (override with `IGLOO_MCP_QUERY_HISTORY`)
 
 Query preview: SELECT * FROM huge_table WHERE date >= '2024-01-01'...
 ```
