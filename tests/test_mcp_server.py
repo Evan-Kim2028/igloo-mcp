@@ -108,10 +108,18 @@ def test_register_igloo_mcp_registers_once():
     class DummyServer:
         def __init__(self) -> None:
             self.names: List[str] = []
+            self.resources: List[str] = []
 
         def tool(self, *, name: str, description: str):  # noqa: ARG002, unused-argument
             def decorator(func):  # pragma: no cover - executed by registration
                 self.names.append(name)
+                return func
+
+            return decorator
+
+        def resource(self, uri: str, **_: Any):  # noqa: ARG002
+            def decorator(func):  # pragma: no cover - executed by registration
+                self.resources.append(uri)
                 return func
 
             return decorator
@@ -122,6 +130,7 @@ def test_register_igloo_mcp_registers_once():
     with patch("igloo_mcp.mcp_server.SnowCLI"):
         mcp_server.register_igloo_mcp(server, service)
         assert server.names  # ensure tools registered
+        assert server.resources  # ensure resource registered
 
     # Second call should not duplicate registrations
     with patch("igloo_mcp.mcp_server.SnowCLI"):

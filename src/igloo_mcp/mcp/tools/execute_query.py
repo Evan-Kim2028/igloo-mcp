@@ -5,9 +5,12 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import threading
 import time
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import anyio
@@ -16,6 +19,10 @@ from igloo_mcp.config import Config
 from igloo_mcp.logging import QueryHistory
 from igloo_mcp.mcp.utils import json_compatible
 from igloo_mcp.mcp_health import MCPHealthMonitor
+from igloo_mcp.path_utils import (
+    find_repo_root,
+    resolve_artifact_root,
+)
 from igloo_mcp.service_layer import QueryService
 from igloo_mcp.session_utils import (
     apply_session_context,
@@ -32,6 +39,34 @@ from .schema_utils import (
     snowflake_identifier_schema,
     string_schema,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _write_sql_artifact(
+    artifact_root: Path, sql_sha256: str, sql: str
+) -> Optional[Path]:
+    """Persist SQL text under the by-sha directory if missing."""
+
+    try:
+        queries_dir = artifact_root / "queries" / "by_sha"
+        queries_dir.mkdir(parents=True, exist_ok=True)
+        artifact_path = (queries_dir / f"{sql_sha256}.sql").resolve()
+        if not artifact_path.exists():
+            artifact_path.write_text(sql, encoding="utf-8")
+        return artifact_path
+    except Exception:
+        logger.debug("Failed to persist SQL artifact", exc_info=True)
+        return None
+
+
+def _relative_sql_path(repo_root: Path, artifact_path: Optional[Path]) -> Optional[str]:
+    if artifact_path is None:
+        return None
+    try:
+        return artifact_path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except Exception:
+        return artifact_path.resolve().as_posix()
 
 
 class ExecuteQueryTool(MCPTool):
@@ -58,6 +93,8 @@ class ExecuteQueryTool(MCPTool):
         self.health_monitor = health_monitor
         # Optional JSONL query history (enabled via IGLOO_MCP_QUERY_HISTORY)
         self.history = QueryHistory.from_env()
+        self._history_enabled = self.history.enabled
+        self._repo_root = find_repo_root()
 
     @property
     def name(self) -> str:
@@ -133,6 +170,13 @@ class ExecuteQueryTool(MCPTool):
             RuntimeError: If query execution fails
         """
         if timeout_seconds is not None:
+            if isinstance(timeout_seconds, str):
+                try:
+                    timeout_seconds = int(timeout_seconds)
+                except (TypeError, ValueError):
+                    raise TypeError(
+                        "timeout_seconds must be an integer value in seconds."
+                    ) from None
             if isinstance(timeout_seconds, bool) or not isinstance(
                 timeout_seconds, int
             ):
@@ -191,6 +235,21 @@ class ExecuteQueryTool(MCPTool):
         # Filter out None values
         overrides = {k: v for k, v in overrides.items() if v is not None}
 
+        sql_sha256: Optional[str] = None
+        history_artifacts: Dict[str, str] = {}
+        if self._history_enabled:
+            sql_sha256 = hashlib.sha256(statement.encode("utf-8")).hexdigest()
+            try:
+                artifact_root = resolve_artifact_root()
+                artifact_path = _write_sql_artifact(
+                    artifact_root, sql_sha256, statement
+                )
+                sql_rel = _relative_sql_path(self._repo_root, artifact_path)
+                if sql_rel:
+                    history_artifacts["sql_path"] = sql_rel
+            except Exception:
+                logger.debug("Failed to persist SQL artifact", exc_info=True)
+
         # Execute query with session context management
         timeout = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
 
@@ -210,20 +269,24 @@ class ExecuteQueryTool(MCPTool):
 
             # Persist success history (lightweight JSONL)
             try:
-                self.history.record(
-                    {
-                        "ts": time.time(),
-                        "status": "success",
-                        "profile": self.config.snowflake.profile,
-                        "statement_preview": statement[:200],
-                        "rowcount": result.get("rowcount", 0),
-                        "timeout_seconds": timeout,
-                        "overrides": overrides,
-                        "query_id": result.get("query_id"),
-                        "duration_ms": result.get("duration_ms"),
-                        **({"reason": reason} if reason else {}),
-                    }
-                )
+                payload: Dict[str, Any] = {
+                    "ts": time.time(),
+                    "status": "success",
+                    "profile": self.config.snowflake.profile,
+                    "statement_preview": statement[:200],
+                    "rowcount": result.get("rowcount", 0),
+                    "timeout_seconds": timeout,
+                    "overrides": overrides,
+                    "query_id": result.get("query_id"),
+                    "duration_ms": result.get("duration_ms"),
+                }
+                if sql_sha256 is not None:
+                    payload["sql_sha256"] = sql_sha256
+                if history_artifacts:
+                    payload["artifacts"] = dict(history_artifacts)
+                if reason:
+                    payload["reason"] = reason
+                self.history.record(payload)
             except Exception:
                 pass
 
@@ -241,18 +304,22 @@ class ExecuteQueryTool(MCPTool):
 
             # Persist timeout history
             try:
-                self.history.record(
-                    {
-                        "ts": time.time(),
-                        "status": "timeout",
-                        "profile": self.config.snowflake.profile,
-                        "statement_preview": statement[:200],
-                        "timeout_seconds": timeout,
-                        "overrides": overrides,
-                        "error": str(e),
-                        **({"reason": reason} if reason else {}),
-                    }
-                )
+                payload = {
+                    "ts": time.time(),
+                    "status": "timeout",
+                    "profile": self.config.snowflake.profile,
+                    "statement_preview": statement[:200],
+                    "timeout_seconds": timeout,
+                    "overrides": overrides,
+                    "error": str(e),
+                }
+                if sql_sha256 is not None:
+                    payload["sql_sha256"] = sql_sha256
+                if history_artifacts:
+                    payload["artifacts"] = dict(history_artifacts)
+                if reason:
+                    payload["reason"] = reason
+                self.history.record(payload)
             except Exception:
                 pass
 
@@ -303,18 +370,22 @@ class ExecuteQueryTool(MCPTool):
 
             # Persist failure history
             try:
-                self.history.record(
-                    {
-                        "ts": time.time(),
-                        "status": "error",
-                        "profile": self.config.snowflake.profile,
-                        "statement_preview": statement[:200],
-                        "timeout_seconds": timeout,
-                        "overrides": overrides,
-                        "error": error_message,
-                        **({"reason": reason} if reason else {}),
-                    }
-                )
+                payload = {
+                    "ts": time.time(),
+                    "status": "error",
+                    "profile": self.config.snowflake.profile,
+                    "statement_preview": statement[:200],
+                    "timeout_seconds": timeout,
+                    "overrides": overrides,
+                    "error": error_message,
+                }
+                if sql_sha256 is not None:
+                    payload["sql_sha256"] = sql_sha256
+                if history_artifacts:
+                    payload["artifacts"] = dict(history_artifacts)
+                if reason:
+                    payload["reason"] = reason
+                self.history.record(payload)
             except Exception:
                 pass
 

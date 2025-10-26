@@ -23,9 +23,11 @@ from typing_extensions import Annotated
 # NOTE: For typing, import from the fastmcp package; fallback handled at runtime.
 try:  # Prefer the standalone fastmcp package when available
     from fastmcp import Context, FastMCP
+    from fastmcp.exceptions import NotFoundError
     from fastmcp.utilities.logging import configure_logging, get_logger
 except ImportError:  # Fall back to the implementation bundled with python-sdk
     from mcp.server.fastmcp import Context, FastMCP  # type: ignore[import-untyped,assignment]
+    from mcp.server.fastmcp.exceptions import NotFoundError  # type: ignore[import-untyped,assignment]
     from mcp.server.fastmcp.utilities.logging import configure_logging, get_logger  # type: ignore[import-untyped,assignment]
 
 from mcp_server_snowflake.server import (  # type: ignore[import-untyped]
@@ -57,6 +59,7 @@ from .mcp_health import (
     MCPHealthMonitor,
 )
 from .mcp_resources import MCPResourceManager
+from .path_utils import resolve_artifact_root
 from .profile_utils import (
     ProfileValidationError,
     get_profile_summary,
@@ -80,6 +83,20 @@ logger = get_logger(__name__)
 _health_monitor: Optional[MCPHealthMonitor] = None
 _resource_manager: Optional[MCPResourceManager] = None
 _catalog_service: Optional[CatalogService] = None
+
+
+def read_sql_artifact_by_sha(sql_sha256: str) -> str:
+    """Return the SQL text for the given SHA-256 hash."""
+
+    artifact_root = resolve_artifact_root()
+    artifact_path = (
+        artifact_root / "queries" / "by_sha" / f"{sql_sha256}.sql"
+    ).resolve()
+    if not artifact_path.exists() or not artifact_path.is_file():
+        raise FileNotFoundError(
+            f"SQL artifact for {sql_sha256} not found under {artifact_root}"
+        )
+    return artifact_path.read_text(encoding="utf-8")
 
 
 def _get_catalog_summary_sync(catalog_dir: str) -> Dict[str, Any]:
@@ -319,6 +336,22 @@ def register_igloo_mcp(
     ) -> Dict[str, Any]:
         """Get catalog summary - delegates to GetCatalogSummaryTool."""
         return await get_catalog_summary_inst.execute(catalog_dir=catalog_dir)
+
+    @server.resource(
+        "igloo://queries/by-sha/{sql_sha256}.sql",
+        name="sql_artifact_by_sha",
+        description="Full SQL text for a recorded query execution identified by its SHA-256 hash.",
+        mime_type="text/sql; charset=utf-8",
+    )
+    async def sql_artifact_by_sha(sql_sha256: str) -> str:
+        try:
+            return read_sql_artifact_by_sha(sql_sha256)
+        except FileNotFoundError as exc:
+            raise NotFoundError(str(exc)) from exc
+        except Exception as exc:  # pragma: no cover - unlikely I/O error
+            raise NotFoundError(
+                f"SQL artifact for {sql_sha256} is unreadable: {exc}"
+            ) from exc
 
     if enable_cli_bridge and snow_cli is not None:
 

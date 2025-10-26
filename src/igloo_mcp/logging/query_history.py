@@ -6,6 +6,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Optional
 
+from ..path_utils import resolve_history_path
+
 
 class QueryHistory:
     """Lightweight JSONL history writer for queries.
@@ -17,22 +19,30 @@ class QueryHistory:
     def __init__(self, path: Optional[Path]) -> None:
         self._path = path
         self._lock = Lock()
+        self._enabled = self._path is not None
         if self._path is not None:
             try:
                 self._path.parent.mkdir(parents=True, exist_ok=True)
             except Exception:
                 # If directory creation fails, disable history silently
                 self._path = None
+                self._enabled = False
 
     @classmethod
     def from_env(cls) -> "QueryHistory":
         raw = os.environ.get("IGLOO_MCP_QUERY_HISTORY")
-        if not raw:
+        if raw is not None and raw.strip() == "":
             return cls(None)
+
         try:
-            return cls(Path(raw).expanduser())
+            path = resolve_history_path(raw=raw)
+            return cls(path)
         except Exception:
             return cls(None)
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
 
     def record(self, payload: dict[str, Any]) -> None:
         if self._path is None:

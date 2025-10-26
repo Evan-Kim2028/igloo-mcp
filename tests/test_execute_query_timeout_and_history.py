@@ -1,5 +1,7 @@
+import hashlib
 import json
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import pytest
@@ -141,6 +143,8 @@ class _FakeService:
 async def test_timeout_cancels_and_logs_history(tmp_path, monkeypatch):
     history_path = tmp_path / "history.jsonl"
     monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
+    artifact_root = tmp_path / "artifacts"
+    monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
     tool = ExecuteQueryTool(
@@ -157,12 +161,23 @@ async def test_timeout_cancels_and_logs_history(tmp_path, monkeypatch):
     event = json.loads(data[-1])
     assert event["status"] == "timeout"
     assert event.get("statement_preview", "").startswith("SELECT LONG_RUNNING")
+    expected_sha = hashlib.sha256("SELECT LONG_RUNNING".encode("utf-8")).hexdigest()
+    assert event["sql_sha256"] == expected_sha
+    sql_path = event.get("artifacts", {}).get("sql_path")
+    assert sql_path
+    artifact = Path(sql_path)
+    if not artifact.is_absolute():
+        artifact = (Path.cwd() / artifact).resolve()
+    assert artifact.exists()
+    assert artifact.read_text(encoding="utf-8") == "SELECT LONG_RUNNING"
 
 
 @pytest.mark.asyncio
 async def test_success_returns_query_id_and_logs(tmp_path, monkeypatch):
     history_path = tmp_path / "history.jsonl"
     monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
+    artifact_root = tmp_path / "artifacts"
+    monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
     tool = ExecuteQueryTool(
@@ -180,10 +195,19 @@ async def test_success_returns_query_id_and_logs(tmp_path, monkeypatch):
     event = json.loads(data[-1])
     assert event["status"] == "success"
     assert event.get("query_id") == "FAKE_QID_123"
+    expected_sha = hashlib.sha256("SELECT QUICK".encode("utf-8")).hexdigest()
+    assert event["sql_sha256"] == expected_sha
+    sql_path = event.get("artifacts", {}).get("sql_path")
+    assert sql_path
+    artifact = Path(sql_path)
+    if not artifact.is_absolute():
+        artifact = (Path.cwd() / artifact).resolve()
+    assert artifact.exists()
+    assert artifact.read_text(encoding="utf-8") == "SELECT QUICK"
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("bad_value", ["30", 12.5, True])
+@pytest.mark.parametrize("bad_value", ["30s", 12.5, True])
 async def test_timeout_seconds_requires_integer(bad_value):
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
     tool = ExecuteQueryTool(
@@ -192,6 +216,40 @@ async def test_timeout_seconds_requires_integer(bad_value):
 
     with pytest.raises((TypeError, ValueError)):
         await tool.execute(statement="SELECT QUICK", timeout_seconds=bad_value)
+
+
+@pytest.mark.asyncio
+async def test_timeout_seconds_accepts_numeric_string(tmp_path, monkeypatch):
+    history_path = tmp_path / "history.jsonl"
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
+
+    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+    tool = ExecuteQueryTool(
+        cfg, _FakeService(work_seconds=0.05), QueryService(context=None)
+    )
+
+    res = await tool.execute(statement="SELECT QUICK", timeout_seconds="45")
+    assert res["rowcount"] == 2
+
+    data = history_path.read_text(encoding="utf-8").strip().splitlines()
+    event = json.loads(data[-1])
+    assert event["timeout_seconds"] == 45
+
+
+@pytest.mark.asyncio
+async def test_disabling_history_skips_sql_artifact(tmp_path, monkeypatch):
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", "")
+    artifact_root = tmp_path / "artifacts"
+    monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
+
+    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+    tool = ExecuteQueryTool(
+        cfg, _FakeService(work_seconds=0.05), QueryService(context=None)
+    )
+
+    res = await tool.execute(statement="SELECT QUICK", timeout_seconds=2)
+    assert res["rowcount"] == 2
+    assert not artifact_root.exists()
 
 
 @pytest.mark.asyncio
