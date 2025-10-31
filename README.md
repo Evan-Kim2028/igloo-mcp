@@ -6,7 +6,8 @@ Igloo MCP is a standalone MCP server for Snowflake operations, designed for agen
 
 - 🛡️ **SQL Guardrails**: Blocks write + DDL operations (INSERT, UPDATE, CREATE, ALTER, DELETE, DROP, TRUNCATE) with safe alternatives
 - ⏱️ **Timeouts + Cancellation**: Per‑request timeouts with best‑effort server‑side cancel; captures query ID when available
-- 📝 **Lightweight Query History (default)**: Auto-write compact JSONL audit events (success, timeout, error) to `logs/doc.jsonl` with SHA-indexed SQL artifacts
+- 📝 **Always-On Query History**: Automatically capture JSONL audit events (success, timeout, error) with SHA-indexed SQL artifacts, even outside a git repo
+- 📦 **Result Cache**: Default-on CSV/JSON cache per SQL + session context for instant replays without rerunning Snowflake
 - 🧠 **Smart Errors**: Compact by default; turn on verbose mode for actionable optimization hints
 - 🧩 **MCP‑Only Tooling**: Clean set of MCP tools for query, preview, catalog, dependency graph, health, and connection tests
 - ✅ **MCP Protocol Compliant**: Standard exception‑based error handling and robust health checks
@@ -26,6 +27,7 @@ Igloo MCP is a standalone MCP server for Snowflake operations, designed for agen
 - `preview_table` - Preview table contents with LIMIT support
 - `build_catalog` - Build comprehensive metadata catalog from Snowflake INFORMATION_SCHEMA
 - `get_catalog_summary` - Get catalog overview with object counts and statistics
+- `search_catalog` - Search locally built catalog artifacts for tables, views, and columns
 - `build_dependency_graph` - Build dependency graph for data lineage analysis
 - `test_connection` - Test Snowflake connection and profile validation
 - `health_check` - Get system health status and configuration details
@@ -40,6 +42,7 @@ See [MCP Documentation](docs/mcp/mcp_server_user_guide.md) for details.
 | `preview_table` | Quick table preview without writing SQL | `table_name`, `limit`, `warehouse`, `database`, `schema` |
 | `build_catalog` | Export comprehensive Snowflake metadata | `output_dir`, `database`, `account`, `format` |
 | `get_catalog_summary` | Read catalog statistics and health | `catalog_dir` |
+| `search_catalog` | Search locally built catalog artifacts | `catalog_dir`, `object_types`, `database`, `schema`, `name_contains`, `column_contains`, `limit` |
 | `build_dependency_graph` | Build dependency relationships (JSON/DOT) | `database`, `schema`, `account`, `format` |
 | `test_connection` | Validate Snowflake connectivity | — |
 | `health_check` | Comprehensive system, profile, and resource health | `include_cortex`, `include_profile`, `include_catalog` |
@@ -48,7 +51,7 @@ See [MCP Documentation](docs/mcp/mcp_server_user_guide.md) for details.
 
 ## Query Log History (doc.jsonl + SQL artifacts)
 
-Every execution writes a compact JSONL record to the repo-local `logs/doc.jsonl` (created on demand). Each record references the full SQL stored once by SHA-256 under `logs/artifacts/queries/by_sha/`.
+Every execution writes a compact JSONL record to `logs/doc.jsonl` (created on demand). If the workspace path is unavailable, Igloo falls back to `~/.igloo_mcp/logs/doc.jsonl` so history is always captured. Each record references the full SQL stored once by SHA-256 under `logs/artifacts/queries/by_sha/`.
 
 ### Configure Paths
 
@@ -56,13 +59,14 @@ Every execution writes a compact JSONL record to the repo-local `logs/doc.jsonl`
 |---------|---------|----------|
 | History file | `<repo>/logs/doc.jsonl` | `IGLOO_MCP_QUERY_HISTORY=/custom/doc.jsonl` |
 | Artifact root | `<repo>/logs/artifacts/` | `IGLOO_MCP_ARTIFACT_ROOT=/custom/artifacts` |
+| Cache root | `<artifact_root>/cache/` | `IGLOO_MCP_CACHE_ROOT=/custom/cache` |
 
-Set either env var to change locations. Use an empty string (`export IGLOO_MCP_QUERY_HISTORY=""`) to disable history entirely.
-When disabled, neither JSONL records nor SQL artifacts are written to disk.
+Set these env vars to change locations. Use `IGLOO_MCP_QUERY_HISTORY=disabled` (or `off`/`false`/`0`) to disable history entirely. When disabled, neither JSONL records nor SQL artifacts are written to disk.
 
 ### Logged Fields (per line)
 
 - `ts` — Unix timestamp (seconds)
+- `execution_id` — Stable UUID per request (ties history, cache, audit info together)
 - `status` — `success` | `timeout` | `error`
 - `profile` — Snowflake profile used
 - `statement_preview` — First 200 characters of the SQL
@@ -72,6 +76,9 @@ When disabled, neither JSONL records nor SQL artifacts are written to disk.
 - `rowcount`, `duration_ms`, `query_id` — When available (success only)
 - `overrides` — Session overrides `{ warehouse, database, schema, role }`
 - `reason` — Optional short reason (also stored in Snowflake `QUERY_TAG`)
+- `metric_insight` — Optional structured insight summarising what the query discovered
+- `cache_key`, `cache_manifest` — Present on cache hits/saves for traceability
+- `session_context` — Effective warehouse/database/schema/role used for execution
 - `error` — Error message (timeout/error only)
 
 ### Examples
@@ -110,6 +117,7 @@ Notes:
 - Query ID may be unavailable if a timeout triggers early cancellation.
 - History writes are best-effort; logging never raises to the caller.
 - Full SQL is stored once by hash; use the MCP resource `igloo://queries/by-sha/{sql_sha256}.sql` or the exporter (below) to read it.
+- Cached executions log the `cache_key` and manifest path so you can open the saved CSV/JSON without rerunning Snowflake.
 - Use `reason` for human context only; avoid sensitive data.
 
 ### Bundle SQL for Audits
@@ -137,6 +145,38 @@ Each bundle entry includes:
 - `sql_sha256`, `mcp_uri`, and the full `sql_text`
 - Any `query_id`, `reason`, `rowcount`, `duration_ms`, and overrides
 - Generator metadata with the selection criteria used
+
+## Result Caching (rows.jsonl + CSV)
+
+- Successful executions (up to `IGLOO_MCP_CACHE_MAX_ROWS`, default 5 000 rows) are cached under `<artifact_root>/cache/<cache_key>/` with both `rows.jsonl` and a human-friendly `rows.csv` plus a manifest.
+- Subsequent calls with the same SQL, profile, and session overrides return the cached payload instantly; Snowflake is bypassed and history records a `cache_hit`.
+- Configure behaviour via:
+  - `IGLOO_MCP_CACHE_MODE=enabled|refresh|read_only|disabled`
+  - `IGLOO_MCP_CACHE_ROOT=/custom/cache`
+  - `IGLOO_MCP_CACHE_MAX_ROWS=2000`
+- History entries include `cache_key`/`cache_manifest`, and tool responses expose `result.cache` + `audit_info.cache` so you always know when cached data was served.
+
+### Fixture-Based Regression Testing
+
+- A deterministic cache/history scenario lives under `tests/fixtures/cache_scenarios/baseline/` (history JSONL, manifest, rows CSV/JSONL, SQL text).
+- Regenerate locally via `python -m tests.helpers.cache_fixture_builder` (see helper for details) and validate with `python -m pytest tests/test_cache_golden_fixtures.py`.
+- CI consumers and log-processing scripts can rely on these fixtures to ensure compatibility with fields such as `execution_id`, `cache_key`, `metric_insight`, and artifact paths.
+
+### Inspect Local Logs Quickly
+
+1. **View latest history line** – `tail -n 1 logs/doc.jsonl`
+2. **Open full SQL text** – `cat $(jq -r '.artifacts.sql_path' <<< "$(tail -n 1 logs/doc.jsonl)")`
+3. **Check cache manifest** – `jq '.' logs/artifacts/cache/<cache_key>/manifest.json`
+4. **Disable logging/caching** (when debugging) – set `IGLOO_MCP_QUERY_HISTORY=disabled` and/or `IGLOO_MCP_CACHE_MODE=disabled` for that session.
+
+### Search Built Catalogs
+
+1. Run `build_catalog` once (for example `build_catalog --output_dir ./artifacts/catalog --database ANALYTICS`).
+2. Query the local snapshot via `search_catalog`:
+   ```bash
+   search_catalog --catalog_dir ./artifacts/catalog --object_types table --name_contains customers
+   ```
+3. Filter by columns (`--column_contains revenue`) or schemas (`--schema REPORTING`) to rapidly find the objects you need without hitting Snowflake.
 
 ## Installation
 
@@ -535,3 +575,10 @@ catalog = catalog_service.build_catalog(database="MY_DB")
   }
 }
 ```
+
+## Testing
+
+- **Offline (default):** `python -m pytest` – runs the offline suite backed by stored Snowflake CLI fixtures and fake connectors. This is the command we run in CI.
+- **Live Snowflake checks (optional):** `python -m pytest --snowflake -m requires_snowflake` after setting up credentials. Without `--snowflake`, tests marked `requires_snowflake` are skipped automatically.
+
+Fixtures that capture sanitized Snowflake CLI output live under `tests/fixtures/snowflake_cli/`. Update them as the schema evolves, then rerun the offline suite to ensure coverage stays green.
