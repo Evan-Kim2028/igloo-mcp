@@ -8,7 +8,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Iterable, Optional, TypedDict, cast
 
-from ..path_utils import DEFAULT_HISTORY_PATH, resolve_history_path
+from ..path_utils import resolve_history_path
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +146,11 @@ class QueryHistory:
 
     @classmethod
     def from_env(cls) -> "QueryHistory":
+        """Create QueryHistory instance from environment configuration.
+
+        Uses resolve_history_path() exclusively for path resolution.
+        Honors IGLOO_MCP_LOG_SCOPE and IGLOO_MCP_NAMESPACED_LOGS.
+        """
         raw = os.environ.get("IGLOO_MCP_QUERY_HISTORY")
         raw_clean = raw.strip() if raw is not None else None
 
@@ -153,27 +158,16 @@ class QueryHistory:
         if raw_clean is not None and raw_clean.lower() in cls._DISABLE_SENTINELS:
             disabled = True
 
-        fallbacks: list[Path] = []
-        fallback_home = Path.home() / ".igloo_mcp" / DEFAULT_HISTORY_PATH
+        if disabled:
+            return cls(None, disabled=True)
 
         try:
-            fallback_home.parent.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            # Best effort; QueryHistory.__init__ will surface warnings if used.
-            pass
-
-        try:
-            if disabled:
-                return cls(None, disabled=True)
-
             path = resolve_history_path(raw=raw)
-            if path is not None and path != fallback_home:
-                fallbacks.append(fallback_home)
-            return cls(path, fallbacks=fallbacks)
+            return cls(path, fallbacks=None)
         except Exception:
-            warning = "Unable to resolve query history path; using fallback"
+            warning = "Unable to resolve query history path; history disabled"
             logger.warning(warning, exc_info=True)
-            return cls(fallback_home, fallbacks=[], disabled=False)
+            return cls(None, disabled=False)
 
     @property
     def enabled(self) -> bool:
