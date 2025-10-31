@@ -20,6 +20,8 @@ from .execute_query import ExecuteQueryTool
 from .get_catalog_summary import GetCatalogSummaryTool
 from .health import HealthCheckTool
 from .preview_table import PreviewTableTool
+from .search_catalog import SearchCatalogTool
+
 # QueryLineageTool removed - lineage functionality not part of igloo-mcp
 from .test_connection import ConnectionTestTool
 
@@ -32,6 +34,7 @@ __all__ = [
     "GetCatalogSummaryTool",
     "HealthCheckTool",
     "PreviewTableTool",
+    "SearchCatalogTool",
     # "QueryLineageTool",  # Removed - lineage functionality not part of igloo-mcp
     "ConnectionTestTool",
 ]

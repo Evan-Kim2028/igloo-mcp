@@ -1,142 +1,16 @@
 import hashlib
 import json
-import time
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import pytest
 
 from igloo_mcp.config import Config, SnowflakeConfig
 from igloo_mcp.mcp.tools.execute_query import ExecuteQueryTool
 from igloo_mcp.service_layer.query_service import QueryService
-
-
-class _FakeCursor:
-    def __init__(self, work_seconds: float = 1.0):
-        self._cancelled: bool = False
-        self._fetchone_map: Dict[str, str] = {}
-        self._rows: List[Dict[str, Any]] = []
-        self.sfqid: Optional[str] = None
-        self._work_seconds = work_seconds
-        self.description: Optional[List[Tuple[str, ...]]] = None
-        self._session_parameters: Dict[str, Optional[str]] = {
-            "QUERY_TAG": None,
-            "STATEMENT_TIMEOUT_IN_SECONDS": "0",
-        }
-        self.query_tags_seen: List[Optional[str]] = []
-        self.statement_timeouts_seen: List[Optional[str]] = []
-
-    def execute(self, query: str) -> None:
-        q = query.strip().upper()
-        if q.startswith("SHOW PARAMETERS LIKE 'QUERY_TAG'"):
-            value = self._session_parameters["QUERY_TAG"]
-            self.description = [("key",), ("value",)]
-            self._rows = [{"KEY": "QUERY_TAG", "VALUE": value or ""}]
-            return
-        if q.startswith("SHOW PARAMETERS LIKE 'STATEMENT_TIMEOUT_IN_SECONDS'"):
-            value = self._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"]
-            self.description = [("key",), ("value",)]
-            self._rows = [{"KEY": "STATEMENT_TIMEOUT_IN_SECONDS", "VALUE": value or ""}]
-            return
-        if q.startswith("ALTER SESSION SET QUERY_TAG"):
-            raw = query.split("=", 1)[1].strip().rstrip(";")
-            cleaned = raw.strip().strip("'").replace("''", "'")
-            self._session_parameters["QUERY_TAG"] = cleaned or None
-            self.description = None
-            self._rows = []
-            return
-        if q.startswith("ALTER SESSION UNSET QUERY_TAG"):
-            self._session_parameters["QUERY_TAG"] = None
-            self.description = None
-            self._rows = []
-            return
-        if q.startswith("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS"):
-            raw_timeout = query.split("=", 1)[1].strip().rstrip(";")
-            self._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] = (
-                raw_timeout or None
-            )
-            self.description = None
-            self._rows = []
-            return
-        if q.startswith("ALTER SESSION UNSET STATEMENT_TIMEOUT_IN_SECONDS"):
-            self._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] = "0"
-            self.description = None
-            self._rows = []
-            return
-        # Fast paths for session snapshot queries
-        if q.startswith("SELECT CURRENT_ROLE()"):
-            self._fetchone_map = {"ROLE": "TEST_ROLE"}
-            return
-        if q.startswith("SELECT CURRENT_WAREHOUSE()"):
-            self._fetchone_map = {"WAREHOUSE": "TEST_WH"}
-            return
-        if q.startswith("SELECT CURRENT_DATABASE()"):
-            self._fetchone_map = {"DATABASE": "TEST_DB"}
-            return
-        if q.startswith("SELECT CURRENT_SCHEMA()"):
-            self._fetchone_map = {"SCHEMA": "PUBLIC"}
-            return
-        if (
-            q.startswith("USE ROLE")
-            or q.startswith("USE WAREHOUSE")
-            or q.startswith("USE DATABASE")
-            or q.startswith("USE SCHEMA")
-        ):
-            self.description = None
-            self._rows = []
-            return
-
-        # Simulate long/short query returning a result set
-        self.sfqid = "FAKE_QID_123"
-        self.query_tags_seen.append(self._session_parameters["QUERY_TAG"])
-        self.statement_timeouts_seen.append(
-            self._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"]
-        )
-        end = time.time() + self._work_seconds
-        while time.time() < end:
-            if self._cancelled:
-                self._rows = []
-                return
-            time.sleep(0.01)
-        # For SELECT-like result sets, DB-API sets a non-None description
-        self.description = [("A",)]
-        self._rows = [{"A": 1}, {"A": 2}]
-
-    def fetchone(self) -> Dict[str, str]:
-        return self._fetchone_map
-
-    def fetchall(self) -> List[Dict[str, Any]]:
-        return self._rows
-
-    def cancel(self) -> None:
-        self._cancelled = True
-
-
-class _FakeConn:
-    def __init__(self, cursor: _FakeCursor):
-        self._cursor = cursor
-
-    def __enter__(self) -> Tuple[None, _FakeCursor]:
-        return (None, self._cursor)
-
-    def __exit__(self, exc_type, exc, tb) -> Literal[False]:  # noqa: ANN001
-        return False
-
-
-class _FakeService:
-    def __init__(self, work_seconds: float):
-        self._cursor = _FakeCursor(work_seconds=work_seconds)
-
-    def get_connection(
-        self,
-        *,
-        use_dict_cursor: bool = True,  # noqa: FBT001
-        session_parameters: Optional[Dict[str, Any]] = None,
-    ) -> _FakeConn:
-        return _FakeConn(self._cursor)
-
-    def get_query_tag_param(self) -> Dict[str, Any]:
-        return {}
+from tests.helpers.fake_snowflake_connector import (
+    FakeQueryPlan,
+    FakeSnowflakeService,
+)
 
 
 @pytest.mark.asyncio
@@ -147,9 +21,16 @@ async def test_timeout_cancels_and_logs_history(tmp_path, monkeypatch):
     monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    tool = ExecuteQueryTool(
-        cfg, _FakeService(work_seconds=2.0), QueryService(context=None)
+    service = FakeSnowflakeService(
+        [
+            FakeQueryPlan(
+                statement="SELECT LONG_RUNNING",
+                rows=[{"A": 1}],
+                duration=2.0,
+            )
+        ]
     )
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     with pytest.raises(RuntimeError) as exc:
         await tool.execute(statement="SELECT LONG_RUNNING", timeout_seconds=1)
@@ -180,9 +61,17 @@ async def test_success_returns_query_id_and_logs(tmp_path, monkeypatch):
     monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    tool = ExecuteQueryTool(
-        cfg, _FakeService(work_seconds=0.05), QueryService(context=None)
+    service = FakeSnowflakeService(
+        [
+            FakeQueryPlan(
+                statement="SELECT QUICK",
+                rows=[{"A": 1}, {"A": 2}],
+                duration=0.05,
+                sfqid="FAKE_QID_123",
+            )
+        ]
     )
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     res = await tool.execute(statement="SELECT QUICK", timeout_seconds=2)
     assert res["rowcount"] == 2
@@ -210,9 +99,10 @@ async def test_success_returns_query_id_and_logs(tmp_path, monkeypatch):
 @pytest.mark.parametrize("bad_value", ["30s", 12.5, True])
 async def test_timeout_seconds_requires_integer(bad_value):
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    tool = ExecuteQueryTool(
-        cfg, _FakeService(work_seconds=0.05), QueryService(context=None)
+    service = FakeSnowflakeService(
+        [FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}])]
     )
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     with pytest.raises((TypeError, ValueError)):
         await tool.execute(statement="SELECT QUICK", timeout_seconds=bad_value)
@@ -224,9 +114,10 @@ async def test_timeout_seconds_accepts_numeric_string(tmp_path, monkeypatch):
     monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    tool = ExecuteQueryTool(
-        cfg, _FakeService(work_seconds=0.05), QueryService(context=None)
+    service = FakeSnowflakeService(
+        [FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}])]
     )
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     res = await tool.execute(statement="SELECT QUICK", timeout_seconds="45")
     assert res["rowcount"] == 2
@@ -243,19 +134,35 @@ async def test_disabling_history_skips_sql_artifact(tmp_path, monkeypatch):
     monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    tool = ExecuteQueryTool(
-        cfg, _FakeService(work_seconds=0.05), QueryService(context=None)
+    service = FakeSnowflakeService(
+        [FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}])]
     )
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
+
+    assert tool.history.enabled is False
 
     res = await tool.execute(statement="SELECT QUICK", timeout_seconds=2)
     assert res["rowcount"] == 2
-    assert not artifact_root.exists()
+    assert artifact_root.exists()
+    sql_files = list(artifact_root.rglob("*.sql"))
+    assert sql_files, "SQL artifact should be written even when history is disabled"
 
 
 @pytest.mark.asyncio
-async def test_reason_query_tag_applied_per_request_and_restored():
+async def test_reason_query_tag_applied_per_request_and_restored(tmp_path, monkeypatch):
+    monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "refresh")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(tmp_path / "history.jsonl"))
+    monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(tmp_path / "artifacts"))
+    monkeypatch.setenv("IGLOO_MCP_CACHE_ROOT", str(tmp_path / "cache"))
+
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    service = _FakeService(work_seconds=0.05)
+    service = FakeSnowflakeService(
+        [
+            FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}]),
+            FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}]),
+        ]
+    )
+
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     await tool.execute(statement="SELECT QUICK", timeout_seconds=2, reason="First pass")
@@ -263,11 +170,66 @@ async def test_reason_query_tag_applied_per_request_and_restored():
         statement="SELECT QUICK", timeout_seconds=2, reason="Second pass"
     )
 
-    cursor = service._cursor
-    assert cursor.query_tags_seen == [
+    executed_cursors = [cursor for cursor in service.cursors if cursor._main_executed]
+    assert len(executed_cursors) == 2
+
+    tags = [
+        tag
+        for cursor in executed_cursors
+        for tag in cursor.query_tags_seen
+        if tag is not None
+    ]
+    assert tags == [
         "tool:execute_query; reason:First pass",
         "tool:execute_query; reason:Second pass",
     ]
-    assert cursor._session_parameters["QUERY_TAG"] is None
-    assert cursor.statement_timeouts_seen == ["2", "2"]
-    assert cursor._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] == "0"
+    for cursor in executed_cursors:
+        assert cursor._session_parameters["QUERY_TAG"] is None
+        assert cursor.statement_timeouts_seen == ["2"]
+        assert cursor._session_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] == "0"
+
+
+@pytest.mark.asyncio
+async def test_large_result_triggers_truncation(tmp_path, monkeypatch):
+    history_path = tmp_path / "history.jsonl"
+    artifact_root = tmp_path / "artifacts"
+    cache_root = tmp_path / "cache"
+
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
+    monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
+    monkeypatch.setenv("IGLOO_MCP_CACHE_ROOT", str(cache_root))
+
+    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+
+    mock_rows = [{"idx": i, "payload": "x" * 2048} for i in range(1, 1201)]
+
+    plan = FakeQueryPlan(
+        statement="SELECT BIG",
+        rows=mock_rows,
+        rowcount=len(mock_rows),
+        duration=0.01,
+        sfqid="BIG_QID",
+    )
+    service = FakeSnowflakeService([plan])
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
+
+    result = await tool.execute(statement="SELECT BIG", timeout_seconds=120)
+
+    assert result["truncated"] is True
+    assert result["original_rowcount"] == len(mock_rows)
+    assert result["returned_rowcount"] == len(result["rows"])
+    marker = result["rows"][500]
+    assert marker.get("__truncated__") is True
+    assert "Large result set truncated" in marker.get("__message__", "")
+
+    manifest_path = Path(result["cache"]["manifest_path"])
+    assert manifest_path.exists()
+    rows_path = manifest_path.parent / "rows.jsonl"
+    assert rows_path.exists()
+
+    cached_result = await tool.execute(statement="SELECT BIG", timeout_seconds=120)
+    assert cached_result["cache"]["hit"] is True
+    executed_cursors = [cursor for cursor in service.cursors if cursor._main_executed]
+    assert len(executed_cursors) == 1
+    # Cache hit should not execute an additional query; the last cursor is the snapshot used for cache lookup.
+    assert service.cursors[-1]._main_executed is False

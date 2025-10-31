@@ -1,0 +1,25 @@
+{
+  "rows": [
+    {
+      "database_name": "ANALYTICS",
+      "schema_name": "REPORTING",
+      "table_name": "SALES_FACT",
+      "column_name": "ID",
+      "data_type": "NUMBER"
+    },
+    {
+      "database_name": "ANALYTICS",
+      "schema_name": "REPORTING",
+      "table_name": "SALES_FACT",
+      "column_name": "REGION",
+      "data_type": "VARCHAR"
+    },
+    {
+      "database_name": "ANALYTICS",
+      "schema_name": "PUBLIC",
+      "table_name": "CUSTOMERS",
+      "column_name": "CUSTOMER_ID",
+      "data_type": "NUMBER"
+    }
+  ]
+}

@@ -36,11 +36,53 @@ class SessionSnapshot(SessionContext):
 
 
 def ensure_session_lock(service: SnowflakeServiceProtocol) -> threading.Lock:
-    lock = getattr(service, _LOCK_ATTR, None)
-    if lock is None:
-        lock = threading.Lock()
-        setattr(service, _LOCK_ATTR, lock)
-    return lock
+    """Get or create a session lock with defensive error handling.
+
+    Args:
+        service: The Snowflake service object
+
+    Returns:
+        A threading.Lock for session synchronization
+
+    Raises:
+        ValueError: If the service is None or invalid
+    """
+    if service is None:
+        raise ValueError("Snowflake service is None - cannot create session lock")
+
+    # Defensive check to ensure we have a valid service object
+    if not hasattr(service, "__dict__"):
+        raise ValueError("Invalid Snowflake service object - missing attributes")
+
+    try:
+        lock = getattr(service, _LOCK_ATTR, None)
+        if lock is None:
+            lock = threading.Lock()
+            setattr(service, _LOCK_ATTR, lock)
+        return lock
+    except AttributeError as e:
+        raise ValueError(f"Failed to access Snowflake service attributes: {e}")
+    except Exception as e:
+        raise ValueError(f"Unexpected error creating session lock: {e}")
+
+
+def validate_session_lock(service: SnowflakeServiceProtocol) -> bool:
+    """Validate that a session lock exists and is functional.
+
+    Args:
+        service: The Snowflake service object
+
+    Returns:
+        True if the session lock is valid, False otherwise
+    """
+    if service is None:
+        return False
+
+    try:
+        lock = getattr(service, _LOCK_ATTR, None)
+        return lock is not None and isinstance(lock, threading.Lock)
+    except (AttributeError, TypeError):
+        return False
 
 
 def quote_identifier(value: str) -> str:

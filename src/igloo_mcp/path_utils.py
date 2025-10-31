@@ -8,6 +8,7 @@ from typing import Optional
 
 DEFAULT_HISTORY_PATH = Path("logs/doc.jsonl")
 DEFAULT_ARTIFACT_ROOT = Path("logs/artifacts")
+DEFAULT_CACHE_SUBDIR = Path("cache")
 
 
 def _iter_candidate_roots(start: Path) -> list[Path]:
@@ -64,3 +65,19 @@ def resolve_artifact_root(
     if candidate:
         return _resolve_with_repo_root(candidate, repo_root)
     return (repo_root / DEFAULT_ARTIFACT_ROOT).resolve()
+
+
+def resolve_cache_root(
+    raw: Optional[str] = None,
+    *,
+    start: Optional[Path] = None,
+    artifact_root: Optional[Path] = None,
+) -> Path:
+    """Return the root directory for cached query results."""
+
+    repo_root = find_repo_root(start=start)
+    candidate = raw if raw is not None else os.environ.get("IGLOO_MCP_CACHE_ROOT")
+    if candidate:
+        return _resolve_with_repo_root(candidate, repo_root)
+    base_root = artifact_root or resolve_artifact_root(start=start)
+    return (base_root / DEFAULT_CACHE_SUBDIR).resolve()

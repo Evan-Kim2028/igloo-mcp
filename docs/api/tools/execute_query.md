@@ -23,6 +23,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | `database` | string | ❌ No | profile | Database override (Snowflake identifier) |
 | `schema` | string | ❌ No | profile | Schema override (Snowflake identifier) |
 | `role` | string | ❌ No | profile | Role override (Snowflake identifier) |
+| `metric_insight` | string \| object | ❌ No | - | Optional summary/JSON describing the results; stored alongside history and cache artifacts. |
 
 > Identifiers accept standard Snowflake names such as `ANALYTICS_WH` or double-quoted values like `"Analytics-WH"` / `"Sales Analytics"`.
 
@@ -43,9 +44,42 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
   "rows": [
     {"customer_id": 1, "name": "Alice", "email": "alice@example.com"},
     {"customer_id": 2, "name": "Bob", "email": "bob@example.com"}
-  ]
+  ],
+  "columns": ["customer_id", "name", "email"],
+  "session_context": {
+    "warehouse": "ANALYTICS_WH",
+    "database": "SALES",
+    "schema": "PUBLIC",
+    "role": "ANALYST"
+  },
+  "cache": {
+    "hit": false,
+    "cache_key": "f2f5d2…",
+    "manifest_path": "logs/artifacts/cache/f2f5d2…/manifest.json",
+    "result_csv_path": "logs/artifacts/cache/f2f5d2…/rows.csv",
+    "created_at": "2025-01-15T12:34:56.123456+00:00"
+  },
+  "audit_info": {
+    "execution_id": "11111111111111111111111111111111",
+    "history_path": "logs/doc.jsonl",
+    "cache": {
+      "mode": "enabled",
+      "hit": false,
+      "key": "f2f5d2…",
+      "manifest": "logs/artifacts/cache/f2f5d2…/manifest.json"
+    },
+    "columns": ["customer_id", "name", "email"],
+    "session_context": {
+      "warehouse": "ANALYTICS_WH",
+      "database": "SALES",
+      "schema": "PUBLIC",
+      "role": "ANALYST"
+    }
+  }
 }
 ```
+
+- Result caching is on by default; subsequent runs with the same SQL, profile, and resolved session context return `cache.hit = true` along with the manifest path and CSV/JSON artifacts for auditability.
 
 ## Errors
 
@@ -137,7 +171,8 @@ except RuntimeError as e:
 2. **Use LIMIT for testing** - Sample data before full queries
 3. **Increase timeout for complex queries** - Use 300-600s for aggregations
 4. **Scale warehouse** - Use larger warehouse for heavy queries
-5. **Enable verbose errors** - Get optimization hints when queries fail
+5. **Leverage result cache** - Repeated SQL with the same session context reuses stored CSV/JSON instead of rerunning Snowflake; set `IGLOO_MCP_CACHE_MODE=disabled` to force live execution.
+6. **Enable verbose errors** - Get optimization hints when queries fail
 
 ## Related Tools
 

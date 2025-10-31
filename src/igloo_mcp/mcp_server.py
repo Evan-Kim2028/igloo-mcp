@@ -15,10 +15,10 @@ import os
 import string
 from contextlib import asynccontextmanager
 from functools import partial
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import anyio
-from pydantic import Field, StrictInt
+from pydantic import Field
 from typing_extensions import Annotated
 
 # NOTE: For typing, import from the fastmcp package; fallback handled at runtime.
@@ -54,6 +54,7 @@ from .mcp.tools import (  # QueryLineageTool,  # Removed - lineage functionality
     GetCatalogSummaryTool,
     HealthCheckTool,
     PreviewTableTool,
+    SearchCatalogTool,
 )
 from .mcp.utils import get_profile_recommendations
 from .mcp_health import (
@@ -183,6 +184,7 @@ def register_igloo_mcp(
     test_connection_inst = ConnectionTestTool(config, snowflake_service)
     health_check_inst = HealthCheckTool(config, snowflake_service, _health_monitor)
     get_catalog_summary_inst = GetCatalogSummaryTool(catalog_service)
+    search_catalog_inst = SearchCatalogTool()
 
     @server.tool(
         name="execute_query", description="Execute a SQL query against Snowflake"
@@ -212,9 +214,12 @@ def register_igloo_mcp(
             ),
         ] = None,
         timeout_seconds: Annotated[
-            Optional[StrictInt],
+            Optional[int],
             Field(
-                description="Query timeout in seconds (default: 30s from config)",
+                description=(
+                    "Query timeout in seconds (default: 30s from config). "
+                    "Integer between 1 and 3600."
+                ),
                 ge=1,
                 le=3600,
                 default=None,
@@ -227,20 +232,117 @@ def register_igloo_mcp(
                 default=False,
             ),
         ] = False,
+        metric_insight: Annotated[
+            Optional[Dict[str, Any] | str],
+            Field(
+                description=(
+                    "Optional insights or key findings from query results. "
+                    "Can be a summary string or structured JSON with key metrics and business impact."
+                ),
+                default=None,
+            ),
+        ] = None,
         ctx: Context | None = None,
     ) -> Dict[str, Any]:
         """Execute a SQL query against Snowflake - delegates to ExecuteQueryTool."""
-        return await execute_query_inst.execute(
-            statement=statement,
-            warehouse=warehouse,
-            database=database,
-            schema=schema,
-            role=role,
-            reason=reason,
-            timeout_seconds=timeout_seconds,
-            verbose_errors=verbose_errors,
-            ctx=ctx,
-        )
+        try:
+            return await execute_query_inst.execute(
+                statement=statement,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role,
+                reason=reason,
+                timeout_seconds=timeout_seconds,
+                verbose_errors=verbose_errors,
+                metric_insight=metric_insight,
+                ctx=ctx,
+            )
+        except ValueError as e:
+            # Enhanced structured error for validation issues
+            error_msg = str(e)
+            if "timeout_seconds must be an integer" in error_msg:
+                raise ValueError(
+                    {
+                        "code": "PARAM_TYPE",
+                        "message": "Invalid parameter type: timeout_seconds must be an integer",
+                        "data": {
+                            "path": ".timeout_seconds",
+                            "expected": "integer",
+                            "received_type": "string",
+                            "hint": "Use 480 (number) without quotes instead of '480'",
+                            "examples": [30, 60, 300, 480],
+                        },
+                    }
+                ) from e
+            elif "timeout_seconds must be between" in error_msg:
+                raise ValueError(
+                    {
+                        "code": "PARAM_RANGE",
+                        "message": "Invalid parameter value: timeout_seconds out of range",
+                        "data": {
+                            "path": ".timeout_seconds",
+                            "min": 1,
+                            "max": 3600,
+                            "received_sample": timeout_seconds,
+                            "hint": "Use a timeout between 1 and 3600 seconds",
+                        },
+                    }
+                ) from e
+            elif "SQL statement type" in error_msg:
+                # Pass through enhanced SQL validation errors
+                raise ValueError(error_msg) from e
+            else:
+                # Generic parameter error
+                raise ValueError(
+                    {
+                        "code": "PARAM_VALIDATION",
+                        "message": "Parameter validation failed",
+                        "data": {
+                            "error": error_msg,
+                            "hint": "Check parameter values and types",
+                        },
+                    }
+                ) from e
+        except TimeoutError as e:
+            # Structured timeout error
+            raise RuntimeError(
+                {
+                    "code": "QUERY_TIMEOUT",
+                    "message": f"Query timeout after {timeout_seconds or 30}s",
+                    "data": {
+                        "timeout_seconds": timeout_seconds or 30,
+                        "suggestions": [
+                            "Increase timeout: timeout_seconds=480",
+                            "Add WHERE/LIMIT clause to reduce data volume",
+                            "Use larger warehouse for complex queries",
+                            "Use verbose_errors=True for detailed hints",
+                        ],
+                    },
+                }
+            ) from e
+        except Exception as e:
+            # Structured execution error
+            error_msg = str(e)
+            if verbose_errors:
+                # Include detailed error when requested
+                raise RuntimeError(error_msg) from e
+            else:
+                # Compact, actionable error
+                raise RuntimeError(
+                    {
+                        "code": "QUERY_EXECUTION_FAILED",
+                        "message": f"Query execution failed: {error_msg[:150]}",
+                        "data": {
+                            "hint": "Use verbose_errors=true for detailed information",
+                            "suggestions": [
+                                "Check SQL syntax and table names",
+                                "Verify database/schema context",
+                                "Check permissions for the objects referenced",
+                            ],
+                        },
+                    }
+                ) from e
 
     @server.tool(name="preview_table", description="Preview table contents")
     async def preview_table_tool(
@@ -344,6 +446,63 @@ def register_igloo_mcp(
     ) -> Dict[str, Any]:
         """Get catalog summary - delegates to GetCatalogSummaryTool."""
         return await get_catalog_summary_inst.execute(catalog_dir=catalog_dir)
+
+    @server.tool(
+        name="search_catalog", description="Search locally built catalog artifacts"
+    )
+    async def search_catalog_tool(
+        catalog_dir: Annotated[
+            str,
+            Field(
+                description="Directory containing catalog artifacts (catalog.json or catalog.jsonl).",
+                default="./data_catalogue",
+            ),
+        ] = "./data_catalogue",
+        object_types: Annotated[
+            Optional[List[str]],
+            Field(description="Optional list of object types to include", default=None),
+        ] = None,
+        database: Annotated[
+            Optional[str],
+            Field(description="Filter results to a specific database", default=None),
+        ] = None,
+        schema: Annotated[
+            Optional[str],
+            Field(description="Filter results to a specific schema", default=None),
+        ] = None,
+        name_contains: Annotated[
+            Optional[str],
+            Field(
+                description="Substring search on object name (case-insensitive)",
+                default=None,
+            ),
+        ] = None,
+        column_contains: Annotated[
+            Optional[str],
+            Field(
+                description="Substring search on column name (case-insensitive)",
+                default=None,
+            ),
+        ] = None,
+        limit: Annotated[
+            int,
+            Field(
+                description="Maximum number of results to return",
+                ge=1,
+                le=500,
+                default=20,
+            ),
+        ] = 20,
+    ) -> Dict[str, Any]:
+        return await search_catalog_inst.execute(
+            catalog_dir=catalog_dir,
+            object_types=object_types,
+            database=database,
+            schema=schema,
+            name_contains=name_contains,
+            column_contains=column_contains,
+            limit=limit,
+        )
 
     @server.resource(
         "igloo://queries/by-sha/{sql_sha256}.sql",

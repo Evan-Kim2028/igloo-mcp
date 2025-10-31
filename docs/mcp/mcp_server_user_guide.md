@@ -80,6 +80,7 @@ The MCP server exposes these tools to AI assistants:
 | `preview_table` | Preview table contents | `table_name`, `limit`, `warehouse`, `database`, `schema`, `role` | Column metadata and rows |
 | `build_catalog` | Generate comprehensive data catalogs | `output_dir`, `database`, `account`, `format` | Catalog totals and output location |
 | `get_catalog_summary` | Retrieve existing catalog summaries | `catalog_dir` | Catalog statistics and metadata |
+| `search_catalog` | Search locally cached catalog artifacts | `catalog_dir`, `object_types`, `database`, `schema`, `name_contains`, `column_contains`, `limit` | Matching catalog entries with column metadata |
 | `build_dependency_graph` | Create object dependency graphs | `database`, `schema`, `account`, `format` | Dependency graph in JSON or DOT |
 | `test_connection` | Test Snowflake connection | — | Connection status |
 | `health_check` | Comprehensive server health | — | System, profile, and resource health |

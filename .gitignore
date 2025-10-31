@@ -149,6 +149,7 @@ Thumbs.db
 
 
 notes/*
+logs/*
 data_catalogue/*
 dependencies/*
 lineage/*

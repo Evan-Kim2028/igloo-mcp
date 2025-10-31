@@ -3,6 +3,14 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-10-31
+
+### Fixed
+- Miscellaneous bug fixes from the "bug fixes" PR; no public API changes.
+
+### Notes
+- Patch release; no breaking changes detected.
+
 ## [0.2.0] - 2025-10-26
 
 ### Added
@@ -128,4 +136,3 @@ The legacy CLI interface (`nanuk` command) has been removed. Igloo is now MCP-on
 - `get_resource_status` MCP tool - Merged into HealthCheckTool
 
 **Total Phase 1 Impact**: -4,088 LOC (66% code reduction)
-

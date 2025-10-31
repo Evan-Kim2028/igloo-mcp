@@ -1,0 +1,18 @@
+{
+  "rows": [
+    {
+      "database_name": "ANALYTICS",
+      "schema_name": "PUBLIC",
+      "function_name": "CALC_MARGIN",
+      "return_type": "NUMBER",
+      "function_language": "SQL"
+    },
+    {
+      "database_name": "ANALYTICS",
+      "schema_name": "PUBLIC",
+      "function_name": "FORMAT_CURRENCY",
+      "return_type": "VARCHAR",
+      "function_language": "SQL"
+    }
+  ]
+}
