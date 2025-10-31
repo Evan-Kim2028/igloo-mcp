@@ -7,7 +7,7 @@ for blocked operations like DELETE, DROP, and TRUNCATE.
 from __future__ import annotations
 
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # Import upstream validation from snowflake-labs-mcp
 from mcp_server_snowflake.query_manager.tools import (
@@ -197,7 +197,8 @@ def validate_sql_statement(
     # Build effective allow list: include SELECT-equivalent statements when SELECT is allowed
     allow_set = {item.lower() for item in allow_list}
     disallow_set = {item.lower() for item in disallow_list}
-    effective_allow_list = list(allow_list)
+    # CRITICAL FIX: Ensure all lists are lowercase for upstream validation compatibility
+    effective_allow_list = [item.lower() for item in allow_list]
 
     if "select" in allow_set:
         for extra in _SELECT_EQUIVALENT_ALLOWLIST:
@@ -205,10 +206,59 @@ def validate_sql_statement(
                 effective_allow_list.append(extra)
                 allow_set.add(extra)
 
-    # Use upstream validation with the expanded allow list
+    # ENHANCEMENT: Fallback validation with sqlglot for better robustness
+    fallback_stmt_type: Optional[str] = None
+    select_like_hint = False
+    multi_statement_detected = False
+    parsed_expressions: list[exp.Expression] = []
+
+    if HAS_SQLGLOT:
+        try:
+            parsed_expressions = sqlglot.parse(statement, dialect="snowflake")
+        except Exception:
+            parsed_expressions = []
+
+    if parsed_expressions:
+        primary_expression = parsed_expressions[0]
+        key = primary_expression.key or ""
+        fallback_stmt_type = key.upper() or None
+        multi_statement_detected = len(parsed_expressions) > 1
+
+        if not multi_statement_detected:
+            select_like_hint = _is_select_like_statement(
+                statement, parsed=primary_expression
+            )
+
+            if not select_like_hint and fallback_stmt_type in {"SELECT", "WITH"}:
+                statement_upper = statement.upper()
+                if (
+                    "LATERAL FLATTEN" in statement_upper
+                    or "CROSS JOIN LATERAL" in statement_upper
+                ):
+                    select_like_hint = True
+
+    # CRITICAL FIX: Use lowercase lists for upstream validation (it's case-sensitive)
+    lowercase_disallow_list = [item.lower() for item in disallow_list]
     stmt_type, is_valid = validate_sql_type(
-        statement, effective_allow_list, disallow_list
+        statement, effective_allow_list, lowercase_disallow_list
     )
+
+    if multi_statement_detected:
+        detected: list[str] = []
+        for expr in parsed_expressions:
+            name = (expr.key or "UNKNOWN").upper()
+            if name not in detected:
+                detected.append(name)
+
+        pretty_detected = (
+            ", ".join(t.title() for t in detected) if detected else "Unknown"
+        )
+        error_msg = (
+            "Multiple SQL statements detected in a single request. "
+            "Only a single statement is permitted for execute_query. "
+            f"Detected statements: {pretty_detected}."
+        )
+        return "MultipleStatements", False, error_msg
 
     canonical_stmt = _canonicalize_statement_type(stmt_type)
 
@@ -230,11 +280,29 @@ def validate_sql_statement(
             # Treat SELECT-equivalent statements as allowed when SELECT is permitted
             return stmt_type, True, None
 
+    if select_like_hint and "select" in allow_set and not multi_statement_detected:
+        if is_valid:
+            return "Select", True, None
+
+        if canonical_stmt in {"", "unknown", "command"}:
+            return "Select", True, None
+
+        if _is_select_equivalent(stmt_type):
+            return "Select", True, None
+
     if is_valid:
         return stmt_type, True, None
 
     # Generate error message with alternatives
     alternatives = generate_sql_alternatives(statement, stmt_type)
+
+    # Enhanced structured error messages
+    structured_error = {
+        "code": "SQL_TYPE_NOT_ALLOWED",
+        "statement_type": stmt_type,
+        "allowed_types": [t.capitalize() for t in allow_list] if allow_list else [],
+        "suggestions": [],
+    }
 
     if alternatives:
         alt_text = "\n".join(alternatives)
@@ -242,6 +310,7 @@ def validate_sql_statement(
             f"SQL statement type '{stmt_type}' is not permitted.\n\n"
             f"Safe alternatives:\n{alt_text}"
         )
+        structured_error["suggestions"] = ["Use safe alternatives provided above"]
     else:
         # Capitalize allow_list for display (they're lowercase for validation)
         display_allowed = [t.capitalize() for t in allow_list]
@@ -256,12 +325,166 @@ def validate_sql_statement(
         else:
             details.append("Detected type is provided by the Snowflake parser.")
 
+        # Enhanced suggestions for common issues
+        if "Unknown" in stmt_type:
+            # Special handling for Unknown type errors
+            if "LATERAL" in statement.upper():
+                details.append("\n💡 This query contains LATERAL operations.")
+                details.append(
+                    "   If this is a SELECT query, LATERAL should be supported."
+                )
+                structured_error["suggestions"].append(
+                    "Check if this is actually a SELECT query with LATERAL operations"
+                )
+            elif "WITH" in statement.upper():
+                details.append("\n💡 This query starts WITH (CTE pattern).")
+                details.append(
+                    "   If this is a SELECT with CTE, it should be supported."
+                )
+                structured_error["suggestions"].append(
+                    "Verify this is a SELECT statement with Common Table Expression"
+                )
+
+            # Add sqlglot fallback information if available
+            if fallback_stmt_type and fallback_stmt_type != "UNKNOWN":
+                details.append(f"\n🔍 sqlglot detected this as: {fallback_stmt_type}")
+                if fallback_stmt_type in ["SELECT", "WITH"] and "select" in allow_set:
+                    details.append(
+                        "   This appears to be a SELECT query that should be allowed."
+                    )
+                    structured_error["suggestions"].append(
+                        "Consider enabling SELECT statements if this is a data query"
+                    )
+
         if display_allowed:
-            details.append(f"Allowed types: {', '.join(display_allowed)}")
+            details.append(f"\nAllowed types: {', '.join(display_allowed)}")
+            structured_error["allowed_types"] = display_allowed
 
         error_msg = "\n".join(details)
 
     return stmt_type, False, error_msg
+
+
+def _is_select_like_statement(
+    statement: str, parsed: Optional[exp.Expression] = None
+) -> bool:
+    """Return True when the SQL behaves like a SELECT or set operation."""
+
+    if not HAS_SQLGLOT:
+        return False
+
+    if parsed is None:
+        try:
+            parsed = sqlglot.parse_one(statement, dialect="snowflake")
+        except Exception:
+            return False
+
+    def is_select_like(node: exp.Expression | None) -> bool:
+        if node is None:
+            return False
+
+        if isinstance(node, (exp.Select, exp.SetOperation)):
+            return True
+
+        if isinstance(node, exp.With):
+            target = node.this or node.args.get("expression")
+            return is_select_like(target)
+
+        if isinstance(node, (exp.Subquery, exp.Paren)):
+            return is_select_like(node.this)
+
+        if isinstance(node, exp.Query):
+            return is_select_like(node.this)
+
+        return False
+
+    def strip_comments(sql: str) -> str:
+        """Remove block and line comments while preserving string literals."""
+
+        def remove_block_comments(source: str) -> str:
+            result: list[str] = []
+            in_single = False
+            in_double = False
+            idx = 0
+
+            while idx < len(source):
+                char = source[idx]
+
+                if char == "'" and not in_double:
+                    in_single = not in_single
+                    result.append(char)
+                    idx += 1
+                    continue
+
+                if char == '"' and not in_single:
+                    in_double = not in_double
+                    result.append(char)
+                    idx += 1
+                    continue
+
+                if not in_single and not in_double and source.startswith("/*", idx):
+                    idx += 2
+                    depth = 1
+                    while idx < len(source) and depth > 0:
+                        if source.startswith("/*", idx):
+                            depth += 1
+                            idx += 2
+                            continue
+                        if source.startswith("*/", idx):
+                            depth -= 1
+                            idx += 2
+                            continue
+                        idx += 1
+                    continue
+
+                result.append(char)
+                idx += 1
+
+            return "".join(result)
+
+        def remove_line_comments(source: str) -> str:
+            lines: list[str] = []
+            for line in source.splitlines():
+                in_single = False
+                in_double = False
+                idx = 0
+                while idx < len(line):
+                    char = line[idx]
+                    if char == "'" and not in_double:
+                        in_single = not in_single
+                    elif char == '"' and not in_single:
+                        in_double = not in_double
+                    elif char == "-" and not in_single and not in_double:
+                        if idx + 1 < len(line) and line[idx + 1] == "-":
+                            line = line[:idx]
+                            break
+                    idx += 1
+                lines.append(line)
+            return "\n".join(lines)
+
+        without_blocks = remove_block_comments(sql)
+        return remove_line_comments(without_blocks)
+
+    structural_select = is_select_like(parsed)
+    if not structural_select:
+        return False
+
+    upper_without_line_comments = strip_comments(statement).upper()
+    keyword_tokens = ("UNION", "INTERSECT", "EXCEPT", "MINUS")
+    contains_keywords = any(
+        token in upper_without_line_comments for token in keyword_tokens
+    )
+
+    if not contains_keywords:
+        return True
+
+    has_set_operation = isinstance(parsed, exp.SetOperation)
+    if not has_set_operation:
+        has_set_operation = any(
+            isinstance(node, exp.SetOperation) for node in parsed.walk()
+        )
+
+    return bool(has_set_operation)
 
 
 def get_sql_statement_type(statement: str) -> str:

@@ -1,0 +1,16 @@
+{
+  "totals": {
+    "databases": 1,
+    "schemas": 194,
+    "tables": 0,
+    "views": 767,
+    "materialized_views": 0,
+    "dynamic_tables": 0,
+    "tasks": 0,
+    "functions": 0,
+    "procedures": 21,
+    "columns": 0
+  },
+  "output_dir": "research/adhoc/artemis/data_catalog",
+  "format": "json"
+}

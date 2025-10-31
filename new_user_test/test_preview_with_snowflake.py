@@ -7,9 +7,7 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.skip(
-    reason="manual integration scenario requiring Snowflake access"
-)
+pytestmark = pytest.mark.requires_snowflake
 
 # Add the src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent / "igloo-mcp" / "src"))

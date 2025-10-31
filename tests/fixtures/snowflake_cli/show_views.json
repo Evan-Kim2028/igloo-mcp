@@ -1,0 +1,9 @@
+{
+  "rows": [
+    {
+      "name": "SALES_BY_REGION",
+      "schema_name": "REPORTING",
+      "database_name": "ANALYTICS"
+    }
+  ]
+}

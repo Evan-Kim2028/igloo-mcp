@@ -1,0 +1,9 @@
+{
+  "rows": [
+    {
+      "name": "REFRESH_SALES",
+      "schema_name": "REPORTING",
+      "database_name": "ANALYTICS"
+    }
+  ]
+}

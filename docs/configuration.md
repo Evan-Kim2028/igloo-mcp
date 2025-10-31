@@ -22,10 +22,17 @@
  export SNOWFLAKE_SCHEMA=my-schema
  export SNOWFLAKE_ROLE=my-role
 
- # Output directories
- export SNOWCLI_CATALOG_DIR=./data_catalogue
- export SNOWCLI_LINEAGE_DIR=./lineage_data
- export SNOWCLI_DEPENDENCY_DIR=./dependencies
+# Output directories
+export SNOWCLI_CATALOG_DIR=./data_catalogue
+export SNOWCLI_LINEAGE_DIR=./lineage_data
+export SNOWCLI_DEPENDENCY_DIR=./dependencies
+
+# Query history & cache
+export IGLOO_MCP_QUERY_HISTORY=~/workspace/logs/doc.jsonl   # JSONL history path (default: <repo>/logs/doc.jsonl; fallback ~/.igloo_mcp/logs/doc.jsonl)
+export IGLOO_MCP_ARTIFACT_ROOT=~/workspace/logs/artifacts   # SQL + result artifact root
+export IGLOO_MCP_CACHE_ROOT=~/workspace/logs/cache          # Override cache directory (default: <artifact_root>/cache)
+export IGLOO_MCP_CACHE_MODE=enabled                        # enabled|refresh|read_only|disabled
+export IGLOO_MCP_CACHE_MAX_ROWS=5000                       # Max rows to store per result
 
  # MCP server settings
  export MCP_SERVER_HOST=localhost
@@ -137,26 +144,40 @@ from igloo_mcp.config import Config, SnowflakeConfig
  - **macOS/Linux**: `~/.snowflake/config.toml`
  - **Windows**: `%USERPROFILE%\.snowflake\config.toml`
 
- ## Output Directory Structure
+## Output Directory Structure
 
- Igloo MCP creates the following directory structure:
+Igloo MCP creates the following directory structure:
 
- ```
- project-root/
- ├── data_catalogue/           # Catalog outputs
- │   ├── databases.json        # Database metadata
- │   ├── schemas.jsonl         # Schema metadata
- │   ├── tables.jsonl          # Table metadata
- │   └── views.jsonl           # View metadata
- ├── lineage_cache/            # Cached lineage data
- ├── dependencies/             # Dependency graphs
- │   └── dependency_graph.dot  # GraphViz format
- └── logs/                     # Application logs
- ```
+```
+project-root/
+├── data_catalogue/           # Catalog outputs
+│   ├── databases.json        # Database metadata
+│   ├── schemas.jsonl         # Schema metadata
+│   ├── tables.jsonl          # Table metadata
+│   └── views.jsonl           # View metadata
+├── lineage_cache/            # Cached lineage data
+├── dependencies/             # Dependency graphs
+│   └── dependency_graph.dot  # GraphViz format
+└── logs/                     # Query history + artifacts (ignored by git)
+    ├── doc.jsonl             # JSONL history (success/timeout/error/cache_hit)
+    ├── artifacts/
+    │   ├── queries/by_sha/   # Full SQL text stored once per SHA-256
+    │   └── cache/<key>/      # Result manifests + CSV/JSON rows
+    └── catalog/              # (optional) cached catalog exports
+```
 
- ## Advanced Configuration
+## Advanced Configuration
 
- ### Custom SQL Permissions
+### Query History & Local Cache
+
+- **History enable/disable**: set `IGLOO_MCP_QUERY_HISTORY` to a path (default `<repo>/logs/doc.jsonl`) or to `disabled`/`off`/`false`/`0` to skip history writes entirely. When the path is unwritable Igloo falls back to `~/.igloo_mcp/logs/doc.jsonl`.
+- **Artifact root**: `IGLOO_MCP_ARTIFACT_ROOT` controls where SQL text and cache folders live. If unset, the repo-local `logs/artifacts` directory is used with a fallback to `~/.igloo_mcp/logs/artifacts`.
+- **Result cache**: `IGLOO_MCP_CACHE_MODE=enabled|refresh|read_only|disabled` toggles caching. Set `refresh` to bypass the cache while still writing new results; `disabled` skips both lookup and storage. Limit the stored payload size with `IGLOO_MCP_CACHE_MAX_ROWS` (default 5 000 rows per execution).
+- **Cache directory override**: use `IGLOO_MCP_CACHE_ROOT` to relocate the cache away from the artifact root (e.g., onto a faster disk).
+
+Each execution writes an `audit_info` block and history record that link together the execution ID, session context, and cached manifest path so you can trace queries long after they run.
+
+### Custom SQL Permissions
 
  Ensure your Snowflake role has these permissions:
 

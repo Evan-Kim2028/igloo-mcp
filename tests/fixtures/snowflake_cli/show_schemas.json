@@ -1,0 +1,14 @@
+{
+  "rows": [
+    {
+      "name": "PUBLIC",
+      "database_name": "ANALYTICS",
+      "owner": "SYSADMIN"
+    },
+    {
+      "name": "REPORTING",
+      "database_name": "ANALYTICS",
+      "owner": "SYSADMIN"
+    }
+  ]
+}

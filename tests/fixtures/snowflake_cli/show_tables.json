@@ -1,0 +1,19 @@
+{
+  "rows": [
+    {
+      "name": "SALES_FACT",
+      "schema_name": "REPORTING",
+      "database_name": "ANALYTICS"
+    },
+    {
+      "name": "CUSTOMERS",
+      "schema_name": "PUBLIC",
+      "database_name": "ANALYTICS"
+    },
+    {
+      "name": "ORDERS",
+      "schema_name": "PUBLIC",
+      "database_name": "ANALYTICS"
+    }
+  ]
+}

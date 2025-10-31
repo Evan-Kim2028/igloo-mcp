@@ -1,0 +1,9 @@
+{
+  "rows": [
+    {
+      "name": "SYNC_DIMENSIONS",
+      "schema_name": "REPORTING",
+      "database_name": "ANALYTICS"
+    }
+  ]
+}
