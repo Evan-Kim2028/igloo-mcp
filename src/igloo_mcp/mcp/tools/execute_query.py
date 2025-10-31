@@ -20,7 +20,12 @@ import anyio
 
 from igloo_mcp.cache import QueryResultCache
 from igloo_mcp.config import Config
-from igloo_mcp.logging import QueryHistory
+from igloo_mcp.logging import (
+    Insight,
+    QueryHistory,
+    normalize_insight,
+    truncate_insight_for_storage,
+)
 from igloo_mcp.mcp.utils import json_compatible
 from igloo_mcp.mcp_health import MCPHealthMonitor
 from igloo_mcp.path_utils import (
@@ -307,7 +312,7 @@ class ExecuteQueryTool(MCPTool):
         timeout_seconds: Optional[int] = None,
         verbose_errors: bool = False,
         reason: Optional[str] = None,
-        metric_insight: Optional[Dict[str, Any] | str] = None,
+        post_query_insight: Optional[Dict[str, Any] | str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Execute SQL query against Snowflake.
@@ -321,7 +326,7 @@ class ExecuteQueryTool(MCPTool):
             timeout_seconds: Query timeout in seconds (default: 30s)
             verbose_errors: Include detailed optimization hints in errors
             reason: Short reason for executing this query
-            metric_insight: Optional dict or string with key findings and metrics from query results
+            post_query_insight: Optional dict or string with key findings and metrics from query results
 
         Returns:
             Query results with rows, rowcount, and execution metadata
@@ -330,6 +335,10 @@ class ExecuteQueryTool(MCPTool):
             ValueError: If profile validation fails or SQL is blocked
             RuntimeError: If query execution fails
         """
+        # Normalize insight once
+        normalized_insight: Optional[Insight] = None
+        if post_query_insight is not None:
+            normalized_insight = normalize_insight(post_query_insight)
         if timeout_seconds is not None:
             if isinstance(timeout_seconds, str):
                 try:
@@ -485,6 +494,17 @@ class ExecuteQueryTool(MCPTool):
             if cache_hit_metadata.get("columns"):
                 result["columns"] = cache_hit_metadata["columns"]
 
+            # Retrieve stored insight from cache manifest
+            stored_insight_raw = cache_hit_metadata.get("post_query_insight")
+            if stored_insight_raw:
+                # Normalize stored insight if needed (may be stored as dict or already normalized)
+                stored_insight = (
+                    normalize_insight(stored_insight_raw)
+                    if isinstance(stored_insight_raw, (str, dict))
+                    else stored_insight_raw
+                )
+                result["post_query_insight"] = stored_insight
+
             payload: Dict[str, Any] = {
                 "ts": requested_ts,
                 "timestamp": self._iso_timestamp(requested_ts),
@@ -507,8 +527,16 @@ class ExecuteQueryTool(MCPTool):
                 payload["artifacts"] = dict(history_artifacts)
             if reason:
                 payload["reason"] = reason
-            if metric_insight:
-                payload["metric_insight"] = metric_insight
+            # Include truncated insight in history (for storage)
+            if stored_insight_raw:
+                stored_insight_for_storage = (
+                    normalize_insight(stored_insight_raw)
+                    if isinstance(stored_insight_raw, (str, dict))
+                    else stored_insight_raw
+                )
+                payload["post_query_insight"] = truncate_insight_for_storage(
+                    stored_insight_for_storage
+                )
             try:
                 self.history.record(payload)
             except Exception:
@@ -546,6 +574,11 @@ class ExecuteQueryTool(MCPTool):
             manifest_path: Optional[Path] = None
             if self._cache_enabled and cache_key and cache_context_ready:
                 try:
+                    # Store truncated insight in cache manifest
+                    cache_insight = None
+                    if normalized_insight:
+                        cache_insight = truncate_insight_for_storage(normalized_insight)
+
                     cache_metadata = {
                         "profile": self.config.snowflake.profile,
                         "context": session_context,
@@ -553,7 +586,7 @@ class ExecuteQueryTool(MCPTool):
                         "duration_ms": result.get("duration_ms"),
                         "statement_sha256": sql_sha256,
                         "truncated": result.get("truncated"),
-                        "metric_insight": metric_insight,
+                        "post_query_insight": cache_insight,
                         "reason": reason,
                         "columns": result.get("columns"),
                     }
@@ -599,8 +632,11 @@ class ExecuteQueryTool(MCPTool):
                     payload["artifacts"] = dict(history_artifacts)
                 if reason:
                     payload["reason"] = reason
-                if metric_insight:
-                    payload["metric_insight"] = metric_insight
+                # Include truncated insight in history (for storage)
+                if normalized_insight:
+                    payload["post_query_insight"] = truncate_insight_for_storage(
+                        normalized_insight
+                    )
                 if cache_key:
                     payload["cache_key"] = cache_key
                 if manifest_path is not None:
@@ -622,6 +658,10 @@ class ExecuteQueryTool(MCPTool):
                 result["cache"]["manifest_path"] = str(manifest_path)
             if session_context:
                 result.setdefault("session_context", session_context)
+
+            # Include full (untruncated) insight in response
+            if normalized_insight:
+                result["post_query_insight"] = normalized_insight
 
             result["audit_info"] = self._build_audit_info(
                 execution_id=execution_id,
@@ -665,8 +705,11 @@ class ExecuteQueryTool(MCPTool):
                     payload["artifacts"] = dict(history_artifacts)
                 if reason:
                     payload["reason"] = reason
-                if metric_insight:
-                    payload["metric_insight"] = metric_insight
+                # Include truncated insight in history (for storage)
+                if normalized_insight:
+                    payload["post_query_insight"] = truncate_insight_for_storage(
+                        normalized_insight
+                    )
                 if cache_key:
                     payload["cache_key"] = cache_key
                 self.history.record(payload)
@@ -740,8 +783,11 @@ class ExecuteQueryTool(MCPTool):
                     payload["artifacts"] = dict(history_artifacts)
                 if reason:
                     payload["reason"] = reason
-                if metric_insight:
-                    payload["metric_insight"] = metric_insight
+                # Include truncated insight in history (for storage)
+                if normalized_insight:
+                    payload["post_query_insight"] = truncate_insight_for_storage(
+                        normalized_insight
+                    )
                 if cache_key:
                     payload["cache_key"] = cache_key
                 self.history.record(payload)
@@ -1174,12 +1220,13 @@ class ExecuteQueryTool(MCPTool):
                     default=False,
                     examples=[True],
                 ),
-                "metric_insight": {
-                    "title": "Metric Insight",
+                "post_query_insight": {
+                    "title": "Post Query Insight",
                     "description": (
-                        "Optional insights or key findings from the query results. Logged alongside the history and "
-                        "caches so agents can recall what was discovered without re-running the statement. Provide "
-                        "either a plain summary string or structured JSON with richer context."
+                        "Optional insights or key findings from the query results. Metadata-only; no extra compute. "
+                        "Logged alongside the history and caches so agents can recall what was discovered without "
+                        "re-running the statement. Provide either a plain summary string or structured JSON with "
+                        "richer context."
                     ),
                     "anyOf": [
                         string_schema(
