@@ -131,7 +131,7 @@ async def test_execute_rejects_out_of_range_timeout(
 
 
 @pytest.mark.asyncio
-async def test_timeout_records_reason_and_metric(
+async def test_timeout_records_reason_and_insight(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     plan = FakeQueryPlan(statement="SELECT 1", rows=[{"VAL": 1}])
@@ -151,13 +151,15 @@ async def test_timeout_records_reason_and_metric(
             statement="SELECT 1",
             timeout_seconds=5,
             reason="analysis",
-            metric_insight={"score": 10},
+            post_query_insight={"summary": "score: 10"},
         )
 
     assert monitor.errors
     assert any(payload.get("reason") == "analysis" for payload in history_calls)
     assert any(
-        payload.get("metric_insight") == {"score": 10} for payload in history_calls
+        isinstance(payload.get("post_query_insight"), dict)
+        and payload["post_query_insight"].get("summary") == "score: 10"
+        for payload in history_calls
     )
 
 

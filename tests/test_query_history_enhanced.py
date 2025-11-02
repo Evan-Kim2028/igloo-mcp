@@ -1,4 +1,4 @@
-"""Enhanced tests for query history with metric_insight support."""
+"""Enhanced tests for query history with post_query_insight support."""
 
 from __future__ import annotations
 
@@ -15,20 +15,20 @@ from igloo_mcp.logging.query_history import QueryHistory
 class TestQueryHistoryEnhancements:
     """Test enhanced query history features."""
 
-    def test_metric_insight_string_conversion(self):
-        """Test that string metric_insight is converted to structured format."""
+    def test_post_query_insight_string_passthrough(self):
+        """Test that string post_query_insight is recorded as provided."""
         with tempfile.TemporaryDirectory() as temp_dir:
             history_file = Path(temp_dir) / "test_history.jsonl"
             history = QueryHistory(history_file)
 
-            # Test string metric_insight
+            # Test string post_query_insight
             payload = {
                 "ts": 1699999999,
                 "status": "success",
                 "profile": "test",
                 "statement_preview": "SELECT * FROM users",
                 "rowcount": 100,
-                "metric_insight": "Query shows 15% increase in daily active users",
+                "post_query_insight": "Query shows 15% increase in daily active users",
             }
 
             history.record(payload)
@@ -39,20 +39,17 @@ class TestQueryHistoryEnhancements:
 
             assert "timestamp" in recorded  # ISO timestamp should be added
             assert (
-                recorded["metric_insight"]["summary"]
+                recorded["post_query_insight"]
                 == "Query shows 15% increase in daily active users"
             )
-            assert recorded["metric_insight"]["key_metrics"] == []
-            assert recorded["metric_insight"]["business_impact"] == ""
-            assert recorded["metric_insight"]["follow_up_needed"] is False
 
-    def test_metric_insight_dict_preservation(self):
-        """Test that dict metric_insight is preserved and structured."""
+    def test_post_query_insight_dict_preservation(self):
+        """Test that dict post_query_insight is preserved and structured."""
         with tempfile.TemporaryDirectory() as temp_dir:
             history_file = Path(temp_dir) / "test_history.jsonl"
             history = QueryHistory(history_file)
 
-            # Test dict metric_insight
+            # Test dict post_query_insight
             insight_dict = {
                 "summary": "Revenue growth of 23% MoM",
                 "key_metrics": ["revenue_up_23pct", "new_customers_450"],
@@ -67,7 +64,7 @@ class TestQueryHistoryEnhancements:
                 "profile": "test",
                 "statement_preview": "SELECT revenue, customers FROM sales",
                 "rowcount": 50,
-                "metric_insight": insight_dict,
+                "post_query_insight": insight_dict,
             }
 
             history.record(payload)
@@ -76,20 +73,22 @@ class TestQueryHistoryEnhancements:
             content = history_file.read_text()
             recorded = json.loads(content.strip())
 
-            assert recorded["metric_insight"]["summary"] == insight_dict["summary"]
+            assert recorded["post_query_insight"]["summary"] == insight_dict["summary"]
             assert (
-                recorded["metric_insight"]["key_metrics"] == insight_dict["key_metrics"]
+                recorded["post_query_insight"]["key_metrics"]
+                == insight_dict["key_metrics"]
             )
             assert (
-                recorded["metric_insight"]["business_impact"]
+                recorded["post_query_insight"]["business_impact"]
                 == insight_dict["business_impact"]
             )
             assert (
-                recorded["metric_insight"]["follow_up_needed"]
+                recorded["post_query_insight"]["follow_up_needed"]
                 == insight_dict["follow_up_needed"]
             )
             assert (
-                recorded["metric_insight"]["confidence"] == insight_dict["confidence"]
+                recorded["post_query_insight"]["confidence"]
+                == insight_dict["confidence"]
             )
 
     def test_iso_timestamp_conversion(self):
@@ -118,8 +117,8 @@ class TestQueryHistoryEnhancements:
             timestamp = recorded["timestamp"]
             assert "T" in timestamp and "-" in timestamp  # Basic ISO format check
 
-    def test_multiple_entries_with_metric_insight(self):
-        """Test recording multiple entries with varying metric_insight formats."""
+    def test_multiple_entries_with_post_query_insight(self):
+        """Test recording multiple entries with varying post_query_insight formats."""
         with tempfile.TemporaryDirectory() as temp_dir:
             history_file = Path(temp_dir) / "test_history.jsonl"
             history = QueryHistory(history_file)
@@ -132,7 +131,7 @@ class TestQueryHistoryEnhancements:
                     "profile": "test",
                     "statement_preview": "SELECT * FROM users",
                     "rowcount": 100,
-                    "metric_insight": "User growth trend positive",
+                    "post_query_insight": "User growth trend positive",
                 },
                 {
                     "ts": 1700000000,
@@ -148,7 +147,7 @@ class TestQueryHistoryEnhancements:
                     "profile": "test",
                     "statement_preview": "SELECT COUNT(*) FROM orders",
                     "rowcount": 1,
-                    "metric_insight": {
+                    "post_query_insight": {
                         "summary": "Total order count calculated",
                         "key_metrics": ["total_orders:12450"],
                         "business_impact": "Order volume indicators healthy",
@@ -170,9 +169,15 @@ class TestQueryHistoryEnhancements:
                 assert recorded["status"] == entries[i]["status"]
                 assert "timestamp" in recorded
 
-                if entries[i].get("metric_insight"):
-                    assert "metric_insight" in recorded
-                    assert "summary" in recorded["metric_insight"]
+                if entries[i].get("post_query_insight"):
+                    assert "post_query_insight" in recorded
+                    if isinstance(entries[i]["post_query_insight"], str):
+                        assert (
+                            recorded["post_query_insight"]
+                            == entries[i]["post_query_insight"]
+                        )
+                    else:
+                        assert "summary" in recorded["post_query_insight"]
 
     def test_repository_specific_logging_enabled_by_default(self):
         """Test that repository-specific logging is enabled by default in git repos."""
@@ -215,20 +220,20 @@ class TestQueryHistoryEnhancements:
             assert history.enabled is False
             assert history.disabled is True
 
-    def test_error_handling_in_metric_insight_processing(self):
-        """Test graceful error handling in metric_insight processing."""
+    def test_error_handling_in_post_query_insight_processing(self):
+        """Test graceful error handling when payload contains non-serializable data."""
         with tempfile.TemporaryDirectory() as temp_dir:
             history_file = Path(temp_dir) / "test_history.jsonl"
             history = QueryHistory(history_file)
 
-            # Test with non-serializable metric_insight
+            # Test with non-serializable field
             payload = {
                 "ts": 1699999999,
                 "status": "success",
                 "profile": "test",
                 "statement_preview": "SELECT * FROM test",
                 "rowcount": 10,
-                "metric_insight": object(),  # Non-serializable object
+                "post_query_insight": object(),  # Non-serializable object
             }
 
             # Should not raise an exception
@@ -238,8 +243,8 @@ class TestQueryHistoryEnhancements:
             content = history_file.read_text()
             recorded = json.loads(content.strip())
 
-            # Should handle the non-serializable object gracefully
-            assert "metric_insight" in recorded
+            # Should handle the non-serializable object gracefully by writing error entry
+            assert "error" in recorded
 
     def test_jsonl_format_maintained_with_enhancements(self):
         """Test that JSONL format is maintained with enhanced features."""
@@ -255,7 +260,7 @@ class TestQueryHistoryEnhancements:
                     "profile": "test",
                     "statement_preview": f"SELECT * FROM table_{i}",
                     "rowcount": i * 10,
-                    "metric_insight": f"Entry {i} summary",
+                    "post_query_insight": f"Entry {i} summary",
                 }
                 history.record(payload)
 
