@@ -76,7 +76,7 @@ Set these env vars to change locations. Use `IGLOO_MCP_QUERY_HISTORY=disabled` (
 - `rowcount`, `duration_ms`, `query_id` — When available (success only)
 - `overrides` — Session overrides `{ warehouse, database, schema, role }`
 - `reason` — Optional short reason (also stored in Snowflake `QUERY_TAG`)
-- `metric_insight` — Optional structured insight summarising what the query discovered
+- `post_query_insight` — Optional structured insight summarising what the query discovered
 - `cache_key`, `cache_manifest` — Present on cache hits/saves for traceability
 - `session_context` — Effective warehouse/database/schema/role used for execution
 - `error` — Error message (timeout/error only)
@@ -160,7 +160,7 @@ Each bundle entry includes:
 
 - A deterministic cache/history scenario lives under `tests/fixtures/cache_scenarios/baseline/` (history JSONL, manifest, rows CSV/JSONL, SQL text).
 - Regenerate locally via `python -m tests.helpers.cache_fixture_builder` (see helper for details) and validate with `python -m pytest tests/test_cache_golden_fixtures.py`.
-- CI consumers and log-processing scripts can rely on these fixtures to ensure compatibility with fields such as `execution_id`, `cache_key`, `metric_insight`, and artifact paths.
+- CI consumers and log-processing scripts can rely on these fixtures to ensure compatibility with fields such as `execution_id`, `cache_key`, `post_query_insight`, and artifact paths.
 
 ### Inspect Local Logs Quickly
 
