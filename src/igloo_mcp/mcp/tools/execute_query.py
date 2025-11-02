@@ -29,7 +29,6 @@ from igloo_mcp.logging import (
 from igloo_mcp.mcp.utils import json_compatible
 from igloo_mcp.mcp_health import MCPHealthMonitor
 from igloo_mcp.path_utils import (
-    DEFAULT_ARTIFACT_ROOT,
     find_repo_root,
     resolve_artifact_root,
 )
@@ -121,35 +120,16 @@ class ExecuteQueryTool(MCPTool):
         warnings: list[str] = []
         raw = os.environ.get("IGLOO_MCP_ARTIFACT_ROOT")
         try:
-            primary = resolve_artifact_root(raw=raw)
+            artifact_root = resolve_artifact_root(raw=raw)
+            # Ensure directory exists and is writable
+            artifact_root.mkdir(parents=True, exist_ok=True)
+            return artifact_root, warnings
         except Exception as exc:
-            primary = None
-            warnings.append(f"Failed to resolve artifact root from environment: {exc}")
-
-        fallback = (Path.home() / ".igloo_mcp" / DEFAULT_ARTIFACT_ROOT).resolve()
-        candidates = []
-        if primary is not None:
-            candidates.append(primary)
-        if fallback not in candidates:
-            candidates.append(fallback)
-
-        for index, candidate in enumerate(candidates):
-            try:
-                candidate.mkdir(parents=True, exist_ok=True)
-                if index > 0:
-                    warnings.append(
-                        f"Artifact root unavailable; using fallback: {candidate}"
-                    )
-                return candidate, warnings
-            except Exception as exc:
-                warnings.append(
-                    f"Failed to initialise artifact root {candidate}: {exc}"
-                )
-
-        warnings.append(
-            "Artifact root unavailable; SQL artifacts and cache will be disabled."
-        )
-        return None, warnings
+            warnings.append(f"Failed to resolve or initialize artifact root: {exc}")
+            warnings.append(
+                "Artifact root unavailable; SQL artifacts and cache will be disabled."
+            )
+            return None, warnings
 
     def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Optional[Path]:
         if self._artifact_root is None:

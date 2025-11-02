@@ -8,7 +8,13 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Iterable, Optional, TypedDict, cast
 
-from ..path_utils import resolve_history_path
+from ..path_utils import (
+    DEFAULT_HISTORY_PATH,
+    apply_namespacing,
+    find_repo_root,
+    get_global_base,
+    resolve_history_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -161,13 +167,48 @@ class QueryHistory:
         if disabled:
             return cls(None, disabled=True)
 
+        def _fallback_candidates() -> list[Path]:
+            candidates: list[Path] = []
+            try:
+                global_path = (
+                    get_global_base() / apply_namespacing(DEFAULT_HISTORY_PATH)
+                ).resolve()
+                candidates.append(global_path)
+            except Exception:
+                pass
+            try:
+                repo_root = find_repo_root()
+                repo_path = (
+                    repo_root / apply_namespacing(DEFAULT_HISTORY_PATH)
+                ).resolve()
+                if repo_path not in candidates:
+                    candidates.append(repo_path)
+            except Exception:
+                pass
+            return candidates
+
+        fallbacks = _fallback_candidates()
+
         try:
             path = resolve_history_path(raw=raw)
-            return cls(path, fallbacks=None)
         except Exception:
-            warning = "Unable to resolve query history path; history disabled"
+            warning = "Unable to resolve query history path; attempting fallback"
             logger.warning(warning, exc_info=True)
-            return cls(None, disabled=False)
+            if not fallbacks:
+                warning = "History disabled; no fallback paths available"
+                logger.warning(warning)
+                return cls(None, disabled=False)
+            primary = fallbacks[0]
+            remaining = [
+                candidate for candidate in fallbacks[1:] if candidate != primary
+            ]
+            return cls(primary, fallbacks=remaining or None)
+
+        path = path.resolve()
+        remaining_fallbacks = [
+            candidate for candidate in fallbacks if candidate != path
+        ]
+        return cls(path, fallbacks=remaining_fallbacks or None)
 
     @property
     def enabled(self) -> bool:

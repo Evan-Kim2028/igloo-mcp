@@ -22,13 +22,20 @@ def _is_namespaced_logs() -> bool:
     return val in ("true", "1", "yes", "on")
 
 
-def _get_global_base() -> Path:
+def get_global_base() -> Path:
     """Return global base directory (~/.igloo_mcp)."""
     return Path.home() / ".igloo_mcp"
 
 
-def _apply_namespacing(base: Path, subpath: Path) -> Path:
-    """Apply namespacing if enabled (logs/igloo_mcp/... instead of logs/...)."""
+def apply_namespacing(subpath: Path) -> Path:
+    """Apply namespacing if enabled (logs/igloo_mcp/... instead of logs/...).
+
+    Args:
+        subpath: Relative path to modify (e.g., Path("logs/doc.jsonl"))
+
+    Returns:
+        Modified path with igloo_mcp inserted if namespacing enabled
+    """
     if _is_namespaced_logs():
         # Replace logs/ with logs/igloo_mcp/
         parts = list(subpath.parts)
@@ -96,13 +103,13 @@ def resolve_history_path(
     # Scope-based resolution
     scope = _get_log_scope()
     if scope == "global":
-        base = _get_global_base()
-        subpath = _apply_namespacing(base, DEFAULT_HISTORY_PATH)
+        base = get_global_base()
+        subpath = apply_namespacing(DEFAULT_HISTORY_PATH)
         return (base / subpath).resolve()
     else:
         # repo scope
         repo_root = find_repo_root(start=start)
-        subpath = _apply_namespacing(repo_root, DEFAULT_HISTORY_PATH)
+        subpath = apply_namespacing(DEFAULT_HISTORY_PATH)
         return (repo_root / subpath).resolve()
 
 
@@ -132,13 +139,13 @@ def resolve_artifact_root(
     # Scope-based resolution
     scope = _get_log_scope()
     if scope == "global":
-        base = _get_global_base()
-        subpath = _apply_namespacing(base, DEFAULT_ARTIFACT_ROOT)
+        base = get_global_base()
+        subpath = apply_namespacing(DEFAULT_ARTIFACT_ROOT)
         return (base / subpath).resolve()
     else:
         # repo scope
         repo_root = find_repo_root(start=start)
-        subpath = _apply_namespacing(repo_root, DEFAULT_ARTIFACT_ROOT)
+        subpath = apply_namespacing(DEFAULT_ARTIFACT_ROOT)
         return (repo_root / subpath).resolve()
 
 
