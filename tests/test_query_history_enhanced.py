@@ -16,7 +16,7 @@ class TestQueryHistoryEnhancements:
     """Test enhanced query history features."""
 
     def test_post_query_insight_string_passthrough(self):
-        """Test that string post_query_insight is converted to structured format."""
+        """Test that string post_query_insight is recorded as provided."""
         with tempfile.TemporaryDirectory() as temp_dir:
             history_file = Path(temp_dir) / "test_history.jsonl"
             history = QueryHistory(history_file)
@@ -39,7 +39,7 @@ class TestQueryHistoryEnhancements:
 
             assert "timestamp" in recorded  # ISO timestamp should be added
             assert (
-                recorded["post_query_insight"]["summary"]
+                recorded["post_query_insight"]
                 == "Query shows 15% increase in daily active users"
             )
 
@@ -171,7 +171,13 @@ class TestQueryHistoryEnhancements:
 
                 if entries[i].get("post_query_insight"):
                     assert "post_query_insight" in recorded
-                    assert "summary" in recorded["post_query_insight"]
+                    if isinstance(entries[i]["post_query_insight"], str):
+                        assert (
+                            recorded["post_query_insight"]
+                            == entries[i]["post_query_insight"]
+                        )
+                    else:
+                        assert "summary" in recorded["post_query_insight"]
 
     def test_repository_specific_logging_enabled_by_default(self):
         """Test that repository-specific logging is enabled by default in git repos."""
@@ -215,12 +221,12 @@ class TestQueryHistoryEnhancements:
             assert history.disabled is True
 
     def test_error_handling_in_post_query_insight_processing(self):
-        """Test graceful error handling in post_query_insight processing."""
+        """Test graceful error handling when payload contains non-serializable data."""
         with tempfile.TemporaryDirectory() as temp_dir:
             history_file = Path(temp_dir) / "test_history.jsonl"
             history = QueryHistory(history_file)
 
-            # Test with non-serializable post_query_insight
+            # Test with non-serializable field
             payload = {
                 "ts": 1699999999,
                 "status": "success",
@@ -237,8 +243,8 @@ class TestQueryHistoryEnhancements:
             content = history_file.read_text()
             recorded = json.loads(content.strip())
 
-            # Should handle the non-serializable object gracefully
-            assert "post_query_insight" in recorded
+            # Should handle the non-serializable object gracefully by writing error entry
+            assert "error" in recorded
 
     def test_jsonl_format_maintained_with_enhancements(self):
         """Test that JSONL format is maintained with enhanced features."""

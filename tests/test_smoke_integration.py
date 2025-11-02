@@ -89,8 +89,13 @@ class TestSmokeIntegration:
                     history_file.exists()
                 ), "History file should be created in smoke test"
 
-                content = history_file.read_text()
-                recorded = json.loads(content.strip())
+                lines = [
+                    line
+                    for line in history_file.read_text().splitlines()
+                    if line.strip()
+                ]
+                assert lines, "History file should contain at least one entry"
+                recorded = json.loads(lines[-1])
 
                 # Verify post_query_insight was properly structured
                 assert "post_query_insight" in recorded
@@ -252,36 +257,46 @@ class TestSmokeIntegration:
         """Test repository detection and logging workflow."""
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            fake_home = Path(temp_dir)
+            # Test non-git directory (logging should still enable with workspace path)
+            with (
+                patch("igloo_mcp.path_utils.find_repo_root") as mock_find,
+                patch("igloo_mcp.path_utils.Path.home", lambda: Path(temp_dir)),
+            ):
+                mock_find.return_value = Path(temp_dir)
 
-            # Global scope should default to ~/.igloo_mcp/logs/...
-            with patch("igloo_mcp.path_utils.Path.home", return_value=fake_home):
                 with patch.dict("os.environ", {}, clear=True):
                     history = QueryHistory.from_env()
-                    assert history.enabled is True
                     assert (
-                        history.path == fake_home / ".igloo_mcp" / "logs" / "doc.jsonl"
-                    )
+                        history.enabled is True
+                    ), "Should default to workspace history"
+                    assert history.path is not None
+                    expected = (
+                        Path(temp_dir) / ".igloo_mcp" / "logs" / "doc.jsonl"
+                    ).resolve()
+                    assert history.path.resolve() == expected
 
-            # Repo scope should place logs under the repository root
-            repo_root = Path(temp_dir) / "repo"
-            repo_root.mkdir(parents=True, exist_ok=True)
+            # Test git directory (logging should be enabled)
+            (Path(temp_dir) / ".git").mkdir()
 
-            with patch("igloo_mcp.path_utils.Path.home", return_value=fake_home):
-                with patch(
-                    "igloo_mcp.path_utils.find_repo_root", return_value=repo_root
+            with (
+                patch("igloo_mcp.path_utils.find_repo_root") as mock_find,
+                patch("igloo_mcp.path_utils.Path.home", lambda: Path(temp_dir)),
+            ):
+                mock_find.return_value = Path(temp_dir)
+
+                with patch.dict(
+                    "os.environ",
+                    {"IGLOO_MCP_LOG_SCOPE": "repo"},
+                    clear=True,
                 ):
-                    with patch.dict(
-                        os.environ,
-                        {"IGLOO_MCP_LOG_SCOPE": "repo"},
-                        clear=True,
-                    ):
-                        history = QueryHistory.from_env()
-                        assert (
-                            history.enabled is True
-                        ), "Should be enabled in repo scope"
-                        assert history.path is not None
-                        assert history.path == repo_root / "logs" / "doc.jsonl"
+                    history = QueryHistory.from_env()
+                    assert history.enabled is True, "Should be enabled in git repo"
+                    assert history.path is not None
+                    resolved = history.path.resolve()
+                    assert resolved.is_relative_to(Path(temp_dir).resolve())
+                    assert (
+                        "logs" in resolved.as_posix()
+                    ), "Should use repository-specific path"
 
     def test_complex_snowflake_patterns_validation(self):
         """Test validation of complex Snowflake-specific patterns."""

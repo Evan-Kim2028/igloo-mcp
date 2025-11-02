@@ -180,10 +180,8 @@ class TestEnhancedErrorHandling:
 
         tool.history.record.assert_called_once()
         payload = tool.history.record.call_args[0][0]
-        assert (
-            isinstance(payload["post_query_insight"], dict)
-            and payload["post_query_insight"]["summary"] == "Test shows positive trend"
-        )
+        assert isinstance(payload["post_query_insight"], dict)
+        assert payload["post_query_insight"]["summary"] == "Test shows positive trend"
 
     @pytest.mark.asyncio
     async def test_post_query_insight_as_dict_parameter_handling(
@@ -217,13 +215,14 @@ class TestEnhancedErrorHandling:
 
         tool.history.record.assert_called_once()
         payload = tool.history.record.call_args[0][0]
-        assert all(
-            payload["post_query_insight"].get(k) == insight_dict[k]
-            for k in ("summary", "key_metrics", "business_impact")
-        )
+        assert isinstance(payload["post_query_insight"], dict)
+        for key in ("summary", "key_metrics", "business_impact"):
+            assert payload["post_query_insight"][key] == insight_dict[key]
+        # Defaulted field present
+        assert payload["post_query_insight"].get("follow_up_needed") in (False, True)
 
     def test_schema_includes_post_query_insight(self):
-        """Ensure the tool schema advertises metric_insight."""
+        """Ensure the tool schema advertises post_query_insight."""
         config = Config.from_env()
         tool = ExecuteQueryTool(
             config=config,
