@@ -271,7 +271,7 @@ class QueryResultCache:
                 "duration_ms",
                 "statement_sha256",
                 "truncated",
-                "metric_insight",
+                "post_query_insight",
                 "reason",
             )
         }
@@ -371,7 +371,7 @@ class QueryResultCache:
             "result_csv": result_csv_path.name if result_csv_path else None,
             "columns": metadata.get("columns"),
             "truncated": metadata.get("truncated"),
-            "metric_insight": metadata.get("metric_insight"),
+            "post_query_insight": metadata.get("post_query_insight"),
             "reason": metadata.get("reason"),
         }
 

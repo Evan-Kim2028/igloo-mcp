@@ -1,15 +1,82 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 from pathlib import Path
 from threading import Lock
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Optional, TypedDict, cast
 
 from ..path_utils import DEFAULT_HISTORY_PATH, resolve_history_path
 
 logger = logging.getLogger(__name__)
+
+
+class Insight(TypedDict, total=False):
+    """Normalized insight structure for post-query analysis."""
+
+    summary: str
+    key_metrics: list[str]
+    business_impact: str
+    follow_up_needed: bool
+    source: str
+
+
+def normalize_insight(value: str | dict[str, Any]) -> Insight:
+    """Normalize insight value to structured Insight format.
+
+    Args:
+        value: Either a string summary or a dict with insight fields
+
+    Returns:
+        Normalized Insight dict with all required fields set
+    """
+    if isinstance(value, str):
+        return {
+            "summary": value,
+            "key_metrics": [],
+            "business_impact": "",
+            "follow_up_needed": False,
+        }
+    norm = cast(Insight, dict(value))
+    norm.setdefault("summary", "")
+    norm.setdefault("key_metrics", [])
+    norm.setdefault("business_impact", "")
+    norm.setdefault("follow_up_needed", False)
+    return norm
+
+
+def truncate_insight_for_storage(insight: Insight, max_bytes: int = 16384) -> Insight:
+    """Truncate insight to fit within storage size limit.
+
+    Args:
+        insight: Normalized insight dict
+        max_bytes: Maximum size in bytes (default: 16KB)
+
+    Returns:
+        Truncated insight dict (or original if within limit)
+    """
+    serialized = json.dumps(insight, ensure_ascii=False)
+    if len(serialized.encode("utf-8")) <= max_bytes:
+        return insight
+
+    # Truncate summary field if present and too large
+    truncated = dict(insight)
+    summary = str(truncated.get("summary", ""))
+    if summary:
+        # Estimate bytes and truncate with ellipsis
+        summary_bytes = summary.encode("utf-8")
+        if len(summary_bytes) > max_bytes - 100:  # Reserve space for other fields
+            max_summary_bytes = max_bytes - 100
+            truncated_summary = summary_bytes[:max_summary_bytes].decode(
+                "utf-8", errors="ignore"
+            )
+            # Try to avoid cutting in the middle of a multi-byte character
+            while len(truncated_summary.encode("utf-8")) > max_summary_bytes - 3:
+                truncated_summary = truncated_summary[:-1]
+            truncated["summary"] = truncated_summary + "..."
+    return cast(Insight, truncated)
 
 
 class QueryHistory:
@@ -128,12 +195,8 @@ class QueryHistory:
     def record(self, payload: dict[str, Any]) -> None:
         """Record a query execution to the JSONL history file.
 
-        Enhanced to support optional metric_insight field for LLM-driven analysis.
-
         Args:
-            payload: Query execution payload with enhanced fields:
-                - metric_insight: Optional dict with key findings and insights
-                - Other standard query execution fields
+            payload: Query execution payload with standard fields
         """
         if self._path is None or self._disabled:
             return
@@ -146,49 +209,17 @@ class QueryHistory:
                 payload["ts"]
             ).isoformat()
 
-        # Validate and structure metric_insight if present
-        if "metric_insight" in payload and payload["metric_insight"]:
-            insight = payload["metric_insight"]
-            if isinstance(insight, str):
-                # Convert string insights to structured format
-                payload["metric_insight"] = {
-                    "summary": insight,
-                    "key_metrics": [],
-                    "business_impact": "",
-                    "follow_up_needed": False,
-                }
-            elif isinstance(insight, dict):
-                # Preserve arbitrary caller-provided fields while ensuring documented defaults
-                structured = dict(insight)
-                structured.setdefault("summary", "")
-                structured.setdefault("key_metrics", [])
-                structured.setdefault("business_impact", "")
-                structured.setdefault("follow_up_needed", False)
-                payload["metric_insight"] = structured
-
         try:
             line = json.dumps(payload, ensure_ascii=False)
         except (TypeError, ValueError) as e:
-            # Handle non-serializable objects gracefully
-            if "metric_insight" in payload:
-                # Try to serialize metric_insight specifically
-                try:
-                    payload["metric_insight"] = str(payload["metric_insight"])
-                    line = json.dumps(payload, ensure_ascii=False)
-                except Exception:
-                    # Fallback: remove problematic field
-                    payload_copy = payload.copy()
-                    payload_copy.pop("metric_insight", None)
-                    line = json.dumps(payload_copy, ensure_ascii=False)
-            else:
-                # Fallback: convert to string representation
-                line = json.dumps(
-                    {
-                        "error": f"Serialization failed: {str(e)}",
-                        "original_preview": str(payload)[:200],
-                    },
-                    ensure_ascii=False,
-                )
+            # Fallback: convert to string representation
+            line = json.dumps(
+                {
+                    "error": f"Serialization failed: {str(e)}",
+                    "original_preview": str(payload)[:200],
+                },
+                ensure_ascii=False,
+            )
 
         with self._lock:
             try:
@@ -199,3 +230,148 @@ class QueryHistory:
                 warning = "Failed to append query history entry to %s" % (self._path,)
                 self._warnings.append(warning)
                 logger.warning(warning, exc_info=True)
+
+    def record_insight(
+        self,
+        execution_id: str,
+        post_query_insight: str | dict[str, Any],
+        *,
+        source: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Record a post-hoc insight for a prior query execution.
+
+        Args:
+            execution_id: Execution ID from execute_query.audit_info.execution_id
+            post_query_insight: LLM-provided post-query insight (str or dict)
+            source: Optional source identifier (e.g., "human", "agent:claude")
+
+        Returns:
+            Dict with execution_id, content_sha256, and deduped flag
+        """
+        if self._path is None or self._disabled:
+            return {
+                "execution_id": execution_id,
+                "deduped": False,
+                "content_sha256": None,
+            }
+
+        # Normalize insight
+        normalized = normalize_insight(post_query_insight)
+        truncated = truncate_insight_for_storage(normalized)
+
+        # Compute content hash for deduplication
+        content_json = json.dumps(truncated, ensure_ascii=False, sort_keys=True)
+        content_sha256 = hashlib.sha256(content_json.encode("utf-8")).hexdigest()
+
+        # Check for duplicate (execution_id, content_sha256)
+        deduped = False
+        if self._path.exists():
+            try:
+                with self._path.open("r", encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            entry = json.loads(line)
+                            if (
+                                entry.get("execution_id") == execution_id
+                                and entry.get("status") == "insight_recorded"
+                                and entry.get("content_sha256") == content_sha256
+                            ):
+                                deduped = True
+                                break
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+
+        if not deduped:
+            # Append new history entry
+            import time
+            from datetime import datetime, timezone
+
+            payload = {
+                "ts": time.time(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "execution_id": execution_id,
+                "status": "insight_recorded",
+                "post_query_insight": truncated,
+                "content_sha256": content_sha256,
+            }
+            if source:
+                payload["source"] = source
+
+            try:
+                line = json.dumps(payload, ensure_ascii=False)
+            except Exception:
+                # Fallback serialization
+                payload_fallback = {
+                    "execution_id": execution_id,
+                    "status": "insight_recorded",
+                    "error": "Serialization failed",
+                }
+                line = json.dumps(payload_fallback, ensure_ascii=False)
+
+            with self._lock:
+                try:
+                    with self._path.open("a", encoding="utf-8") as fh:
+                        fh.write(line)
+                        fh.write("\n")
+                except Exception:
+                    warning = "Failed to append insight record to %s" % (self._path,)
+                    self._warnings.append(warning)
+                    logger.warning(warning, exc_info=True)
+
+        return {
+            "execution_id": execution_id,
+            "deduped": deduped,
+            "content_sha256": content_sha256,
+        }
+
+
+def update_cache_manifest_insight(
+    manifest_path: Path, post_query_insight: str | dict[str, Any]
+) -> bool:
+    """Atomically update cache manifest with post_query_insight.
+
+    Args:
+        manifest_path: Path to cache manifest.json
+        post_query_insight: LLM-provided insight (str or dict)
+
+    Returns:
+        True if update succeeded, False otherwise
+    """
+    if not manifest_path.exists():
+        return False
+
+    try:
+        # Load existing manifest
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        # Normalize and truncate insight
+        normalized = normalize_insight(post_query_insight)
+        truncated = truncate_insight_for_storage(normalized)
+
+        # Update manifest
+        manifest_data["post_query_insight"] = truncated
+
+        # Atomic write: temp file + os.replace
+        temp_path = manifest_path.with_suffix(".tmp.json")
+        try:
+            temp_path.write_text(
+                json.dumps(manifest_data, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            temp_path.replace(manifest_path)
+            return True
+        except Exception:
+            # Clean up temp file on failure
+            try:
+                temp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return False
+    except Exception:
+        logger.debug("Failed to update cache manifest", exc_info=True)
+        return False

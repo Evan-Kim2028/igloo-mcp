@@ -44,6 +44,7 @@ from mcp_server_snowflake.utils import (  # type: ignore[import-untyped]
 
 from .config import Config, ConfigError, apply_config_overrides, get_config, load_config
 from .context import create_service_context
+from .logging import QueryHistory, update_cache_manifest_insight
 
 # Lineage functionality removed - not part of igloo-mcp
 from .mcp.tools import (  # QueryLineageTool,  # Removed - lineage functionality not part of igloo-mcp
@@ -232,11 +233,11 @@ def register_igloo_mcp(
                 default=False,
             ),
         ] = False,
-        metric_insight: Annotated[
+        post_query_insight: Annotated[
             Optional[Dict[str, Any] | str],
             Field(
                 description=(
-                    "Optional insights or key findings from query results. "
+                    "Optional insights or key findings from query results. Metadata-only; no extra compute. "
                     "Can be a summary string or structured JSON with key metrics and business impact."
                 ),
                 default=None,
@@ -255,7 +256,7 @@ def register_igloo_mcp(
                 reason=reason,
                 timeout_seconds=timeout_seconds,
                 verbose_errors=verbose_errors,
-                metric_insight=metric_insight,
+                post_query_insight=post_query_insight,
                 ctx=ctx,
             )
         except ValueError as e:
@@ -503,6 +504,134 @@ def register_igloo_mcp(
             column_contains=column_contains,
             limit=limit,
         )
+
+    @server.tool(
+        name="record_query_insight",
+        description="Attach a post-hoc insight to a prior execute_query run",
+    )
+    async def record_query_insight_tool(
+        execution_id: Annotated[
+            str,
+            Field(
+                description="Execution ID from execute_query.audit_info.execution_id"
+            ),
+        ],
+        post_query_insight: Annotated[
+            Dict[str, Any] | str,
+            Field(description="LLM-provided post-query insight"),
+        ],
+        cache_manifest_override: Annotated[
+            Optional[str],
+            Field(
+                description="Optional path to manifest if audit_info missing",
+                default=None,
+            ),
+        ] = None,
+        source: Annotated[
+            Optional[str],
+            Field(
+                description="Optional source identifier (e.g., 'human', 'agent:claude')",
+                default=None,
+            ),
+        ] = None,
+    ) -> Dict[str, Any]:
+        """Record a post-hoc insight for a prior query execution."""
+        history = QueryHistory.from_env()
+        result = history.record_insight(
+            execution_id=execution_id,
+            post_query_insight=post_query_insight,
+            source=source,
+        )
+
+        # Try to update manifest if path provided
+        updated_manifest: Optional[str] = None
+        if cache_manifest_override:
+            from pathlib import Path
+
+            manifest_path = Path(cache_manifest_override)
+            if update_cache_manifest_insight(manifest_path, post_query_insight):
+                updated_manifest = str(manifest_path.resolve())
+
+        return {
+            "execution_id": result["execution_id"],
+            "deduped": result["deduped"],
+            "updated_manifest": updated_manifest,
+        }
+
+    @server.tool(
+        name="describe_logging_paths",
+        description="Get resolved paths for history, artifacts, and cache with writability checks",
+    )
+    async def describe_logging_paths_tool() -> Dict[str, Any]:
+        """Describe logging paths and writability."""
+        from pathlib import Path
+
+        history = QueryHistory.from_env()
+        history_path = str(history.path) if history.path else None
+
+        artifact_root_raw = os.environ.get("IGLOO_MCP_ARTIFACT_ROOT")
+        from .path_utils import resolve_artifact_root
+
+        try:
+            artifact_root = resolve_artifact_root(raw=artifact_root_raw)
+            artifact_root_str = str(artifact_root)
+        except Exception:
+            artifact_root_str = None
+
+        cache_root_str = None
+        if artifact_root_str:
+            from .path_utils import DEFAULT_CACHE_SUBDIR
+
+            cache_root = Path(artifact_root_str) / DEFAULT_CACHE_SUBDIR
+            cache_root_str = str(cache_root.resolve())
+
+        # Check writability
+        writable: Dict[str, bool] = {}
+        if history_path:
+            try:
+                path = Path(history_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                test_file = path.parent / ".writable_test"
+                test_file.write_text("test")
+                test_file.unlink()
+                writable["history"] = True
+            except Exception:
+                writable["history"] = False
+        else:
+            writable["history"] = False
+
+        if artifact_root_str:
+            try:
+                path = Path(artifact_root_str)
+                path.mkdir(parents=True, exist_ok=True)
+                test_file = path / ".writable_test"
+                test_file.write_text("test")
+                test_file.unlink()
+                writable["artifacts"] = True
+            except Exception:
+                writable["artifacts"] = False
+        else:
+            writable["artifacts"] = False
+
+        if cache_root_str:
+            try:
+                path = Path(cache_root_str)
+                path.mkdir(parents=True, exist_ok=True)
+                test_file = path / ".writable_test"
+                test_file.write_text("test")
+                test_file.unlink()
+                writable["cache"] = True
+            except Exception:
+                writable["cache"] = False
+        else:
+            writable["cache"] = False
+
+        return {
+            "history_path": history_path,
+            "artifact_root": artifact_root_str,
+            "cache_root": cache_root_str,
+            "writable": writable,
+        }
 
     @server.resource(
         "igloo://queries/by-sha/{sql_sha256}.sql",
