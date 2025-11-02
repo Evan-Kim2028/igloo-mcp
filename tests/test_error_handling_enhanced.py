@@ -154,7 +154,7 @@ class TestEnhancedErrorHandling:
         assert "timeout_seconds" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_metric_insight_parameter_handling(
+    async def test_post_query_insight_parameter_handling(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         config = Config.from_env()
@@ -175,15 +175,18 @@ class TestEnhancedErrorHandling:
 
         await tool.execute(
             statement="SELECT * FROM test",
-            metric_insight="Test shows positive trend",
+            post_query_insight="Test shows positive trend",
         )
 
         tool.history.record.assert_called_once()
         payload = tool.history.record.call_args[0][0]
-        assert payload["metric_insight"] == "Test shows positive trend"
+        assert (
+            isinstance(payload["post_query_insight"], dict)
+            and payload["post_query_insight"]["summary"] == "Test shows positive trend"
+        )
 
     @pytest.mark.asyncio
-    async def test_metric_insight_as_dict_parameter_handling(
+    async def test_post_query_insight_as_dict_parameter_handling(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         config = Config.from_env()
@@ -208,13 +211,18 @@ class TestEnhancedErrorHandling:
             "business_impact": "Strong growth trajectory",
         }
 
-        await tool.execute(statement="SELECT * FROM test", metric_insight=insight_dict)
+        await tool.execute(
+            statement="SELECT * FROM test", post_query_insight=insight_dict
+        )
 
         tool.history.record.assert_called_once()
         payload = tool.history.record.call_args[0][0]
-        assert payload["metric_insight"] == insight_dict
+        assert all(
+            payload["post_query_insight"].get(k) == insight_dict[k]
+            for k in ("summary", "key_metrics", "business_impact")
+        )
 
-    def test_schema_includes_metric_insight(self):
+    def test_schema_includes_post_query_insight(self):
         """Ensure the tool schema advertises metric_insight."""
         config = Config.from_env()
         tool = ExecuteQueryTool(
@@ -225,7 +233,7 @@ class TestEnhancedErrorHandling:
         )
 
         schema = tool.get_parameter_schema()
-        metric_schema = schema["properties"]["metric_insight"]
+        metric_schema = schema["properties"]["post_query_insight"]
 
         assert "anyOf" in metric_schema
         assert any(option.get("type") == "string" for option in metric_schema["anyOf"])

@@ -41,8 +41,8 @@ class TestSmokeIntegration:
         assert error_msg is None, f"LATERAL query had error message: {error_msg}"
         assert stmt_type == "Select"
 
-    def test_complete_metric_insight_workflow(self):
-        """Test complete workflow for metric_insight feature."""
+    def test_complete_post_query_insight_workflow(self):
+        """Test complete workflow for post_query_insight feature."""
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # Simulate git repository
@@ -57,14 +57,14 @@ class TestSmokeIntegration:
                     history.enabled
                 ), "Query history should be enabled in git repo smoke test"
 
-                # Simulate recording query with metric_insight
+                # Simulate recording query with post_query_insight
                 payload = {
                     "ts": 1699999999,
                     "status": "success",
                     "profile": "simulate_test",
                     "statement_preview": "SELECT revenue_growth FROM quarterly_metrics",
                     "rowcount": 4,
-                    "metric_insight": {
+                    "post_query_insight": {
                         "summary": (
                             "Q4 revenue grew 23% YoY exceeding forecast by 8 points"
                         ),
@@ -92,21 +92,21 @@ class TestSmokeIntegration:
                 content = history_file.read_text()
                 recorded = json.loads(content.strip())
 
-                # Verify metric_insight was properly structured
-                assert "metric_insight" in recorded
+                # Verify post_query_insight was properly structured
+                assert "post_query_insight" in recorded
                 assert (
-                    recorded["metric_insight"]["summary"]
-                    == payload["metric_insight"]["summary"]
+                    recorded["post_query_insight"]["summary"]
+                    == payload["post_query_insight"]["summary"]
                 )
                 assert (
-                    recorded["metric_insight"]["key_metrics"]
-                    == payload["metric_insight"]["key_metrics"]
+                    recorded["post_query_insight"]["key_metrics"]
+                    == payload["post_query_insight"]["key_metrics"]
                 )
                 assert (
-                    recorded["metric_insight"]["business_impact"]
-                    == payload["metric_insight"]["business_impact"]
+                    recorded["post_query_insight"]["business_impact"]
+                    == payload["post_query_insight"]["business_impact"]
                 )
-                assert recorded["metric_insight"]["follow_up_needed"] is True
+                assert recorded["post_query_insight"]["follow_up_needed"] is True
 
     @pytest.mark.asyncio
     async def test_complete_query_execution_workflow_with_all_features(self):
@@ -168,7 +168,7 @@ class TestSmokeIntegration:
                     warehouse="ANALYTICS_WH",
                     timeout_seconds=120,
                     reason="Q4 2023 revenue analysis with customer cohort breakdown",
-                    metric_insight={
+                    post_query_insight={
                         "summary": (
                             "Q4 showed record performance with 23% revenue growth "
                             "and improved customer acquisition"
@@ -357,7 +357,7 @@ class TestSmokeIntegration:
             "timeout_seconds",
             "verbose_errors",
             "reason",
-            "metric_insight",
+            "post_query_insight",
         ]
 
         for param in expected_params:
@@ -365,8 +365,8 @@ class TestSmokeIntegration:
                 param in schema["properties"]
             ), f"Missing parameter in schema: {param}"
 
-        # Verify metric_insight schema details
-        metric_schema = schema["properties"]["metric_insight"]
+        # Verify post_query_insight schema details
+        metric_schema = schema["properties"]["post_query_insight"]
         assert "anyOf" in metric_schema
         assert any(option.get("type") == "string" for option in metric_schema["anyOf"])
         assert any(option.get("type") == "object" for option in metric_schema["anyOf"])
@@ -427,7 +427,7 @@ class TestSmokeIntegration:
                 "statement_preview": complex_lateral_query[:200],
                 "rowcount": 50,
                 "reason": "User behavior pattern analysis for product recommendation improvements",
-                "metric_insight": {
+                "post_query_insight": {
                     "summary": (
                         "Users show distinct navigation patterns with 60% following "
                         "predictable paths"
@@ -455,9 +455,9 @@ class TestSmokeIntegration:
             # All enhancement features should be present
             assert "timestamp" in recorded
             assert "reason" in recorded
-            assert "metric_insight" in recorded
+            assert "post_query_insight" in recorded
             assert (
-                recorded["metric_insight"]["summary"]
-                == integration_payload["metric_insight"]["summary"]
+                recorded["post_query_insight"]["summary"]
+                == integration_payload["post_query_insight"]["summary"]
             )
             assert recorded["statement_preview"] == complex_lateral_query[:200]

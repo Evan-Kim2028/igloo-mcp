@@ -23,7 +23,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | `database` | string | ❌ No | profile | Database override (Snowflake identifier) |
 | `schema` | string | ❌ No | profile | Schema override (Snowflake identifier) |
 | `role` | string | ❌ No | profile | Role override (Snowflake identifier) |
-| `metric_insight` | string \| object | ❌ No | - | Optional summary/JSON describing the results; stored alongside history and cache artifacts. |
+| `post_query_insight` | string \| object | ❌ No | - | Optional summary/JSON describing the results; stored alongside history and cache artifacts. |
 
 > Identifiers accept standard Snowflake names such as `ANALYTICS_WH` or double-quoted values like `"Analytics-WH"` / `"Sales Analytics"`.
 
