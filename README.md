@@ -187,6 +187,51 @@ Each bundle entry includes:
 uv pip install igloo-mcp
 ```
 
+### Editor Setup (Cursor, Codex, Claude Code)
+
+Quick wiring for common MCP clients. See the full guide in docs/installation.md.
+
+• Cursor (`~/.cursor/mcp.json`)
+```json
+{
+  "mcpServers": {
+    "igloo-mcp": {
+      "command": "igloo-mcp",
+      "args": ["--profile", "my-profile"],
+      "env": {"SNOWFLAKE_PROFILE": "my-profile"}
+    }
+  }
+}
+```
+
+• Claude Code (settings snippet)
+```json
+{
+  "mcp": {
+    "igloo-mcp": {
+      "command": "igloo-mcp",
+      "args": ["--profile", "my-profile"],
+      "env": {"SNOWFLAKE_PROFILE": "my-profile"}
+    }
+  }
+}
+```
+
+• Codex / Other MCP Clients (generic block; consult client docs for config path)
+```json
+{
+  "mcpServers": {
+    "igloo-mcp": {
+      "command": "igloo-mcp",
+      "args": ["--profile", "my-profile"],
+      "env": {"SNOWFLAKE_PROFILE": "my-profile"}
+    }
+  }
+}
+```
+
+After editing, restart your client and run a quick smoke test: `igloo-mcp --profile my-profile --help`.
+
 ## ⚡ 5-Minute Quickstart
 
 Get igloo-mcp running with Cursor in under 5 minutes!
@@ -299,6 +344,21 @@ Edit `~/.cursor/mcp.json`:
 **Restart Cursor** after configuring.
 
 #### Claude Code (alternative)
+#### Codex / Other MCP Clients (alternative)
+
+Most MCP clients support the same server block; place it in your client’s MCP config file:
+```json
+{
+  "mcpServers": {
+    "igloo-mcp": {
+      "command": "igloo-mcp",
+      "args": ["--profile", "quickstart"],
+      "env": {"SNOWFLAKE_PROFILE": "quickstart"}
+    }
+  }
+}
+```
+Consult your client’s documentation for the specific config path and restart the client after changes.
 
 Add this to your Claude Code MCP settings:
 
