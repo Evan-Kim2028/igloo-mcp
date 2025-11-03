@@ -336,6 +336,11 @@ class ExecuteQueryTool(MCPTool):
             RuntimeError: If query execution fails
         """
         # Normalize insight once
+        if "metric_insight" in kwargs:
+            raise TypeError(
+                "execute_query no longer accepts 'metric_insight'; use 'post_query_insight' instead"
+            )
+
         normalized_insight: Optional[Insight] = None
         if post_query_insight is not None:
             normalized_insight = normalize_insight(post_query_insight)
