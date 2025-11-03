@@ -89,8 +89,13 @@ class TestSmokeIntegration:
                     history_file.exists()
                 ), "History file should be created in smoke test"
 
-                content = history_file.read_text()
-                recorded = json.loads(content.strip())
+                lines = [
+                    line
+                    for line in history_file.read_text().splitlines()
+                    if line.strip()
+                ]
+                assert lines, "History file should contain at least one entry"
+                recorded = json.loads(lines[-1])
 
                 # Verify post_query_insight was properly structured
                 assert "post_query_insight" in recorded
@@ -253,7 +258,10 @@ class TestSmokeIntegration:
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # Test non-git directory (logging should still enable with workspace path)
-            with patch("igloo_mcp.path_utils.find_repo_root") as mock_find:
+            with (
+                patch("igloo_mcp.path_utils.find_repo_root") as mock_find,
+                patch("igloo_mcp.path_utils.Path.home", lambda: Path(temp_dir)),
+            ):
                 mock_find.return_value = Path(temp_dir)
 
                 with patch.dict("os.environ", {}, clear=True):
@@ -262,16 +270,25 @@ class TestSmokeIntegration:
                         history.enabled is True
                     ), "Should default to workspace history"
                     assert history.path is not None
-                    base = Path(temp_dir).resolve()
-                    assert history.path.resolve().is_relative_to(base)
+                    expected = (
+                        Path(temp_dir) / ".igloo_mcp" / "logs" / "doc.jsonl"
+                    ).resolve()
+                    assert history.path.resolve() == expected
 
             # Test git directory (logging should be enabled)
             (Path(temp_dir) / ".git").mkdir()
 
-            with patch("igloo_mcp.path_utils.find_repo_root") as mock_find:
+            with (
+                patch("igloo_mcp.path_utils.find_repo_root") as mock_find,
+                patch("igloo_mcp.path_utils.Path.home", lambda: Path(temp_dir)),
+            ):
                 mock_find.return_value = Path(temp_dir)
 
-                with patch.dict("os.environ", {}, clear=True):
+                with patch.dict(
+                    "os.environ",
+                    {"IGLOO_MCP_LOG_SCOPE": "repo"},
+                    clear=True,
+                ):
                     history = QueryHistory.from_env()
                     assert history.enabled is True, "Should be enabled in git repo"
                     assert history.path is not None

@@ -127,7 +127,7 @@ class ExecuteQueryTool(MCPTool):
             warnings.append(f"Failed to resolve artifact root from environment: {exc}")
 
         fallback = (Path.home() / ".igloo_mcp" / DEFAULT_ARTIFACT_ROOT).resolve()
-        candidates = []
+        candidates: list[Path] = []
         if primary is not None:
             candidates.append(primary)
         if fallback not in candidates:
