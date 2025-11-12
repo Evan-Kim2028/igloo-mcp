@@ -324,3 +324,47 @@ class TestEnhancedSQLValidation:
             assert (
                 error_msg is None
             ), f"Snowflake pattern should not have error message: {error_msg}"
+
+    def test_show_statements_allowed_when_permitted(self):
+        """SHOW statements should be recognized and allowed when 'show' is enabled."""
+        allow_list = ["Select", "Show"]
+        disallow_list: list[str] = []
+
+        queries = [
+            "SHOW TABLES;",
+            "SHOW TERSE TABLES;",
+            "SHOW DATABASES;",
+            "SHOW SCHEMAS;",
+            "SHOW VIEWS;",
+            "SHOW FUNCTIONS;",
+            "SHOW TABLES LIKE 'MVR_PACKAGES' IN ACCOUNT;",
+            "SHOW TABLES LIKE 'MVR_PACKAGES' IN DATABASE;",
+        ]
+
+        for query in queries:
+            stmt_type, is_valid, error_msg = validate_sql_statement(
+                query, allow_list, disallow_list
+            )
+
+            assert is_valid is True, f"SHOW should be allowed: {query} -> {stmt_type}"
+            assert stmt_type == "Show", f"Expected 'Show' type, got: {stmt_type}"
+            assert error_msg is None
+
+    def test_show_statements_blocked_when_disabled(self):
+        """When 'show' is disabled, SHOW statements should be blocked with type Show."""
+        allow_list = ["Select"]
+        disallow_list = ["Show"]
+
+        queries = [
+            "SHOW TABLES;",
+            "SHOW DATABASES;",
+        ]
+
+        for query in queries:
+            stmt_type, is_valid, error_msg = validate_sql_statement(
+                query, allow_list, disallow_list
+            )
+
+            assert is_valid is False
+            assert stmt_type == "Show"
+            assert error_msg is not None and "not permitted" in error_msg

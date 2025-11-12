@@ -293,6 +293,22 @@ def validate_sql_statement(
     if is_valid:
         return stmt_type, True, None
 
+    # Safe lexical fallback for Snowflake SHOW statements
+    # Upstream parsers (including sqlglot) often classify SHOW as Command/Unknown.
+    # Since SHOW is read-only and already governed by the 'show' permission, we
+    # recognize it lexically to avoid false blocks.
+    try:
+        s = statement.lstrip()
+    except Exception:  # pragma: no cover - extremely defensive
+        s = statement
+
+    if s[:4].upper() == "SHOW":
+        if "show" in allow_set:
+            return "Show", True, None
+        # When SHOW is disabled by policy, surface a consistent error that
+        # identifies the statement as Show (not Command) for better UX.
+        stmt_type = "Show"
+
     # Generate error message with alternatives
     alternatives = generate_sql_alternatives(statement, stmt_type)
 

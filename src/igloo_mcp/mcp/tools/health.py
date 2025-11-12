@@ -174,15 +174,16 @@ class HealthCheckTool(MCPTool):
             cursor.execute("SELECT CURRENT_ROLE() as role")
             role_result = cursor.fetchone()
 
+            def _pick(d: Dict[str, Any] | None, lower: str, upper: str) -> Any:
+                if not isinstance(d, dict):
+                    return None
+                return d.get(lower) if lower in d else d.get(upper)
+
             return {
-                "warehouse": (
-                    warehouse_result.get("warehouse") if warehouse_result else None
-                ),
-                "database": (
-                    database_result.get("database") if database_result else None
-                ),
-                "schema": schema_result.get("schema") if schema_result else None,
-                "role": role_result.get("role") if role_result else None,
+                "warehouse": _pick(warehouse_result, "warehouse", "WAREHOUSE"),
+                "database": _pick(database_result, "database", "DATABASE"),
+                "schema": _pick(schema_result, "schema", "SCHEMA"),
+                "role": _pick(role_result, "role", "ROLE"),
             }
 
     async def _check_profile(self) -> Dict[str, Any]:
