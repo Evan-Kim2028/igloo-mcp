@@ -110,6 +110,8 @@ class ExecuteQueryTool(MCPTool):
 
     AUTO_ASYNC_MARGIN_SECONDS = 5.0
     AUTO_ASYNC_POLL_INTERVAL_SECONDS = 0.5
+    ASYNC_JOB_RETENTION_SECONDS = 600
+    ASYNC_JOB_MAX_ENTRIES = 200
 
     def __init__(
         self,
@@ -228,15 +230,17 @@ class ExecuteQueryTool(MCPTool):
         execution_id = uuid.uuid4().hex
         sql_sha256 = hashlib.sha256(statement.encode("utf-8")).hexdigest()
         timeout = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
+        now = time.time()
         job_state = AsyncQueryJobState(
             execution_id=execution_id,
             status="pending",
-            submitted_ts=time.time(),
+            submitted_ts=now,
             timeout_seconds=timeout,
             statement_preview=statement[:200],
             sql_sha256=sql_sha256,
         )
         with self._jobs_lock:
+            self._prune_async_jobs_locked(now)
             self._async_jobs[execution_id] = job_state
 
         if ctx is not None:
@@ -399,6 +403,7 @@ class ExecuteQueryTool(MCPTool):
         execution_id: str,
         include_rows: bool = True,
     ) -> Dict[str, Any]:
+        self._prune_async_jobs()
         with self._jobs_lock:
             job = self._async_jobs.get(execution_id)
 
@@ -418,16 +423,57 @@ class ExecuteQueryTool(MCPTool):
             "statement_preview": job.statement_preview,
         }
 
+        cleanup_after_response = False
         if job.status == "success" and job.result is not None:
             result = job.result
             if not include_rows and "rows" in result:
                 result = dict(result)
                 result.pop("rows", None)
             payload["result"] = result
+            cleanup_after_response = include_rows
         elif job.status == "error":
             payload["error"] = job.error
+            cleanup_after_response = True
+
+        if cleanup_after_response:
+            self._cleanup_async_job(execution_id)
 
         return payload
+
+    def _cleanup_async_job(self, execution_id: str) -> None:
+        with self._jobs_lock:
+            self._async_jobs.pop(execution_id, None)
+
+    def _prune_async_jobs(self) -> None:
+        with self._jobs_lock:
+            self._prune_async_jobs_locked()
+
+    def _prune_async_jobs_locked(self, now: Optional[float] = None) -> None:
+        if now is None:
+            now = time.time()
+
+        to_remove: list[str] = []
+        for exec_id, job in list(self._async_jobs.items()):
+            if (
+                job.completed_ts is not None
+                and now - job.completed_ts > self.ASYNC_JOB_RETENTION_SECONDS
+            ):
+                to_remove.append(exec_id)
+
+        for exec_id in to_remove:
+            self._async_jobs.pop(exec_id, None)
+
+        excess = len(self._async_jobs) - self.ASYNC_JOB_MAX_ENTRIES
+        if excess <= 0:
+            return
+
+        for exec_id, _ in sorted(
+            self._async_jobs.items(), key=lambda item: item[1].submitted_ts
+        ):
+            if excess <= 0:
+                break
+            self._async_jobs.pop(exec_id, None)
+            excess -= 1
 
     def _resolve_cache_context(
         self, overrides: Dict[str, Optional[str]]

@@ -90,6 +90,7 @@ async def test_execute_query_async_mode_returns_handle(monkeypatch):
     assert poll["status"] == "success"
     assert poll["result"]["rowcount"] == 1
     assert poll["result"]["rows"] == [[1]]
+    assert tool._async_jobs == {}
 
 
 @pytest.mark.anyio
@@ -125,6 +126,7 @@ async def test_execute_query_auto_returns_result_within_rpc(monkeypatch):
     assert result["rowcount"] == 1
     assert result["rows"] == [[1]]
     assert result["cache"]["hit"] is False
+    assert tool._async_jobs == {}
 
 
 @pytest.mark.anyio
@@ -174,6 +176,7 @@ async def test_execute_query_auto_falls_back_to_async(monkeypatch):
 
     assert poll["status"] == "success"
     assert poll["result"]["rowcount"] == 1
+    assert tool._async_jobs == {}
 
 
 @pytest.mark.anyio
