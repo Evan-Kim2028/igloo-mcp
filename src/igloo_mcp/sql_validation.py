@@ -303,11 +303,14 @@ def validate_sql_statement(
         s = statement
 
     if s[:4].upper() == "SHOW":
-        if "show" in allow_set:
-            return "Show", True, None
-        # When SHOW is disabled by policy, surface a consistent error that
-        # identifies the statement as Show (not Command) for better UX.
+        # Always normalize to the "Show" statement type for clarity.
         stmt_type = "Show"
+
+        # Disallow entries must win even if SHOW appears in allow_list.
+        if "show" in disallow_set:
+            is_valid = False
+        elif "show" in allow_set:
+            return "Show", True, None
 
     # Generate error message with alternatives
     alternatives = generate_sql_alternatives(statement, stmt_type)
