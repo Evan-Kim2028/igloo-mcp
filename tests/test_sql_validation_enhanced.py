@@ -368,3 +368,16 @@ class TestEnhancedSQLValidation:
             assert is_valid is False
             assert stmt_type == "Show"
             assert error_msg is not None and "not permitted" in error_msg
+
+    def test_show_statements_disallow_overrides_allow(self):
+        """Explicit disallow entries should override allow list membership for SHOW."""
+        allow_list = ["Select", "Show"]
+        disallow_list = ["Show"]
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            "SHOW ROLES;", allow_list, disallow_list
+        )
+
+        assert is_valid is False
+        assert stmt_type == "Show"
+        assert error_msg is not None and "not permitted" in error_msg
