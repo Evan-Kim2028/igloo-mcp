@@ -26,6 +26,7 @@ dependencies = [
 
 [project.scripts]
 igloo-mcp = "igloo_mcp.mcp_server:main"
+igloo-report = "igloo_mcp.report_cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Evan-Kim2028/igloo-mcp"
