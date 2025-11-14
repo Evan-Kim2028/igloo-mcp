@@ -3,6 +3,18 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - Unreleased
+
+### Added
+- Automatic cache insights: key metrics/insight summaries are recorded in history docs and cache manifests whenever `post_query_insight` or auto-insight generation runs, with fixture coverage.
+
+### Changed
+- `execute_query` now consumes as much of the MCP RPC timeout budget as possible before transparently falling back to async polling, so long-running statements always return an `execution_id`. Related docs cover inline wait budgeting and `fetch_async_query_result` parity.
+- SQL validation recognizes SHOW statements even when they begin with whitespace or SQL comments, ensuring permissions apply uniformly.
+
+### Tests
+- Expanded `tests/test_execute_query_tool.py`, cache fixture builders, and `tests/test_sql_validation_enhanced.py` to cover auto insights, auto async fallback, and SHOW lexical detection with comment prefixes.
+
 ## [0.2.1] - 2025-10-31
 
 ### Fixed

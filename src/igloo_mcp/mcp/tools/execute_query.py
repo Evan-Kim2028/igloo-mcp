@@ -12,11 +12,22 @@ import os
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import anyio
+
+try:  # pragma: no cover - imported for typing/runtime compatibility only
+    from fastmcp import Context
+except ImportError:  # pragma: no cover
+    try:
+        from mcp.server.fastmcp import (
+            Context,  # type: ignore[import-untyped,assignment]
+        )
+    except ImportError:  # pragma: no cover
+        Context = Any  # type: ignore[misc,assignment]
 
 from igloo_mcp.cache import QueryResultCache
 from igloo_mcp.config import Config
@@ -33,6 +44,7 @@ from igloo_mcp.path_utils import (
     find_repo_root,
     resolve_artifact_root,
 )
+from igloo_mcp.post_query_insights import build_default_insights
 from igloo_mcp.service_layer import QueryService
 from igloo_mcp.session_utils import (
     apply_session_context,
@@ -79,8 +91,25 @@ def _relative_sql_path(repo_root: Path, artifact_path: Optional[Path]) -> Option
         return artifact_path.resolve().as_posix()
 
 
+@dataclass
+class AsyncQueryJobState:
+    execution_id: str
+    status: Literal["pending", "running", "success", "error"]
+    submitted_ts: float
+    timeout_seconds: int
+    statement_preview: str
+    sql_sha256: str | None = None
+    started_ts: float | None = None
+    completed_ts: float | None = None
+    result: Dict[str, Any] | None = None
+    error: str | None = None
+
+
 class ExecuteQueryTool(MCPTool):
     """MCP tool for executing SQL queries against Snowflake."""
+
+    AUTO_ASYNC_MARGIN_SECONDS = 5.0
+    AUTO_ASYNC_POLL_INTERVAL_SECONDS = 0.5
 
     def __init__(
         self,
@@ -112,6 +141,9 @@ class ExecuteQueryTool(MCPTool):
         self._cache_enabled = self.cache.enabled
         self._cache_mode = self.cache.mode
         self._static_audit_warnings.extend(self.cache.pop_warnings())
+        self._async_jobs: dict[str, AsyncQueryJobState] = {}
+        self._jobs_lock = threading.Lock()
+        self._rpc_soft_timeout = self._resolve_rpc_soft_timeout()
 
     @property
     def name(self) -> str:
@@ -151,6 +183,21 @@ class ExecuteQueryTool(MCPTool):
         )
         return None, warnings
 
+    def _resolve_rpc_soft_timeout(self) -> int:
+        raw = os.environ.get("IGLOO_MCP_RPC_SOFT_TIMEOUT")
+        default = 110
+        if not raw:
+            return default
+        try:
+            parsed = int(raw)
+            # Keep the limit reasonable to avoid accidental 0/negative values
+            return max(parsed, 30)
+        except (TypeError, ValueError):
+            self._static_audit_warnings.append(
+                "Invalid IGLOO_MCP_RPC_SOFT_TIMEOUT value; falling back to 110s."
+            )
+            return default
+
     def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Optional[Path]:
         if self._artifact_root is None:
             self._transient_audit_warnings.append(
@@ -163,6 +210,224 @@ class ExecuteQueryTool(MCPTool):
                 "Failed to persist SQL text for audit history."
             )
         return artifact_path
+
+    async def _enqueue_async_job(
+        self,
+        *,
+        statement: str,
+        warehouse: Optional[str],
+        database: Optional[str],
+        schema: Optional[str],
+        role: Optional[str],
+        timeout_seconds: Optional[int],
+        verbose_errors: bool,
+        reason: Optional[str],
+        normalized_insight: Optional[Insight],
+        ctx: Context | None,
+    ) -> Dict[str, Any]:
+        execution_id = uuid.uuid4().hex
+        sql_sha256 = hashlib.sha256(statement.encode("utf-8")).hexdigest()
+        timeout = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
+        job_state = AsyncQueryJobState(
+            execution_id=execution_id,
+            status="pending",
+            submitted_ts=time.time(),
+            timeout_seconds=timeout,
+            statement_preview=statement[:200],
+            sql_sha256=sql_sha256,
+        )
+        with self._jobs_lock:
+            self._async_jobs[execution_id] = job_state
+
+        if ctx is not None:
+            try:
+                await ctx.report_progress(0, 100, "Query enqueued for async execution")
+            except Exception:
+                pass
+
+        async def _async_runner() -> None:
+            await self._run_async_job(
+                job_state,
+                statement=statement,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role,
+                timeout_seconds=timeout_seconds,
+                verbose_errors=verbose_errors,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                sql_sha_override=sql_sha256,
+            )
+
+        def _runner() -> None:
+            anyio.run(_async_runner)
+
+        threading.Thread(target=_runner, daemon=True).start()
+
+        return {
+            "status": "accepted",
+            "execution_id": execution_id,
+            "message": (
+                "Query accepted for asynchronous execution. Call fetch_async_query_result"
+                " with this execution_id to check status or retrieve cached rows."
+            ),
+            "timeout_seconds": timeout,
+            "sql_sha256": sql_sha256,
+            "poll_tool": "fetch_async_query_result",
+        }
+
+    async def _execute_auto_mode(
+        self,
+        *,
+        statement: str,
+        warehouse: Optional[str],
+        database: Optional[str],
+        schema: Optional[str],
+        role: Optional[str],
+        timeout_seconds: Optional[int],
+        verbose_errors: bool,
+        reason: Optional[str],
+        normalized_insight: Optional[Insight],
+        ctx: Context | None,
+    ) -> Dict[str, Any]:
+        accepted = await self._enqueue_async_job(
+            statement=statement,
+            warehouse=warehouse,
+            database=database,
+            schema=schema,
+            role=role,
+            timeout_seconds=timeout_seconds,
+            verbose_errors=verbose_errors,
+            reason=reason,
+            normalized_insight=normalized_insight,
+            ctx=ctx,
+        )
+
+        execution_id = accepted.get("execution_id")
+        if not execution_id:
+            return accepted
+
+        inline_wait = self._auto_inline_wait_budget(timeout_seconds)
+        if inline_wait <= 0:
+            accepted["inline_wait_seconds"] = 0.0
+            accepted.setdefault(
+                "message",
+                "Query running asynchronously; call fetch_async_query_result with the "
+                "provided execution_id to retrieve results when complete.",
+            )
+            return accepted
+
+        deadline = time.time() + inline_wait
+        poll_interval = min(
+            self.AUTO_ASYNC_POLL_INTERVAL_SECONDS,
+            max(inline_wait / 5, 0.1),
+        )
+
+        while True:
+            poll = await self.fetch_async_result(
+                execution_id=execution_id,
+                include_rows=True,
+            )
+            status = poll.get("status")
+            if status == "success" and poll.get("result"):
+                return poll["result"]
+            if status == "error":
+                raise RuntimeError(poll.get("error") or "Asynchronous query failed")
+
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                accepted["inline_wait_seconds"] = inline_wait
+                accepted["message"] = (
+                    "Query still running after %.0fs; call fetch_async_query_result "
+                    "with execution_id=%s to retrieve cached results."
+                    % (
+                        inline_wait,
+                        execution_id,
+                    )
+                )
+                return accepted
+
+            await anyio.sleep(min(poll_interval, remaining))
+
+    async def _run_async_job(
+        self,
+        job_state: AsyncQueryJobState,
+        *,
+        statement: str,
+        warehouse: Optional[str],
+        database: Optional[str],
+        schema: Optional[str],
+        role: Optional[str],
+        timeout_seconds: Optional[int],
+        verbose_errors: bool,
+        reason: Optional[str],
+        normalized_insight: Optional[Insight],
+        sql_sha_override: Optional[str],
+    ) -> None:
+        with self._jobs_lock:
+            job_state.status = "running"
+            job_state.started_ts = time.time()
+        try:
+            result = await self._execute_impl(
+                statement=statement,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role,
+                timeout_seconds=timeout_seconds,
+                verbose_errors=verbose_errors,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                ctx=None,
+                execution_id_override=job_state.execution_id,
+                sql_sha_override=sql_sha_override,
+            )
+            with self._jobs_lock:
+                job_state.status = "success"
+                job_state.result = result
+                job_state.completed_ts = time.time()
+        except Exception as exc:
+            with self._jobs_lock:
+                job_state.status = "error"
+                job_state.error = str(exc)
+                job_state.completed_ts = time.time()
+
+    async def fetch_async_result(
+        self,
+        *,
+        execution_id: str,
+        include_rows: bool = True,
+    ) -> Dict[str, Any]:
+        with self._jobs_lock:
+            job = self._async_jobs.get(execution_id)
+
+        if job is None:
+            raise ValueError(
+                f"No async query execution found for execution_id={execution_id}"
+            )
+
+        payload: Dict[str, Any] = {
+            "execution_id": execution_id,
+            "status": job.status,
+            "submitted_ts": job.submitted_ts,
+            "started_ts": job.started_ts,
+            "completed_ts": job.completed_ts,
+            "timeout_seconds": job.timeout_seconds,
+            "sql_sha256": job.sql_sha256,
+            "statement_preview": job.statement_preview,
+        }
+
+        if job.status == "success" and job.result is not None:
+            result = job.result
+            if not include_rows and "rows" in result:
+                result = dict(result)
+                result.pop("rows", None)
+            payload["result"] = result
+        elif job.status == "error":
+            payload["error"] = job.error
+
+        return payload
 
     def _resolve_cache_context(
         self, overrides: Dict[str, Optional[str]]
@@ -217,6 +482,37 @@ class ExecuteQueryTool(MCPTool):
         warnings.extend(self.history.pop_warnings())
         warnings.extend(self.cache.pop_warnings())
         return warnings
+
+    def _auto_inline_wait_budget(self, timeout_seconds: Optional[int]) -> float:
+        user_limit = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
+        rpc_budget = max(
+            float(self._rpc_soft_timeout) - self.AUTO_ASYNC_MARGIN_SECONDS,
+            0.0,
+        )
+        return max(min(float(user_limit), rpc_budget), 0.0)
+
+    def _ensure_default_insights(
+        self, result: Dict[str, Any]
+    ) -> tuple[Optional[Dict[str, Any]], List[str]]:
+        key_metrics = result.get("key_metrics")
+        insights = result.get("insights")
+        rows = result.get("rows")
+
+        if (key_metrics is None or insights is None) and rows:
+            computed_metrics, computed_insights = build_default_insights(
+                rows,
+                columns=result.get("columns"),
+                total_rows=result.get("rowcount"),
+                truncated=bool(result.get("truncated")),
+            )
+            if key_metrics is None and computed_metrics:
+                result["key_metrics"] = computed_metrics
+                key_metrics = computed_metrics
+            if insights is None and computed_insights:
+                result["insights"] = computed_insights
+                insights = computed_insights
+
+        return key_metrics, insights or []
 
     @staticmethod
     def _iso_timestamp(epoch: float) -> str:
@@ -300,9 +596,21 @@ class ExecuteQueryTool(MCPTool):
                     "timeout_seconds": 120,
                 },
             },
+            {
+                "description": "Run long analytics query asynchronously",
+                "parameters": {
+                    "statement": (
+                        "WITH params AS (SELECT DATEADD('day', -30, CURRENT_DATE) AS start_dt) "
+                        "SELECT * FROM ANALYTICS.LONG_RUNNING_METRICS WHERE event_ts >= (SELECT start_dt FROM params)"
+                    ),
+                    "warehouse": "ANALYTICS_WH",
+                    "timeout_seconds": 480,
+                    "response_mode": "async",
+                },
+            },
         ]
 
-    async def execute(
+    async def _execute_impl(
         self,
         statement: str,
         warehouse: Optional[str] = None,
@@ -312,52 +620,13 @@ class ExecuteQueryTool(MCPTool):
         timeout_seconds: Optional[int] = None,
         verbose_errors: bool = False,
         reason: Optional[str] = None,
-        post_query_insight: Optional[Dict[str, Any] | str] = None,
-        **kwargs: Any,
+        normalized_insight: Optional[Insight] = None,
+        ctx: Context | None = None,
+        *,
+        execution_id_override: Optional[str] = None,
+        sql_sha_override: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Execute SQL query against Snowflake.
-
-        Args:
-            statement: SQL statement to execute
-            warehouse: Optional warehouse override
-            database: Optional database override
-            schema: Optional schema override
-            role: Optional role override
-            timeout_seconds: Query timeout in seconds (default: 30s)
-            verbose_errors: Include detailed optimization hints in errors
-            reason: Short reason for executing this query
-            post_query_insight: Optional dict or string with key findings and metrics from query results
-
-        Returns:
-            Query results with rows, rowcount, and execution metadata
-
-        Raises:
-            ValueError: If profile validation fails or SQL is blocked
-            RuntimeError: If query execution fails
-        """
-        # Normalize insight once
-        if "metric_insight" in kwargs:
-            raise TypeError(
-                "execute_query no longer accepts 'metric_insight'; use 'post_query_insight' instead"
-            )
-
-        normalized_insight: Optional[Insight] = None
-        if post_query_insight is not None:
-            normalized_insight = normalize_insight(post_query_insight)
-        if timeout_seconds is not None:
-            if isinstance(timeout_seconds, str):
-                try:
-                    timeout_seconds = int(timeout_seconds)
-                except (TypeError, ValueError):
-                    raise TypeError(
-                        "timeout_seconds must be an integer value in seconds."
-                    ) from None
-            if isinstance(timeout_seconds, bool) or not isinstance(
-                timeout_seconds, int
-            ):
-                raise TypeError("timeout_seconds must be an integer value in seconds.")
-            if not 1 <= timeout_seconds <= 3600:
-                raise ValueError("timeout_seconds must be between 1 and 3600 seconds.")
+        """Internal execute_query implementation shared by sync + async flows."""
 
         # Validate profile health before executing query
         if self.health_monitor:
@@ -421,9 +690,11 @@ class ExecuteQueryTool(MCPTool):
                 "role": overrides_input.get("role"),
             }
 
-        execution_id = uuid.uuid4().hex
+        execution_id = execution_id_override or uuid.uuid4().hex
         requested_ts = time.time()
-        sql_sha256 = hashlib.sha256(statement.encode("utf-8")).hexdigest()
+        sql_sha256 = (
+            sql_sha_override or hashlib.sha256(statement.encode("utf-8")).hexdigest()
+        )
         history_artifacts: Dict[str, str] = {}
         artifact_path = self._persist_sql_artifact(sql_sha256, statement)
         if artifact_path is not None:
@@ -510,6 +781,15 @@ class ExecuteQueryTool(MCPTool):
                 )
                 result["post_query_insight"] = stored_insight
 
+            cached_metrics = cache_hit_metadata.get("key_metrics")
+            if cached_metrics:
+                result["key_metrics"] = cached_metrics
+            cached_insights = cache_hit_metadata.get("insights")
+            if cached_insights:
+                result["insights"] = cached_insights
+
+            key_metrics, derived_insights = self._ensure_default_insights(result)
+
             payload: Dict[str, Any] = {
                 "ts": requested_ts,
                 "timestamp": self._iso_timestamp(requested_ts),
@@ -542,6 +822,10 @@ class ExecuteQueryTool(MCPTool):
                 payload["post_query_insight"] = truncate_insight_for_storage(
                     stored_insight_for_storage
                 )
+            if key_metrics:
+                payload["key_metrics"] = key_metrics
+            if derived_insights:
+                payload["insights"] = derived_insights
             try:
                 self.history.record(payload)
             except Exception:
@@ -569,6 +853,8 @@ class ExecuteQueryTool(MCPTool):
                 reason,
             )
 
+            key_metrics, derived_insights = self._ensure_default_insights(result)
+
             if self.health_monitor and hasattr(
                 self.health_monitor, "record_query_success"
             ):
@@ -594,6 +880,8 @@ class ExecuteQueryTool(MCPTool):
                         "post_query_insight": cache_insight,
                         "reason": reason,
                         "columns": result.get("columns"),
+                        "key_metrics": key_metrics,
+                        "insights": derived_insights,
                     }
                     manifest_path = self.cache.store(
                         cache_key,
@@ -648,6 +936,10 @@ class ExecuteQueryTool(MCPTool):
                     payload["cache_manifest"] = str(manifest_path)
                 if result.get("columns"):
                     payload["columns"] = result.get("columns")
+                if key_metrics:
+                    payload["key_metrics"] = key_metrics
+                if derived_insights:
+                    payload["insights"] = derived_insights
                 self.history.record(payload)
             except Exception:
                 pass
@@ -814,6 +1106,92 @@ class ExecuteQueryTool(MCPTool):
                 raise RuntimeError(
                     f"Query execution failed: {error_message[:150]}. Use verbose_errors=true for details."
                 )
+
+    async def execute(
+        self,
+        statement: str,
+        warehouse: Optional[str] = None,
+        database: Optional[str] = None,
+        schema: Optional[str] = None,
+        role: Optional[str] = None,
+        timeout_seconds: Optional[int] = None,
+        verbose_errors: bool = False,
+        reason: Optional[str] = None,
+        post_query_insight: Optional[Dict[str, Any] | str] = None,
+        response_mode: Optional[str] = None,
+        ctx: Context | None = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Public entry point for execute_query."""
+
+        if "metric_insight" in kwargs:
+            raise TypeError(
+                "execute_query no longer accepts 'metric_insight'; use 'post_query_insight' instead"
+            )
+
+        normalized_insight: Optional[Insight] = None
+        if post_query_insight is not None:
+            normalized_insight = normalize_insight(post_query_insight)
+
+        if timeout_seconds is not None:
+            if isinstance(timeout_seconds, str):
+                try:
+                    timeout_seconds = int(timeout_seconds)
+                except (TypeError, ValueError):
+                    raise TypeError(
+                        "timeout_seconds must be an integer value in seconds."
+                    ) from None
+            if isinstance(timeout_seconds, bool) or not isinstance(
+                timeout_seconds, int
+            ):
+                raise TypeError("timeout_seconds must be an integer value in seconds.")
+            if not 1 <= timeout_seconds <= 3600:
+                raise ValueError("timeout_seconds must be between 1 and 3600 seconds.")
+
+        mode = (response_mode or "auto").lower()
+        if mode not in {"auto", "sync", "async"}:
+            raise ValueError("response_mode must be one of: auto, sync, async")
+
+        if mode == "sync":
+            return await self._execute_impl(
+                statement=statement,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role,
+                timeout_seconds=timeout_seconds,
+                verbose_errors=verbose_errors,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                ctx=ctx,
+            )
+
+        if mode == "async":
+            return await self._enqueue_async_job(
+                statement=statement,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role,
+                timeout_seconds=timeout_seconds,
+                verbose_errors=verbose_errors,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                ctx=ctx,
+            )
+
+        return await self._execute_auto_mode(
+            statement=statement,
+            warehouse=warehouse,
+            database=database,
+            schema=schema,
+            role=role,
+            timeout_seconds=timeout_seconds,
+            verbose_errors=verbose_errors,
+            reason=reason,
+            normalized_insight=normalized_insight,
+            ctx=ctx,
+        )
 
     def _execute_query_sync(
         self,
@@ -1292,6 +1670,18 @@ class ExecuteQueryTool(MCPTool):
                             "follow_up_needed": True,
                         },
                     ],
+                },
+                "response_mode": {
+                    "title": "Response Mode",
+                    "type": "string",
+                    "enum": ["auto", "sync", "async"],
+                    "default": "auto",
+                    "description": (
+                        "Controls how the tool responds: 'auto' runs synchronously until nearing the client timeout, "
+                        "'async' immediately returns an execution_id for polling via fetch_async_query_result, "
+                        "and 'sync' forces inline execution."
+                    ),
+                    "examples": ["auto", "async"],
                 },
             },
         }

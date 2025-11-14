@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Dict, List
 from unittest.mock import patch
 
+import anyio
+
 from igloo_mcp.cache.query_result_cache import QueryResultCache
 from igloo_mcp.config import Config, SnowflakeConfig
 from igloo_mcp.mcp.tools.execute_query import ExecuteQueryTool
@@ -34,7 +36,7 @@ class _TimeSequence:
         try:
             self._last = next(self._values)
         except StopIteration:
-            pass
+            self._last += 0.5
         return self._last
 
 
@@ -113,11 +115,12 @@ def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
             health_monitor=None,
         )
 
-        await tool.execute(
+        first = await tool.execute(
             statement="SELECT month, total_revenue FROM fixture_source",
             warehouse="FIXTURE_WH",
             timeout_seconds=120,
             reason="Fixture baseline history",
+            response_mode="sync",
             post_query_insight={
                 "summary": "Fixture revenue sample",
                 "key_metrics": ["jan_revenue:125000.25", "feb_revenue:132500.75"],
@@ -126,13 +129,30 @@ def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
             },
         )
 
+        if first.get("status") == "accepted":
+            execution_id = first["execution_id"]
+            while True:
+                poll = await tool.fetch_async_result(execution_id=execution_id)
+                if poll["status"] == "success":
+                    break
+                await anyio.sleep(0.05)
+
         # Second execution should hit the cache immediately.
-        await tool.execute(
+        second = await tool.execute(
             statement="SELECT month, total_revenue FROM fixture_source",
             warehouse="FIXTURE_WH",
             timeout_seconds=120,
             reason="Fixture baseline history",
+            response_mode="sync",
         )
+
+        if second.get("status") == "accepted":
+            execution_id = second["execution_id"]
+            while True:
+                poll = await tool.fetch_async_result(execution_id=execution_id)
+                if poll["status"] == "success":
+                    break
+                await anyio.sleep(0.05)
 
     time_sequence = [
         1700000000.0,  # initial requested_ts

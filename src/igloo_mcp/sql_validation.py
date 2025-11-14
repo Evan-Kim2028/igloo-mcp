@@ -176,6 +176,47 @@ def generate_sql_alternatives(
     return alternatives
 
 
+def _strip_leading_comments_and_whitespace(statement: str) -> str:
+    """Return statement without leading whitespace or SQL comments."""
+
+    if not statement:
+        return ""
+
+    length = len(statement)
+    idx = 0
+
+    while idx < length:
+        # Skip whitespace characters
+        while idx < length and statement[idx].isspace():
+            idx += 1
+
+        if idx >= length:
+            break
+
+        two = statement[idx : idx + 2]
+
+        # Line comment starting with --
+        if two == "--":
+            idx += 2
+            while idx < length and statement[idx] not in "\n\r":
+                idx += 1
+            while idx < length and statement[idx] in "\n\r":
+                idx += 1
+            continue
+
+        # Block comment starting with /* ... */
+        if two == "/*":
+            idx += 2
+            while idx < length and statement[idx : idx + 2] != "*/":
+                idx += 1
+            idx = min(length, idx + 2)
+            continue
+
+        break
+
+    return statement[idx:]
+
+
 def validate_sql_statement(
     statement: str,
     allow_list: List[str],
@@ -298,11 +339,11 @@ def validate_sql_statement(
     # Since SHOW is read-only and already governed by the 'show' permission, we
     # recognize it lexically to avoid false blocks.
     try:
-        s = statement.lstrip()
+        stripped = _strip_leading_comments_and_whitespace(statement)
     except Exception:  # pragma: no cover - extremely defensive
-        s = statement
+        stripped = statement.lstrip() if hasattr(statement, "lstrip") else statement
 
-    if s[:4].upper() == "SHOW":
+    if stripped.upper().startswith("SHOW"):
         # Always normalize to the "Show" statement type for clarity.
         stmt_type = "Show"
 
