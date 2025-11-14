@@ -350,6 +350,26 @@ class TestEnhancedSQLValidation:
             assert stmt_type == "Show", f"Expected 'Show' type, got: {stmt_type}"
             assert error_msg is None
 
+    def test_show_statements_with_leading_comments(self):
+        """SHOW statements remain detectable even with leading comments."""
+        allow_list = ["Select", "Show"]
+        disallow_list: list[str] = []
+
+        queries = [
+            "-- describe tables\nSHOW TABLES;",
+            "/* ensure visibility */ SHOW SCHEMAS;",
+            "   -- comment\r\n   /* doc */\n   SHOW FUNCTIONS;",
+        ]
+
+        for query in queries:
+            stmt_type, is_valid, error_msg = validate_sql_statement(
+                query, allow_list, disallow_list
+            )
+
+            assert is_valid is True
+            assert stmt_type == "Show"
+            assert error_msg is None
+
     def test_show_statements_blocked_when_disabled(self):
         """When 'show' is disabled, SHOW statements should be blocked with type Show."""
         allow_list = ["Select"]
@@ -368,6 +388,19 @@ class TestEnhancedSQLValidation:
             assert is_valid is False
             assert stmt_type == "Show"
             assert error_msg is not None and "not permitted" in error_msg
+
+    def test_show_statements_with_comments_blocked_when_disabled(self):
+        """Comment-prefixed SHOW statements should still be blocked when disallowed."""
+        allow_list = ["Select"]
+        disallow_list = ["Show"]
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            "-- metadata\nSHOW TABLES;", allow_list, disallow_list
+        )
+
+        assert is_valid is False
+        assert stmt_type == "Show"
+        assert error_msg is not None and "not permitted" in error_msg
 
     def test_show_statements_disallow_overrides_allow(self):
         """Explicit disallow entries should override allow list membership for SHOW."""

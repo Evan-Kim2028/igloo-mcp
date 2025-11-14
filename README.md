@@ -8,6 +8,7 @@ Igloo MCP is a standalone MCP server for Snowflake operations, designed for agen
 - ⏱️ **Timeouts + Cancellation**: Per‑request timeouts with best‑effort server‑side cancel; captures query ID when available
 - 📝 **Always-On Query History**: Automatically capture JSONL audit events (success, timeout, error) with SHA-indexed SQL artifacts, even outside a git repo
 - 📦 **Result Cache**: Default-on CSV/JSON cache per SQL + session context for instant replays without rerunning Snowflake
+- 📊 **Auto Insights**: Every successful query returns lightweight `key_metrics` + `insights` derived from the seen rows—no extra SQL required
 - 🧠 **Smart Errors**: Compact by default; turn on verbose mode for actionable optimization hints
 - 🧩 **MCP‑Only Tooling**: Clean set of MCP tools for query, preview, catalog, dependency graph, health, and connection tests
 - ✅ **MCP Protocol Compliant**: Standard exception‑based error handling and robust health checks
@@ -46,6 +47,7 @@ See [MCP Documentation](docs/mcp/mcp_server_user_guide.md) for details.
 | `build_dependency_graph` | Build dependency relationships (JSON/DOT) | `database`, `schema`, `account`, `format` |
 | `test_connection` | Validate Snowflake connectivity | — |
 | `health_check` | Comprehensive system, profile, and resource health | `include_cortex`, `include_profile`, `include_catalog` |
+| `fetch_async_query_result` | Poll asynchronous `execute_query` jobs and retrieve cached results | `execution_id`, `include_rows` |
 
 ---
 
@@ -77,6 +79,7 @@ Set these env vars to change locations. Use `IGLOO_MCP_QUERY_HISTORY=disabled` (
 - `overrides` — Session overrides `{ warehouse, database, schema, role }`
 - `reason` — Optional short reason (also stored in Snowflake `QUERY_TAG`)
 - `post_query_insight` — Optional structured insight summarising what the query discovered
+- `key_metrics`, `insights` — Automatically generated summaries of the returned rows (non-null ratios, numeric ranges, categorical top values, etc.)
 - `cache_key`, `cache_manifest` — Present on cache hits/saves for traceability
 - `session_context` — Effective warehouse/database/schema/role used for execution
 - `error` — Error message (timeout/error only)
@@ -155,6 +158,7 @@ Each bundle entry includes:
   - `IGLOO_MCP_CACHE_ROOT=/custom/cache`
   - `IGLOO_MCP_CACHE_MAX_ROWS=2000`
 - History entries include `cache_key`/`cache_manifest`, and tool responses expose `result.cache` + `audit_info.cache` so you always know when cached data was served.
+- Cache manifests now persist the generated `key_metrics` + `insights`, so cache hits return the same summaries without recomputation.
 
 ### Fixture-Based Regression Testing
 
@@ -375,6 +379,42 @@ Add this to your Claude Code MCP settings:
 ```
 
 Then ask Claude to test the connection or list databases.
+
+## Global MCP Configuration (All Projects)
+
+Cursor, Codex, and most MCP clients support a *global* configuration that applies to every workspace on your machine. Use this when you want igloo-mcp available everywhere without copying blocks into each repo.
+
+1. **Edit the global config:**
+   - Cursor: `~/.cursor/mcp.json`
+   - Codex CLI: `~/.factory/mcp.json`
+   - Claude Code: `~/Library/Application Support/Claude/mcp.json`
+2. **Register igloo-mcp once:**
+   ```json
+   {
+     "mcpServers": {
+       "igloo-mcp": {
+         "command": "igloo-mcp",
+         "args": ["--profile", "quickstart"],
+         "env": {
+           "SNOWFLAKE_PROFILE": "quickstart",
+           "IGLOO_MCP_QUERY_HISTORY": "~/.igloo_mcp/logs/doc.jsonl",
+           "IGLOO_MCP_ARTIFACT_ROOT": "~/.igloo_mcp/logs/artifacts"
+         }
+       }
+     }
+   }
+   ```
+   The `env` block keeps history/artifacts in a stable global directory so every project reuses the same cache + audit trail.
+3. **Switch profiles per workspace:** override `SNOWFLAKE_PROFILE` or pass `--profile` when launching igloo-mcp (Cursor adds per-project overrides via `.cursor/mcp.json`). You can also define multiple servers:
+   ```json
+   "igloo-mcp-prd": { "command": "igloo-mcp", "args": ["--profile", "prod"], "env": {"SNOWFLAKE_PROFILE": "prod"} }
+   ```
+4. **Manage secrets centrally:** export `SNOWFLAKE_PRIVATE_KEY_PATH`, `IGLOO_MCP_CACHE_MODE`, etc., in your shell RC so every project inherits the same behaviour. The MCP config should only reference non-sensitive identifiers.
+
+Troubleshooting tips:
+- If a project needs a different artifact root, set `IGLOO_MCP_ARTIFACT_ROOT` in that repo’s `.env` or launch script—it overrides the global default.
+- Use `igloo-mcp --profile <name> --health-check` to validate the profile once; all editors re-use the cached session metadata.
+- When sharing machines, prefer per-user global configs under your home directory so other accounts keep separate Snowflake profiles and audit logs.
 
 ### Step 4: Test Your Setup (30 seconds)
 

@@ -34,18 +34,31 @@ Thank you for your interest in contributing to Igloo MCP! This guide will help y
    # Check MCP server is available
    uv run igloo-mcp --help
    # Should show: igloo-mcp MCP Server
-   
+
    # Verify Python package
    python -c "import igloo_mcp; print(igloo_mcp.__version__)"
    ```
 
 ## Making Changes
 
-### Branching Strategy
+### Branching Strategy (GitFlow)
 
-- Create feature branches from `main`
-- Use descriptive branch names: `feature/add-new-tool`, `fix/authentication-bug`
-- Keep branches focused on a single feature or fix
+- `main` always reflects the latest production release. It only receives merges from release or hotfix branches.
+- `develop` is the integration branch for the next release cycle (currently 0.2.3). All feature work targets `develop`.
+- `feature/<issue-id>-short-description` branches are created from `develop`, rebased frequently, and merged back via PRs.
+- `release/x.y.z` branches are cut from `develop` once the feature set is ready. Use these branches to bump versions, finalize docs, and run the hardening/test pass before merging to `main` and back to `develop`.
+- `hotfix/<issue>` branches fork from `main` to patch urgent production issues; merge them into both `main` and `develop` after verification.
+
+Branch lifecycle example for 0.2.3:
+
+```bash
+git checkout main && git pull
+git checkout develop || git checkout -b develop
+git checkout -b feature/issue-123-honor-union-select develop
+# ... work, PR into develop ...
+git checkout develop && git pull && git checkout -b release/0.2.3
+# version bumps + QA, then merge release/0.2.3 -> main, tag, and back-merge into develop
+```
 
 ### Code Style
 
@@ -162,20 +175,38 @@ Closes #123
 
 ## Release Process
 
+### Workflow Overview
+
+For the 0.2.3 cycle we are following GitFlow:
+
+1. Keep `develop` in sync with `origin/develop`; all feature PRs must target it until the 0.2.3 release branch is cut.
+2. When the backlog for 0.2.3 is ready, branch `release/0.2.3` from `develop`.
+3. On the release branch:
+   - Bump versions
+   - Update changelog/docs
+   - Run the full QA/test suite and fix regressions directly on the branch
+4. Merge `release/0.2.3` into `main`, tag `v0.2.3`, and push.
+5. Merge the same release branch back into `develop` so future work inherits the release-only commits.
+6. Delete the release branch when finished. Repeat for the next version (0.2.4, etc.).
+
+Hotfixes fork from `main` (e.g., `hotfix/0.2.3-connection-leak`) and land back into both `main` and `develop` after tagging.
+
 ### Version Bumping
 
-- Update version in `pyproject.toml`
-- Update version references in documentation
-- Update `__version__` in `src/igloo_mcp/__init__.py`
-- Create release notes in CHANGELOG.md
+- Update `pyproject.toml`
+- Update documentation references
+- Update `src/igloo_mcp/__init__.py`
+- Write release notes in `CHANGELOG.md`
+- Tag the merge commit (`git tag v0.2.3 && git push origin v0.2.3`)
 
 ### Release Checklist
 
-- [ ] All tests pass
-- [ ] Documentation updated
-- [ ] Version numbers consistent
-- [ ] Release notes prepared
-- [ ] Changelog updated
+- [ ] `release/x.y.z` branch created from `develop`
+- [ ] Ruff, mypy, and pytest succeed
+- [ ] Documentation and changelog updated
+- [ ] Version numbers consistent across code/docs
+- [ ] Release notes committed
+- [ ] Tag pushed and branch merged back into `develop`
 
 ## Getting Help
 

@@ -279,6 +279,10 @@ class QueryResultCache:
         metadata["manifest_version"] = manifest_data.get("version")
         if "columns" in manifest_data:
             metadata["columns"] = manifest_data.get("columns")
+        if "key_metrics" in manifest_data:
+            metadata["key_metrics"] = manifest_data.get("key_metrics")
+        if "insights" in manifest_data:
+            metadata["insights"] = manifest_data.get("insights")
         return CacheHit(
             cache_key=cache_key,
             rows=rows,
@@ -373,6 +377,8 @@ class QueryResultCache:
             "truncated": metadata.get("truncated"),
             "post_query_insight": metadata.get("post_query_insight"),
             "reason": metadata.get("reason"),
+            "key_metrics": metadata.get("key_metrics"),
+            "insights": metadata.get("insights"),
         }
 
         manifest_path = key_dir / "manifest.json"

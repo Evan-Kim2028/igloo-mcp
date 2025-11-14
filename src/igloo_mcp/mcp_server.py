@@ -243,6 +243,17 @@ def register_igloo_mcp(
                 default=None,
             ),
         ] = None,
+        response_mode: Annotated[
+            Optional[str],
+            Field(
+                description=(
+                    "Execution response mode: 'auto' (default) runs synchronously until nearing the client timeout, "
+                    "'async' enqueues the query and requires polling via fetch_async_query_result, "
+                    "and 'sync' forces inline execution."
+                ),
+                default=None,
+            ),
+        ] = None,
         ctx: Context | None = None,
     ) -> Dict[str, Any]:
         """Execute a SQL query against Snowflake - delegates to ExecuteQueryTool."""
@@ -257,6 +268,7 @@ def register_igloo_mcp(
                 timeout_seconds=timeout_seconds,
                 verbose_errors=verbose_errors,
                 post_query_insight=post_query_insight,
+                response_mode=response_mode,
                 ctx=ctx,
             )
         except ValueError as e:
@@ -344,6 +356,30 @@ def register_igloo_mcp(
                         },
                     }
                 ) from e
+
+    @server.tool(
+        name="fetch_async_query_result",
+        description="Check status or retrieve results for an async execute_query call",
+    )
+    async def fetch_async_query_result_tool(
+        execution_id: Annotated[
+            str,
+            Field(
+                description="Execution ID returned when execute_query runs in async mode",
+            ),
+        ],
+        include_rows: Annotated[
+            bool,
+            Field(
+                description="Include cached rows when the job has finished",
+                default=True,
+            ),
+        ] = True,
+    ) -> Dict[str, Any]:
+        return await execute_query_inst.fetch_async_result(
+            execution_id=execution_id,
+            include_rows=include_rows,
+        )
 
     @server.tool(name="preview_table", description="Preview table contents")
     async def preview_table_tool(
