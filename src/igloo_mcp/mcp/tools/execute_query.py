@@ -1241,11 +1241,6 @@ class ExecuteQueryTool(MCPTool):
         if mode not in {"auto", "sync", "async"}:
             raise ValueError("response_mode must be one of: auto, sync, async")
 
-        if mode == "auto" and timeout_seconds is not None:
-            inline_budget = self._auto_inline_wait_budget(timeout_seconds)
-            if inline_budget >= float(timeout_seconds):
-                mode = "sync"
-
         if mode == "sync":
             return await self._execute_impl(
                 statement=statement,
@@ -1258,12 +1253,49 @@ class ExecuteQueryTool(MCPTool):
                 reason=reason,
                 normalized_insight=normalized_insight,
                 ctx=ctx,
-                validate_profile=False,
-                validate_statement=False,
             )
 
         if mode == "async":
             return await self._enqueue_async_job(
+                statement=statement,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role,
+                timeout_seconds=timeout_seconds,
+                verbose_errors=verbose_errors,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                ctx=ctx,
+            )
+        # Auto mode chooses between inline execution and async scheduling based
+        # on the available RPC soft timeout budget. When the inline budget can
+        # fully cover the requested timeout we prefer sync execution so that
+        # client-visible behavior (including timeout exceptions) remains
+        # predictable.
+        timeout_limit = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
+        inline_wait = self._auto_inline_wait_budget(timeout_seconds)
+        if inline_wait >= float(timeout_limit):
+            return await self._execute_impl(
+                statement=statement,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role,
+                timeout_seconds=timeout_seconds,
+                verbose_errors=verbose_errors,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                ctx=ctx,
+            )
+
+        if mode == "auto" and timeout_seconds is not None:
+            inline_budget = self._auto_inline_wait_budget(timeout_seconds)
+            if inline_budget >= float(timeout_seconds):
+                mode = "sync"
+
+        if mode == "sync":
+            return await self._execute_impl(
                 statement=statement,
                 warehouse=warehouse,
                 database=database,
