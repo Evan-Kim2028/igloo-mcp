@@ -673,47 +673,10 @@ class ExecuteQueryTool(MCPTool):
         sql_sha_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Internal execute_query implementation shared by sync + async flows."""
-
-        # Validate profile health before executing query
-        if self.health_monitor:
-            profile_health = await anyio.to_thread.run_sync(
-                self.health_monitor.get_profile_health,
-                self.config.snowflake.profile,
-                False,  # use cache
-            )
-            if not profile_health.is_valid:
-                error_msg = (
-                    profile_health.validation_error or "Profile validation failed"
-                )
-                available = (
-                    ", ".join(profile_health.available_profiles)
-                    if profile_health.available_profiles
-                    else "none"
-                )
-                self.health_monitor.record_error(
-                    f"Profile validation failed: {error_msg}"
-                )
-                raise ValueError(
-                    f"Snowflake profile validation failed: {error_msg}. "
-                    f"Profile: {self.config.snowflake.profile}, "
-                    f"Available profiles: {available}. "
-                    f"Check configuration with 'snow connection list' or verify profile settings."
-                )
-
-        # Validate SQL statement against permissions
-        allow_list = self.config.sql_permissions.get_allow_list()
-        disallow_list = self.config.sql_permissions.get_disallow_list()
-
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            statement, allow_list, disallow_list
-        )
-
-        if not is_valid and error_msg:
-            if self.health_monitor:
-                self.health_monitor.record_error(
-                    f"SQL statement blocked: {stmt_type} - {statement[:100]}"
-                )
-            raise ValueError(error_msg)
+        # Guardrails for profile health + SQL permissions are enforced at the
+        # public execute() entrypoint so they apply consistently to sync/async
+        # and auto modes. _execute_impl assumes those checks have already
+        # passed.
 
         # Prepare session context overrides
         overrides_input = {
@@ -1194,6 +1157,49 @@ class ExecuteQueryTool(MCPTool):
             if not 1 <= timeout_seconds <= 3600:
                 raise ValueError("timeout_seconds must be between 1 and 3600 seconds.")
 
+        # Enforce profile health and SQL permission guardrails before we choose
+        # sync vs async mode so that validation errors are surfaced
+        # consistently as ValueError from execute(), regardless of
+        # response_mode.
+        if self.health_monitor:
+            profile_health = await anyio.to_thread.run_sync(
+                self.health_monitor.get_profile_health,
+                self.config.snowflake.profile,
+                False,  # use cache
+            )
+            if not profile_health.is_valid:
+                error_msg = (
+                    profile_health.validation_error or "Profile validation failed"
+                )
+                available = (
+                    ", ".join(profile_health.available_profiles)
+                    if profile_health.available_profiles
+                    else "none"
+                )
+                self.health_monitor.record_error(
+                    f"Profile validation failed: {error_msg}"
+                )
+                raise ValueError(
+                    f"Snowflake profile validation failed: {error_msg}. "
+                    f"Profile: {self.config.snowflake.profile}, "
+                    f"Available profiles: {available}. "
+                    f"Check configuration with 'snow connection list' or verify profile settings."
+                )
+
+        allow_list = self.config.sql_permissions.get_allow_list()
+        disallow_list = self.config.sql_permissions.get_disallow_list()
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            statement, allow_list, disallow_list
+        )
+
+        if not is_valid and error_msg:
+            if self.health_monitor:
+                self.health_monitor.record_error(
+                    f"SQL statement blocked: {stmt_type} - {statement[:100]}"
+                )
+            raise ValueError(error_msg)
+
         mode = (response_mode or "auto").lower()
         if mode not in {"auto", "sync", "async"}:
             raise ValueError("response_mode must be one of: auto, sync, async")
@@ -1214,6 +1220,26 @@ class ExecuteQueryTool(MCPTool):
 
         if mode == "async":
             return await self._enqueue_async_job(
+                statement=statement,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role,
+                timeout_seconds=timeout_seconds,
+                verbose_errors=verbose_errors,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                ctx=ctx,
+            )
+        # Auto mode chooses between inline execution and async scheduling based
+        # on the available RPC soft timeout budget. When the inline budget can
+        # fully cover the requested timeout we prefer sync execution so that
+        # client-visible behavior (including timeout exceptions) remains
+        # predictable.
+        timeout_limit = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
+        inline_wait = self._auto_inline_wait_budget(timeout_seconds)
+        if inline_wait >= float(timeout_limit):
+            return await self._execute_impl(
                 statement=statement,
                 warehouse=warehouse,
                 database=database,
