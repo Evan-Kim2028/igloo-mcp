@@ -161,8 +161,8 @@ outputs:
     service = StubService()
     mcp_server.register_igloo_mcp(server, service)
 
-    tool = server.tools["report_build"]
-    result = await tool(manifest_path=str(report_manifest_path), validate_only=True)
+    tool = server.tools["report_lint"]
+    result = await tool(str(report_manifest_path))
 
     assert result["manifest_path"] == str(report_manifest_path.resolve())
     assert result["ok"] is False

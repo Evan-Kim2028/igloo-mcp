@@ -554,19 +554,16 @@ def register_igloo_mcp(
 
     @server.tool(
         name="report_scaffold",
-        description=(
-            "Scaffold a starter report manifest from recent execute_query history so agents "
-            "can edit it and later build reports with report_build."
-        ),
+        description="Create a skeleton report manifest from recent execute_query history",
     )
     async def report_scaffold_tool(
         manifest_path: Annotated[
             Optional[str],
             Field(
                 description=(
-                    "Optional target path for a manifest YAML (e.g. 'reports/my_report.yaml'). "
-                    "Used to derive report id and default output naming when write_manifest is true. "
-                    "Relative paths are resolved against the repository root."
+                    "Optional path where a manifest YAML would live; used for id and "
+                    "default output naming when write_manifest is true. Relative paths "
+                    "are resolved against the repository root."
                 ),
                 default=None,
             ),
@@ -575,7 +572,7 @@ def register_igloo_mcp(
             int,
             Field(
                 description=(
-                    "Number of recent execute_query history entries to turn into datasets in the manifest."
+                    "Number of recent history entries to scaffold into datasets"
                 ),
                 ge=1,
                 le=20,
@@ -586,8 +583,9 @@ def register_igloo_mcp(
             bool,
             Field(
                 description=(
-                    "If true, also write the scaffolded manifest YAML to disk (using manifest_path or 'report.yaml' "
-                    "in the repo root) and return written_path. When false, only return the manifest JSON payload."
+                    "If true, write the scaffolded manifest to manifest_path (or "
+                    "'report.yaml' in the repo root when manifest_path is omitted) and "
+                    "return the resolved path. When false, only return manifest JSON."
                 ),
                 default=False,
             ),
@@ -681,19 +679,46 @@ def register_igloo_mcp(
         }
 
     @server.tool(
+        name="report_lint",
+        description="Validate a report manifest and its dataset bindings",
+    )
+    async def report_lint_tool(
+        manifest_path: Annotated[
+            str,
+            Field(
+                description=(
+                    "Path to report manifest YAML (relative to repo root or absolute)."
+                ),
+                default="report.yaml",
+            ),
+        ] = "report.yaml",
+    ) -> Dict[str, Any]:
+        from pathlib import Path
+
+        raw_path = Path(manifest_path).expanduser()
+        if raw_path.is_absolute():
+            manifest_abs = raw_path.resolve()
+        else:
+            repo_root = find_repo_root()
+            manifest_abs = (repo_root / raw_path).resolve()
+
+        issues = lint_report(manifest_abs)
+        return {
+            "manifest_path": str(manifest_abs),
+            "ok": not issues,
+            "issues": [asdict(issue) for issue in issues],
+        }
+
+    @server.tool(
         name="report_build",
-        description=(
-            "Validate a report manifest and build a narrative or JSON payload from cached execute_query results. "
-            "Use validate_only=true to lint without rendering, or default settings to render the report body."
-        ),
+        description="Render a report manifest into an output body with provenance metadata",
     )
     async def report_build_tool(
         manifest_path: Annotated[
             str,
             Field(
                 description=(
-                    "Path to the report manifest YAML to use (relative to repo root or absolute), "
-                    "for example 'reports/my_report.yaml'."
+                    "Path to report manifest YAML (relative to repo root or absolute)."
                 ),
                 default="report.yaml",
             ),
@@ -702,8 +727,7 @@ def register_igloo_mcp(
             Optional[str],
             Field(
                 description=(
-                    "Logical output name from manifest.outputs to build (default: the first output), "
-                    "for example 'default' or 'html_export'."
+                    "Named output from manifest.outputs to build (default: first output)."
                 ),
                 default=None,
             ),
@@ -713,7 +737,7 @@ def register_igloo_mcp(
             Field(
                 description=(
                     "Optional override for output format: 'markdown', 'html', or 'json'. "
-                    "Defaults to the manifest output format; 'json' is recommended for agent consumption."
+                    "Defaults to the manifest output format."
                 ),
                 default=None,
             ),
@@ -723,7 +747,7 @@ def register_igloo_mcp(
             Field(
                 description=(
                     "If true, write the rendered body to disk using either output_path "
-                    "or the path defined on the selected manifest.outputs entry."
+                    "or manifest.outputs[].path."
                 ),
                 default=False,
             ),
@@ -732,41 +756,12 @@ def register_igloo_mcp(
             Optional[str],
             Field(
                 description=(
-                    "Explicit output path for the rendered report when persist_output is true "
-                    "(relative to repo root or absolute)."
+                    "Explicit output path when persist_output is true (relative to repo "
+                    "root or absolute)."
                 ),
                 default=None,
             ),
         ] = None,
-        validate_only: Annotated[
-            bool,
-            Field(
-                description=(
-                    "If true, only run validation and return ok/issues without rendering the report body."
-                ),
-                default=False,
-            ),
-        ] = False,
-        fail_on_issues: Annotated[
-            bool,
-            Field(
-                description=(
-                    "If true and validation finds issues, skip rendering and return ok=false with issues, "
-                    "so agents can treat any lint problems as hard failures."
-                ),
-                default=False,
-            ),
-        ] = False,
-        include_body: Annotated[
-            bool,
-            Field(
-                description=(
-                    "If false, omit the rendered body from the response while still returning format, provenance, "
-                    "and any validation issues (useful when agents only need metadata)."
-                ),
-                default=True,
-            ),
-        ] = True,
     ) -> Dict[str, Any]:
         import json
         from pathlib import Path
@@ -777,20 +772,6 @@ def register_igloo_mcp(
         else:
             repo_root = find_repo_root()
             manifest_abs = (repo_root / raw_path).resolve()
-        issues = lint_report(manifest_abs)
-        ok = not issues
-
-        response: Dict[str, Any] = {
-            "manifest_path": str(manifest_abs),
-            "ok": ok,
-            "issues": [asdict(issue) for issue in issues],
-        }
-
-        if validate_only:
-            return response
-
-        if fail_on_issues and not ok:
-            return response
 
         result = build_report(manifest_abs, output_name=output_name, refresh=False)
         result_format = result.get("format", "markdown")
@@ -834,18 +815,15 @@ def register_igloo_mcp(
             out_path.write_text(body, encoding="utf-8")
             written_path = str(out_path)
 
-        response.update(
-            {
-                "output_name": selected_output_name,
-                "format": effective_format,
-                "provenance": provenance,
-            }
-        )
+        response: Dict[str, Any] = {
+            "manifest_path": str(manifest_abs),
+            "output_name": selected_output_name,
+            "format": effective_format,
+            "body": body,
+            "provenance": provenance,
+        }
 
-        if include_body:
-            response["body"] = body
-
-        if effective_format == "json" and result_format == "json" and include_body:
+        if effective_format == "json" and result_format == "json":
             try:
                 response["body_json"] = json.loads(body)
             except Exception:
