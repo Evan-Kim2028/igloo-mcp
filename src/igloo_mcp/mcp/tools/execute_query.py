@@ -52,6 +52,7 @@ from igloo_mcp.session_utils import (
     restore_session_context,
     snapshot_session,
 )
+from igloo_mcp.sql_objects import extract_query_objects
 from igloo_mcp.sql_validation import validate_sql_statement
 
 from .base import MCPTool
@@ -341,18 +342,31 @@ class ExecuteQueryTool(MCPTool):
 
             remaining = deadline - time.time()
             if remaining <= 0:
-                accepted["inline_wait_seconds"] = inline_wait
-                accepted["message"] = (
-                    "Query still running after %.0fs; call fetch_async_query_result "
-                    "with execution_id=%s to retrieve cached results."
-                    % (
-                        inline_wait,
-                        execution_id,
-                    )
-                )
-                return accepted
+                break
 
             await anyio.sleep(min(poll_interval, remaining))
+
+        # Inline wait exhausted; attempt one more fetch to capture recent completion
+        poll = await self.fetch_async_result(
+            execution_id=execution_id,
+            include_rows=True,
+        )
+        status = poll.get("status")
+        if status == "success" and poll.get("result"):
+            return poll["result"]
+        if status == "error":
+            raise RuntimeError(poll.get("error") or "Asynchronous query failed")
+
+        accepted["inline_wait_seconds"] = inline_wait
+        accepted["message"] = (
+            "Query still running after %.0fs; call fetch_async_query_result "
+            "with execution_id=%s to retrieve cached results."
+            % (
+                inline_wait,
+                execution_id,
+            )
+        )
+        return accepted
 
     async def _run_async_job(
         self,
@@ -386,6 +400,8 @@ class ExecuteQueryTool(MCPTool):
                 ctx=None,
                 execution_id_override=job_state.execution_id,
                 sql_sha_override=sql_sha_override,
+                validate_profile=False,
+                validate_statement=False,
             )
             with self._jobs_lock:
                 job_state.status = "success"
@@ -537,6 +553,47 @@ class ExecuteQueryTool(MCPTool):
         )
         return max(min(float(user_limit), rpc_budget), 0.0)
 
+    async def _ensure_profile_health(self) -> None:
+        if not self.health_monitor:
+            return
+
+        profile_health = await anyio.to_thread.run_sync(
+            self.health_monitor.get_profile_health,
+            self.config.snowflake.profile,
+            False,
+        )
+        if profile_health.is_valid:
+            return
+
+        error_msg = profile_health.validation_error or "Profile validation failed"
+        available = (
+            ", ".join(profile_health.available_profiles)
+            if profile_health.available_profiles
+            else "none"
+        )
+        self.health_monitor.record_error(f"Profile validation failed: {error_msg}")
+        raise ValueError(
+            f"Snowflake profile validation failed: {error_msg}. "
+            f"Profile: {self.config.snowflake.profile}, "
+            f"Available profiles: {available}. "
+            "Check configuration with 'snow connection list' or verify profile settings."
+        )
+
+    def _enforce_sql_permissions(self, statement: str) -> None:
+        allow_list = self.config.sql_permissions.get_allow_list()
+        disallow_list = self.config.sql_permissions.get_disallow_list()
+
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            statement, allow_list, disallow_list
+        )
+
+        if not is_valid and error_msg:
+            if self.health_monitor:
+                self.health_monitor.record_error(
+                    f"SQL statement blocked: {stmt_type} - {statement[:100]}"
+                )
+            raise ValueError(error_msg)
+
     def _ensure_default_insights(
         self, result: Dict[str, Any]
     ) -> tuple[Optional[Dict[str, Any]], List[str]]:
@@ -671,49 +728,16 @@ class ExecuteQueryTool(MCPTool):
         *,
         execution_id_override: Optional[str] = None,
         sql_sha_override: Optional[str] = None,
+        validate_profile: bool = True,
+        validate_statement: bool = True,
     ) -> Dict[str, Any]:
         """Internal execute_query implementation shared by sync + async flows."""
 
-        # Validate profile health before executing query
-        if self.health_monitor:
-            profile_health = await anyio.to_thread.run_sync(
-                self.health_monitor.get_profile_health,
-                self.config.snowflake.profile,
-                False,  # use cache
-            )
-            if not profile_health.is_valid:
-                error_msg = (
-                    profile_health.validation_error or "Profile validation failed"
-                )
-                available = (
-                    ", ".join(profile_health.available_profiles)
-                    if profile_health.available_profiles
-                    else "none"
-                )
-                self.health_monitor.record_error(
-                    f"Profile validation failed: {error_msg}"
-                )
-                raise ValueError(
-                    f"Snowflake profile validation failed: {error_msg}. "
-                    f"Profile: {self.config.snowflake.profile}, "
-                    f"Available profiles: {available}. "
-                    f"Check configuration with 'snow connection list' or verify profile settings."
-                )
+        if validate_profile:
+            await self._ensure_profile_health()
 
-        # Validate SQL statement against permissions
-        allow_list = self.config.sql_permissions.get_allow_list()
-        disallow_list = self.config.sql_permissions.get_disallow_list()
-
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            statement, allow_list, disallow_list
-        )
-
-        if not is_valid and error_msg:
-            if self.health_monitor:
-                self.health_monitor.record_error(
-                    f"SQL statement blocked: {stmt_type} - {statement[:100]}"
-                )
-            raise ValueError(error_msg)
+        if validate_statement:
+            self._enforce_sql_permissions(statement)
 
         # Prepare session context overrides
         overrides_input = {
@@ -741,6 +765,7 @@ class ExecuteQueryTool(MCPTool):
         sql_sha256 = (
             sql_sha_override or hashlib.sha256(statement.encode("utf-8")).hexdigest()
         )
+        referenced_objects = extract_query_objects(statement)
         history_artifacts: Dict[str, str] = {}
         artifact_path = self._persist_sql_artifact(sql_sha256, statement)
         if artifact_path is not None:
@@ -815,6 +840,8 @@ class ExecuteQueryTool(MCPTool):
                 result.setdefault("session_context", effective_context)
             if cache_hit_metadata.get("columns"):
                 result["columns"] = cache_hit_metadata["columns"]
+            if cache_hit_metadata.get("objects"):
+                result["objects"] = cache_hit_metadata["objects"]
 
             # Retrieve stored insight from cache manifest
             stored_insight_raw = cache_hit_metadata.get("post_query_insight")
@@ -833,6 +860,9 @@ class ExecuteQueryTool(MCPTool):
             cached_insights = cache_hit_metadata.get("insights")
             if cached_insights:
                 result["insights"] = cached_insights
+            cached_objects = cache_hit_metadata.get("objects")
+            if cached_objects:
+                result["objects"] = cached_objects
 
             key_metrics, derived_insights = self._ensure_default_insights(result)
 
@@ -928,6 +958,7 @@ class ExecuteQueryTool(MCPTool):
                         "columns": result.get("columns"),
                         "key_metrics": key_metrics,
                         "insights": derived_insights,
+                        "objects": referenced_objects,
                     }
                     manifest_path = self.cache.store(
                         cache_key,
@@ -986,6 +1017,8 @@ class ExecuteQueryTool(MCPTool):
                     payload["key_metrics"] = key_metrics
                 if derived_insights:
                     payload["insights"] = derived_insights
+                if referenced_objects:
+                    payload["objects"] = referenced_objects
                 self.history.record(payload)
             except Exception:
                 pass
@@ -1001,6 +1034,8 @@ class ExecuteQueryTool(MCPTool):
                 result["cache"]["manifest_path"] = str(manifest_path)
             if session_context:
                 result.setdefault("session_context", session_context)
+            if referenced_objects:
+                result["objects"] = referenced_objects
 
             # Include full (untruncated) insight in response
             if normalized_insight:
@@ -1055,6 +1090,8 @@ class ExecuteQueryTool(MCPTool):
                     )
                 if cache_key:
                     payload["cache_key"] = cache_key
+                if referenced_objects:
+                    payload["objects"] = referenced_objects
                 self.history.record(payload)
             except Exception:
                 pass
@@ -1133,6 +1170,8 @@ class ExecuteQueryTool(MCPTool):
                     )
                 if cache_key:
                     payload["cache_key"] = cache_key
+                if referenced_objects:
+                    payload["objects"] = referenced_objects
                 self.history.record(payload)
             except Exception:
                 pass
@@ -1194,9 +1233,18 @@ class ExecuteQueryTool(MCPTool):
             if not 1 <= timeout_seconds <= 3600:
                 raise ValueError("timeout_seconds must be between 1 and 3600 seconds.")
 
+        # Always validate profile + SQL up front so async paths fail fast.
+        await self._ensure_profile_health()
+        self._enforce_sql_permissions(statement)
+
         mode = (response_mode or "auto").lower()
         if mode not in {"auto", "sync", "async"}:
             raise ValueError("response_mode must be one of: auto, sync, async")
+
+        if mode == "auto" and timeout_seconds is not None:
+            inline_budget = self._auto_inline_wait_budget(timeout_seconds)
+            if inline_budget >= float(timeout_seconds):
+                mode = "sync"
 
         if mode == "sync":
             return await self._execute_impl(
@@ -1210,6 +1258,8 @@ class ExecuteQueryTool(MCPTool):
                 reason=reason,
                 normalized_insight=normalized_insight,
                 ctx=ctx,
+                validate_profile=False,
+                validate_statement=False,
             )
 
         if mode == "async":
