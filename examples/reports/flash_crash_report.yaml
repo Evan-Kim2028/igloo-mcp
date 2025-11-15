@@ -1,0 +1,18 @@
+id: "flash-crash-oct-10"
+title: "Oct-10 Flash Crash Report (example)"
+version: "0.1.0"
+author: "example-analyst"
+templates:
+  main: "templates/flash_crash_report.md.jinja"
+  engine: "jinja"
+datasets:
+  - name: "flash_crash_events"
+    description: "Example dataset bound to a fictitious execution"
+    source:
+      execution_id: "example-execution-id"
+      sql_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+    tags: ["example", "demo"]
+outputs:
+  - name: "default"
+    format: "markdown"
+    path: "reports/flash_crash_report.md"

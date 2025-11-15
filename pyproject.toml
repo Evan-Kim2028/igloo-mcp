@@ -20,12 +20,14 @@ dependencies = [
     "fastmcp>=2.8.1",
     "snowflake-labs-mcp>=1.3.3",
     "pydantic>=2.7.0",
+    "jinja2>=3.1.0",
 ]
 
 # MCP dependencies are included by default - no separate installation needed
 
 [project.scripts]
 igloo-mcp = "igloo_mcp.mcp_server:main"
+igloo-report = "igloo_mcp.report_cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Evan-Kim2028/igloo-mcp"
