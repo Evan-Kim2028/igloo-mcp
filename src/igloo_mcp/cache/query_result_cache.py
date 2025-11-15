@@ -273,6 +273,7 @@ class QueryResultCache:
                 "truncated",
                 "post_query_insight",
                 "reason",
+                "objects",
             )
         }
         metadata["cache_hit"] = True
@@ -379,6 +380,7 @@ class QueryResultCache:
             "reason": metadata.get("reason"),
             "key_metrics": metadata.get("key_metrics"),
             "insights": metadata.get("insights"),
+            "objects": metadata.get("objects"),
         }
 
         manifest_path = key_dir / "manifest.json"

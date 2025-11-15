@@ -13,6 +13,7 @@ dependencies = [
     "pyyaml>=6.0.0",
     "snowflake-cli>=2.0.0",
     "sqlglot>=27.16.3",
+    "pyjwt>=2.9.0",
     "pyvis>=0.3.2",
     "networkx>=3.0",
     "websockets>=15.0.1",
@@ -27,6 +28,7 @@ dependencies = [
 [project.scripts]
 igloo-mcp = "igloo_mcp.mcp_server:main"
 igloo-report = "igloo_mcp.report_cli:main"
+igloo = "igloo_mcp.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/Evan-Kim2028/igloo-mcp"
