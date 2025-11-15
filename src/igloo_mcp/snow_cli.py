@@ -38,6 +38,7 @@ class QueryOutput:
     # Optional parsed forms
     rows: Optional[List[Dict[str, Any]]] = None
     columns: Optional[List[str]] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class SnowCLI:
