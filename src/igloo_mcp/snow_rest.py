@@ -249,10 +249,15 @@ class SnowRestClient:
         expires = now + timedelta(minutes=55)
         account = self.config.account.upper()
         user = self.config.user.upper()
+        parsed = urllib.parse.urlparse(self.base_url)
+        netloc = parsed.netloc
+        if ":" not in netloc:
+            netloc = f"{netloc}:443"
+        audience = urllib.parse.urlunparse(parsed._replace(netloc=netloc))
         payload = {
             "iss": f"{account}.{user}",
             "sub": f"{account}.{user}",
-            "aud": self.base_url,
+            "aud": audience,
             "iat": int(now.timestamp()),
             "exp": int(expires.timestamp()),
         }
