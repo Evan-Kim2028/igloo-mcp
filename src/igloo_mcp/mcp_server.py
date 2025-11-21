@@ -681,6 +681,37 @@ def register_igloo_mcp(
         }
 
     @server.tool(
+        name="report_lint",
+        description="Validate a report manifest and its dataset bindings",
+    )
+    async def report_lint_tool(
+        manifest_path: Annotated[
+            str,
+            Field(
+                description=(
+                    "Path to report manifest YAML (relative to repo root or absolute)."
+                ),
+                default="report.yaml",
+            ),
+        ] = "report.yaml",
+    ) -> Dict[str, Any]:
+        from pathlib import Path
+
+        raw_path = Path(manifest_path).expanduser()
+        if raw_path.is_absolute():
+            manifest_abs = raw_path.resolve()
+        else:
+            repo_root = find_repo_root()
+            manifest_abs = (repo_root / raw_path).resolve()
+
+        issues = lint_report(manifest_abs)
+        return {
+            "manifest_path": str(manifest_abs),
+            "ok": not issues,
+            "issues": [asdict(issue) for issue in issues],
+        }
+
+    @server.tool(
         name="report_build",
         description=(
             "Validate a report manifest and build a narrative or JSON payload from cached execute_query results. "

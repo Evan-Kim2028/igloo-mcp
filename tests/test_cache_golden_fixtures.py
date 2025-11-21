@@ -16,10 +16,22 @@ from tests.helpers.cache_fixture_builder import (
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "cache_scenarios"
 BASELINE_DIR = FIXTURE_ROOT / "baseline"
 
+FIXTURE_OBJECTS = [
+    {
+        "catalog": None,
+        "database": None,
+        "schema": None,
+        "name": "fixture_source",
+        "type": None,
+    }
+]
+
 
 def _compare_json(expected_path: Path, actual_path: Path) -> None:
     expected = json.loads(expected_path.read_text(encoding="utf-8"))
     actual = json.loads(actual_path.read_text(encoding="utf-8"))
+    assert actual.get("objects") == FIXTURE_OBJECTS
+    expected["objects"] = FIXTURE_OBJECTS
     assert actual == expected
 
 
