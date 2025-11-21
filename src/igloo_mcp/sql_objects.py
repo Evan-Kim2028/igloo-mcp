@@ -29,7 +29,9 @@ class QueryObject:
         }
 
 
-def _iter_tables(expression: exp.Expression) -> Iterable[exp.Table]:
+def _iter_tables(expression: exp.Expression | None) -> Iterable[exp.Table]:
+    if expression is None:
+        return
     for table in expression.find_all(exp.Table):
         # Skip derived tables like (select ... ) alias
         if isinstance(table.this, exp.Subquery):
