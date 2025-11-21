@@ -641,7 +641,7 @@ def register_igloo_mcp(
         manifest = ReportManifest(
             id=report_id,
             title=f"Report {report_id}",
-            templates=TemplatesConfig(main="templates/report.md"),
+            templates=TemplatesConfig(main="templates/report.md", engine="jinja"),
             datasets=datasets,
             outputs=[
                 ReportOutput(
@@ -665,7 +665,11 @@ def register_igloo_mcp(
                 import yaml  # type: ignore[import-untyped]
 
                 with path.open("w", encoding="utf-8") as fh:
-                    yaml.safe_dump(manifest.model_dump(), fh, sort_keys=False)
+                    yaml.safe_dump(
+                        manifest.model_dump(by_alias=True, exclude_none=True),
+                        fh,
+                        sort_keys=False,
+                    )
                 written_path = str(path)
             except Exception as exc:  # pragma: no cover - unlikely I/O error
                 raise RuntimeError(
