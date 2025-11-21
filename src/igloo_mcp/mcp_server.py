@@ -802,8 +802,19 @@ def register_igloo_mcp(
         provenance = result.get("provenance", {})
 
         effective_format = format or result_format
+        body_json = None
         if effective_format == "html" and result_format == "markdown":
             body = f"<html><body><pre>\n{body}\n</pre></body></html>\n"
+        elif effective_format == "json":
+            if result_format == "json":
+                try:
+                    body_json = json.loads(body)
+                except Exception:
+                    body_json = None
+            else:
+                # Wrap non-JSON bodies so callers get valid JSON when requesting it
+                body_json = {"format": result_format, "body": body}
+                body = json.dumps(body_json)
 
         selected_output_name: Optional[str] = output_name
         written_path: Optional[str] = None
@@ -849,11 +860,14 @@ def register_igloo_mcp(
         if include_body:
             response["body"] = body
 
-        if effective_format == "json" and result_format == "json" and include_body:
-            try:
-                response["body_json"] = json.loads(body)
-            except Exception:
-                pass
+        if effective_format == "json" and include_body:
+            if body_json is None:
+                try:
+                    body_json = json.loads(body)
+                except Exception:
+                    body_json = None
+            if body_json is not None:
+                response["body_json"] = body_json
 
         if written_path is not None:
             response["output_path"] = written_path

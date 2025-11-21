@@ -3,21 +3,18 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..path_utils import find_repo_root
 from .manifest import DatasetRef, DatasetSource
 
 
-def _load_jsonl(path: Path) -> Iterable[Dict[str, Any]]:
-    """Yield JSON objects from a JSONL file.
-
-    This mirrors the lightweight implementation used in scripts/export_report_bundle.py
-    but lives in the library for reuse by reporting utilities.
-    """
+def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
+    """Load JSON objects from a JSONL file."""
 
     if not path.exists():
-        return
+        return []
+    records: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -28,7 +25,8 @@ def _load_jsonl(path: Path) -> Iterable[Dict[str, Any]]:
             except json.JSONDecodeError:
                 continue
             if isinstance(payload, dict):
-                yield payload
+                records.append(payload)
+    return records
 
 
 @dataclass

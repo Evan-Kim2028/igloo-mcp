@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 from typing import List, Optional
@@ -43,10 +44,20 @@ def _command_build(args: argparse.Namespace) -> int:
     body = result.get("body", "")
     fmt = result.get("format", "markdown")
 
-    # Optional format override (html simply wraps markdown)
+    # Optional format override (html simply wraps markdown; json wraps payload)
     effective_format = args.format or fmt
+    body_json = None
     if effective_format == "html" and fmt == "markdown":
         body = f"<html><body><pre>\n{body}\n</pre></body></html>\n"
+    elif effective_format == "json":
+        if fmt == "json":
+            try:
+                body_json = json.loads(body)
+            except Exception:
+                body_json = None
+        else:
+            body_json = {"format": fmt, "body": body}
+            body = json.dumps(body_json, indent=2)
 
     # Determine output path: explicit flag wins; otherwise use manifest outputs
     output_path: Path
