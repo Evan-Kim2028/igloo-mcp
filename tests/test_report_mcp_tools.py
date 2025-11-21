@@ -7,6 +7,7 @@ from typing import Any, Dict
 import pytest
 
 from igloo_mcp import mcp_server
+from igloo_mcp.reporting.history_index import HistoryIndex
 
 
 class CapturingServer:
@@ -167,3 +168,59 @@ outputs:
     assert result["manifest_path"] == str(report_manifest_path.resolve())
     assert result["ok"] is False
     assert result["issues"]
+
+
+def test_history_index_handles_missing_file(tmp_path: Path) -> None:
+    missing_path = tmp_path / "no_history.jsonl"
+    # File intentionally not created
+    index = HistoryIndex(missing_path)
+    assert index.records == []
+
+
+@pytest.mark.asyncio
+async def test_report_build_json_override_on_markdown_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Minimal manifest with markdown output
+    manifest_path = tmp_path / "report.yaml"
+    manifest_path.write_text(
+        """
+id: demo
+templates:
+  main: templates/report.md
+datasets: []
+outputs:
+  - name: default
+    format: markdown
+    path: reports/demo.md
+""".strip(),
+        encoding="utf-8",
+    )
+
+    # Empty history path should not crash
+    history_path = tmp_path / "history.jsonl"
+    monkeypatch.setattr(
+        "igloo_mcp.reporting.builder.resolve_history_path",
+        lambda: history_path,
+        raising=True,
+    )
+
+    # Stub template file
+    template_path = tmp_path / "templates" / "report.md"
+    template_path.parent.mkdir(parents=True, exist_ok=True)
+    template_path.write_text("# Demo Report", encoding="utf-8")
+
+    server = CapturingServer()
+    service = StubService()
+    mcp_server.register_igloo_mcp(server, service)
+
+    tool = server.tools["report_build"]
+    result = await tool(str(manifest_path), None, "json", False, None)
+
+    assert result["format"] == "json"
+    assert "body_json" in result
+    assert result["body_json"]["format"] == "markdown"
+    assert isinstance(result["body"], str)
+    # body should be valid JSON
+    parsed = json.loads(result["body"])
+    assert parsed["format"] == "markdown"
