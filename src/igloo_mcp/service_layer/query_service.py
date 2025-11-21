@@ -1,10 +1,13 @@
 """Query service for service layer."""
 
+import logging
 import os
 from typing import Any, Dict, Optional
 
 from ..snow_cli import QueryOutput, SnowCLI
 from ..snow_rest import SnowRestClient
+
+logger = logging.getLogger(__name__)
 
 
 class QueryService:
@@ -35,6 +38,10 @@ class QueryService:
                 self.rest_client = SnowRestClient.from_env(default_context=default_ctx)
             except Exception:
                 # Fall back to CLI driver if REST client setup fails for any reason
+                logger.warning(
+                    "SnowREST initialization failed; falling back to SnowCLI driver",
+                    exc_info=True,
+                )
                 self.cli = SnowCLI(self.profile)
                 self.driver = "cli"
         else:

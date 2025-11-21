@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import replace
 from datetime import datetime
@@ -11,7 +12,7 @@ import anyio
 import pytest
 
 from igloo_mcp.config import Config, SQLPermissions
-from igloo_mcp.mcp.tools.execute_query import ExecuteQueryTool
+from igloo_mcp.mcp.tools.execute_query import AsyncQueryJobState, ExecuteQueryTool
 
 
 @pytest.mark.anyio
@@ -215,3 +216,32 @@ async def test_execute_query_generates_key_metrics(monkeypatch):
     kinds = {col["kind"] for col in metrics["columns"]}
     assert {"numeric", "time", "categorical"}.issubset(kinds)
     assert result.get("insights")
+
+
+def test_async_jobs_marked_timed_out_and_retained_for_fetch():
+    """Ensure long-running async jobs hit an error state instead of leaking forever."""
+
+    tool = object.__new__(ExecuteQueryTool)
+    tool._jobs_lock = threading.Lock()
+    tool._async_jobs = {}
+    # Remove grace for the test to trip immediately
+    tool.ASYNC_JOB_TIMEOUT_GRACE_SECONDS = 0
+    tool.ASYNC_JOB_MAX_ENTRIES = 200
+    tool.ASYNC_JOB_RETENTION_SECONDS = 600
+
+    submitted = time.time() - 10
+    job = AsyncQueryJobState(
+        execution_id="deadbeef",
+        status="running",
+        submitted_ts=submitted,
+        timeout_seconds=1,
+        statement_preview="SELECT 1",
+    )
+    tool._async_jobs[job.execution_id] = job
+
+    tool._prune_async_jobs_locked(now=time.time())
+
+    timed_out = tool._async_jobs[job.execution_id]
+    assert timed_out.status == "error"
+    assert timed_out.completed_ts is not None
+    assert "Timed out" in (timed_out.error or "")
