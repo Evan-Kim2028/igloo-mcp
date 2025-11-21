@@ -113,6 +113,7 @@ class ExecuteQueryTool(MCPTool):
     AUTO_ASYNC_POLL_INTERVAL_SECONDS = 0.5
     ASYNC_JOB_RETENTION_SECONDS = 600
     ASYNC_JOB_MAX_ENTRIES = 200
+    ASYNC_JOB_TIMEOUT_GRACE_SECONDS = 5.0
 
     def __init__(
         self,
@@ -404,14 +405,16 @@ class ExecuteQueryTool(MCPTool):
                 validate_statement=False,
             )
             with self._jobs_lock:
-                job_state.status = "success"
-                job_state.result = result
-                job_state.completed_ts = time.time()
+                if job_state.status != "error":
+                    job_state.status = "success"
+                    job_state.result = result
+                    job_state.completed_ts = time.time()
         except Exception as exc:
             with self._jobs_lock:
-                job_state.status = "error"
-                job_state.error = str(exc)
-                job_state.completed_ts = time.time()
+                if job_state.status != "error":
+                    job_state.status = "error"
+                    job_state.error = str(exc)
+                    job_state.completed_ts = time.time()
 
     async def fetch_async_result(
         self,
@@ -479,17 +482,27 @@ class ExecuteQueryTool(MCPTool):
         for exec_id in to_remove:
             self._async_jobs.pop(exec_id, None)
 
-        excess = len(self._async_jobs) - self.ASYNC_JOB_MAX_ENTRIES
-        if excess <= 0:
-            return
+        # Mark long-running in-flight jobs as timed out so callers see terminal state
+        for job in self._async_jobs.values():
+            if job.status in {"pending", "running"} and job.timeout_seconds:
+                if now - job.submitted_ts > (
+                    job.timeout_seconds + self.ASYNC_JOB_TIMEOUT_GRACE_SECONDS
+                ):
+                    job.status = "error"
+                    job.error = (
+                        f"Timed out after {job.timeout_seconds}s of asynchronous work"
+                    )
+                    job.completed_ts = now
 
-        for exec_id, _ in sorted(
-            self._async_jobs.items(), key=lambda item: item[1].submitted_ts
-        ):
-            if excess <= 0:
-                break
-            self._async_jobs.pop(exec_id, None)
-            excess -= 1
+        excess = len(self._async_jobs) - self.ASYNC_JOB_MAX_ENTRIES
+        if excess > 0:
+            for exec_id, _ in sorted(
+                self._async_jobs.items(), key=lambda item: item[1].submitted_ts
+            ):
+                if excess <= 0:
+                    break
+                self._async_jobs.pop(exec_id, None)
+                excess -= 1
 
     def _resolve_cache_context(
         self, overrides: Dict[str, Optional[str]]
