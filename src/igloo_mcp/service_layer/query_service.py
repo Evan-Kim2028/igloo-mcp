@@ -4,7 +4,7 @@ import os
 from typing import Any, Dict, Optional
 
 from ..snow_cli import QueryOutput, SnowCLI
-from ..snow_rest import SnowRestClient, SnowRestError
+from ..snow_rest import SnowRestClient
 
 
 class QueryService:
@@ -33,8 +33,8 @@ class QueryService:
                 default_ctx = context.config.snowflake.session_defaults()
             try:
                 self.rest_client = SnowRestClient.from_env(default_context=default_ctx)
-            except SnowRestError:
-                # Fall back to CLI driver if REST config is incomplete
+            except Exception:
+                # Fall back to CLI driver if REST client setup fails for any reason
                 self.cli = SnowCLI(self.profile)
                 self.driver = "cli"
         else:

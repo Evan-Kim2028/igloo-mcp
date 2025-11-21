@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import igloo_mcp.service_layer.query_service as query_service
 from igloo_mcp.config import SnowflakeConfig
 from igloo_mcp.service_layer.query_service import QueryService, SnowRestClient
 from igloo_mcp.snow_cli import QueryOutput
@@ -32,4 +33,38 @@ def test_query_service_rest_driver(monkeypatch: pytest.MonkeyPatch) -> None:
     result = service.execute("SELECT 1")
 
     assert dummy.calls == ["SELECT 1"]
+    assert result.rows == [{"VALUE": 1}]
+
+
+def test_query_service_rest_driver_falls_back_to_cli_on_init_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(**_: object) -> None:
+        raise FileNotFoundError("missing pem")
+
+    class DummyCLI:
+        def __init__(self, profile: str | None = None) -> None:
+            self.profile = profile
+            self.calls = []
+
+        def run_query(
+            self, query: str, *, output_format=None, timeout=None, ctx_overrides=None
+        ) -> QueryOutput:
+            self.calls.append(query)
+            return QueryOutput("{}", "", 0, rows=[{"VALUE": 1}], columns=["VALUE"])
+
+    monkeypatch.setenv("IGLOO_MCP_SNOW_DRIVER", "rest")
+    monkeypatch.setattr(SnowRestClient, "from_env", staticmethod(boom))
+    monkeypatch.setattr(query_service, "SnowCLI", DummyCLI)
+
+    context = SimpleNamespace(
+        config=SimpleNamespace(snowflake=SnowflakeConfig(profile="test"))
+    )
+    service = QueryService(context=context)
+    result = service.execute("SELECT 1")
+
+    assert service.driver == "cli"
+    assert service.rest_client is None
+    assert isinstance(service.cli, DummyCLI)
+    assert service.cli.calls == ["SELECT 1"]
     assert result.rows == [{"VALUE": 1}]
