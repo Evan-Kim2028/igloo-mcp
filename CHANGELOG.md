@@ -3,6 +3,20 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.2.5] - 2025-11-22
+
+### Added
+- Structured source attribution in `execute_query` responses/history. `source_databases` and fully-qualified `tables` now appear for cache hits, successes, timeouts, and errors so cross-database usage is auditable even when the session default database differs.
+- New regression suite (`tests/test_execute_query_source_attribution.py`) covering extractor edge cases plus async/trio integration flows, ensuring the feature no longer depends on ad-hoc reproduction scripts.
+
+### Changed
+- Refactored payload enrichment into `_enrich_payload_with_objects` to remove duplication across cache/timeout/error logging paths.
+- Version bump to **0.2.5** with README/CONTRIBUTING/doc updates and release automation notes.
+
+### Fixed
+- `HealthCheckTool` now calls `MCPHealthMonitor.get_comprehensive_health` when available and gracefully falls back to legacy `get_health_status`, restoring compatibility with existing tests and ensuring accurate `system.healthy` reporting.
+- Eliminated stray `tmp_repro_38` artifacts now that coverage exists in the test suite.
+
 # [0.2.4] - 2025-11-22
 
 ### Added

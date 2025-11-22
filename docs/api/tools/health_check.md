@@ -53,11 +53,19 @@ Get comprehensive health status for the MCP server and Snowflake connection.
     "status": "ready"
   },
   "system": {
-    "uptime_seconds": 120,
-    "timestamp": 1702345678.9
+    "status": "healthy",
+    "healthy": true,
+    "error_count": 0,
+    "warning_count": 0,
+    "metrics": {
+      "uptime_seconds": 120
+    },
+    "recent_errors": []
   }
 }
 ```
+
+- `system` now reflects the consolidated `get_comprehensive_health` response (v0.2.5) with `healthy`, `error_count`, `metrics.uptime_seconds`, and recent errors populated. Older monitors that only expose `get_health_status()` are still supported.
 
 ## Examples
 

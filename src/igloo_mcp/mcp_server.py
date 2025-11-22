@@ -293,7 +293,7 @@ def register_igloo_mcp(
                 if field == "reason" and error_type == "missing":
                     raise ValueError(
                         "❌ Missing required parameter: 'reason'\n\n"
-                        "The 'reason' parameter is required in v0.2.4+ for query auditability.\n\n"
+                        "The 'reason' parameter is required in v0.2.5+ for query auditability.\n\n"
                         "💡 Quick fix: Add a brief explanation (5+ characters)\n"
                         "   execute_query(\n"
                         "       statement='SELECT * FROM customers LIMIT 10',\n"

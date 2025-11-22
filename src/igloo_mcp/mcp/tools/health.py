@@ -304,19 +304,53 @@ class HealthCheckTool(MCPTool):
 
     def _get_system_health(self) -> Dict[str, Any]:
         """Get system health metrics from monitor."""
-        try:
-            status = self.health_monitor.get_comprehensive_health(
-                snowflake_service=self.snowflake_service
-            )
+        if not self.health_monitor:
             return {
-                "status": status.overall_status.value,
-                "healthy": status.overall_status.value == "healthy",
-                "error_count": status.error_count,
-                "warning_count": 0,  # Not tracked in current monitor
-                "metrics": {
-                    "uptime_seconds": status.uptime_seconds,
-                },
-                "recent_errors": [status.last_error] if status.last_error else [],
+                "status": "unavailable",
+                "error": "health monitor not configured",
+            }
+
+        try:
+            if hasattr(self.health_monitor, "get_comprehensive_health"):
+                status = self.health_monitor.get_comprehensive_health(
+                    snowflake_service=self.snowflake_service
+                )
+                overall_status = getattr(
+                    status.overall_status, "value", str(status.overall_status)
+                )
+                recent_errors = (
+                    [status.last_error] if getattr(status, "last_error", None) else []
+                )
+                return {
+                    "status": overall_status,
+                    "healthy": overall_status == "healthy",
+                    "error_count": getattr(status, "error_count", 0),
+                    "warning_count": 0,  # Not tracked in current monitor
+                    "metrics": {
+                        "uptime_seconds": getattr(status, "uptime_seconds", 0),
+                    },
+                    "recent_errors": recent_errors,
+                }
+
+            legacy_status = (
+                self.health_monitor.get_health_status()
+                if hasattr(self.health_monitor, "get_health_status")
+                else None
+            )
+            if legacy_status is not None:
+                return {
+                    "status": getattr(legacy_status, "status", "unknown"),
+                    "healthy": getattr(legacy_status, "is_healthy", False),
+                    "error_count": getattr(legacy_status, "error_count", 0),
+                    "warning_count": getattr(legacy_status, "warning_count", 0),
+                    "metrics": getattr(legacy_status, "metrics", {}),
+                    "recent_errors": getattr(legacy_status, "recent_errors", []),
+                }
+
+            return {
+                "status": "unknown",
+                "healthy": False,
+                "error": "health monitor missing status methods",
             }
         except Exception as e:
             return {
