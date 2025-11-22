@@ -44,7 +44,7 @@ Thank you for your interest in contributing to Igloo MCP! This guide will help y
 ### Branching Strategy (GitFlow)
 
 - `main` always reflects the latest production release. It only receives merges from release or hotfix branches.
-- `develop` is the integration branch for the next release cycle (currently 0.2.3). All feature work targets `develop`.
+- `develop` is the integration branch for the next release cycle (currently 0.2.4). All feature work targets `develop`.
 - `feature/<issue-id>-short-description` branches are created from `develop`, rebased frequently, and merged back via PRs.
 - `release/x.y.z` branches are cut from `develop` once the feature set is ready. Use these branches to bump versions, finalize docs, and run the hardening/test pass before merging to `main` and back to `develop`.
 - `hotfix/<issue>` branches fork from `main` to patch urgent production issues; merge them into both `main` and `develop` after verification.
@@ -177,7 +177,7 @@ Closes #123
 
 ### Workflow Overview
 
-For the 0.2.3 cycle we are following GitFlow:
+For the 0.2.3 cycle we followed GitFlow (0.2.4 on this branch follows the same pattern):
 
 1. Keep `develop` in sync with `origin/develop`; all feature PRs must target it until the 0.2.3 release branch is cut.
 2. When the backlog for 0.2.3 is ready, branch `release/0.2.3` from `develop`.
