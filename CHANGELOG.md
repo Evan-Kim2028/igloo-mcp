@@ -3,6 +3,23 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.2.4] - 2025-11-22
+
+### Added
+- Made `reason` parameter **required** in `execute_query` tool (minLength: 5) for improved auditability in Snowflake QUERY_TAG, history, and cache manifests.
+- Enhanced `session_context` logging to always include `database` and `schema` alongside `warehouse`/`role`.
+
+### Changed
+- Updated `execute_query` schema description/examples to emphasize `reason` importance.
+- Tests updated to reflect required `reason`.
+
+### Breaking Changes
+- `execute_query` calls without `reason` will now fail validation in MCP clients.
+
+### Migration
+- Add `reason="brief purpose"` to all `execute_query` calls (e.g., "Validate Q3 revenue", "Debug null orders").
+- No impact on existing logs (backward compatible).
+
 ## [0.2.3] - 2025-11-22
 
 ### Added
