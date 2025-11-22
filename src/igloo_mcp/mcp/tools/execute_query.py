@@ -847,10 +847,17 @@ class ExecuteQueryTool(MCPTool):
                 )
             if cache_hit_metadata.get("truncated"):
                 result["truncated"] = cache_hit_metadata.get("truncated")
+            session_context = effective_context.copy()
             if cache_hit_metadata.get("context"):
-                result.setdefault("session_context", cache_hit_metadata["context"])
-            else:
-                result.setdefault("session_context", effective_context)
+                ctx = cache_hit_metadata["context"]
+                session_context.update(
+                    {
+                        k: ctx.get(k)
+                        for k in ["warehouse", "database", "schema", "role"]
+                        if ctx.get(k)
+                    }
+                )
+            result["session_context"] = session_context
             if cache_hit_metadata.get("columns"):
                 result["columns"] = cache_hit_metadata["columns"]
             if cache_hit_metadata.get("objects"):
@@ -894,7 +901,15 @@ class ExecuteQueryTool(MCPTool):
                 "cache_manifest": str(cache_hit_metadata.get("manifest_path")),
                 "columns": cache_hit_metadata.get("columns"),
             }
-            payload["session_context"] = effective_context
+            full_session = effective_context.copy()
+            full_session.update(
+                {
+                    k: session_context.get(k)
+                    for k in ["warehouse", "database", "schema", "role"]
+                    if session_context.get(k)
+                }
+            )
+            payload["session_context"] = full_session
             if sql_sha256:
                 payload["sql_sha256"] = sql_sha256
             if history_artifacts:
@@ -1680,7 +1695,7 @@ class ExecuteQueryTool(MCPTool):
             "title": "Execute Snowflake Query",
             "type": "object",
             "additionalProperties": False,
-            "required": ["statement"],
+            "required": ["statement", "reason"],
             "properties": {
                 "statement": {
                     **string_schema(
@@ -1700,17 +1715,21 @@ class ExecuteQueryTool(MCPTool):
                 "reason": {
                     **string_schema(
                         (
-                            "Short reason for executing this query. Stored in Snowflake "
-                            "QUERY_TAG, history, and cache metadata to explain why the data was requested. "
-                            "Avoid sensitive information."
+                            "REQUIRED: Short reason for executing this query. "
+                            "Stored in Snowflake QUERY_TAG, history, and cache metadata "
+                            "to explain why the data was requested. Avoid sensitive information. "
+                            "Examples: 'Validate revenue spike', 'Dashboard refresh', 'Debug missing data'"
                         ),
-                        title="Reason",
+                        title="Reason (REQUIRED)",
                         examples=[
                             "Validate yesterday's revenue spike",
                             "Power BI dashboard refresh",
                             "Investigate nulls in customer_email",
+                            "Check Q3 2025 Hyperliquid coverage",
+                            "Explore Base DEX BTC trading volume",
                         ],
                     ),
+                    "minLength": 5,
                 },
                 "warehouse": snowflake_identifier_schema(
                     "Warehouse override. Defaults to the active profile warehouse.",

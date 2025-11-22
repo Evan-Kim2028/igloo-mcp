@@ -1,3 +1,5 @@
+- 🛡️ **Audit-First Logging**: `reason` now **required** for every `execute_query` – auto-tags Snowflake queries and enriches history/cache for team reviews.
+| `execute_query` | Run safe SQL with guards/timeouts/**reason required** | Agent-generated queries; returns rows + insights |
 # Igloo MCP - Lightweight MCP Server for Agentic Snowflake Workflows
 
 Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snowflake interactions in AI agentic workflows. Unlike general-purpose tools, it's optimized for developers using LLMs (e.g., in Cursor or Claude) to explore data, build catalogs, and analyze lineage – with built-in safety, auditing, and speed boosts for iterative dev.
@@ -68,7 +70,22 @@ snow connection add --name quickstart --account <your-account> --user <username>
 # Browser login (SSO/Okta preferred)
 ```
 
+```bash
+snow connection add --name quickstart --account <your-account> --user <username> --authenticator externalbrowser --warehouse <warehouse>
+# Browser login (SSO/Okta preferred)
+```
+
 ### Launch & Test in Cursor/Claude (1 min)
+## Usage Notes: Required `reason` Parameter (v0.2.4+)
+
+- **Every `execute_query` needs `reason`** (5+ chars): Explains query purpose for audits.
+- Examples:
+  ```python
+  execute_query(statement="SELECT * FROM sales LIMIT 10", reason="Preview recent orders")
+  execute_query(statement="SELECT COUNT(*) FROM users WHERE date >= '2025-01-01'", reason="Validate user growth Q1")
+  ```
+- **Why?** Improves Snowflake QUERY_TAG, history searchability, and team collaboration.
+- Backward compatible with existing logs.
 Copy [docs/config/mcp-client-config.example.json](./docs/config/mcp-client-config.example.json) to `~/.cursor/mcp.json` (or client-specific path):
 ```json
 {

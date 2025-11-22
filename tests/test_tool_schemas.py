@@ -45,7 +45,7 @@ def test_execute_query_schema(base_config: Config) -> None:
     schema = tool.get_parameter_schema()
     _validate_schema(schema)
 
-    assert schema["required"] == ["statement"]
+    assert schema["required"] == ["statement", "reason"]
     props = schema["properties"]
 
     statement = props["statement"]
