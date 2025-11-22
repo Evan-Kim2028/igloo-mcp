@@ -8,12 +8,6 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-
-## Version status
-
-- This branch tracks the 0.2.4 release line (see `CHANGELOG.md` for details, including the required `reason` parameter for `execute_query`).
-
-
 ## Why Igloo MCP? (vs. Official Snowflake Labs MCP)
 
 The official [Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp) is a powerful, enterprise-grade server for full Snowflake AI integration – great for production apps using Cortex (RAG, semantic agents) and object ops. But for **agentic development** (e.g., LLM-driven data exploration in dev tools), Igloo offers a lighter, more dev-focused alternative:
