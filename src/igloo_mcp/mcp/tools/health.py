@@ -305,20 +305,18 @@ class HealthCheckTool(MCPTool):
     def _get_system_health(self) -> Dict[str, Any]:
         """Get system health metrics from monitor."""
         try:
-            status = self.health_monitor.get_health_status()
+            status = self.health_monitor.get_comprehensive_health(
+                snowflake_service=self.snowflake_service
+            )
             return {
-                "status": status.status,
-                "healthy": status.is_healthy,
+                "status": status.overall_status.value,
+                "healthy": status.overall_status.value == "healthy",
                 "error_count": status.error_count,
-                "warning_count": status.warning_count,
+                "warning_count": 0,  # Not tracked in current monitor
                 "metrics": {
-                    "total_queries": status.metrics.get("total_queries", 0),
-                    "successful_queries": status.metrics.get("successful_queries", 0),
-                    "failed_queries": status.metrics.get("failed_queries", 0),
+                    "uptime_seconds": status.uptime_seconds,
                 },
-                "recent_errors": (
-                    status.recent_errors[-5:] if status.recent_errors else []
-                ),
+                "recent_errors": [status.last_error] if status.last_error else [],
             }
         except Exception as e:
             return {
