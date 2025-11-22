@@ -1,5 +1,4 @@
-- 🛡️ **Audit-First Logging**: `reason` now **required** for every `execute_query` – auto-tags Snowflake queries and enriches history/cache for team reviews.
-| `execute_query` | Run safe SQL with guards/timeouts/**reason required** | Agent-generated queries; returns rows + insights |
+
 # Igloo MCP - Lightweight MCP Server for Agentic Snowflake Workflows
 
 Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snowflake interactions in AI agentic workflows. Unlike general-purpose tools, it's optimized for developers using LLMs (e.g., in Cursor or Claude) to explore data, build catalogs, and analyze lineage – with built-in safety, auditing, and speed boosts for iterative dev.
