@@ -19,7 +19,7 @@ from functools import partial
 from typing import Any, Dict, List, Optional
 
 import anyio
-from pydantic import Field
+from pydantic import Field, ValidationError
 from typing_extensions import Annotated
 
 # NOTE: For typing, import from the fastmcp package; fallback handled at runtime.
@@ -282,6 +282,48 @@ def register_igloo_mcp(
                 response_mode=response_mode,
                 ctx=ctx,
             )
+        except ValidationError as e:
+            # Enhanced validation error messages for user-friendly feedback
+            errors = e.errors()
+            for err in errors:
+                field = err["loc"][0] if err["loc"] else None
+                error_type = err["type"]
+
+                # Missing reason parameter
+                if field == "reason" and error_type == "missing":
+                    raise ValueError(
+                        "❌ Missing required parameter: 'reason'\n\n"
+                        "The 'reason' parameter is required in v0.2.4+ for query auditability.\n\n"
+                        "💡 Quick fix: Add a brief explanation (5+ characters)\n"
+                        "   execute_query(\n"
+                        "       statement='SELECT * FROM customers LIMIT 10',\n"
+                        "       reason='Sample customer data for debugging'  # ← Add this\n"
+                        "   )\n\n"
+                        "📝 Examples of good reasons:\n"
+                        "   • 'Debug null customer records in Q3'\n"
+                        "   • 'Validate revenue totals for dashboard'\n"
+                        "   • 'Explore product catalog schema'\n\n"
+                        "📚 Docs: https://github.com/Evan-Kim2028/igloo-mcp/blob/main/docs/api/tools/execute_query.md#parameters"
+                    ) from e
+
+                # Reason too short
+                elif field == "reason" and error_type == "string_too_short":
+                    provided = err.get("input", "")
+                    raise ValueError(
+                        f"❌ Parameter 'reason' is too short: '{provided}' ({len(str(provided))} chars)\n\n"
+                        f"Minimum length: 5 characters (you provided {len(str(provided))})\n\n"
+                        "💡 Be more descriptive - explain the query's purpose:\n"
+                        "   ✅ 'Debug sales spike on 2025-01-15'\n"
+                        "   ✅ 'Count active users for monthly report'\n"
+                        "   ✅ 'Explore sales schema for new dashboard'\n"
+                        "   ❌ 'test' (too vague and too short)\n\n"
+                        "📖 Why? Meaningful reasons improve audit trails and help\n"
+                        "   teammates understand query context in history logs."
+                    ) from e
+
+            # Fallback to default Pydantic error for other validation issues
+            raise ValueError(f"Validation error: {e}") from e
+
         except ValueError as e:
             # Enhanced structured error for validation issues
             error_msg = str(e)
@@ -313,8 +355,20 @@ def register_igloo_mcp(
                         },
                     }
                 ) from e
+            elif "SQL statement type" in error_msg and "not permitted" in error_msg:
+                # Enhanced SQL permission error with configuration guidance
+                raise ValueError(
+                    f"{error_msg}\n\n"
+                    "🛡️  Safety Guardrails: This operation is blocked by default.\n\n"
+                    "⚙️  To enable write operations:\n"
+                    "   1. Set environment variable: IGLOO_MCP_SQL_PERMISSIONS='write'\n"
+                    "   2. Or configure in your MCP client settings\n\n"
+                    "⚠️  Warning: Enabling writes removes safety guardrails.\n"
+                    "   Use with caution in production environments.\n\n"
+                    "📚 Docs: https://github.com/Evan-Kim2028/igloo-mcp/blob/main/docs/configuration.md#sql-permissions"
+                ) from e
             elif "SQL statement type" in error_msg:
-                # Pass through enhanced SQL validation errors
+                # Pass through other SQL validation errors
                 raise ValueError(error_msg) from e
             else:
                 # Generic parameter error
