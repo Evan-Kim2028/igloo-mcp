@@ -16,7 +16,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
 | `statement` | string | ✅ Yes | - | SQL statement to execute (min length 1) |
-| `reason` | string | ❌ No | - | Short reason for running the query. Stored in Snowflake `QUERY_TAG` and local history; avoid sensitive information. |
+| `reason` | string | ✅ Yes | - | Short reason for running the query (min length 5). Stored in Snowflake `QUERY_TAG` and local history; avoid sensitive information. |
 | `timeout_seconds` | integer | ❌ No | 120 | Query timeout in seconds (1-3600) |
 | `verbose_errors` | boolean | ❌ No | false | Include detailed optimization hints |
 | `warehouse` | string | ❌ No | profile | Warehouse override (Snowflake identifier) |
@@ -198,7 +198,8 @@ Query preview: SELECT * FROM huge_table WHERE...
 
 ```python
 result = execute_query(
-    statement="SELECT COUNT(*) as count FROM orders WHERE date >= '2024-01-01'"
+    statement="SELECT COUNT(*) as count FROM orders WHERE date >= '2024-01-01'",
+    reason="Monthly order count for reporting"
 )
 print(f"Row count: {result['rowcount']}")
 print(f"Result: {result['rows'][0]['count']}")
@@ -221,7 +222,8 @@ result = execute_query(
 ```python
 try:
     result = execute_query(
-        statement="SELECT * FROM non_existent_table"
+        statement="SELECT * FROM non_existent_table",
+        reason="Testing error handling"
     )
 except ValueError as e:
     print(f"Validation error: {e}")

@@ -203,6 +203,16 @@ def register_igloo_mcp(
     )
     async def execute_query_tool(
         statement: Annotated[str, Field(description="SQL statement to execute")],
+        reason: Annotated[
+            str,
+            Field(
+                description=(
+                    "Short reason for executing this query. Stored in Snowflake QUERY_TAG "
+                    "and local history; avoid sensitive info."
+                ),
+                min_length=5,
+            ),
+        ],
         warehouse: Annotated[
             Optional[str], Field(description="Warehouse override", default=None)
         ] = None,
@@ -214,16 +224,6 @@ def register_igloo_mcp(
         ] = None,
         role: Annotated[
             Optional[str], Field(description="Role override", default=None)
-        ] = None,
-        reason: Annotated[
-            Optional[str],
-            Field(
-                description=(
-                    "Short reason for executing this query. Stored in Snowflake QUERY_TAG "
-                    "and local history; avoid sensitive info."
-                ),
-                default=None,
-            ),
         ] = None,
         timeout_seconds: Annotated[
             Optional[int],
