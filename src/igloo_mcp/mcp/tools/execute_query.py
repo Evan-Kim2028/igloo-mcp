@@ -726,6 +726,33 @@ class ExecuteQueryTool(MCPTool):
             },
         ]
 
+    def _extract_source_info(self, objects: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Extract structured source info from referenced objects."""
+        source_databases = set()
+        tables = []
+        for obj in objects:
+            db = obj.get("database")
+            schema = obj.get("schema")
+            name = obj.get("name")
+
+            if db:
+                source_databases.add(db)
+
+            # Construct fully qualified name
+            parts = []
+            if db:
+                parts.append(db)
+            if schema:
+                parts.append(schema)
+            if name:
+                parts.append(name)
+            tables.append(".".join(parts))
+
+        return {
+            "source_databases": sorted(list(source_databases)),
+            "tables": sorted(tables),
+        }
+
     async def _execute_impl(
         self,
         statement: str,
@@ -930,6 +957,10 @@ class ExecuteQueryTool(MCPTool):
                 payload["key_metrics"] = key_metrics
             if derived_insights:
                 payload["insights"] = derived_insights
+            if referenced_objects:
+                payload["objects"] = referenced_objects
+                source_info = self._extract_source_info(referenced_objects)
+                payload.update(source_info)
             try:
                 self.history.record(payload)
             except Exception:
@@ -1047,6 +1078,8 @@ class ExecuteQueryTool(MCPTool):
                     payload["insights"] = derived_insights
                 if referenced_objects:
                     payload["objects"] = referenced_objects
+                    source_info = self._extract_source_info(referenced_objects)
+                    payload.update(source_info)
                 self.history.record(payload)
             except Exception:
                 pass
@@ -1120,6 +1153,8 @@ class ExecuteQueryTool(MCPTool):
                     payload["cache_key"] = cache_key
                 if referenced_objects:
                     payload["objects"] = referenced_objects
+                    source_info = self._extract_source_info(referenced_objects)
+                    payload.update(source_info)
                 self.history.record(payload)
             except Exception:
                 pass
@@ -1200,6 +1235,8 @@ class ExecuteQueryTool(MCPTool):
                     payload["cache_key"] = cache_key
                 if referenced_objects:
                     payload["objects"] = referenced_objects
+                    source_info = self._extract_source_info(referenced_objects)
+                    payload.update(source_info)
                 self.history.record(payload)
             except Exception:
                 pass
