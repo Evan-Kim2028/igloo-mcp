@@ -1,5 +1,5 @@
 [project]
-name = "igloo-mcp"
+ name = "igloo_mcp"
 version = "0.2.3"
 description = "Igloo MCP - Snowflake MCP Server for agentic native workflows"
 readme = "README.md"
@@ -27,7 +27,7 @@ dependencies = [
 # MCP dependencies are included by default - no separate installation needed
 
 [project.scripts]
-igloo-mcp = "igloo_mcp.mcp_server:main"
+ igloo_mcp = "igloo_mcp.mcp_server:main"
 igloo-report = "igloo_mcp.report_cli:main"
 igloo = "igloo_mcp.cli:main"
 
