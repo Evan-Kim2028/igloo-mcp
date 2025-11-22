@@ -10,6 +10,11 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 
+## Version status
+
+- This branch tracks the 0.2.4 release line (see `CHANGELOG.md` for details, including the required `reason` parameter for `execute_query`).
+
+
 ## Why Igloo MCP? (vs. Official Snowflake Labs MCP)
 
 The official [Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp) is a powerful, enterprise-grade server for full Snowflake AI integration – great for production apps using Cortex (RAG, semantic agents) and object ops. But for **agentic development** (e.g., LLM-driven data exploration in dev tools), Igloo offers a lighter, more dev-focused alternative:
@@ -60,7 +65,7 @@ Detailed schemas in [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md).
 ### Install (1 min)
 ```bash
 uv pip install igloo-mcp  # Or pip install igloo-mcp
-igloo --version  # Verify (v0.2.3+)
+igloo --version  # Verify (v0.2.4+)
 ```
 
 ### Connect Snowflake Profile (2 min)
@@ -115,7 +120,7 @@ Configure paths via env (e.g., `IGLOO_MCP_QUERY_HISTORY=disabled`). Details: [do
 - [Full Docs](./docs/getting-started.md)
 - [API Reference](./docs/api/README.md)
 - [Examples](./examples/README.md) (e.g., catalog building, dep graphs)
-- [CHANGELOG](./CHANGELOG.md) for v0.2.3 updates
+- [CHANGELOG](./CHANGELOG.md) for full release notes (0.2.3, 0.2.4, etc.)
 - Questions? Open an issue or discuss in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 Built for agentic efficiency – let's make Snowflake AI-native!

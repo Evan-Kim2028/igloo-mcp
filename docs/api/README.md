@@ -114,7 +114,10 @@ build_catalog(database="PROD")
 get_catalog_summary()
 
 # 4. Query specific tables
-execute_query(statement="SELECT * FROM important_table LIMIT 100")
+execute_query(
+    statement="SELECT * FROM important_table LIMIT 100",
+    reason="Inspect sample rows from important_table",
+)
 ```
 
 ### Pattern 2: Dependency Analysis

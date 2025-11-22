@@ -79,7 +79,7 @@ unavailable on timeout.
 Query timeout after 30s.
 
 Quick fixes:
-1. Increase timeout: execute_query(..., timeout_seconds=480)
+1. Increase timeout: execute_query(..., timeout_seconds=480, reason="Allow longer-running query")
 2. Add filter: Add WHERE clause to reduce data volume
 3. Sample data: Add LIMIT clause for testing (e.g., LIMIT 1000)
 4. Scale warehouse: Use larger warehouse for complex queries
@@ -104,7 +104,8 @@ Query preview: SELECT * FROM huge_table WHERE date >= '2024-01-01'...
 ```python
 execute_query(
     statement="SELECT * FROM sales WHERE date >= '2024-01-01'",  # Add filter
-    timeout_seconds=300
+    timeout_seconds=300,
+    reason="Analyze sales since 2024-01-01",
 )
 ```
 
@@ -113,7 +114,8 @@ execute_query(
 execute_query(
     statement="SELECT customer_id, SUM(revenue) FROM orders GROUP BY 1",
     warehouse="LARGE_WH",  # Scale up
-    timeout_seconds=600
+    timeout_seconds=600,
+    reason="Compute customer revenue aggregates",
 )
 ```
 
@@ -121,7 +123,8 @@ execute_query(
 ```python
 execute_query(
     statement="SELECT * FROM huge_table LIMIT 1000",  # Sample
-    timeout_seconds=60
+    timeout_seconds=60,
+    reason="Sample rows from huge_table for testing",
 )
 ```
 
@@ -268,7 +271,8 @@ All errors follow this structure:
 ```python
 execute_query(
     statement="...",
-    verbose_errors=True  # Get detailed diagnostics
+    verbose_errors=True,  # Get detailed diagnostics
+    reason="Investigate query failure with verbose diagnostics",
 )
 ```
 
