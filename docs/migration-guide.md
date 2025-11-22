@@ -1,8 +1,82 @@
-# Migration Guide: CLI to MCP
+# Migration Guide
 
-This guide helps you migrate from the deprecated CLI interface to the modern MCP (Model Context Protocol) interface.
+This guide helps you migrate between different versions of Igloo MCP and from the deprecated CLI interface.
 
-## Why Migrate?
+## Table of Contents
+- [Migrating to v0.2.4 (Required `reason` Parameter)](#migrating-to-v024-required-reason-parameter)
+- [Migrating from CLI to MCP](#migrating-from-cli-to-mcp)
+
+---
+
+## Migrating to v0.2.4 (Required `reason` Parameter)
+
+### Breaking Change
+Starting in v0.2.4, the `reason` parameter is **required** for all `execute_query` calls.
+
+### Before (v0.2.3 and earlier)
+```python
+execute_query(
+    statement="SELECT * FROM users LIMIT 10"
+)
+```
+
+### After (v0.2.4+)
+```python
+execute_query(
+    statement="SELECT * FROM users LIMIT 10",
+    reason="Sample user data for debugging"  # Required!
+)
+```
+
+### Requirements
+- **Minimum Length**: 5 characters
+- **Purpose**: Auditability - stored in Snowflake QUERY_TAG and local history
+- **Examples**:
+  - ✅ "Debug null orders in Q3"
+  - ✅ "Validate customer count for dashboard"
+  - ✅ "Explore sales schema"
+  - ❌ "test" (too short - must be at least 5 characters)
+  - ❌ "" (empty string not allowed)
+
+### Error Messages
+If you forget to add `reason` or make it too short, you'll see a helpful error:
+
+```
+❌ Missing required parameter: 'reason'
+
+The 'reason' parameter is required in v0.2.4+ for query auditability.
+
+💡 Quick fix: Add a brief explanation (5+ characters)
+   execute_query(
+       statement='SELECT * FROM customers LIMIT 10',
+       reason='Sample customer data for debugging'  # ← Add this
+   )
+
+📝 Examples of good reasons:
+   • 'Debug null customer records in Q3'
+   • 'Validate revenue totals for dashboard'
+   • 'Explore product catalog schema'
+```
+
+### Migration Steps
+1. Search your codebase for `execute_query` calls
+2. Add `reason` parameter (5+ characters) to each call
+3. Update any automation/scripts that call execute_query
+4. Test with your MCP client to verify errors are clear
+
+### Why This Change?
+- **Improved Auditability**: Every query in history logs now has context
+- **Better Team Collaboration**: Teammates can understand why queries were run
+- **Snowflake Integration**: Reasons appear in Snowflake QUERY_TAG for full traceability
+- **LLM Context**: AI agents can better understand and resume query workflows
+
+---
+
+## Migrating from CLI to MCP
+
+This section helps you migrate from the deprecated CLI interface to the modern MCP (Model Context Protocol) interface.
+
+### Why Migrate?
 
 ### Benefits of MCP
 - **AI-First Design**: Built for AI assistant integration
