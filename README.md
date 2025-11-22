@@ -7,7 +7,6 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-**Latest: v0.2.3** – Consolidated reporting tools, hardened async job handling with REST fallbacks, and stricter execution guardrails for safer agentic use. See [CHANGELOG.md](./CHANGELOG.md) for details.
 
 ## Why Igloo MCP? (vs. Official Snowflake Labs MCP)
 
@@ -94,15 +93,6 @@ Full client guides: [docs/installation.md](./docs/installation.md).
 
 Configure paths via env (e.g., `IGLOO_MCP_QUERY_HISTORY=disabled`). Details: [docs/reporting.md](./docs/reporting.md).
 
-## Development Setup
-
-### Local Development
-- Install dev deps: `uv sync --dev`
-- Run pre-commit: `pre-commit install` (config in `.pre-commit-config.yaml`)
-- Tests: `pytest` (use `--snowflake` for live DB; see `tests/conftest.py`)
-- MCP Client Config: Copy `docs/config/mcp-client-config.example.json` to `.mcp.json` and edit for your Snowflake profile.
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for more.
 
 ## Resources
 - [Full Docs](./docs/getting-started.md)
