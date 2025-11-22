@@ -1,5 +1,7 @@
 # DeFi DEX Trading Sample Dataset
 
+These files are for demo/local setup only. Run `python setup_sample_data.py` to regenerate if missing or customized – no need to commit generated outputs. Keeps the repo lightweight!
+
 This sample dataset is **extracted from a real production DeFi analytics pipeline** that processes cryptocurrency trading data from multiple decentralized exchanges (DEXs). It provides realistic, complex data relationships perfect for demonstrating igloo-mcp capabilities.
 
 ## Real-World Context

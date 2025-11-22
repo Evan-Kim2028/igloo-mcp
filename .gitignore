@@ -170,3 +170,4 @@ new_user_test/
 external_ruff.py
 conftest.py
 building_a_mcp.md
+.factory/
