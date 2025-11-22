@@ -746,12 +746,23 @@ class ExecuteQueryTool(MCPTool):
                 parts.append(schema)
             if name:
                 parts.append(name)
-            tables.append(".".join(parts))
+            # Only append if we have any parts
+            if parts:
+                tables.append(".".join(parts))
 
         return {
-            "source_databases": sorted(list(source_databases)),
+            "source_databases": sorted(source_databases),
             "tables": sorted(tables),
         }
+
+    def _enrich_payload_with_objects(
+        self, payload: Dict[str, Any], referenced_objects: List[Dict[str, Any]]
+    ) -> None:
+        """Enrich payload with objects and extracted source info."""
+        if referenced_objects:
+            payload["objects"] = referenced_objects
+            source_info = self._extract_source_info(referenced_objects)
+            payload.update(source_info)
 
     async def _execute_impl(
         self,
@@ -957,10 +968,7 @@ class ExecuteQueryTool(MCPTool):
                 payload["key_metrics"] = key_metrics
             if derived_insights:
                 payload["insights"] = derived_insights
-            if referenced_objects:
-                payload["objects"] = referenced_objects
-                source_info = self._extract_source_info(referenced_objects)
-                payload.update(source_info)
+            self._enrich_payload_with_objects(payload, referenced_objects)
             try:
                 self.history.record(payload)
             except Exception:
@@ -1076,10 +1084,7 @@ class ExecuteQueryTool(MCPTool):
                     payload["key_metrics"] = key_metrics
                 if derived_insights:
                     payload["insights"] = derived_insights
-                if referenced_objects:
-                    payload["objects"] = referenced_objects
-                    source_info = self._extract_source_info(referenced_objects)
-                    payload.update(source_info)
+                self._enrich_payload_with_objects(payload, referenced_objects)
                 self.history.record(payload)
             except Exception:
                 pass
@@ -1151,10 +1156,7 @@ class ExecuteQueryTool(MCPTool):
                     )
                 if cache_key:
                     payload["cache_key"] = cache_key
-                if referenced_objects:
-                    payload["objects"] = referenced_objects
-                    source_info = self._extract_source_info(referenced_objects)
-                    payload.update(source_info)
+                self._enrich_payload_with_objects(payload, referenced_objects)
                 self.history.record(payload)
             except Exception:
                 pass
@@ -1233,10 +1235,7 @@ class ExecuteQueryTool(MCPTool):
                     )
                 if cache_key:
                     payload["cache_key"] = cache_key
-                if referenced_objects:
-                    payload["objects"] = referenced_objects
-                    source_info = self._extract_source_info(referenced_objects)
-                    payload.update(source_info)
+                self._enrich_payload_with_objects(payload, referenced_objects)
                 self.history.record(payload)
             except Exception:
                 pass

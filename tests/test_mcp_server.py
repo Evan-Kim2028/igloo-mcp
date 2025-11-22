@@ -326,7 +326,7 @@ async def test_execute_query_tool_structures_timeout(monkeypatch: pytest.MonkeyP
     tool = server.tools["execute_query"]
 
     with pytest.raises(RuntimeError) as exc_info:
-        await tool("SELECT 1", timeout_seconds=12)
+        await tool("SELECT 1", timeout_seconds=12, reason="test timeout")
 
     payload = exc_info.value.args[0]
     assert payload["code"] == "QUERY_TIMEOUT"
@@ -344,7 +344,7 @@ async def test_execute_query_tool_formats_param_errors(monkeypatch: pytest.Monke
     tool = server.tools["execute_query"]
 
     with pytest.raises(ValueError) as exc_info:
-        await tool("SELECT 1", timeout_seconds="invalid")
+        await tool("SELECT 1", timeout_seconds="invalid", reason="test param error")
 
     payload = exc_info.value.args[0]
     assert payload["code"] == "PARAM_TYPE"
@@ -360,7 +360,7 @@ async def test_execute_query_tool_compact_error(monkeypatch: pytest.MonkeyPatch)
     tool = server.tools["execute_query"]
 
     with pytest.raises(RuntimeError) as exc_info:
-        await tool("SELECT 1")
+        await tool("SELECT 1", reason="test compact error")
 
     payload = exc_info.value.args[0]
     assert payload["code"] == "QUERY_EXECUTION_FAILED"
@@ -376,7 +376,9 @@ async def test_execute_query_tool_verbose_error(monkeypatch: pytest.MonkeyPatch)
     tool = server.tools["execute_query"]
 
     with pytest.raises(RuntimeError) as exc_info:
-        await tool("SELECT 1", verbose_errors=True)  # noqa: FBT003
+        await tool(
+            "SELECT 1", verbose_errors=True, reason="test verbose error"
+        )  # noqa: FBT003
 
     assert "detailed failure" in str(exc_info.value)
 

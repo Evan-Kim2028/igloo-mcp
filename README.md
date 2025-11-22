@@ -15,7 +15,8 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 - 📝 **Always-On History**: Auto-logs executions (success/error/timeout) to JSONL + SHA-hashed SQL artifacts. Fallback to `~/.igloo_mcp/logs/` if no workspace.
 - 📦 **Smart Caching**: Cache results (up to 5k rows as CSV/JSONL) by SQL + context; modes for refresh/read-only. Instant for AI replays.
 - 📊 **Auto Insights**: Every query returns `key_metrics` (null ratios, ranges, top values) + insights – fuels LLM reasoning without follow-up SQL.
-- 🧠 **Error Handling**: Compact errors; verbose mode for hints. v0.2.3 adds better REST init fallbacks.
+- 🧠 **Error Handling**: Compact errors; verbose mode for hints. v0.2.3 adds better REST init fallbacks and v0.2.5 ensures health-check feedback routes through the new `get_comprehensive_health` monitor.
+- 📡 **Source Attribution**: v0.2.5 includes structured `source_databases`/`tables` fields in both query responses and history logs so compliance reviews no longer rely on session defaults.
 - 🧩 **MCP-Compliant Tools**: Clean set for agentic use – no extras. Consolidated in v0.2.3 for reporting workflows.
 - ⚡ **Simple Backend**: SnowCLI integration for max performance; CLI/REST modes. Python 3.12+, MIT-licensed.
 
@@ -29,12 +30,12 @@ The official [Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp) is a po
 - **Dev Workflow Boosts**: Always-on query history (JSONL audits), result caching (instant replays, no re-hits on Snowflake), and auto-insights (row summaries for LLM reasoning – no extra SQL). Official emphasizes Cortex but lacks these for rapid iteration.
 - **Agent-Safe Defaults**: Blocks risky SQL (DDL/DML) out-of-box, with timeouts/cancellation. Official is flexible but needs config for guards.
 - **Lightweight Focus**: 8 core MCP tools for querying, cataloging, and lineage – perfect for AI prototypes. Skip Cortex bloat if you don't need RAG/agents.
-- **Performance Edge**: Optimized for local/dev (CLI mode default; REST fallback in v0.2.3). Official is container-heavy for prod.
+- **Performance Edge**: Optimized for local/dev (CLI mode default; REST fallback added in v0.2.3). Official is container-heavy for prod.
+- **Transparent Attribution**: v0.2.5 logs `source_databases` + fully-qualified `tables` for every query result/history entry so cross-database access is always auditable.
 
 In essence: Use official for production Snowflake AI ecosystems. Choose Igloo for agile agentic coding – faster auditing, caching, and safety to make your LLMs more productive with data.
 
 See [docs/comparison.md](./docs/comparison.md) for deeper diffs (I'll add this if needed).
-
 
 ## MCP Tools
 
@@ -59,7 +60,7 @@ Detailed schemas in [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md).
 ### Install (1 min)
 ```bash
 uv pip install igloo-mcp  # Or pip install igloo-mcp
-igloo --version  # Verify (v0.2.4+)
+igloo --version  # Verify (v0.2.5+)
 ```
 
 ### Connect Snowflake Profile (2 min)
@@ -75,6 +76,32 @@ snow connection add --name quickstart --account <your-account> --user <username>
 ```
 
 ### Launch & Test in Cursor/Claude (1 min)
+## Usage Notes: Required `reason` Parameter (v0.2.4+ / still mandatory in v0.2.5)
+
+- **Every `execute_query` needs `reason`** (5+ chars): Explains query purpose for audits.
+- Examples:
+  ```python
+  execute_query(statement="SELECT * FROM sales LIMIT 10", reason="Preview recent orders")
+  execute_query(statement="SELECT COUNT(*) FROM users WHERE date >= '2025-01-01'", reason="Validate user growth Q1")
+  ```
+- **Why?** Improves Snowflake QUERY_TAG, history searchability, and team collaboration.
+- Backward compatible with existing logs.
+Copy [docs/config/mcp-client-config.example.json](./docs/config/mcp-client-config.example.json) to `~/.cursor/mcp.json` (or client-specific path):
+```json
+{
+  "mcpServers": {
+    "igloo-mcp": {
+      "command": "igloo-mcp",
+      "args": ["--profile", "quickstart"],
+      "env": {"SNOWFLAKE_PROFILE": "quickstart"}
+    }
+  }
+}
+```
+Restart client; test: Ask "Preview the customers table" – should return safe rows + insights.
+
+Full client guides: [docs/installation.md](./docs/installation.md).
+
 ## Advanced: History, Caching & Reporting
 
 - **Query History**: Logs to `logs/doc.jsonl` (ts, status, SQL hash, metrics). Export bundles via `igloo-report` (v0.2.3: templated outputs, Jinja2 deps).
@@ -88,7 +115,7 @@ Configure paths via env (e.g., `IGLOO_MCP_QUERY_HISTORY=disabled`). Details: [do
 - [Full Docs](./docs/getting-started.md)
 - [API Reference](./docs/api/README.md)
 - [Examples](./examples/README.md) (e.g., catalog building, dep graphs)
-- [CHANGELOG](./CHANGELOG.md) for full release notes (0.2.3, 0.2.4, etc.)
+- [CHANGELOG](./CHANGELOG.md) for full release notes (0.2.3, 0.2.4, 0.2.5, etc.)
 - Questions? Open an issue or discuss in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 Built for agentic efficiency – let's make Snowflake AI-native!

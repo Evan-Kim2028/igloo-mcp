@@ -48,6 +48,11 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
     {"customer_id": 2, "name": "Bob", "email": "bob@example.com"}
   ],
   "columns": ["customer_id", "name", "email"],
+  "objects": [
+    {"database": "SALES", "schema": "PUBLIC", "name": "CUSTOMERS", "type": null}
+  ],
+  "source_databases": ["SALES"],
+  "tables": ["SALES.PUBLIC.CUSTOMERS"],
   "session_context": {
     "warehouse": "ANALYTICS_WH",
     "database": "SALES",
@@ -112,6 +117,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 
 - Result caching is on by default; subsequent runs with the same SQL, profile, and resolved session context return `cache.hit = true` along with the manifest path and CSV/JSON artifacts for auditability.
 - `key_metrics` and `insights` are automatically derived from the returned rows (no extra SQL) so downstream tools get quick summaries of the seen data. Metrics include non-null ratios, numeric ranges, categorical top values, and time spans based on the sampled result set.
+- `source_databases`/`tables` (added in v0.2.5) enumerate every referenced object extracted from the compiled SQL so history logs and cache hits retain accurate cross-database attribution even when the active session database differs.
 - When `response_mode="auto"` needs to hand execution back before the MCP RPC limit, the response switches to the async form shown below and includes `inline_wait_seconds` to document how long the tool waited before yielding control.
 
 ## Async Execution & Polling
