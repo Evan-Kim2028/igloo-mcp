@@ -75,32 +75,6 @@ snow connection add --name quickstart --account <your-account> --user <username>
 ```
 
 ### Launch & Test in Cursor/Claude (1 min)
-## Usage Notes: Required `reason` Parameter (v0.2.4+)
-
-- **Every `execute_query` needs `reason`** (5+ chars): Explains query purpose for audits.
-- Examples:
-  ```python
-  execute_query(statement="SELECT * FROM sales LIMIT 10", reason="Preview recent orders")
-  execute_query(statement="SELECT COUNT(*) FROM users WHERE date >= '2025-01-01'", reason="Validate user growth Q1")
-  ```
-- **Why?** Improves Snowflake QUERY_TAG, history searchability, and team collaboration.
-- Backward compatible with existing logs.
-Copy [docs/config/mcp-client-config.example.json](./docs/config/mcp-client-config.example.json) to `~/.cursor/mcp.json` (or client-specific path):
-```json
-{
-  "mcpServers": {
-    "igloo-mcp": {
-      "command": "igloo-mcp",
-      "args": ["--profile", "quickstart"],
-      "env": {"SNOWFLAKE_PROFILE": "quickstart"}
-    }
-  }
-}
-```
-Restart client; test: Ask "Preview the customers table" – should return safe rows + insights.
-
-Full client guides: [docs/installation.md](./docs/installation.md).
-
 ## Advanced: History, Caching & Reporting
 
 - **Query History**: Logs to `logs/doc.jsonl` (ts, status, SQL hash, metrics). Export bundles via `igloo-report` (v0.2.3: templated outputs, Jinja2 deps).
