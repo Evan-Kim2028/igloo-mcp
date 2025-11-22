@@ -8,6 +8,19 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
+## Key Features
+
+- 🛡️ **Built-in Guardrails**: Defaults block writes/DDL (e.g., no INSERT/CREATE); safe alternatives suggested. Enhanced in v0.2.3 for stricter validation.
+- ⏱️ **Timeouts & Cancellation**: Per-query limits (default 30s) with server-side cancel; captures query IDs for tracing.
+- 📝 **Always-On History**: Auto-logs executions (success/error/timeout) to JSONL + SHA-hashed SQL artifacts. Fallback to `~/.igloo_mcp/logs/` if no workspace.
+- 📦 **Smart Caching**: Cache results (up to 5k rows as CSV/JSONL) by SQL + context; modes for refresh/read-only. Instant for AI replays.
+- 📊 **Auto Insights**: Every query returns `key_metrics` (null ratios, ranges, top values) + insights – fuels LLM reasoning without follow-up SQL.
+- 🧠 **Error Handling**: Compact errors; verbose mode for hints. v0.2.3 adds better REST init fallbacks.
+- 🧩 **MCP-Compliant Tools**: Clean set for agentic use – no extras. Consolidated in v0.2.3 for reporting workflows.
+- ⚡ **Simple Backend**: SnowCLI integration for max performance; CLI/REST modes. Python 3.12+, MIT-licensed.
+
+Full API in [docs/api/README.md](./docs/api/README.md).
+
 ## Why Igloo MCP? (vs. Official Snowflake Labs MCP)
 
 The official [Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp) is a powerful, enterprise-grade server for full Snowflake AI integration – great for production apps using Cortex (RAG, semantic agents) and object ops. But for **agentic development** (e.g., LLM-driven data exploration in dev tools), Igloo offers a lighter, more dev-focused alternative:
@@ -22,18 +35,6 @@ In essence: Use official for production Snowflake AI ecosystems. Choose Igloo fo
 
 See [docs/comparison.md](./docs/comparison.md) for deeper diffs (I'll add this if needed).
 
-## Key Features
-
-- 🛡️ **Built-in Guardrails**: Defaults block writes/DDL (e.g., no INSERT/CREATE); safe alternatives suggested. Enhanced in v0.2.3 for stricter validation.
-- ⏱️ **Timeouts & Cancellation**: Per-query limits (default 30s) with server-side cancel; captures query IDs for tracing.
-- 📝 **Always-On History**: Auto-logs executions (success/error/timeout) to JSONL + SHA-hashed SQL artifacts. Fallback to `~/.igloo_mcp/logs/` if no workspace.
-- 📦 **Smart Caching**: Cache results (up to 5k rows as CSV/JSONL) by SQL + context; modes for refresh/read-only. Instant for AI replays.
-- 📊 **Auto Insights**: Every query returns `key_metrics` (null ratios, ranges, top values) + insights – fuels LLM reasoning without follow-up SQL.
-- 🧠 **Error Handling**: Compact errors; verbose mode for hints. v0.2.3 adds better REST init fallbacks.
-- 🧩 **MCP-Compliant Tools**: Clean set for agentic use – no extras. Consolidated in v0.2.3 for reporting workflows.
-- ⚡ **Simple Backend**: SnowCLI integration for max performance; CLI/REST modes. Python 3.12+, MIT-licensed.
-
-Full API in [docs/api/README.md](./docs/api/README.md).
 
 ## MCP Tools
 
