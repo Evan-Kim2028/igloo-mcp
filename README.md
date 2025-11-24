@@ -10,15 +10,16 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 
 ## Key Features
 
-- 🛡️ **Built-in Guardrails**: Defaults block writes/DDL (e.g., no INSERT/CREATE); safe alternatives suggested. Enhanced in v0.2.3 for stricter validation.
+- 🛡️ **Built-in Guardrails**: Defaults block writes/DDL (e.g., no INSERT/CREATE); safe alternatives suggested. Enhanced in v0.2.3 for stricter validation. DESCRIBE statements correctly classified in v0.3.0.
 - ⏱️ **Timeouts & Cancellation**: Per-query limits (default 30s) with server-side cancel; captures query IDs for tracing.
 - 📝 **Always-On History**: Auto-logs executions (success/error/timeout) to JSONL + SHA-hashed SQL artifacts. Fallback to `~/.igloo_mcp/logs/` if no workspace.
 - 📦 **Smart Caching**: Cache results (up to 5k rows as CSV/JSONL) by SQL + context; modes for refresh/read-only. Instant for AI replays.
 - 📊 **Auto Insights**: Every query returns `key_metrics` (null ratios, ranges, top values) + insights – fuels LLM reasoning without follow-up SQL.
-- 🧠 **Error Handling**: Compact errors; verbose mode for hints. v0.2.3 adds better REST init fallbacks and v0.2.5 ensures health-check feedback routes through the new `get_comprehensive_health` monitor.
+- 🧠 **Error Handling**: Compact errors; verbose mode for hints. v0.2.3 adds better REST init fallbacks and v0.2.5 ensures health-check feedback routes through the new `get_comprehensive_health` monitor. v0.3.0 improves timeout error messaging with catalog-based filtering guidance.
 - 📡 **Source Attribution**: v0.2.5+ includes structured `source_databases`/`tables` fields in both query responses and history logs so compliance reviews no longer rely on session defaults.
-- 🧩 **MCP-Compliant Tools**: Clean set for agentic use – no extras. Consolidated in v0.2.3 for reporting workflows.
-- 📂 **Unified Storage**: All data (query history, artifacts, reports) stored together per instance for easy access across projects
+- 🧩 **MCP-Compliant Tools**: 11 focused tools for querying, cataloging, lineage, and living reports. Consolidated in v0.2.3 for reporting workflows.
+- 📂 **Unified Storage**: All data (query history, artifacts, reports) stored together per instance for easy access across projects. Reports use `~/.igloo_mcp/reports/` by default in v0.3.0+.
+- 📋 **Living Reports**: JSON-backed, auditable business reports that evolve safely with LLM assistance (v0.3.0+). Three-layer architecture: Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs.
 - ⚡ **Simple Backend**: SnowCLI integration for max performance; CLI/REST modes. Python 3.12+, MIT-licensed.
 
 Full API in [docs/api/README.md](./docs/api/README.md).
@@ -30,7 +31,7 @@ The official [Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp) is a po
 - **Simpler Setup**: SnowCLI-based – no YAML service configs. Just install, pick a profile, and go. Official requires detailed service listings and permission tuning.
 - **Dev Workflow Boosts**: Always-on query history (JSONL audits), result caching (instant replays, no re-hits on Snowflake), and auto-insights (row summaries for LLM reasoning – no extra SQL). Official emphasizes Cortex but lacks these for rapid iteration.
 - **Agent-Safe Defaults**: Blocks risky SQL (DDL/DML) out-of-box, with timeouts/cancellation. Official is flexible but needs config for guards.
-- **Lightweight Focus**: 6 core MCP tools for querying, cataloging, and lineage – perfect for AI prototypes. Skip Cortex bloat if you don't need RAG/agents.
+- **Lightweight Focus**: 11 focused MCP tools for querying, cataloging, lineage, and living reports – perfect for AI prototypes. Skip Cortex bloat if you don't need RAG/agents.
 - **Performance Edge**: Optimized for local/dev (CLI mode default; REST fallback added in v0.2.3). Official is container-heavy for prod.
 - **Transparent Attribution**: v0.2.5+ logs `source_databases` + fully-qualified `tables` for every query result/history entry so cross-database access is always auditable.
 
@@ -56,14 +57,16 @@ Igloo exposes 11 focused tools for Snowflake ops. Use via any MCP client (e.g., 
 
 Detailed schemas in [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md).
 
-## Living Reports (Beta)
+## Living Reports (v0.3.0+)
 
 Living Reports are JSON-backed, auditable business reports that evolve safely with LLM assistance. Key features:
 
 - **Structured**: JSON schema with sections, insights, and supporting queries
-- **Auditable**: Full history of changes with actor tracking
-- **LLM-Evolvable**: Use `evolve_report` tool to safely modify reports
+- **Auditable**: Full history of changes with actor tracking and immutable audit logs
+- **LLM-Evolvable**: Use `evolve_report` tool to safely modify reports with validation
 - **MCP-First**: Primary interface through AI assistants and MCP tools
+- **Quarto Rendering**: Export to HTML, PDF, Markdown, or DOCX via `render_report`
+- **Three-Layer Architecture**: Presentation (Quarto), Machine Truth (JSON), Immutable Memory (audit logs)
 
 **MCP Usage:**
 ```python
@@ -71,6 +74,7 @@ Living Reports are JSON-backed, auditable business reports that evolve safely wi
 result = await evolve_report(
     report_selector="Q1 Sales Analysis",
     instruction="Prioritize revenue drivers over user acquisition",
+    proposed_changes={...},  # Structured changes from LLM
     constraints={"max_importance_delta": 2}
 )
 ```
@@ -102,17 +106,9 @@ snow connection add --name quickstart --account <your-account> --user <username>
 ```
 
 ### Launch & Test in Cursor/Claude (1 min)
-## Usage Notes: Required `reason` Parameter (v0.2.4+ / still mandatory in v0.3.0)
 
-- **Every `execute_query` needs `reason`** (5+ chars): Explains query purpose for audits.
-- Examples:
-  ```python
-  execute_query(statement="SELECT * FROM sales LIMIT 10", reason="Preview recent orders")
-  execute_query(statement="SELECT COUNT(*) FROM users WHERE date >= '2025-01-01'", reason="Validate user growth Q1")
-  ```
-- **Why?** Improves Snowflake QUERY_TAG, history searchability, and team collaboration.
-- Backward compatible with existing logs.
 Copy [docs/config/mcp-client-config.example.json](./docs/config/mcp-client-config.example.json) to `~/.cursor/mcp.json` (or client-specific path):
+
 ```json
 {
   "mcpServers": {
@@ -124,9 +120,21 @@ Copy [docs/config/mcp-client-config.example.json](./docs/config/mcp-client-confi
   }
 }
 ```
+
 Restart client; test: Ask "Preview the customers table" – should return safe rows + insights.
 
 Full client guides: [docs/installation.md](./docs/installation.md).
+
+## Usage Notes: Required `reason` Parameter (v0.3.0)
+
+- **Every `execute_query` needs `reason`** (5+ chars): Explains query purpose for audits.
+- Examples:
+  ```python
+  execute_query(statement="SELECT * FROM sales LIMIT 10", reason="Preview recent orders")
+  execute_query(statement="SELECT COUNT(*) FROM users WHERE date >= '2025-01-01'", reason="Validate user growth Q1")
+  ```
+- **Why?** Improves Snowflake QUERY_TAG, history searchability, and team collaboration.
+- Backward compatible with existing logs.
 
 ## Advanced: History & Caching
 
@@ -136,7 +144,7 @@ Full client guides: [docs/installation.md](./docs/installation.md).
 **Optional Configuration**: All history/artifact/report paths have sensible defaults. Only set these environment variables if you need custom paths or to disable features:
 - `IGLOO_MCP_QUERY_HISTORY` - Optional. Defaults to `~/.igloo_mcp/logs/doc.jsonl` (global) or `<repo>/logs/doc.jsonl` (repo scope). Set to `disabled` to turn off history.
 - `IGLOO_MCP_ARTIFACT_ROOT` - Optional. Defaults to `~/.igloo_mcp/logs/artifacts` (global) or `<repo>/logs/artifacts` (repo scope).
-- `IGLOO_MCP_REPORTS_ROOT` - Optional. Defaults to `~/.igloo_mcp/reports` (global) or `<repo>/reports` (repo scope).
+- `IGLOO_MCP_REPORTS_ROOT` - Optional. Defaults to `~/.igloo_mcp/reports` (global) or `<repo>/reports` (repo scope). **Note**: In v0.3.0+, reports use unified storage at `~/.igloo_mcp/reports/` by default for cross-project access.
 
 See [Configuration Guide](./docs/configuration.md) for details.
 
