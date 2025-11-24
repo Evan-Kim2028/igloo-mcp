@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Dict, List
 from unittest.mock import patch
 
-
 from igloo_mcp.cache.query_result_cache import QueryResultCache
 from igloo_mcp.config import Config, SnowflakeConfig
 from igloo_mcp.mcp.tools.execute_query import ExecuteQueryTool

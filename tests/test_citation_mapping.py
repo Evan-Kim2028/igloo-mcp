@@ -2,7 +2,6 @@
 
 import uuid
 
-
 from igloo_mcp.living_reports.models import (
     DatasetSource,
     Insight,

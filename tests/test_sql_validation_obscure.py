@@ -5,7 +5,6 @@ Tests complex and edge case SQL patterns that might cause validation issues.
 
 from __future__ import annotations
 
-
 from igloo_mcp.sql_validation import validate_sql_statement
 
 
