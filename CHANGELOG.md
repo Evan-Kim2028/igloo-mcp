@@ -3,6 +3,50 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.3.0] - 2025-11-23
+
+### Added
+- **Living Reports System**: Complete implementation of auditable, LLM-assisted report generation with three-layer architecture (Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs)
+- **MCP `evolve_report` Tool**: LLM-agnostic framework for structured report evolution
+- **MCP `render_report` Tool**: Quarto-based rendering to HTML/PDF/Markdown/DOCX
+- **CLI Report Commands**: `igloo report create/evolve/render/revert/open/list` subcommands for full report lifecycle management
+- **Report Storage & Locking**: Atomic writes, crash recovery, cross-platform file locking, and backup rotation
+- **HistoryIndex Integration**: Reports can reference cached query results via execution_id/sql_sha256 for provenance
+- **Pydantic Data Models**: Complete type system for reports, insights, sections, audit events, and index entries
+- **Global Report Index**: UUID-based report registry with title resolution and filesystem reconciliation
+- `IGLOO_MCP_REPORTS_ROOT` environment variable for explicit reports directory control
+- Automatic reports directory creation on first use
+
+### Removed
+- `preview_table` tool (replaced by `execute_query` with `SELECT * FROM table LIMIT n`)
+- **report_scaffold** tool (deprecated in favor of direct report creation via CLI)
+
+### Fixed
+- **DESCRIBE TABLE Classification** (#41): DESCRIBE statements now correctly classified as 'Describe' type instead of 'Command', enabling proper permission handling
+- **Timeout Error Messaging** (#42): Error messages now prioritize catalog-based filtering and clustering key guidance before suggesting timeout increases
+
+### Changed
+- **BREAKING**: Living reports now use unified storage with query history and artifacts
+  - Default location: `~/.igloo-mcp/reports/` (follows IGLOO_MCP_LOG_SCOPE)
+  - Configure via: `IGLOO_MCP_REPORTS_ROOT` environment variable
+  - Migration: Move existing reports from `<repo>/reports/` to `~/.igloo-mcp/reports/`
+- Major version upgrade: Version bump to **0.3.0** reflecting significant improvements and new features
+
+# [0.2.7] - 2025-01-XX
+
+### Added
+- **Auto-generated UUIDs**: `insight_id` and `section_id` are now optional for additions (`insights_to_add`, `sections_to_add`). UUIDs are automatically generated if not provided, reducing boilerplate code.
+- **Partial Update Support**: When modifying insights or sections, only specified fields are updated. Fields not provided (or set to `None`) remain unchanged, enabling granular updates.
+- **Atomic Add-and-Link**: New `insights` field in `SectionChange` allows creating insights inline within section additions. Insights are created atomically with the section and automatically linked, eliminating the need for separate add-and-link operations.
+- **Enhanced Error Messages**: Validation errors now include structured information with field paths (e.g., `insights_to_modify[0].insight_id`), actual values, and available IDs for "not found" errors. Both string format (backward compatible) and structured format (in `context.structured_errors`) are provided.
+
+### Changed
+- **BREAKING**: `validate_against_outline()` now returns `List[ValidationErrorDetail]` instead of `List[str]`. String format is maintained via `to_string()` method for backward compatibility.
+- Validation now requires at least one non-ID field for modifications to prevent empty update operations.
+
+### Fixed
+- Improved error messages for invalid insight/section IDs now include available IDs to help users find the correct values.
+
 # [0.2.5] - 2025-11-22
 
 ### Added

@@ -1,3 +1,8 @@
+"""History index functionality for resolving datasets in living reports.
+
+This module provides the HistoryIndex class for resolving datasets from query history.
+"""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..path_utils import find_repo_root
-from .manifest import DatasetRef, DatasetSource
+from .models import DatasetSource, ResolvedDataset
 
 
 def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
@@ -30,17 +35,6 @@ def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
 
 
 @dataclass
-class ResolvedDataset:
-    """Concrete dataset resolved from history/cache artifacts."""
-
-    name: str
-    rows: List[Dict[str, Any]]
-    columns: List[str]
-    key_metrics: Optional[Dict[str, Any]]
-    insights: List[Any]
-    provenance: Dict[str, Any]
-
-
 class DatasetResolutionError(RuntimeError):
     """Raised when a manifest dataset cannot be bound to artifacts."""
 
@@ -125,7 +119,11 @@ class HistoryIndex:
         return rows
 
     def resolve_dataset(
-        self, dataset: DatasetRef, *, repo_root: Optional[Path] = None
+        self,
+        dataset_name: str,
+        source: DatasetSource,
+        *,
+        repo_root: Optional[Path] = None,
     ) -> ResolvedDataset:
         """Resolve a single dataset reference into concrete rows + metadata.
 
@@ -135,7 +133,6 @@ class HistoryIndex:
         3. History record's cache_manifest field.
         """
 
-        source = dataset.source
         repo_root = repo_root or find_repo_root()
 
         manifest_path: Optional[Path] = None
@@ -149,7 +146,7 @@ class HistoryIndex:
             history_record = self._resolve_history_record(source)
             if history_record is None:
                 raise DatasetResolutionError(
-                    f"No history entry found for dataset {dataset.name!r}"
+                    f"No history entry found for dataset {dataset_name!r}"
                 )
             artifacts = history_record.get("artifacts") or {}
             cache_manifest = artifacts.get("cache_manifest") or history_record.get(
@@ -157,7 +154,7 @@ class HistoryIndex:
             )
             if not cache_manifest:
                 raise DatasetResolutionError(
-                    f"History entry for dataset {dataset.name!r} lacks cache_manifest"
+                    f"History entry for dataset {dataset_name!r} lacks cache_manifest"
                 )
             manifest_path = self._resolve_manifest_path(str(cache_manifest), repo_root)
 
@@ -179,7 +176,7 @@ class HistoryIndex:
         )
 
         provenance: Dict[str, Any] = {
-            "dataset": dataset.name,
+            "dataset": dataset_name,
             "cache_manifest_path": str(manifest_path),
             "rows_path": str(rows_path),
             "created_at": manifest_data.get("created_at"),
@@ -198,13 +195,10 @@ class HistoryIndex:
                 provenance.setdefault("ts", history_record.get("ts"))
 
         return ResolvedDataset(
-            name=dataset.name,
+            name=dataset_name,
             rows=rows,
             columns=columns,
             key_metrics=key_metrics,
             insights=insights,
             provenance=provenance,
         )
-
-
-__all__ = ["HistoryIndex", "ResolvedDataset", "DatasetResolutionError"]

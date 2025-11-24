@@ -300,7 +300,7 @@ class MCPResourceManager:
         if availability.state == ResourceState.UNAVAILABLE:
             if "profile" in self.dependencies.get(resource_name, []):
                 recommendations.append(
-                    "Check Snowflake profile configuration with 'check_profile_config' tool"
+                    "Check Snowflake profile configuration with 'health_check' tool (include_profile=True)"
                 )
                 recommendations.append(
                     "Ensure SNOWFLAKE_PROFILE environment variable is set correctly"

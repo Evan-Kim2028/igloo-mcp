@@ -135,7 +135,7 @@ class TestMCPToolProfileCheck:
         """Test profile check tool with valid configuration."""
         with mock_config_with_profiles(["dev", "prod"], default="dev"):
             with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "dev"}):
-                from igloo_mcp.mcp_server import _get_profile_recommendations
+                from igloo_mcp.mcp.utils import get_profile_recommendations
 
                 # Test the recommendation function
                 from igloo_mcp.profile_utils import get_profile_summary
@@ -143,7 +143,7 @@ class TestMCPToolProfileCheck:
                 summary = get_profile_summary()
                 assert summary.default_profile == "dev"
                 assert summary.profile_count == 2
-                recommendations = _get_profile_recommendations("dev")
+                recommendations = get_profile_recommendations("dev")
 
                 assert isinstance(recommendations, list)
                 assert len(recommendations) > 0
@@ -152,13 +152,13 @@ class TestMCPToolProfileCheck:
         """Test profile check tool identifies configuration issues."""
         with mock_config_with_profiles(["dev", "prod"], default=None):  # No default
             with patch.dict(os.environ, {}, clear=True):  # No env var
-                from igloo_mcp.mcp_server import _get_profile_recommendations
+                from igloo_mcp.mcp.utils import get_profile_recommendations
                 from igloo_mcp.profile_utils import get_profile_summary
 
                 summary = get_profile_summary()
                 assert summary.default_profile is None
                 assert summary.profile_count == 2
-                recommendations = _get_profile_recommendations(None)
+                recommendations = get_profile_recommendations(None)
 
                 assert isinstance(recommendations, list)
                 assert len(recommendations) > 0

@@ -77,49 +77,20 @@ The MCP server exposes these tools to AI assistants:
 | Tool | Description | Key Parameters | Returns |
 |------|-------------|----------------|---------|
 | `execute_query` | Execute SQL queries against Snowflake with safety checks, timeouts, and cancellation | `statement`, `timeout_seconds`, `verbose_errors`, `reason`, `warehouse`, `database`, `schema`, `role` | `{ statement, rowcount, rows, query_id?, duration_ms? }` |
-| `preview_table` | Preview table contents | `table_name`, `limit`, `warehouse`, `database`, `schema`, `role` | Column metadata and rows |
 | `build_catalog` | Generate comprehensive data catalogs | `output_dir`, `database`, `account`, `format` | Catalog totals and output location |
 | `get_catalog_summary` | Retrieve existing catalog summaries | `catalog_dir` | Catalog statistics and metadata |
 | `search_catalog` | Search locally cached catalog artifacts | `catalog_dir`, `object_types`, `database`, `schema`, `name_contains`, `column_contains`, `limit` | Matching catalog entries with column metadata |
 | `build_dependency_graph` | Create object dependency graphs | `database`, `schema`, `account`, `format` | Dependency graph in JSON or DOT |
 | `test_connection` | Test Snowflake connection | — | Connection status |
 | `health_check` | Comprehensive server health | — | System, profile, and resource health |
+| `evolve_report` | Evolve a living report using LLM assistance | `report_selector`, `instruction`, `constraints`, `dry_run` | Validation or evolution result for the report |
+| `render_report` | Render reports to various formats | `report_selector`, `format`, `persist_output` | Rendered report content or file path |
 
 ## Configuration
 
-### VS Code / Cursor Configuration
-
-Create or update your MCP configuration file (usually `~/.vscode/mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "igloo-tools": {
-      "command": "uv",
-      "args": ["run", "igloo-mcp"],
-      "cwd": "/path/to/your/igloo-mcp"
-    }
-  }
-}
-```
-
-### Claude Code Configuration
-
-Add to your Claude Code MCP settings:
-
-```json
-{
-  "mcp": {
-    "igloo-tools": {
-      "command": "uv",
-      "args": ["run", "igloo-mcp"],
-      "cwd": "/path/to/your/igloo-mcp"
-    }
-  }
-}
-```
-
-### Environment Variables
+For MCP client configuration and setup instructions, see:
+- [MCP Integration Guide](../mcp-integration.md) - General MCP setup for all clients
+- [Cursor MCP Setup](cursor-mcp-setup.md) - Cursor-specific configuration
 
 The MCP server respects the following environment variables:
 
@@ -248,3 +219,11 @@ For issues with the MCP server:
 4. Check that you're using compatible versions of all components
 
 The MCP server exposes Igloo MCP functionality through structured tools, so most issues can be diagnosed by checking the service layer or testing with the Python API directly.
+
+## See Also
+
+- [MCP Integration Guide](../mcp-integration.md) - General MCP setup and configuration
+- [Cursor MCP Setup](cursor-mcp-setup.md) - Cursor-specific setup instructions
+- [MCP Server Technical Guide](mcp_server_technical_guide.md) - Technical implementation details
+- [MCP Architecture](mcp_architecture.md) - MCP protocol design patterns
+- [API Reference](../api-reference.md) - Complete MCP tools documentation

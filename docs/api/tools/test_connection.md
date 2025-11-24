@@ -58,5 +58,4 @@ else:
 
 ## Related
 
-- [check_profile_config](check_profile_config.md) - Validate profile setup
-- [health_check](health_check.md) - Comprehensive health status with authenticator details
+- [health_check](health_check.md) - Comprehensive health status with authenticator details and profile validation

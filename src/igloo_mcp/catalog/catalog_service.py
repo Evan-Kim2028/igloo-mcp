@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from ..path_utils import resolve_catalog_path, resolve_catalog_root
 from ..snow_cli import SnowCLI
 
 logger = logging.getLogger(__name__)
@@ -78,11 +80,12 @@ class CatalogService:
         max_ddl_concurrency: int = 8,
         catalog_concurrency: int = 16,
         export_sql: bool = False,
+        use_unified_storage: bool = True,
     ) -> CatalogResult:
         """Build catalog metadata.
 
         Args:
-            output_dir: Output directory for catalog files
+            output_dir: Output directory for catalog files (default: ./data_catalogue)
             database: Specific database to catalog (None for current)
             account_scope: Whether to catalog entire account
             output_format: Output format ('json' or 'jsonl')
@@ -90,22 +93,34 @@ class CatalogService:
             max_ddl_concurrency: Maximum DDL concurrency
             catalog_concurrency: Maximum catalog concurrency
             export_sql: Whether to export SQL files
+            use_unified_storage: If True and output_dir is default, use unified storage
 
         Returns:
             Catalog build result with totals
         """
         try:
+            # Determine output directory
+            # If using unified storage and output_dir is the default, resolve to unified storage
+            if use_unified_storage and output_dir == "./data_catalogue":
+                output_path = resolve_catalog_path(
+                    database=database,
+                    account_scope=account_scope,
+                )
+                output_dir = str(output_path)
+            else:
+                output_path = Path(output_dir)
+
             # Create output directory
-            output_path = Path(output_dir)
             output_path.mkdir(parents=True, exist_ok=True)
 
             # Build basic catalog structure
+            build_timestamp = datetime.now(timezone.utc).isoformat()
             catalog_data = {
                 "metadata": {
                     "database": database or "current",
                     "account_scope": account_scope,
                     "format": output_format,
-                    "timestamp": "2024-01-01T00:00:00Z",
+                    "timestamp": build_timestamp,
                 },
                 "databases": [],
                 "schemas": [],
@@ -148,6 +163,46 @@ class CatalogService:
             summary_file = output_path / "catalog_summary.json"
             with open(summary_file, "w") as f:
                 json.dump(summary_data, f, indent=2)
+
+            # Save metadata file for incremental updates (per database)
+            # Check if this is a unified storage path (either resolved or explicitly provided)
+            try:
+                catalog_root = resolve_catalog_root()
+                is_unified_storage_path = use_unified_storage or str(
+                    output_path
+                ).startswith(str(catalog_root))
+            except Exception:
+                # If path resolution fails, fall back to use_unified_storage flag
+                is_unified_storage_path = use_unified_storage
+
+            if is_unified_storage_path and not account_scope:
+                metadata_file = output_path / "_catalog_metadata.json"
+                total_objects = (
+                    totals.tables
+                    + totals.views
+                    + totals.materialized_views
+                    + totals.dynamic_tables
+                    + totals.tasks
+                    + totals.functions
+                    + totals.procedures
+                )
+                metadata_data = {
+                    "last_build": build_timestamp,
+                    "last_full_refresh": build_timestamp,
+                    "database": database or "current",
+                    "total_objects": total_objects,
+                    "schema_count": totals.schemas,
+                    "table_count": totals.tables,
+                    "view_count": totals.views,
+                    "materialized_view_count": totals.materialized_views,
+                    "dynamic_table_count": totals.dynamic_tables,
+                    "task_count": totals.tasks,
+                    "function_count": totals.functions,
+                    "procedure_count": totals.procedures,
+                    "column_count": totals.columns,
+                }
+                with open(metadata_file, "w") as f:
+                    json.dump(metadata_data, f, indent=2)
 
             return CatalogResult(totals=totals, output_dir=output_dir, success=True)
 

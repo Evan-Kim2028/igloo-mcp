@@ -5,14 +5,27 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 import anyio
 
 from igloo_mcp.catalog import CatalogService
+from igloo_mcp.mcp.exceptions import (
+    MCPSelectorError,
+    MCPValidationError,
+)
+from igloo_mcp.path_utils import resolve_catalog_path, validate_safe_path
 
-from .base import MCPTool
+from .base import MCPTool, tool_error_handler
 from .schema_utils import string_schema
+
+try:
+    from fastmcp.utilities.logging import get_logger
+except ImportError:
+    from mcp.server.fastmcp.utilities.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class GetCatalogSummaryTool(MCPTool):
@@ -32,7 +45,12 @@ class GetCatalogSummaryTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return "Retrieve summary information from existing catalog"
+        return (
+            "Retrieve high-level summary statistics from an existing catalog built via build_catalog. "
+            "Returns aggregate counts (databases, schemas, tables, etc.) and metadata. "
+            "Use search_catalog to find specific objects or filter by name/column. "
+            "Use this tool to get overview statistics about a catalog directory."
+        )
 
     @property
     def category(self) -> str:
@@ -55,39 +73,110 @@ class GetCatalogSummaryTool(MCPTool):
             },
         ]
 
+    @tool_error_handler("get_catalog_summary")
     async def execute(
-        self, catalog_dir: str = "./data_catalogue", **kwargs: Any
+        self,
+        catalog_dir: str = "./data_catalogue",
+        database: Optional[str] = None,
+        request_id: Optional[str] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Get catalog summary.
 
         Args:
-            catalog_dir: Catalog directory path (default: ./data_catalogue)
+            catalog_dir: Catalog directory path (default: ./data_catalogue, resolves to unified storage)
+            database: Optional database name to resolve unified storage path (ignored if catalog_dir is custom)
+            request_id: Optional request correlation ID for tracing (auto-generated if not provided)
 
         Returns:
             Catalog summary with metadata and statistics
 
         Raises:
-            FileNotFoundError: If catalog directory or summary file not found
-            RuntimeError: If summary cannot be loaded
+            MCPSelectorError: If catalog directory or summary file not found
+            MCPExecutionError: If summary cannot be loaded
         """
+        # If catalog_dir is default, try to resolve to unified storage
+        if catalog_dir == "./data_catalogue":
+            try:
+                resolved_path = resolve_catalog_path(
+                    database=database,
+                    account_scope=False,
+                )
+                catalog_dir = str(resolved_path)
+            except Exception:
+                # If resolution fails, use default path (backward compatibility)
+                pass
+
+        logger.info(
+            "get_catalog_summary_started",
+            extra={
+                "catalog_dir": catalog_dir,
+                "database": database,
+                "request_id": request_id,
+            },
+        )
+
+        # Validate catalog directory path (prevent path traversal)
+        # Skip validation for unified storage paths (absolute paths from resolve_catalog_path)
+        # Only validate relative paths
+        catalog_path = Path(catalog_dir)
+        if not catalog_path.is_absolute():
+            try:
+                validated_catalog_dir = validate_safe_path(
+                    catalog_dir,
+                    reject_parent_dirs=True,
+                )
+                catalog_dir = str(validated_catalog_dir)
+            except MCPValidationError:
+                raise  # Re-raise validation errors
+            except Exception as e:
+                raise MCPValidationError(
+                    f"Invalid catalog directory path: {str(e)}",
+                    validation_errors=[f"Path validation failed: {catalog_dir}"],
+                    hints=[
+                        "Use a relative path within the current directory",
+                        "Do not use '..' in paths",
+                    ],
+                ) from e
+
         try:
             summary = await anyio.to_thread.run_sync(
                 self.catalog_service.load_summary, catalog_dir
             )
-            return {"status": "success", "catalog_dir": catalog_dir, "summary": summary}
 
-        except FileNotFoundError:
+            logger.info(
+                "get_catalog_summary_completed",
+                extra={
+                    "catalog_dir": catalog_dir,
+                    "request_id": request_id,
+                },
+            )
+
             return {
-                "status": "error",
-                "error": f"No catalog found in '{catalog_dir}'. Run build_catalog first to generate the catalog.",
+                "status": "success",
                 "catalog_dir": catalog_dir,
+                "summary": summary,
             }
-        except Exception as e:
-            return {
-                "status": "error",
-                "error": f"Failed to load catalog summary: {e}",
-                "catalog_dir": catalog_dir,
-            }
+
+        except FileNotFoundError as e:
+            logger.warning(
+                "get_catalog_summary_not_found",
+                extra={
+                    "catalog_dir": catalog_dir,
+                    "error": str(e),
+                    "request_id": request_id,
+                },
+            )
+
+            raise MCPSelectorError(
+                f"No catalog found in '{catalog_dir}'. Run build_catalog first to generate the catalog.",
+                selector=catalog_dir,
+                error="not_found",
+                hints=[
+                    f"Verify catalog_dir exists: {catalog_dir}",
+                    "Run build_catalog first to create catalog artifacts",
+                ],
+            ) from e
 
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
@@ -97,10 +186,22 @@ class GetCatalogSummaryTool(MCPTool):
             "additionalProperties": False,
             "properties": {
                 "catalog_dir": string_schema(
-                    "Catalog directory path containing summary artifacts.",
+                    "Catalog directory path containing summary artifacts. "
+                    "Defaults to './data_catalogue' which resolves to unified storage "
+                    "at ~/.igloo_mcp/catalogs/{database}/. Specify a custom path to override.",
                     title="Catalog Directory",
                     default="./data_catalogue",
                     examples=["./data_catalogue", "./artifacts/catalog"],
                 ),
+                "database": {
+                    "type": "string",
+                    "description": "Optional database name to resolve unified storage path. "
+                    "Only used when catalog_dir is default. Ignored if catalog_dir is custom.",
+                    "title": "Database",
+                },
+                "request_id": {
+                    "type": "string",
+                    "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
+                },
             },
         }

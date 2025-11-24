@@ -7,36 +7,57 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import os
 import threading
 import time
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Optional
 
 import anyio
 
 try:  # pragma: no cover - imported for typing/runtime compatibility only
     from fastmcp import Context
+    from fastmcp.utilities.logging import get_logger
 except ImportError:  # pragma: no cover
     try:
         from mcp.server.fastmcp import (
             Context,  # type: ignore[import-untyped,assignment]
         )
+        from mcp.server.fastmcp.utilities.logging import (
+            get_logger,  # type: ignore[import-untyped]
+        )
     except ImportError:  # pragma: no cover
         Context = Any  # type: ignore[misc,assignment]
+        import logging
+
+        def get_logger(name: str) -> logging.Logger:
+            return logging.getLogger(name)
+
 
 from igloo_mcp.cache import QueryResultCache
 from igloo_mcp.config import Config
+from igloo_mcp.constants import (
+    ALLOWED_SESSION_PARAMETERS,
+    MAX_QUERY_TIMEOUT_SECONDS,
+    MAX_REASON_LENGTH,
+    MAX_SQL_STATEMENT_LENGTH,
+    MIN_QUERY_TIMEOUT_SECONDS,
+    RESULT_KEEP_FIRST_ROWS,
+    RESULT_KEEP_LAST_ROWS,
+    RESULT_SIZE_LIMIT_MB,
+    RESULT_TRUNCATION_THRESHOLD,
+    STATEMENT_PREVIEW_LENGTH,
+)
 from igloo_mcp.logging import (
     Insight,
     QueryHistory,
     normalize_insight,
     truncate_insight_for_storage,
 )
+from igloo_mcp.mcp.error_utils import wrap_execution_error, wrap_timeout_error
+from igloo_mcp.mcp.exceptions import MCPValidationError
 from igloo_mcp.mcp.utils import json_compatible
 from igloo_mcp.mcp_health import MCPHealthMonitor
 from igloo_mcp.path_utils import (
@@ -55,7 +76,7 @@ from igloo_mcp.session_utils import (
 from igloo_mcp.sql_objects import extract_query_objects
 from igloo_mcp.sql_validation import validate_sql_statement
 
-from .base import MCPTool
+from .base import MCPTool, tool_error_handler
 from .schema_utils import (
     boolean_schema,
     integer_schema,
@@ -63,7 +84,7 @@ from .schema_utils import (
     string_schema,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _write_sql_artifact(
@@ -92,28 +113,8 @@ def _relative_sql_path(repo_root: Path, artifact_path: Optional[Path]) -> Option
         return artifact_path.resolve().as_posix()
 
 
-@dataclass
-class AsyncQueryJobState:
-    execution_id: str
-    status: Literal["pending", "running", "success", "error"]
-    submitted_ts: float
-    timeout_seconds: int
-    statement_preview: str
-    sql_sha256: str | None = None
-    started_ts: float | None = None
-    completed_ts: float | None = None
-    result: Dict[str, Any] | None = None
-    error: str | None = None
-
-
 class ExecuteQueryTool(MCPTool):
     """MCP tool for executing SQL queries against Snowflake."""
-
-    AUTO_ASYNC_MARGIN_SECONDS = 5.0
-    AUTO_ASYNC_POLL_INTERVAL_SECONDS = 0.5
-    ASYNC_JOB_RETENTION_SECONDS = 600
-    ASYNC_JOB_MAX_ENTRIES = 200
-    ASYNC_JOB_TIMEOUT_GRACE_SECONDS = 5.0
 
     def __init__(
         self,
@@ -145,9 +146,6 @@ class ExecuteQueryTool(MCPTool):
         self._cache_enabled = self.cache.enabled
         self._cache_mode = self.cache.mode
         self._static_audit_warnings.extend(self.cache.pop_warnings())
-        self._async_jobs: dict[str, AsyncQueryJobState] = {}
-        self._jobs_lock = threading.Lock()
-        self._rpc_soft_timeout = self._resolve_rpc_soft_timeout()
 
     @property
     def name(self) -> str:
@@ -187,21 +185,6 @@ class ExecuteQueryTool(MCPTool):
         )
         return None, warnings
 
-    def _resolve_rpc_soft_timeout(self) -> int:
-        raw = os.environ.get("IGLOO_MCP_RPC_SOFT_TIMEOUT")
-        default = 110
-        if not raw:
-            return default
-        try:
-            parsed = int(raw)
-            # Keep the limit reasonable to avoid accidental 0/negative values
-            return max(parsed, 30)
-        except (TypeError, ValueError):
-            self._static_audit_warnings.append(
-                "Invalid IGLOO_MCP_RPC_SOFT_TIMEOUT value; falling back to 110s."
-            )
-            return default
-
     def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Optional[Path]:
         if self._artifact_root is None:
             self._transient_audit_warnings.append(
@@ -214,295 +197,6 @@ class ExecuteQueryTool(MCPTool):
                 "Failed to persist SQL text for audit history."
             )
         return artifact_path
-
-    async def _enqueue_async_job(
-        self,
-        *,
-        statement: str,
-        warehouse: Optional[str],
-        database: Optional[str],
-        schema: Optional[str],
-        role: Optional[str],
-        timeout_seconds: Optional[int],
-        verbose_errors: bool,
-        reason: Optional[str],
-        normalized_insight: Optional[Insight],
-        ctx: Context | None,
-    ) -> Dict[str, Any]:
-        execution_id = uuid.uuid4().hex
-        sql_sha256 = hashlib.sha256(statement.encode("utf-8")).hexdigest()
-        timeout = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
-        now = time.time()
-        job_state = AsyncQueryJobState(
-            execution_id=execution_id,
-            status="pending",
-            submitted_ts=now,
-            timeout_seconds=timeout,
-            statement_preview=statement[:200],
-            sql_sha256=sql_sha256,
-        )
-        with self._jobs_lock:
-            self._prune_async_jobs_locked(now)
-            self._async_jobs[execution_id] = job_state
-
-        if ctx is not None:
-            try:
-                await ctx.report_progress(0, 100, "Query enqueued for async execution")
-            except Exception:
-                pass
-
-        async def _async_runner() -> None:
-            await self._run_async_job(
-                job_state,
-                statement=statement,
-                warehouse=warehouse,
-                database=database,
-                schema=schema,
-                role=role,
-                timeout_seconds=timeout_seconds,
-                verbose_errors=verbose_errors,
-                reason=reason,
-                normalized_insight=normalized_insight,
-                sql_sha_override=sql_sha256,
-            )
-
-        def _runner() -> None:
-            anyio.run(_async_runner)
-
-        threading.Thread(target=_runner, daemon=True).start()
-
-        return {
-            "status": "accepted",
-            "execution_id": execution_id,
-            "message": (
-                "Query accepted for asynchronous execution. Call fetch_async_query_result"
-                " with this execution_id to check status or retrieve cached rows."
-            ),
-            "timeout_seconds": timeout,
-            "sql_sha256": sql_sha256,
-            "poll_tool": "fetch_async_query_result",
-        }
-
-    async def _execute_auto_mode(
-        self,
-        *,
-        statement: str,
-        warehouse: Optional[str],
-        database: Optional[str],
-        schema: Optional[str],
-        role: Optional[str],
-        timeout_seconds: Optional[int],
-        verbose_errors: bool,
-        reason: Optional[str],
-        normalized_insight: Optional[Insight],
-        ctx: Context | None,
-    ) -> Dict[str, Any]:
-        accepted = await self._enqueue_async_job(
-            statement=statement,
-            warehouse=warehouse,
-            database=database,
-            schema=schema,
-            role=role,
-            timeout_seconds=timeout_seconds,
-            verbose_errors=verbose_errors,
-            reason=reason,
-            normalized_insight=normalized_insight,
-            ctx=ctx,
-        )
-
-        execution_id = accepted.get("execution_id")
-        if not execution_id:
-            return accepted
-
-        inline_wait = self._auto_inline_wait_budget(timeout_seconds)
-        if inline_wait <= 0:
-            accepted["inline_wait_seconds"] = 0.0
-            accepted.setdefault(
-                "message",
-                "Query running asynchronously; call fetch_async_query_result with the "
-                "provided execution_id to retrieve results when complete.",
-            )
-            return accepted
-
-        deadline = time.time() + inline_wait
-        poll_interval = min(
-            self.AUTO_ASYNC_POLL_INTERVAL_SECONDS,
-            max(inline_wait / 5, 0.1),
-        )
-
-        while True:
-            poll = await self.fetch_async_result(
-                execution_id=execution_id,
-                include_rows=True,
-            )
-            status = poll.get("status")
-            if status == "success" and poll.get("result"):
-                return poll["result"]
-            if status == "error":
-                raise RuntimeError(poll.get("error") or "Asynchronous query failed")
-
-            remaining = deadline - time.time()
-            if remaining <= 0:
-                break
-
-            await anyio.sleep(min(poll_interval, remaining))
-
-        # Inline wait exhausted; attempt one more fetch to capture recent completion
-        poll = await self.fetch_async_result(
-            execution_id=execution_id,
-            include_rows=True,
-        )
-        status = poll.get("status")
-        if status == "success" and poll.get("result"):
-            return poll["result"]
-        if status == "error":
-            raise RuntimeError(poll.get("error") or "Asynchronous query failed")
-
-        accepted["inline_wait_seconds"] = inline_wait
-        accepted["message"] = (
-            "Query still running after %.0fs; call fetch_async_query_result "
-            "with execution_id=%s to retrieve cached results."
-            % (
-                inline_wait,
-                execution_id,
-            )
-        )
-        return accepted
-
-    async def _run_async_job(
-        self,
-        job_state: AsyncQueryJobState,
-        *,
-        statement: str,
-        warehouse: Optional[str],
-        database: Optional[str],
-        schema: Optional[str],
-        role: Optional[str],
-        timeout_seconds: Optional[int],
-        verbose_errors: bool,
-        reason: Optional[str],
-        normalized_insight: Optional[Insight],
-        sql_sha_override: Optional[str],
-    ) -> None:
-        with self._jobs_lock:
-            job_state.status = "running"
-            job_state.started_ts = time.time()
-        try:
-            result = await self._execute_impl(
-                statement=statement,
-                warehouse=warehouse,
-                database=database,
-                schema=schema,
-                role=role,
-                timeout_seconds=timeout_seconds,
-                verbose_errors=verbose_errors,
-                reason=reason,
-                normalized_insight=normalized_insight,
-                ctx=None,
-                execution_id_override=job_state.execution_id,
-                sql_sha_override=sql_sha_override,
-                validate_profile=False,
-                validate_statement=False,
-            )
-            with self._jobs_lock:
-                if job_state.status != "error":
-                    job_state.status = "success"
-                    job_state.result = result
-                    job_state.completed_ts = time.time()
-        except Exception as exc:
-            with self._jobs_lock:
-                if job_state.status != "error":
-                    job_state.status = "error"
-                    job_state.error = str(exc)
-                    job_state.completed_ts = time.time()
-
-    async def fetch_async_result(
-        self,
-        *,
-        execution_id: str,
-        include_rows: bool = True,
-    ) -> Dict[str, Any]:
-        self._prune_async_jobs()
-        with self._jobs_lock:
-            job = self._async_jobs.get(execution_id)
-
-        if job is None:
-            raise ValueError(
-                f"No async query execution found for execution_id={execution_id}"
-            )
-
-        payload: Dict[str, Any] = {
-            "execution_id": execution_id,
-            "status": job.status,
-            "submitted_ts": job.submitted_ts,
-            "started_ts": job.started_ts,
-            "completed_ts": job.completed_ts,
-            "timeout_seconds": job.timeout_seconds,
-            "sql_sha256": job.sql_sha256,
-            "statement_preview": job.statement_preview,
-        }
-
-        cleanup_after_response = False
-        if job.status == "success" and job.result is not None:
-            result = job.result
-            if not include_rows and "rows" in result:
-                result = dict(result)
-                result.pop("rows", None)
-            payload["result"] = result
-            cleanup_after_response = include_rows
-        elif job.status == "error":
-            payload["error"] = job.error
-            cleanup_after_response = True
-
-        if cleanup_after_response:
-            self._cleanup_async_job(execution_id)
-
-        return payload
-
-    def _cleanup_async_job(self, execution_id: str) -> None:
-        with self._jobs_lock:
-            self._async_jobs.pop(execution_id, None)
-
-    def _prune_async_jobs(self) -> None:
-        with self._jobs_lock:
-            self._prune_async_jobs_locked()
-
-    def _prune_async_jobs_locked(self, now: Optional[float] = None) -> None:
-        if now is None:
-            now = time.time()
-
-        to_remove: list[str] = []
-        for exec_id, job in list(self._async_jobs.items()):
-            if (
-                job.completed_ts is not None
-                and now - job.completed_ts > self.ASYNC_JOB_RETENTION_SECONDS
-            ):
-                to_remove.append(exec_id)
-
-        for exec_id in to_remove:
-            self._async_jobs.pop(exec_id, None)
-
-        # Mark long-running in-flight jobs as timed out so callers see terminal state
-        for job in self._async_jobs.values():
-            if job.status in {"pending", "running"} and job.timeout_seconds:
-                if now - job.submitted_ts > (
-                    job.timeout_seconds + self.ASYNC_JOB_TIMEOUT_GRACE_SECONDS
-                ):
-                    job.status = "error"
-                    job.error = (
-                        f"Timed out after {job.timeout_seconds}s of asynchronous work"
-                    )
-                    job.completed_ts = now
-
-        excess = len(self._async_jobs) - self.ASYNC_JOB_MAX_ENTRIES
-        if excess > 0:
-            for exec_id, _ in sorted(
-                self._async_jobs.items(), key=lambda item: item[1].submitted_ts
-            ):
-                if excess <= 0:
-                    break
-                self._async_jobs.pop(exec_id, None)
-                excess -= 1
 
     def _resolve_cache_context(
         self, overrides: Dict[str, Optional[str]]
@@ -558,14 +252,6 @@ class ExecuteQueryTool(MCPTool):
         warnings.extend(self.cache.pop_warnings())
         return warnings
 
-    def _auto_inline_wait_budget(self, timeout_seconds: Optional[int]) -> float:
-        user_limit = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
-        rpc_budget = max(
-            float(self._rpc_soft_timeout) - self.AUTO_ASYNC_MARGIN_SECONDS,
-            0.0,
-        )
-        return max(min(float(user_limit), rpc_budget), 0.0)
-
     async def _ensure_profile_health(self) -> None:
         if not self.health_monitor:
             return
@@ -585,11 +271,17 @@ class ExecuteQueryTool(MCPTool):
             else "none"
         )
         self.health_monitor.record_error(f"Profile validation failed: {error_msg}")
-        raise ValueError(
-            f"Snowflake profile validation failed: {error_msg}. "
-            f"Profile: {self.config.snowflake.profile}, "
-            f"Available profiles: {available}. "
-            "Check configuration with 'snow connection list' or verify profile settings."
+        raise MCPValidationError(
+            f"Snowflake profile validation failed: {error_msg}",
+            validation_errors=[
+                f"Profile: {self.config.snowflake.profile}",
+                f"Available: {available}",
+            ],
+            hints=[
+                "Check configuration with 'snow connection list'",
+                "Verify profile settings",
+                "Run 'snow connection add' to create a new profile",
+            ],
         )
 
     def _enforce_sql_permissions(self, statement: str) -> None:
@@ -603,9 +295,16 @@ class ExecuteQueryTool(MCPTool):
         if not is_valid and error_msg:
             if self.health_monitor:
                 self.health_monitor.record_error(
-                    f"SQL statement blocked: {stmt_type} - {statement[:100]}"
+                    f"SQL statement blocked: {stmt_type} - {statement[:STATEMENT_PREVIEW_LENGTH]}"
                 )
-            raise ValueError(error_msg)
+            raise MCPValidationError(
+                error_msg,
+                validation_errors=[f"Statement type: {stmt_type}"],
+                hints=[
+                    "Set IGLOO_MCP_SQL_PERMISSIONS='write' to enable write operations",
+                    "Use SELECT statements for read-only queries",
+                ],
+            )
 
     def _ensure_default_insights(
         self, result: Dict[str, Any]
@@ -713,7 +412,7 @@ class ExecuteQueryTool(MCPTool):
                 },
             },
             {
-                "description": "Run long analytics query asynchronously",
+                "description": "Run long analytics query with extended timeout",
                 "parameters": {
                     "statement": (
                         "WITH params AS (SELECT DATEADD('day', -30, CURRENT_DATE) AS start_dt) "
@@ -721,7 +420,7 @@ class ExecuteQueryTool(MCPTool):
                     ),
                     "warehouse": "ANALYTICS_WH",
                     "timeout_seconds": 480,
-                    "response_mode": "async",
+                    "response_mode": "sync",
                 },
             },
         ]
@@ -788,6 +487,18 @@ class ExecuteQueryTool(MCPTool):
             await self._ensure_profile_health()
 
         if validate_statement:
+            # Validate SQL statement length
+            if len(statement) > MAX_SQL_STATEMENT_LENGTH:
+                raise MCPValidationError(
+                    f"SQL statement exceeds maximum length of {MAX_SQL_STATEMENT_LENGTH} characters",
+                    validation_errors=[
+                        f"Statement length: {len(statement)} characters"
+                    ],
+                    hints=[
+                        "Break the query into smaller parts",
+                        "Use CTEs or views to simplify complex queries",
+                    ],
+                )
             self._enforce_sql_permissions(statement)
 
         # Prepare session context overrides
@@ -930,7 +641,7 @@ class ExecuteQueryTool(MCPTool):
                 "execution_id": execution_id,
                 "status": "cache_hit",
                 "profile": self.config.snowflake.profile,
-                "statement_preview": statement[:200],
+                "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
                 "rowcount": rowcount,
                 "timeout_seconds": timeout,
                 "overrides": overrides,
@@ -1001,7 +712,7 @@ class ExecuteQueryTool(MCPTool):
             if self.health_monitor and hasattr(
                 self.health_monitor, "record_query_success"
             ):
-                self.health_monitor.record_query_success(statement[:100])  # type: ignore[attr-defined]
+                self.health_monitor.record_query_success(statement[:STATEMENT_PREVIEW_LENGTH])  # type: ignore[attr-defined]
 
             # Persist success history (lightweight JSONL)
             session_context = result.get("session_context") or effective_context
@@ -1055,7 +766,7 @@ class ExecuteQueryTool(MCPTool):
                     "execution_id": execution_id,
                     "status": "success",
                     "profile": self.config.snowflake.profile,
-                    "statement_preview": statement[:200],
+                    "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
                     "rowcount": result.get("rowcount", 0),
                     "timeout_seconds": timeout,
                     "overrides": overrides,
@@ -1120,15 +831,6 @@ class ExecuteQueryTool(MCPTool):
             return result
 
         except TimeoutError as e:
-            # Build tailored timeout messages (compact vs verbose)
-            compact = (
-                f"Query timeout ({timeout}s). Try: timeout_seconds=480, add WHERE/LIMIT clause, "
-                f"or scale warehouse. Use verbose_errors=True for detailed hints. "
-                f"Query ID may be unavailable on timeout."
-            )
-            if self.health_monitor:
-                self.health_monitor.record_error(compact)
-
             # Persist timeout history
             try:
                 completed_ts = time.time()
@@ -1138,7 +840,7 @@ class ExecuteQueryTool(MCPTool):
                     "execution_id": execution_id,
                     "status": "timeout",
                     "profile": self.config.snowflake.profile,
-                    "statement_preview": statement[:200],
+                    "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
                     "timeout_seconds": timeout,
                     "overrides": overrides,
                     "error": str(e),
@@ -1161,45 +863,24 @@ class ExecuteQueryTool(MCPTool):
             except Exception:
                 pass
 
-            if verbose_errors:
-                preview = statement[:200] + ("..." if len(statement) > 200 else "")
-                self._collect_audit_warnings()
-                raise RuntimeError(
-                    "Query timeout after {}s.\n\n".format(timeout)
-                    + "Quick fixes:\n"
-                    + "1. Increase timeout: execute_query(..., timeout_seconds=480)\n"
-                    + "2. Add filter: Add WHERE clause to reduce data volume\n"
-                    + "3. Sample data: Add LIMIT clause for testing (e.g., LIMIT 1000)\n"
-                    + "4. Scale warehouse: Use larger warehouse for complex queries\n\n"
-                    + "Current settings:\n"
-                    + f"  - Timeout: {timeout}s\n"
-                    + (
-                        f"  - Warehouse: {overrides.get('warehouse')}\n"
-                        if overrides.get("warehouse")
-                        else ""
-                    )
-                    + (
-                        f"  - Database: {overrides.get('database')}\n"
-                        if overrides.get("database")
-                        else ""
-                    )
-                    + (
-                        f"  - Schema: {overrides.get('schema')}\n"
-                        if overrides.get("schema")
-                        else ""
-                    )
-                    + (
-                        f"  - Role: {overrides.get('role')}\n"
-                        if overrides.get("role")
-                        else ""
-                    )
-                    + "\nNotes:\n  - Query ID may be unavailable when a timeout triggers early cancellation.\n"
-                    + "\nQuery preview: "
-                    + preview
-                )
-            else:
-                self._collect_audit_warnings()
-                raise RuntimeError(compact)
+            # Use standardized timeout error wrapper
+            context = {
+                "timeout_seconds": timeout,
+                "warehouse": overrides.get("warehouse"),
+                "database": overrides.get("database"),
+                "schema": overrides.get("schema"),
+                "role": overrides.get("role"),
+            }
+            timeout_error = wrap_timeout_error(
+                timeout_seconds=timeout,
+                operation="query",
+                verbose=verbose_errors,
+                context=context,
+            )
+            if self.health_monitor:
+                self.health_monitor.record_error(str(timeout_error))
+            self._collect_audit_warnings()
+            raise timeout_error
         except Exception as e:
             error_message = str(e)
 
@@ -1217,7 +898,7 @@ class ExecuteQueryTool(MCPTool):
                     "execution_id": execution_id,
                     "status": "error",
                     "profile": self.config.snowflake.profile,
-                    "statement_preview": statement[:200],
+                    "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
                     "timeout_seconds": timeout,
                     "overrides": overrides,
                     "error": error_message,
@@ -1240,22 +921,41 @@ class ExecuteQueryTool(MCPTool):
             except Exception:
                 pass
 
+            # Use standardized execution error wrapper
+            context = {
+                "timeout_seconds": timeout,
+                "warehouse": overrides.get("warehouse"),
+                "database": overrides.get("database"),
+                "schema": overrides.get("schema"),
+                "role": overrides.get("role"),
+                "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
+            }
+            hints = [
+                "Check SQL syntax and table names",
+                "Verify database/schema context",
+                "Check permissions for the objects referenced",
+            ]
             if verbose_errors:
-                # Return detailed error with optimization hints
-                self._collect_audit_warnings()
-                raise RuntimeError(
-                    f"Query execution failed: {error_message}\n\n"
-                    f"Query: {statement[:200]}{'...' if len(statement) > 200 else ''}\n"
-                    f"Timeout: {timeout}s\n"
-                    f"Context: {overrides}"
+                hints.extend(
+                    [
+                        f"Query: {statement[:STATEMENT_PREVIEW_LENGTH]}{'...' if len(statement) > STATEMENT_PREVIEW_LENGTH else ''}",
+                        f"Timeout: {timeout}s",
+                    ]
                 )
             else:
-                # Return compact error
-                self._collect_audit_warnings()
-                raise RuntimeError(
-                    f"Query execution failed: {error_message[:150]}. Use verbose_errors=true for details."
-                )
+                hints.append("Use verbose_errors=true for detailed information")
 
+            execution_error = wrap_execution_error(
+                message=f"Query execution failed: {error_message[:150] if not verbose_errors else error_message}",
+                operation="execute_query",
+                original_error=e,
+                hints=hints,
+                context=context,
+            )
+            self._collect_audit_warnings()
+            raise execution_error
+
+    @tool_error_handler("execute_query")
     async def execute(
         self,
         statement: str,
@@ -1294,85 +994,46 @@ class ExecuteQueryTool(MCPTool):
                 timeout_seconds, int
             ):
                 raise TypeError("timeout_seconds must be an integer value in seconds.")
-            if not 1 <= timeout_seconds <= 3600:
-                raise ValueError("timeout_seconds must be between 1 and 3600 seconds.")
+            if (
+                not MIN_QUERY_TIMEOUT_SECONDS
+                <= timeout_seconds
+                <= MAX_QUERY_TIMEOUT_SECONDS
+            ):
+                raise MCPValidationError(
+                    f"timeout_seconds must be between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS} seconds",
+                    validation_errors=[f"Invalid timeout: {timeout_seconds}"],
+                    hints=[
+                        f"Use a timeout between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS} seconds",
+                    ],
+                )
+
+        # Validate SQL statement length
+        if len(statement) > MAX_SQL_STATEMENT_LENGTH:
+            raise MCPValidationError(
+                f"SQL statement exceeds maximum length of {MAX_SQL_STATEMENT_LENGTH} characters",
+                validation_errors=[f"Statement length: {len(statement)} characters"],
+                hints=[
+                    "Break the query into smaller parts",
+                    "Use CTEs or views to simplify complex queries",
+                ],
+            )
 
         # Always validate profile + SQL up front so async paths fail fast.
         await self._ensure_profile_health()
         self._enforce_sql_permissions(statement)
 
         mode = (response_mode or "auto").lower()
-        if mode not in {"auto", "sync", "async"}:
-            raise ValueError("response_mode must be one of: auto, sync, async")
-
-        if mode == "sync":
-            return await self._execute_impl(
-                statement=statement,
-                warehouse=warehouse,
-                database=database,
-                schema=schema,
-                role=role,
-                timeout_seconds=timeout_seconds,
-                verbose_errors=verbose_errors,
-                reason=reason,
-                normalized_insight=normalized_insight,
-                ctx=ctx,
+        if mode not in {"auto", "sync"}:
+            raise MCPValidationError(
+                "Invalid response_mode",
+                validation_errors=[
+                    f"response_mode must be one of: auto, sync (got: {mode})"
+                ],
+                hints=["Use response_mode='auto' or response_mode='sync'"],
             )
 
-        if mode == "async":
-            return await self._enqueue_async_job(
-                statement=statement,
-                warehouse=warehouse,
-                database=database,
-                schema=schema,
-                role=role,
-                timeout_seconds=timeout_seconds,
-                verbose_errors=verbose_errors,
-                reason=reason,
-                normalized_insight=normalized_insight,
-                ctx=ctx,
-            )
-        # Auto mode chooses between inline execution and async scheduling based
-        # on the available RPC soft timeout budget. When the inline budget can
-        # fully cover the requested timeout we prefer sync execution so that
-        # client-visible behavior (including timeout exceptions) remains
-        # predictable.
-        timeout_limit = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
-        inline_wait = self._auto_inline_wait_budget(timeout_seconds)
-        if inline_wait >= float(timeout_limit):
-            return await self._execute_impl(
-                statement=statement,
-                warehouse=warehouse,
-                database=database,
-                schema=schema,
-                role=role,
-                timeout_seconds=timeout_seconds,
-                verbose_errors=verbose_errors,
-                reason=reason,
-                normalized_insight=normalized_insight,
-                ctx=ctx,
-            )
-
-        if mode == "auto" and timeout_seconds is not None:
-            inline_budget = self._auto_inline_wait_budget(timeout_seconds)
-            if inline_budget >= float(timeout_seconds):
-                mode = "sync"
-
-        if mode == "sync":
-            return await self._execute_impl(
-                statement=statement,
-                warehouse=warehouse,
-                database=database,
-                schema=schema,
-                role=role,
-                timeout_seconds=timeout_seconds,
-                verbose_errors=verbose_errors,
-                reason=reason,
-                normalized_insight=normalized_insight,
-                ctx=ctx,
-            )
-
-        return await self._execute_auto_mode(
+        # Both auto and sync modes use synchronous execution
+        return await self._execute_impl(
             statement=statement,
             warehouse=warehouse,
             database=database,
@@ -1410,7 +1071,7 @@ class ExecuteQueryTool(MCPTool):
         if reason:
             try:
                 # Truncate and sanitize reason to avoid overly long tags
-                reason_clean = " ".join(reason.split())[:240]
+                reason_clean = " ".join(reason.split())[:MAX_REASON_LENGTH]
                 existing = params.get("QUERY_TAG")
 
                 # Try merging into existing JSON tag if present
@@ -1460,12 +1121,57 @@ class ExecuteQueryTool(MCPTool):
                 query_id_box: Dict[str, Optional[str]] = {"id": None}
                 done = threading.Event()
 
+                def _validate_session_parameter_name(name: str) -> bool:
+                    """Validate that session parameter name is in the whitelist."""
+                    return name.upper() in ALLOWED_SESSION_PARAMETERS
+
+                def _escape_sql_identifier(identifier: str) -> str:
+                    """Escape SQL identifier for use in LIKE clause.
+
+                    Escapes:
+                    - Single quotes (' -> '')
+                    - LIKE wildcards (% -> \%, _ -> \_)
+
+                    Args:
+                        identifier: SQL identifier to escape
+
+                    Returns:
+                        Escaped identifier safe for LIKE clause
+                    """
+                    # Escape single quotes first
+                    escaped = identifier.replace("'", "''")
+                    # Escape LIKE wildcards (must escape backslash first if present)
+                    escaped = escaped.replace("\\", "\\\\")
+                    escaped = escaped.replace("%", "\\%")
+                    escaped = escaped.replace("_", "\\_")
+                    return escaped
+
                 def _escape_tag(tag_value: str) -> str:
+                    """Escape tag value for use in SQL string literal."""
                     return tag_value.replace("'", "''")
 
+                def _escape_sql_value(value: Any) -> str:
+                    """Escape SQL value for use in SQL statement."""
+                    if isinstance(value, (int, float)):
+                        return str(value)
+                    value_str = str(value)
+                    # Escape single quotes and wrap in quotes
+                    return f"'{value_str.replace(chr(39), chr(39) + chr(39))}'"
+
                 def _get_session_parameter(name: str) -> Optional[str]:
+                    """Get session parameter value with SQL injection protection."""
                     try:
-                        cursor.execute(f"SHOW PARAMETERS LIKE '{name}' IN SESSION")
+                        # Validate parameter name
+                        if not _validate_session_parameter_name(name):
+                            logger.warning(
+                                f"Attempted to access invalid session parameter: {name}"
+                            )
+                            return None
+                        # Escape the name for LIKE clause
+                        escaped_name = _escape_sql_identifier(name)
+                        cursor.execute(
+                            f"SHOW PARAMETERS LIKE '{escaped_name}' IN SESSION"
+                        )
                         rows = cursor.fetchall() or []
                         if not rows:
                             return None
@@ -1484,11 +1190,23 @@ class ExecuteQueryTool(MCPTool):
                             return None
                         return str(value)
                     except Exception:
+                        logger.debug(
+                            f"Failed to get session parameter {name}", exc_info=True
+                        )
                         return None
 
                 def _set_session_parameter(name: str, value: Any) -> None:
+                    """Set session parameter with SQL injection protection."""
                     try:
-                        if name == "QUERY_TAG":
+                        # Validate parameter name against whitelist
+                        if not _validate_session_parameter_name(name):
+                            logger.warning(
+                                f"Attempted to set invalid session parameter: {name}"
+                            )
+                            return
+
+                        name_upper = name.upper()
+                        if name_upper == "QUERY_TAG":
                             if value:
                                 escaped = _escape_tag(str(value))
                                 cursor.execute(
@@ -1496,19 +1214,34 @@ class ExecuteQueryTool(MCPTool):
                                 )
                             else:
                                 cursor.execute("ALTER SESSION UNSET QUERY_TAG")
-                        elif name == "STATEMENT_TIMEOUT_IN_SECONDS":
-                            cursor.execute(
-                                f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {int(value)}"
-                            )
+                        elif name_upper == "STATEMENT_TIMEOUT_IN_SECONDS":
+                            # Validate value is numeric
+                            try:
+                                timeout_value = int(value)
+                                cursor.execute(
+                                    f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {timeout_value}"
+                                )
+                            except (ValueError, TypeError):
+                                logger.warning(
+                                    f"Invalid timeout value for STATEMENT_TIMEOUT_IN_SECONDS: {value}"
+                                )
                         else:
-                            cursor.execute(f"ALTER SESSION SET {name} = {value}")
+                            # For other parameters, escape both name and value
+                            escaped_value = _escape_sql_value(value)
+                            cursor.execute(
+                                f"ALTER SESSION SET {name_upper} = {escaped_value}"
+                            )
                     except Exception:
                         # Session parameter adjustments are best-effort; ignore failures.
+                        logger.debug(
+                            f"Failed to set session parameter {name}", exc_info=True
+                        )
                         pass
 
                 def _restore_session_parameters(
                     previous: Dict[str, Optional[str]],
                 ) -> None:
+                    """Restore session parameters with SQL injection protection."""
                     try:
                         prev_tag = previous.get("QUERY_TAG")
                         if "QUERY_TAG" in params:
@@ -1520,6 +1253,10 @@ class ExecuteQueryTool(MCPTool):
                             else:
                                 cursor.execute("ALTER SESSION UNSET QUERY_TAG")
                     except Exception:
+                        logger.debug(
+                            "Failed to restore QUERY_TAG session parameter",
+                            exc_info=True,
+                        )
                         pass
 
                     try:
@@ -1610,7 +1347,7 @@ class ExecuteQueryTool(MCPTool):
                             result_box["columns"] = column_names
 
                             # Smart truncation for large outputs to prevent context window overflow
-                            if len(processed_rows) > 1000:
+                            if len(processed_rows) > RESULT_TRUNCATION_THRESHOLD:
                                 import json
 
                                 # Sample data size estimation
@@ -1619,15 +1356,14 @@ class ExecuteQueryTool(MCPTool):
                                     len(processed_rows) / 100
                                 )
 
-                                # If estimated output is too large (>1MB), truncate with metadata
-                                if estimated_total_size > 1024 * 1024:
+                                # If estimated output is too large, truncate with metadata
+                                size_limit_bytes = RESULT_SIZE_LIMIT_MB * 1024 * 1024
+                                if estimated_total_size > size_limit_bytes:
                                     original_count = len(processed_rows)
                                     truncated_rows = processed_rows[
-                                        :500
-                                    ]  # Keep first 500 rows
-                                    last_10_rows = processed_rows[
-                                        -10:
-                                    ]  # Keep last 10 rows
+                                        :RESULT_KEEP_FIRST_ROWS
+                                    ]
+                                    last_rows = processed_rows[-RESULT_KEEP_LAST_ROWS:]
 
                                     result_box["rows"] = (
                                         truncated_rows
@@ -1637,7 +1373,7 @@ class ExecuteQueryTool(MCPTool):
                                                 "__message__": "Large result set truncated",
                                             }
                                         ]
-                                        + last_10_rows
+                                        + last_rows
                                     )
                                     result_box["truncated"] = True
                                     result_box["original_rowcount"] = original_count
@@ -1697,9 +1433,9 @@ class ExecuteQueryTool(MCPTool):
 
                     # Give a short grace period for cancellation to propagate
                     done.wait(5)
-                    # Signal timeout to caller
+                    # Signal timeout to caller (will be caught and wrapped above)
                     raise TimeoutError(
-                        "Query execution exceeded timeout and was cancelled"
+                        f"Query execution exceeded timeout ({timeout}s) and was cancelled"
                     )
 
                 # Worker finished: process result
@@ -1870,14 +1606,13 @@ class ExecuteQueryTool(MCPTool):
                 "response_mode": {
                     "title": "Response Mode",
                     "type": "string",
-                    "enum": ["auto", "sync", "async"],
+                    "enum": ["auto", "sync"],
                     "default": "auto",
                     "description": (
-                        "Controls how the tool responds: 'auto' runs synchronously until nearing the client timeout, "
-                        "'async' immediately returns an execution_id for polling via fetch_async_query_result, "
-                        "and 'sync' forces inline execution."
+                        "Controls how the tool responds: 'auto' and 'sync' both use synchronous execution. "
+                        "This parameter is maintained for backward compatibility."
                     ),
-                    "examples": ["auto", "async"],
+                    "examples": ["auto", "sync"],
                 },
             },
         }

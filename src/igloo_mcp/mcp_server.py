@@ -14,8 +14,6 @@ import argparse
 import os
 import string
 from contextlib import asynccontextmanager
-from dataclasses import asdict
-from functools import partial
 from typing import Any, Dict, List, Optional
 
 import anyio
@@ -44,40 +42,37 @@ from mcp_server_snowflake.utils import (  # type: ignore[import-untyped]
 )
 
 from .config import Config, ConfigError, apply_config_overrides, get_config, load_config
+from .constants import MAX_QUERY_TIMEOUT_SECONDS, MIN_QUERY_TIMEOUT_SECONDS
 from .context import create_service_context
-from .logging import QueryHistory, update_cache_manifest_insight
 
 # Lineage functionality removed - not part of igloo-mcp
+from .living_reports.service import ReportService
+from .mcp.exceptions import MCPExecutionError, MCPToolError, MCPValidationError
 from .mcp.tools import (  # QueryLineageTool,  # Removed - lineage functionality not part of igloo-mcp
     BuildCatalogTool,
     BuildDependencyGraphTool,
     ConnectionTestTool,
+    CreateReportTool,
+    EvolveReportTool,
     ExecuteQueryTool,
     GetCatalogSummaryTool,
     HealthCheckTool,
-    PreviewTableTool,
+    RenderReportTool,
     SearchCatalogTool,
+    SearchReportTool,
 )
-from .mcp.utils import get_profile_recommendations
+from .mcp.validation_helpers import format_pydantic_validation_error
+
+# get_profile_recommendations no longer used
 from .mcp_health import (
     MCPHealthMonitor,
 )
 from .mcp_resources import MCPResourceManager
-from .path_utils import find_repo_root, resolve_artifact_root, resolve_history_path
+from .path_utils import resolve_artifact_root
 from .profile_utils import (
     ProfileValidationError,
     get_profile_summary,
     validate_and_resolve_profile,
-)
-from .reporting.builder import build_report, lint_report
-from .reporting.history_index import HistoryIndex
-from .reporting.manifest import (
-    DatasetRef,
-    DatasetSource,
-    ReportManifest,
-    ReportOutput,
-    TemplatesConfig,
-    load_manifest,
 )
 from .service_layer import CatalogService, DependencyService, QueryService
 from .session_utils import (
@@ -87,9 +82,12 @@ from .session_utils import (
     restore_session_context,
     snapshot_session,
 )
-from .snow_cli import SnowCLI, SnowCLIError
 
-_get_profile_recommendations = get_profile_recommendations
+# QueryHistory and update_cache_manifest_insight no longer used in mcp_server
+
+
+
+# SnowCLI no longer used - CLI bridge removed
 
 logger = get_logger(__name__)
 
@@ -97,6 +95,119 @@ logger = get_logger(__name__)
 _health_monitor: Optional[MCPHealthMonitor] = None
 _resource_manager: Optional[MCPResourceManager] = None
 _catalog_service: Optional[CatalogService] = None
+
+# Non-SQL tools that should not be subject to SQL validation
+# These tools operate on file system, metadata, or other non-SQL resources
+NON_SQL_TOOLS = {
+    "create_report",
+    "evolve_report",
+    "render_report",
+    "search_report",
+    "build_catalog",
+    "build_dependency_graph",
+    "get_catalog_summary",
+    "search_catalog",
+    "test_connection",
+    "health_check",
+}
+
+
+def _patch_sql_validation_middleware(server: FastMCP) -> None:
+    """Patch upstream SQL validation middleware to only apply to execute_query tool.
+
+    The upstream Snowflake MCP server's initialize_middleware adds CheckQueryType
+    middleware that validates ALL tool calls as SQL. This function wraps that middleware
+    to only apply SQL validation to the execute_query tool, allowing all other tools
+    to bypass SQL validation.
+
+    Args:
+        server: FastMCP server instance
+    """
+    # Try multiple ways to access middleware stack
+    middleware_stack = None
+
+    # Method 1: Check _middleware attribute
+    if hasattr(server, "_middleware"):
+        middleware_stack = server._middleware
+        logger.debug("Found middleware stack via _middleware attribute")
+    # Method 2: Check middleware attribute (without underscore)
+    elif hasattr(server, "middleware"):
+        middleware_stack = server.middleware
+        logger.debug("Found middleware stack via middleware attribute")
+    # Method 3: Check if server has a _app attribute with middleware
+    elif hasattr(server, "_app") and hasattr(server._app, "middleware"):
+        middleware_stack = server._app.middleware
+        logger.debug("Found middleware stack via _app.middleware")
+    else:
+        # Log all available attributes for debugging
+        attrs = [attr for attr in dir(server) if not attr.startswith("__")]
+        logger.debug(f"Server attributes: {attrs[:20]}...")  # First 20 to avoid spam
+        logger.warning(
+            "Could not find middleware stack, SQL validation patch may not work"
+        )
+        return
+
+    if not middleware_stack:
+        logger.debug("Middleware stack is empty or None")
+        return
+
+    # Find CheckQueryType middleware and wrap it
+    patched = False
+    for i, middleware in enumerate(middleware_stack):
+        # Check if this is the CheckQueryType middleware by inspecting its type/name
+        middleware_type_name = (
+            type(middleware).__name__
+            if hasattr(middleware, "__class__")
+            else str(middleware)
+        )
+        middleware_str = str(middleware)
+
+        # Check for various SQL validation middleware patterns
+        is_sql_validation = (
+            "CheckQueryType" in middleware_type_name
+            or "QueryType" in middleware_type_name
+            or "sql" in middleware_str.lower()
+            and "validation" in middleware_str.lower()
+            or "statement type" in middleware_str.lower()
+        )
+
+        if is_sql_validation:
+            logger.info(
+                f"Found SQL validation middleware: {middleware_type_name}, wrapping to only apply to execute_query"
+            )
+
+            # Create a wrapper that only applies to execute_query
+            original_middleware = middleware
+
+            async def conditional_sql_validation_middleware(
+                call_next: Any,
+                name: str,
+                arguments: Dict[str, Any],
+            ) -> Any:
+                """Middleware wrapper that only applies SQL validation to execute_query."""
+                # Only apply SQL validation to execute_query tool
+                if name == "execute_query":
+                    # Let the original middleware handle execute_query
+                    return await original_middleware(call_next, name, arguments)
+                else:
+                    # Skip SQL validation for all other tools
+                    logger.debug(f"Skipping SQL validation for non-SQL tool: {name}")
+                    return await call_next(name, arguments)
+
+            # Replace the middleware with our conditional wrapper
+            middleware_stack[i] = conditional_sql_validation_middleware
+            logger.info(
+                "Patched SQL validation middleware to only apply to execute_query"
+            )
+            patched = True
+            break
+
+    if not patched:
+        logger.warning(
+            "SQL validation middleware not found in middleware stack. "
+            "Non-SQL tools may be incorrectly validated. "
+            f"Middleware stack length: {len(middleware_stack) if middleware_stack else 0}"
+        )
 
 
 def read_sql_artifact_by_sha(sql_sha256: str) -> str:
@@ -154,9 +265,6 @@ def _execute_query_sync(
                 restore_session_context(cursor, original)
 
 
-# _query_lineage_sync function removed - lineage functionality not part of igloo-mcp
-
-
 def register_igloo_mcp(
     server: FastMCP,
     snowflake_service: SnowflakeService,
@@ -183,20 +291,25 @@ def register_igloo_mcp(
     _health_monitor = context.health_monitor
     _resource_manager = context.resource_manager
     _catalog_service = catalog_service
-    snow_cli: SnowCLI | None = SnowCLI() if enable_cli_bridge else None
+    # snow_cli bridge removed - no longer needed
 
     # Instantiate all extracted tool classes
     execute_query_inst = ExecuteQueryTool(
         config, snowflake_service, query_service, _health_monitor
     )
-    preview_table_inst = PreviewTableTool(config, snowflake_service, query_service)
-    # query_lineage_inst = QueryLineageTool(config)  # Removed - lineage functionality not part of igloo-mcp
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
     build_dependency_graph_inst = BuildDependencyGraphTool(dependency_service)
     test_connection_inst = ConnectionTestTool(config, snowflake_service)
     health_check_inst = HealthCheckTool(config, snowflake_service, _health_monitor)
     get_catalog_summary_inst = GetCatalogSummaryTool(catalog_service)
     search_catalog_inst = SearchCatalogTool()
+
+    # Initialize living reports system
+    report_service = ReportService()
+    create_report_inst = CreateReportTool(config, report_service)
+    evolve_report_inst = EvolveReportTool(config, report_service)
+    render_report_inst = RenderReportTool(config, report_service)
+    search_report_inst = SearchReportTool(config, report_service)
 
     @server.tool(
         name="execute_query", description="Execute a SQL query against Snowflake"
@@ -229,11 +342,12 @@ def register_igloo_mcp(
             Optional[int],
             Field(
                 description=(
-                    "Query timeout in seconds (default: 30s from config). "
-                    "Integer between 1 and 3600."
+                    f"Query timeout in seconds (default: 30s from config). "
+                    f"Integer between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS}. "
+                    f"Maximum timeout is configurable via IGLOO_MCP_MAX_QUERY_TIMEOUT_SECONDS environment variable."
                 ),
-                ge=1,
-                le=3600,
+                ge=MIN_QUERY_TIMEOUT_SECONDS,
+                le=MAX_QUERY_TIMEOUT_SECONDS,
                 default=None,
             ),
         ] = None,
@@ -254,17 +368,6 @@ def register_igloo_mcp(
                 default=None,
             ),
         ] = None,
-        response_mode: Annotated[
-            Optional[str],
-            Field(
-                description=(
-                    "Execution response mode: 'auto' (default) runs synchronously until nearing the client timeout, "
-                    "'async' enqueues the query and requires polling via fetch_async_query_result, "
-                    "and 'sync' forces inline execution."
-                ),
-                default=None,
-            ),
-        ] = None,
         ctx: Context | None = None,
     ) -> Dict[str, Any]:
         """Execute a SQL query against Snowflake - delegates to ExecuteQueryTool."""
@@ -279,198 +382,251 @@ def register_igloo_mcp(
                 timeout_seconds=timeout_seconds,
                 verbose_errors=verbose_errors,
                 post_query_insight=post_query_insight,
-                response_mode=response_mode,
                 ctx=ctx,
             )
+        except (MCPValidationError, MCPExecutionError, MCPToolError):
+            # Re-raise MCP tool errors as-is - FastMCP will handle formatting
+            raise
         except ValidationError as e:
-            # Enhanced validation error messages for user-friendly feedback
-            errors = e.errors()
-            for err in errors:
-                field = err["loc"][0] if err["loc"] else None
-                error_type = err["type"]
-
-                # Missing reason parameter
-                if field == "reason" and error_type == "missing":
-                    raise ValueError(
-                        "❌ Missing required parameter: 'reason'\n\n"
-                        "The 'reason' parameter is required in v0.2.5+ for query auditability.\n\n"
-                        "💡 Quick fix: Add a brief explanation (5+ characters)\n"
-                        "   execute_query(\n"
-                        "       statement='SELECT * FROM customers LIMIT 10',\n"
-                        "       reason='Sample customer data for debugging'  # ← Add this\n"
-                        "   )\n\n"
-                        "📝 Examples of good reasons:\n"
-                        "   • 'Debug null customer records in Q3'\n"
-                        "   • 'Validate revenue totals for dashboard'\n"
-                        "   • 'Explore product catalog schema'\n\n"
-                        "📚 Docs: https://github.com/Evan-Kim2028/igloo-mcp/blob/main/docs/api/tools/execute_query.md#parameters"
-                    ) from e
-
-                # Reason too short
-                elif field == "reason" and error_type == "string_too_short":
-                    provided = err.get("input", "")
-                    raise ValueError(
-                        f"❌ Parameter 'reason' is too short: '{provided}' ({len(str(provided))} chars)\n\n"
-                        f"Minimum length: 5 characters (you provided {len(str(provided))})\n\n"
-                        "💡 Be more descriptive - explain the query's purpose:\n"
-                        "   ✅ 'Debug sales spike on 2025-01-15'\n"
-                        "   ✅ 'Count active users for monthly report'\n"
-                        "   ✅ 'Explore sales schema for new dashboard'\n"
-                        "   ❌ 'test' (too vague and too short)\n\n"
-                        "📖 Why? Meaningful reasons improve audit trails and help\n"
-                        "   teammates understand query context in history logs."
-                    ) from e
-
-            # Fallback to default Pydantic error for other validation issues
-            raise ValueError(f"Validation error: {e}") from e
-
-        except ValueError as e:
-            # Enhanced structured error for validation issues
-            error_msg = str(e)
-            if "timeout_seconds must be an integer" in error_msg:
-                raise ValueError(
-                    {
-                        "code": "PARAM_TYPE",
-                        "message": "Invalid parameter type: timeout_seconds must be an integer",
-                        "data": {
-                            "path": ".timeout_seconds",
-                            "expected": "integer",
-                            "received_type": "string",
-                            "hint": "Use 480 (number) without quotes instead of '480'",
-                            "examples": [30, 60, 300, 480],
-                        },
-                    }
-                ) from e
-            elif "timeout_seconds must be between" in error_msg:
-                raise ValueError(
-                    {
-                        "code": "PARAM_RANGE",
-                        "message": "Invalid parameter value: timeout_seconds out of range",
-                        "data": {
-                            "path": ".timeout_seconds",
-                            "min": 1,
-                            "max": 3600,
-                            "received_sample": timeout_seconds,
-                            "hint": "Use a timeout between 1 and 3600 seconds",
-                        },
-                    }
-                ) from e
-            elif "SQL statement type" in error_msg and "not permitted" in error_msg:
-                # Enhanced SQL permission error with configuration guidance
-                raise ValueError(
-                    f"{error_msg}\n\n"
-                    "🛡️  Safety Guardrails: This operation is blocked by default.\n\n"
-                    "⚙️  To enable write operations:\n"
-                    "   1. Set environment variable: IGLOO_MCP_SQL_PERMISSIONS='write'\n"
-                    "   2. Or configure in your MCP client settings\n\n"
-                    "⚠️  Warning: Enabling writes removes safety guardrails.\n"
-                    "   Use with caution in production environments.\n\n"
-                    "📚 Docs: https://github.com/Evan-Kim2028/igloo-mcp/blob/main/docs/configuration.md#sql-permissions"
-                ) from e
-            elif "SQL statement type" in error_msg:
-                # Pass through other SQL validation errors
-                raise ValueError(error_msg) from e
-            else:
-                # Generic parameter error
-                raise ValueError(
-                    {
-                        "code": "PARAM_VALIDATION",
-                        "message": "Parameter validation failed",
-                        "data": {
-                            "error": error_msg,
-                            "hint": "Check parameter values and types",
-                        },
-                    }
-                ) from e
-        except TimeoutError as e:
-            # Structured timeout error
-            raise RuntimeError(
-                {
-                    "code": "QUERY_TIMEOUT",
-                    "message": f"Query timeout after {timeout_seconds or 30}s",
-                    "data": {
-                        "timeout_seconds": timeout_seconds or 30,
-                        "suggestions": [
-                            "Increase timeout: timeout_seconds=480",
-                            "Add WHERE/LIMIT clause to reduce data volume",
-                            "Use larger warehouse for complex queries",
-                            "Use verbose_errors=True for detailed hints",
-                        ],
-                    },
-                }
-            ) from e
-        except Exception as e:
-            # Structured execution error
-            error_msg = str(e)
-            if verbose_errors:
-                # Include detailed error when requested
-                raise RuntimeError(error_msg) from e
-            else:
-                # Compact, actionable error
-                raise RuntimeError(
-                    {
-                        "code": "QUERY_EXECUTION_FAILED",
-                        "message": f"Query execution failed: {error_msg[:150]}",
-                        "data": {
-                            "hint": "Use verbose_errors=true for detailed information",
-                            "suggestions": [
-                                "Check SQL syntax and table names",
-                                "Verify database/schema context",
-                                "Check permissions for the objects referenced",
-                            ],
-                        },
-                    }
-                ) from e
+            # Convert Pydantic validation errors to MCPValidationError with enhanced messages
+            raise format_pydantic_validation_error(e, tool_name="execute_query") from e
+        except Exception:
+            # All other exceptions should be handled by the tool's @tool_error_handler decorator
+            # This catch-all is a safety net for unexpected errors
+            raise
 
     @server.tool(
-        name="fetch_async_query_result",
-        description="Check status or retrieve results for an async execute_query call",
+        name="evolve_report", description="Evolve a living report with LLM assistance"
     )
-    async def fetch_async_query_result_tool(
-        execution_id: Annotated[
+    async def evolve_report_tool(
+        report_selector: Annotated[
+            str, Field(description="Report ID or title to evolve")
+        ],
+        instruction: Annotated[
             str,
+            Field(description="Natural language evolution instruction for audit trail"),
+        ],
+        proposed_changes: Annotated[
+            Dict[str, Any],
             Field(
-                description="Execution ID returned when execute_query runs in async mode",
+                description="Structured changes generated by LLM based on instruction and current outline"
             ),
         ],
-        include_rows: Annotated[
-            bool,
-            Field(
-                description="Include cached rows when the job has finished",
-                default=True,
-            ),
-        ] = True,
+        constraints: Annotated[
+            Optional[Dict[str, Any]],
+            Field(description="Optional evolution constraints", default=None),
+        ] = None,
+        dry_run: Annotated[
+            bool, Field(description="Validate without applying changes", default=False)
+        ] = False,
     ) -> Dict[str, Any]:
-        return await execute_query_inst.fetch_async_result(
-            execution_id=execution_id,
-            include_rows=include_rows,
+        """Evolve report - delegates to EvolveReportTool."""
+        return await evolve_report_inst.execute(
+            report_selector=report_selector,
+            instruction=instruction,
+            proposed_changes=proposed_changes,
+            constraints=constraints,
+            dry_run=dry_run,
         )
 
-    @server.tool(name="preview_table", description="Preview table contents")
-    async def preview_table_tool(
-        table_name: Annotated[str, Field(description="Fully qualified table name")],
-        limit: Annotated[int, Field(description="Row limit", ge=1, default=100)] = 100,
-        warehouse: Annotated[
-            Optional[str], Field(description="Warehouse override", default=None)
-        ] = None,
-        database: Annotated[
-            Optional[str], Field(description="Database override", default=None)
-        ] = None,
-        schema: Annotated[
-            Optional[str], Field(description="Schema override", default=None)
-        ] = None,
-        role: Annotated[
-            Optional[str], Field(description="Role override", default=None)
+    @server.tool(
+        name="render_report",
+        description="Render a living report to human-readable formats (HTML, PDF, etc.) using Quarto",
+    )
+    async def render_report_tool(
+        report_selector: Annotated[
+            str, Field(description="Report ID or title to render")
+        ],
+        format: Annotated[
+            str,
+            Field(
+                description="Output format",
+                default="html",
+                pattern="^(html|pdf|markdown|docx)$",
+            ),
+        ] = "html",
+        regenerate_outline_view: Annotated[
+            bool,
+            Field(description="Whether to regenerate QMD from outline", default=True),
+        ] = True,
+        include_preview: Annotated[
+            bool,
+            Field(description="Include truncated preview in response", default=False),
+        ] = False,
+        dry_run: Annotated[
+            bool,
+            Field(
+                description="If True, only generate QMD file without running Quarto",
+                default=False,
+            ),
+        ] = False,
+        options: Annotated[
+            Optional[Dict[str, Any]],
+            Field(description="Additional Quarto options", default=None),
         ] = None,
     ) -> Dict[str, Any]:
-        """Preview table contents - delegates to PreviewTableTool."""
-        return await preview_table_inst.execute(
-            table_name=table_name,
+        """Render report - delegates to RenderReportTool."""
+        return await render_report_inst.execute(
+            report_selector=report_selector,
+            format=format,
+            regenerate_outline_view=regenerate_outline_view,
+            include_preview=include_preview,
+            dry_run=dry_run,
+            options=options,
+        )
+
+    @server.tool(
+        name="create_report",
+        description="Create a new living report with optional template and tags",
+    )
+    async def create_report_tool(
+        title: Annotated[str, Field(description="Human-readable title for the report")],
+        template: Annotated[
+            str,
+            Field(
+                description="Report template to use. Defaults to 'default' if not specified. Available templates: default (empty report), monthly_sales, quarterly_review, deep_dive, analyst_v1 (blockchain analysis with citation enforcement).",
+                default="default",
+                pattern="^(default|monthly_sales|quarterly_review|deep_dive|analyst_v1)$",
+            ),
+        ] = "default",
+        tags: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Optional tags for categorization and filtering",
+                default=None,
+            ),
+        ] = None,
+        description: Annotated[
+            Optional[str],
+            Field(
+                description="Optional description of the report (stored in metadata)",
+                default=None,
+            ),
+        ] = None,
+    ) -> Dict[str, Any]:
+        """Create report - delegates to CreateReportTool.
+
+        Note: This is a non-SQL tool that operates on file system, not Snowflake.
+        It should not be subject to SQL validation from upstream middleware.
+        """
+        try:
+            return await create_report_inst.execute(
+                title=title,
+                template=template,
+                tags=tags,
+                description=description,
+            )
+        except Exception as e:
+            # Catch SQL validation errors from upstream middleware that incorrectly
+            # validates non-SQL tools. The error message typically contains "Statement type"
+            # and "not allowed" when upstream middleware tries to validate tool names as SQL.
+            error_msg = str(e).lower()
+            error_type = type(e).__name__
+
+            # Check if this is a SQL validation error that should be bypassed
+            is_sql_validation_error = (
+                (
+                    "statement type" in error_msg
+                    and (
+                        "not allowed" in error_msg
+                        or "create" in error_msg
+                        or "permission" in error_msg
+                    )
+                )
+                or ("sql" in error_msg and "permission" in error_msg)
+                or ("validation" in error_msg and "sql" in error_msg)
+            )
+
+            if is_sql_validation_error:
+                # This is a non-SQL tool - log the issue but proceed anyway
+                # The middleware patch should prevent this, but if it still happens,
+                # we'll log it and try to execute the tool directly
+                logger.warning(
+                    "Upstream SQL validation incorrectly applied to non-SQL tool 'create_report', bypassing",
+                    extra={
+                        "error": str(e),
+                        "error_type": error_type,
+                        "tool": "create_report",
+                    },
+                )
+                # Try to execute directly, bypassing middleware
+                try:
+                    return await create_report_inst.execute(
+                        title=title,
+                        template=template,
+                        tags=tags,
+                        description=description,
+                    )
+                except Exception as direct_error:
+                    # If direct execution also fails, raise the original error
+                    logger.error(
+                        "Direct execution of create_report also failed",
+                        extra={
+                            "original_error": str(e),
+                            "direct_error": str(direct_error),
+                        },
+                    )
+                    raise MCPExecutionError(
+                        f"Report creation failed: {str(direct_error)}",
+                        operation="create_report",
+                        original_error=direct_error,
+                        hints=[
+                            "Check file system permissions",
+                            "Verify reports directory is writable",
+                        ],
+                    ) from direct_error
+
+            # Re-raise other exceptions as-is
+            raise
+
+    @server.tool(
+        name="search_report",
+        description="Search for living reports with intelligent fallback behavior",
+    )
+    async def search_report_tool(
+        title: Annotated[
+            Optional[str],
+            Field(
+                description="Search for reports by title (exact or partial match, case-insensitive)",
+                default=None,
+            ),
+        ] = None,
+        tags: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Filter reports by tags (reports must have all specified tags)",
+                default=None,
+            ),
+        ] = None,
+        report_id: Annotated[
+            Optional[str],
+            Field(description="Exact report ID to search for", default=None),
+        ] = None,
+        status: Annotated[
+            Optional[str],
+            Field(
+                description="Filter by report status",
+                default="active",
+                pattern="^(active|archived)$",
+            ),
+        ] = "active",
+        limit: Annotated[
+            int,
+            Field(
+                description="Maximum number of results to return",
+                default=20,
+                ge=1,
+                le=50,
+            ),
+        ] = 20,
+    ) -> Dict[str, Any]:
+        """Search report - delegates to SearchReportTool."""
+        return await search_report_inst.execute(
+            title=title,
+            tags=tags,
+            report_id=report_id,
+            status=status,
             limit=limit,
-            warehouse=warehouse,
-            database=database,
-            schema=schema,
-            role=role,
         )
 
     @server.tool(name="build_catalog", description="Build Snowflake catalog metadata")
@@ -502,8 +658,6 @@ def register_igloo_mcp(
             include_ddl=include_ddl,
         )
 
-    # query_lineage tool removed - lineage functionality not part of igloo-mcp
-
     @server.tool(
         name="build_dependency_graph", description="Build object dependency graph"
     )
@@ -514,7 +668,7 @@ def register_igloo_mcp(
         schema: Annotated[
             Optional[str], Field(description="Specific schema", default=None)
         ] = None,
-        account: Annotated[
+        account_scope: Annotated[
             bool, Field(description="Include account-level metadata", default=False)
         ] = False,
         format: Annotated[
@@ -525,7 +679,7 @@ def register_igloo_mcp(
         return await build_dependency_graph_inst.execute(
             database=database,
             schema=schema,
-            account_scope=account,
+            account_scope=account_scope,
             format=format,
         )
 
@@ -606,456 +760,6 @@ def register_igloo_mcp(
             limit=limit,
         )
 
-    @server.tool(
-        name="report_scaffold",
-        description=(
-            "Scaffold a starter report manifest from recent execute_query history so agents "
-            "can edit it and later build reports with report_build."
-        ),
-    )
-    async def report_scaffold_tool(
-        manifest_path: Annotated[
-            Optional[str],
-            Field(
-                description=(
-                    "Optional target path for a manifest YAML (e.g. 'reports/my_report.yaml'). "
-                    "Used to derive report id and default output naming when write_manifest is true. "
-                    "Relative paths are resolved against the repository root."
-                ),
-                default=None,
-            ),
-        ] = None,
-        limit: Annotated[
-            int,
-            Field(
-                description=(
-                    "Number of recent execute_query history entries to turn into datasets in the manifest."
-                ),
-                ge=1,
-                le=20,
-                default=3,
-            ),
-        ] = 3,
-        write_manifest: Annotated[
-            bool,
-            Field(
-                description=(
-                    "If true, also write the scaffolded manifest YAML to disk (using manifest_path or 'report.yaml' "
-                    "in the repo root) and return written_path. When false, only return the manifest JSON payload."
-                ),
-                default=False,
-            ),
-        ] = False,
-    ) -> Dict[str, Any]:
-        """Scaffold a ReportManifest from recent history entries.
-
-        This tool is intended for AI/native workflows: it returns the manifest as
-        structured JSON so agents can edit and commit it, and optionally writes a
-        YAML file when requested.
-        """
-
-        from pathlib import Path
-
-        history_path = resolve_history_path()
-        index = HistoryIndex(history_path)
-        records = index.records
-        records_sorted = sorted(records, key=lambda r: r.get("ts") or 0.0)
-        recent = records_sorted[-limit:] if limit and records_sorted else []
-
-        datasets: List[DatasetRef] = []
-        for idx, record in enumerate(recent, start=1):
-            exec_id = record.get("execution_id")
-            sha = record.get("sql_sha256")
-            artifacts = record.get("artifacts") or {}
-            cache_manifest = artifacts.get("cache_manifest") or record.get(
-                "cache_manifest"
-            )
-            source = DatasetSource(
-                execution_id=str(exec_id) if exec_id else None,
-                sql_sha256=str(sha) if sha else None,
-                cache_manifest=str(cache_manifest) if cache_manifest else None,
-            )
-            description = None
-            if record.get("reason"):
-                description = str(record["reason"])
-            datasets.append(
-                DatasetRef(
-                    name=f"dataset_{idx}",
-                    description=description,
-                    source=source,
-                )
-            )
-
-        if manifest_path is not None:
-            manifest_raw = Path(manifest_path)
-            report_id = manifest_raw.stem or "report"
-        else:
-            report_id = "report"
-
-        manifest = ReportManifest(
-            id=report_id,
-            title=f"Report {report_id}",
-            templates=TemplatesConfig(main="templates/report.md", engine="jinja"),
-            datasets=datasets,
-            outputs=[
-                ReportOutput(
-                    name="default",
-                    format="markdown",
-                    path=f"reports/{report_id}.md",
-                )
-            ],
-        )
-
-        written_path: Optional[str] = None
-        if write_manifest:
-            raw_path = manifest_path or "report.yaml"
-            path = Path(raw_path).expanduser()
-            if not path.is_absolute():
-                repo_root = find_repo_root()
-                path = (repo_root / path).resolve()
-
-            path.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                import yaml  # type: ignore[import-untyped]
-
-                with path.open("w", encoding="utf-8") as fh:
-                    yaml.safe_dump(
-                        manifest.model_dump(by_alias=True, exclude_none=True),
-                        fh,
-                        sort_keys=False,
-                    )
-                written_path = str(path)
-            except Exception as exc:  # pragma: no cover - unlikely I/O error
-                raise RuntimeError(
-                    f"Failed to write scaffolded manifest: {exc}"
-                ) from exc
-
-        return {
-            "manifest": manifest.model_dump(),
-            "report_id": manifest.id,
-            "dataset_count": len(manifest.datasets),
-            "history_path": str(history_path),
-            "written_path": written_path,
-        }
-
-    @server.tool(
-        name="report_build",
-        description=(
-            "Validate a report manifest and build a narrative or JSON payload from cached execute_query results. "
-            "Use validate_only=true to lint without rendering, or default settings to render the report body."
-        ),
-    )
-    async def report_build_tool(
-        manifest_path: Annotated[
-            str,
-            Field(
-                description=(
-                    "Path to the report manifest YAML to use (relative to repo root or absolute), "
-                    "for example 'reports/my_report.yaml'."
-                ),
-                default="report.yaml",
-            ),
-        ] = "report.yaml",
-        output_name: Annotated[
-            Optional[str],
-            Field(
-                description=(
-                    "Logical output name from manifest.outputs to build (default: the first output), "
-                    "for example 'default' or 'html_export'."
-                ),
-                default=None,
-            ),
-        ] = None,
-        format: Annotated[
-            Optional[str],
-            Field(
-                description=(
-                    "Optional override for output format: 'markdown', 'html', or 'json'. "
-                    "Defaults to the manifest output format; 'json' is recommended for agent consumption."
-                ),
-                default=None,
-            ),
-        ] = None,
-        persist_output: Annotated[
-            bool,
-            Field(
-                description=(
-                    "If true, write the rendered body to disk using either output_path "
-                    "or the path defined on the selected manifest.outputs entry."
-                ),
-                default=False,
-            ),
-        ] = False,
-        output_path: Annotated[
-            Optional[str],
-            Field(
-                description=(
-                    "Explicit output path for the rendered report when persist_output is true "
-                    "(relative to repo root or absolute)."
-                ),
-                default=None,
-            ),
-        ] = None,
-        validate_only: Annotated[
-            bool,
-            Field(
-                description=(
-                    "If true, only run validation and return ok/issues without rendering the report body."
-                ),
-                default=False,
-            ),
-        ] = False,
-        fail_on_issues: Annotated[
-            bool,
-            Field(
-                description=(
-                    "If true and validation finds issues, skip rendering and return ok=false with issues, "
-                    "so agents can treat any lint problems as hard failures."
-                ),
-                default=False,
-            ),
-        ] = False,
-        include_body: Annotated[
-            bool,
-            Field(
-                description=(
-                    "If false, omit the rendered body from the response while still returning format, provenance, "
-                    "and any validation issues (useful when agents only need metadata)."
-                ),
-                default=True,
-            ),
-        ] = True,
-    ) -> Dict[str, Any]:
-        import json
-        from pathlib import Path
-
-        raw_path = Path(manifest_path).expanduser()
-        if raw_path.is_absolute():
-            manifest_abs = raw_path.resolve()
-        else:
-            repo_root = find_repo_root()
-            manifest_abs = (repo_root / raw_path).resolve()
-        issues = lint_report(manifest_abs)
-        ok = not issues
-
-        response: Dict[str, Any] = {
-            "manifest_path": str(manifest_abs),
-            "ok": ok,
-            "issues": [asdict(issue) for issue in issues],
-        }
-
-        if validate_only:
-            return response
-
-        if fail_on_issues and not ok:
-            return response
-
-        result = build_report(manifest_abs, output_name=output_name, refresh=False)
-        result_format = result.get("format", "markdown")
-        body = result.get("body", "")
-        provenance = result.get("provenance", {})
-
-        effective_format = format or result_format
-        body_json = None
-        if effective_format == "html" and result_format == "markdown":
-            body = f"<html><body><pre>\n{body}\n</pre></body></html>\n"
-        elif effective_format == "json":
-            if result_format == "json":
-                try:
-                    body_json = json.loads(body)
-                except Exception:
-                    body_json = None
-            else:
-                # Wrap non-JSON bodies so callers get valid JSON when requesting it
-                body_json = {"format": result_format, "body": body}
-                body = json.dumps(body_json)
-
-        selected_output_name: Optional[str] = output_name
-        written_path: Optional[str] = None
-
-        if persist_output:
-            if output_path is not None:
-                out_path = Path(output_path).expanduser()
-                if not out_path.is_absolute():
-                    repo_root = find_repo_root()
-                    out_path = (repo_root / out_path).resolve()
-            else:
-                manifest_obj = load_manifest(manifest_abs)
-                selected = None
-                if output_name is not None:
-                    for candidate in manifest_obj.outputs:
-                        if candidate.name == output_name:
-                            selected = candidate
-                            break
-                if selected is None:
-                    if not manifest_obj.outputs:
-                        raise ValueError(
-                            "Report manifest defines no outputs and output_path was not provided",
-                        )
-                    selected = manifest_obj.outputs[0]
-                selected_output_name = selected.name
-                out_path = Path(selected.path).expanduser()
-                if not out_path.is_absolute():
-                    repo_root = find_repo_root()
-                    out_path = (repo_root / out_path).resolve()
-
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(body, encoding="utf-8")
-            written_path = str(out_path)
-
-        response.update(
-            {
-                "output_name": selected_output_name,
-                "format": effective_format,
-                "provenance": provenance,
-            }
-        )
-
-        if include_body:
-            response["body"] = body
-
-        if effective_format == "json" and include_body:
-            if body_json is None:
-                try:
-                    body_json = json.loads(body)
-                except Exception:
-                    body_json = None
-            if body_json is not None:
-                response["body_json"] = body_json
-
-        if written_path is not None:
-            response["output_path"] = written_path
-
-        return response
-
-    @server.tool(
-        name="record_query_insight",
-        description="Attach a post-hoc insight to a prior execute_query run",
-    )
-    async def record_query_insight_tool(
-        execution_id: Annotated[
-            str,
-            Field(
-                description="Execution ID from execute_query.audit_info.execution_id"
-            ),
-        ],
-        post_query_insight: Annotated[
-            Dict[str, Any] | str,
-            Field(description="LLM-provided post-query insight"),
-        ],
-        cache_manifest_override: Annotated[
-            Optional[str],
-            Field(
-                description="Optional path to manifest if audit_info missing",
-                default=None,
-            ),
-        ] = None,
-        source: Annotated[
-            Optional[str],
-            Field(
-                description="Optional source identifier (e.g., 'human', 'agent:claude')",
-                default=None,
-            ),
-        ] = None,
-    ) -> Dict[str, Any]:
-        """Record a post-hoc insight for a prior query execution."""
-        history = QueryHistory.from_env()
-        result = history.record_insight(
-            execution_id=execution_id,
-            post_query_insight=post_query_insight,
-            source=source,
-        )
-
-        # Try to update manifest if path provided
-        updated_manifest: Optional[str] = None
-        if cache_manifest_override:
-            from pathlib import Path
-
-            manifest_path = Path(cache_manifest_override)
-            if update_cache_manifest_insight(manifest_path, post_query_insight):
-                updated_manifest = str(manifest_path.resolve())
-
-        return {
-            "execution_id": result["execution_id"],
-            "deduped": result["deduped"],
-            "updated_manifest": updated_manifest,
-        }
-
-    @server.tool(
-        name="describe_logging_paths",
-        description="Get resolved paths for history, artifacts, and cache with writability checks",
-    )
-    async def describe_logging_paths_tool() -> Dict[str, Any]:
-        """Describe logging paths and writability."""
-        from pathlib import Path
-
-        history = QueryHistory.from_env()
-        history_path = str(history.path) if history.path else None
-
-        artifact_root_raw = os.environ.get("IGLOO_MCP_ARTIFACT_ROOT")
-        from .path_utils import resolve_artifact_root
-
-        try:
-            artifact_root = resolve_artifact_root(raw=artifact_root_raw)
-            artifact_root_str = str(artifact_root)
-        except Exception:
-            artifact_root_str = None
-
-        cache_root_str = None
-        if artifact_root_str:
-            from .path_utils import DEFAULT_CACHE_SUBDIR
-
-            cache_root = Path(artifact_root_str) / DEFAULT_CACHE_SUBDIR
-            cache_root_str = str(cache_root.resolve())
-
-        # Check writability
-        writable: Dict[str, bool] = {}
-        if history_path:
-            try:
-                path = Path(history_path)
-                path.parent.mkdir(parents=True, exist_ok=True)
-                test_file = path.parent / ".writable_test"
-                test_file.write_text("test")
-                test_file.unlink()
-                writable["history"] = True
-            except Exception:
-                writable["history"] = False
-        else:
-            writable["history"] = False
-
-        if artifact_root_str:
-            try:
-                path = Path(artifact_root_str)
-                path.mkdir(parents=True, exist_ok=True)
-                test_file = path / ".writable_test"
-                test_file.write_text("test")
-                test_file.unlink()
-                writable["artifacts"] = True
-            except Exception:
-                writable["artifacts"] = False
-        else:
-            writable["artifacts"] = False
-
-        if cache_root_str:
-            try:
-                path = Path(cache_root_str)
-                path.mkdir(parents=True, exist_ok=True)
-                test_file = path / ".writable_test"
-                test_file.write_text("test")
-                test_file.unlink()
-                writable["cache"] = True
-            except Exception:
-                writable["cache"] = False
-        else:
-            writable["cache"] = False
-
-        return {
-            "history_path": history_path,
-            "artifact_root": artifact_root_str,
-            "cache_root": cache_root_str,
-            "writable": writable,
-        }
-
     @server.resource(
         "igloo://queries/by-sha/{sql_sha256}.sql",
         name="sql_artifact_by_sha",
@@ -1071,58 +775,6 @@ def register_igloo_mcp(
             raise NotFoundError(
                 f"SQL artifact for {sql_sha256} is unreadable: {exc}"
             ) from exc
-
-    if enable_cli_bridge and snow_cli is not None:
-
-        @server.tool(
-            name="run_cli_query",
-            description="Execute a query via the Snowflake CLI bridge",
-        )
-        async def run_cli_query_tool(
-            statement: Annotated[
-                str, Field(description="SQL query to execute using snow CLI")
-            ],
-            warehouse: Annotated[
-                Optional[str], Field(description="Warehouse override", default=None)
-            ] = None,
-            database: Annotated[
-                Optional[str], Field(description="Database override", default=None)
-            ] = None,
-            schema: Annotated[
-                Optional[str], Field(description="Schema override", default=None)
-            ] = None,
-            role: Annotated[
-                Optional[str], Field(description="Role override", default=None)
-            ] = None,
-        ) -> Dict[str, Any]:
-            overrides: Dict[str, Optional[str]] = {
-                "warehouse": warehouse,
-                "database": database,
-                "schema": schema,
-                "role": role,
-            }
-            ctx_overrides: Dict[str, Optional[str]] = {
-                k: v for k, v in overrides.items() if v is not None
-            }
-            try:
-                result = await anyio.to_thread.run_sync(
-                    partial(
-                        snow_cli.run_query,
-                        statement,
-                        output_format="json",
-                        ctx_overrides=ctx_overrides,
-                    )
-                )
-            except SnowCLIError as exc:
-                raise RuntimeError(f"Snow CLI query failed: {exc}") from exc
-
-            rows = result.rows or []
-            return {
-                "statement": statement,
-                "rows": rows,
-                "stdout": result.raw_stdout,
-                "stderr": result.raw_stderr,
-            }
 
 
 def _apply_config_overrides(args: argparse.Namespace) -> Config:
@@ -1316,6 +968,11 @@ def create_combined_lifespan(args: argparse.Namespace):
             except Exception as e:
                 logger.warning(f"Connection health check failed: {e}")
                 _health_monitor.record_error(f"Connection health check failed: {e}")
+
+            # Patch upstream middleware to only apply SQL validation to execute_query
+            # The upstream server's initialize_middleware adds CheckQueryType middleware
+            # that validates ALL tool calls. We need to ensure it only validates execute_query.
+            _patch_sql_validation_middleware(server)
 
             register_igloo_mcp(
                 server,

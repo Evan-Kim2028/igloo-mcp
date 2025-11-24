@@ -1,21 +1,18 @@
-# MCP Diagnostic Tools Reference (v2.0.0)
+# MCP Diagnostic Tools Reference (v0.3.0)
 
 ## Overview
 
-Igloo MCP v2.0.0 provides comprehensive diagnostic tools for the MCP server that provide real-time health monitoring, profile validation, and resource dependency checking. These tools help quickly identify and resolve configuration issues.
+Igloo MCP v0.3.0 provides comprehensive diagnostic tools for the MCP server that provide real-time health monitoring, profile validation, and resource dependency checking. These tools help quickly identify and resolve configuration issues.
+
+> **⚠️ Important**: In v0.3.0, the diagnostic tools `check_profile_config`, `get_resource_status`, and `check_resource_dependencies` have been **consolidated into the `health_check` tool**. Use `health_check` with appropriate parameters (`include_profile=True`, `include_catalog=True`) to access the same functionality. The deprecated tools are documented below for reference only.
 
 ## Tool Categories
 
 ### 🏥 Health Monitoring Tools
-- [`health_check`](#health_check) - Comprehensive server health status
-- [`check_profile_config`](#check_profile_config) - Profile validation and diagnostics
-
-### 🔧 Resource Management Tools
-- [`get_resource_status`](#get_resource_status) - Resource availability checking
-- [`check_resource_dependencies`](#check_resource_dependencies) - Dependency validation
+- [`health_check`](#health_check) - Comprehensive server health status (includes profile validation and resource availability)
 
 ### 🔗 Connection Tools
-- [`test_connection`](#test_connection) - Basic connection testing (existing)
+- [`test_connection`](#test_connection) - Basic connection testing
 
 ## Detailed Tool Documentation
 
@@ -92,11 +89,15 @@ AI: "Give me a health report for the snowflake server"
 
 ---
 
-### `check_profile_config`
+### `check_profile_config` ⚠️ DEPRECATED
+
+> **Deprecated in v0.3.0**: This tool has been consolidated into `health_check`. Use `health_check(include_profile=True)` instead.
 
 **Purpose**: Validates Snowflake profile configuration and provides detailed diagnostics.
 
 **Parameters**: None
+
+**Replacement**: Use `health_check` with `include_profile=True` parameter
 
 **Usage Examples**:
 ```
@@ -177,11 +178,15 @@ AI: "Diagnose profile configuration issues"
 
 ---
 
-### `get_resource_status`
+### `get_resource_status` ⚠️ DEPRECATED
+
+> **Deprecated in v0.3.0**: This tool has been consolidated into `health_check`. Use `health_check(include_catalog=True)` instead.
 
 **Purpose**: Checks availability of all MCP resources and their dependencies.
 
 **Parameters**: None
+
+**Replacement**: Use `health_check` with `include_catalog=True` parameter
 
 **Usage Examples**:
 ```
@@ -267,12 +272,16 @@ AI: "Show me the resource status"
 
 ---
 
-### `check_resource_dependencies`
+### `check_resource_dependencies` ⚠️ DEPRECATED
+
+> **Deprecated in v0.3.0**: This tool has been consolidated into `health_check`. Use `health_check(include_catalog=True)` instead.
 
 **Purpose**: Validates dependencies for a specific resource or all resources.
 
 **Parameters**:
 - `resource_name` (optional): Specific resource to check ("catalog", "lineage", "cortex_search", "dependency_graph")
+
+**Replacement**: Use `health_check` with `include_catalog=True` parameter
 
 **Usage Examples**:
 ```
@@ -470,9 +479,6 @@ AI: "Check if I can connect to Snowflake"
 
 **Typical Response Times**:
 - `health_check`: 50-200ms (cached), 500-2000ms (fresh)
-- `check_profile_config`: 100-300ms
-- `get_resource_status`: 200-800ms
-- `check_resource_dependencies`: 100-500ms
 - `test_connection`: 200-1000ms
 
 ## Configuration Options
@@ -508,8 +514,8 @@ def check_system_health():
     health = call_mcp_tool("health_check")
     if health["status"] != "healthy":
         profile_check = call_mcp_tool("check_profile_config")
-        resource_status = call_mcp_tool("get_resource_status")
-        return diagnose_issues(health, profile_check, resource_status)
+        health_with_resources = call_mcp_tool("health_check", {"include_profile": True, "include_catalog": True})
+        return diagnose_issues(health, health_with_resources)
     return "System is healthy"
 ```
 
@@ -517,9 +523,9 @@ def check_system_health():
 
 ```python
 def validate_before_catalog_build():
-    deps = call_mcp_tool("check_resource_dependencies", {"resource_name": "catalog"})
-    if not deps["ready_to_use"]:
-        return fix_dependencies(deps["blocking_issues"])
+    health = call_mcp_tool("health_check", {"include_profile": True, "include_catalog": True})
+    if not health.get("system", {}).get("healthy", False):
+        return fix_dependencies(health.get("recommendations", []))
     return "Ready to build catalog"
 ```
 

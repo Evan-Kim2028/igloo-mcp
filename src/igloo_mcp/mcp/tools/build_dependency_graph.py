@@ -9,10 +9,18 @@ from typing import Any, Dict, Optional
 
 import anyio
 
+from igloo_mcp.mcp.exceptions import MCPValidationError
 from igloo_mcp.service_layer import DependencyService
 
-from .base import MCPTool
+from .base import MCPTool, tool_error_handler
 from .schema_utils import boolean_schema, enum_schema, snowflake_identifier_schema
+
+try:
+    from fastmcp.utilities.logging import get_logger
+except ImportError:
+    from mcp.server.fastmcp.utilities.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class BuildDependencyGraphTool(MCPTool):
@@ -32,7 +40,11 @@ class BuildDependencyGraphTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return "Build object dependency graph from Snowflake metadata"
+        return (
+            "Build object dependency graph from Snowflake metadata. "
+            "Use this tool when you need to understand relationships between tables, views, and other objects, "
+            "or to trace data lineage. Returns a graph structure showing dependencies between database objects."
+        )
 
     @property
     def category(self) -> str:
@@ -48,7 +60,7 @@ class BuildDependencyGraphTool(MCPTool):
             {
                 "description": "Visualize dependencies across entire account",
                 "parameters": {
-                    "account_scope": True,
+                    "account": True,
                     "format": "json",
                 },
             },
@@ -57,18 +69,20 @@ class BuildDependencyGraphTool(MCPTool):
                 "parameters": {
                     "database": "ANALYTICS",
                     "schema": "REPORTING",
-                    "account_scope": False,
+                    "account": False,
                     "format": "dot",
                 },
             },
         ]
 
+    @tool_error_handler("build_dependency_graph")
     async def execute(
         self,
         database: Optional[str] = None,
         schema: Optional[str] = None,
-        account_scope: bool = True,
+        account: bool = False,
         format: str = "json",
+        request_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Build dependency graph.
@@ -76,32 +90,55 @@ class BuildDependencyGraphTool(MCPTool):
         Args:
             database: Specific database to analyze
             schema: Specific schema to analyze
-            account_scope: Use ACCOUNT_USAGE for broader coverage (default: True)
+            account: Include ACCOUNT_USAGE for broader coverage (default: False)
             format: Output format - 'json' or 'dot' (default: json)
+            request_id: Optional request correlation ID for tracing (auto-generated if not provided)
 
         Returns:
             Dependency graph with nodes and edges
 
         Raises:
-            ValueError: If format is invalid
-            RuntimeError: If graph build fails
+            MCPValidationError: If format is invalid
+            MCPExecutionError: If graph build fails
         """
         if format not in {"json", "dot"}:
-            raise ValueError(f"Invalid format '{format}'. Must be 'json' or 'dot'")
-
-        try:
-            graph = await anyio.to_thread.run_sync(
-                lambda: self.dependency_service.build_dependency_graph(
-                    database=database,
-                    schema=schema,
-                    account_scope=account_scope,
-                    format=format,
-                    output_dir="./dependencies",
-                )
+            raise MCPValidationError(
+                f"Invalid format '{format}'. Must be 'json' or 'dot'",
+                validation_errors=[f"Invalid format: {format}"],
+                hints=["Use format='json' or format='dot'"],
             )
-            return graph
-        except Exception as e:
-            raise RuntimeError(f"Dependency graph build failed: {e}") from e
+
+        logger.info(
+            "build_dependency_graph_started",
+            extra={
+                "database": database,
+                "schema": schema,
+                "account": account,
+                "format": format,
+                "request_id": request_id,
+            },
+        )
+
+        graph = await anyio.to_thread.run_sync(
+            lambda: self.dependency_service.build_dependency_graph(
+                database=database,
+                schema=schema,
+                account_scope=account,
+                format=format,
+                output_dir="./dependencies",
+            )
+        )
+
+        logger.info(
+            "build_dependency_graph_completed",
+            extra={
+                "database": database,
+                "schema": schema,
+                "request_id": request_id,
+            },
+        )
+
+        return graph
 
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
@@ -120,9 +157,9 @@ class BuildDependencyGraphTool(MCPTool):
                     title="Schema",
                     examples=["PUBLIC", "REPORTING"],
                 ),
-                "account_scope": boolean_schema(
+                "account": boolean_schema(
                     "Include ACCOUNT_USAGE views for cross-database dependencies.",
-                    default=True,
+                    default=False,
                     examples=[True, False],
                 ),
                 "format": {
@@ -133,6 +170,10 @@ class BuildDependencyGraphTool(MCPTool):
                         examples=["json"],
                     ),
                     "title": "Output Format",
+                },
+                "request_id": {
+                    "type": "string",
+                    "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
                 },
             },
         }

@@ -44,20 +44,20 @@ Thank you for your interest in contributing to Igloo MCP! This guide will help y
 ### Branching Strategy (GitFlow)
 
 - `main` always reflects the latest production release. It only receives merges from release or hotfix branches.
-- `develop` is the integration branch for the next release cycle (currently 0.2.5). All feature work targets `develop`.
+- `develop` is the integration branch for the next release cycle (currently 0.3.0). All feature work targets `develop`.
 - `feature/<issue-id>-short-description` branches are created from `develop`, rebased frequently, and merged back via PRs.
 - `release/x.y.z` branches are cut from `develop` once the feature set is ready. Use these branches to bump versions, finalize docs, and run the hardening/test pass before merging to `main` and back to `develop`.
 - `hotfix/<issue>` branches fork from `main` to patch urgent production issues; merge them into both `main` and `develop` after verification.
 
-Branch lifecycle example for 0.2.5:
+Branch lifecycle example for 0.3.0:
 
 ```bash
 git checkout main && git pull
 git checkout develop || git checkout -b develop
 git checkout -b feature/issue-123-honor-union-select develop
 # ... work, PR into develop ...
-git checkout develop && git pull && git checkout -b release/0.2.5
-# version bumps + QA, then merge release/0.2.5 -> main, tag, and back-merge into develop
+git checkout develop && git pull && git checkout -b release/0.3.0
+# version bumps + QA, then merge release/0.3.0 -> main, tag, and back-merge into develop
 ```
 
 ### Code Style
@@ -177,19 +177,19 @@ Closes #123
 
 ### Workflow Overview
 
-For the 0.2.5 cycle we followed GitFlow (future 0.2.x releases follow the same pattern):
+For the 0.3.0 cycle we followed GitFlow (future releases follow the same pattern):
 
-1. Keep `develop` in sync with `origin/develop`; all feature PRs must target it until the 0.2.5 release branch is cut.
-2. When the backlog for 0.2.5 is ready, branch `release/0.2.5` from `develop`.
+1. Keep `develop` in sync with `origin/develop`; all feature PRs must target it until the 0.3.0 release branch is cut.
+2. When the backlog for 0.3.0 is ready, branch `release/0.3.0` from `develop`.
 3. On the release branch:
    - Bump versions
    - Update changelog/docs
    - Run the full QA/test suite and fix regressions directly on the branch
-4. Merge `release/0.2.5` into `main`, tag `v0.2.5`, and push.
+4. Merge `release/0.3.0` into `main`, tag `v0.3.0`, and push.
 5. Merge the same release branch back into `develop` so future work inherits the release-only commits.
-6. Delete the release branch when finished. Repeat for the next version (0.2.6, etc.).
+6. Delete the release branch when finished. Repeat for the next version (0.3.1, etc.).
 
-Hotfixes fork from `main` (e.g., `hotfix/0.2.5-connection-leak`) and land back into both `main` and `develop` after tagging.
+Hotfixes fork from `main` (e.g., `hotfix/0.3.0-connection-leak`) and land back into both `main` and `develop` after tagging.
 
 ### Version Bumping
 
@@ -197,7 +197,7 @@ Hotfixes fork from `main` (e.g., `hotfix/0.2.5-connection-leak`) and land back i
 - Update documentation references
 - Update `src/igloo_mcp/__init__.py`
 - Write release notes in `CHANGELOG.md`
-- Tag the merge commit (`git tag v0.2.5 && git push origin v0.2.5`)
+- Tag the merge commit (`git tag v0.3.0 && git push origin v0.3.0`)
 
 ### Release Checklist
 

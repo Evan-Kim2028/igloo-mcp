@@ -334,7 +334,6 @@ class TestSourceAttributionIntegration:
                 raise TimeoutError("Query timeout")
 
             tool._execute_query_sync = Mock(side_effect=timeout_execute)  # type: ignore[assignment]
-            tool._rpc_soft_timeout = 1000  # Large timeout for test
 
             with pytest.raises(RuntimeError):
                 await tool.execute(

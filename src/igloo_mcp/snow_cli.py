@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -17,6 +18,8 @@ from io import StringIO
 from typing import Any, Dict, List, Optional
 
 from .config import get_config
+
+logger = logging.getLogger(__name__)
 
 
 class SnowCLIError(RuntimeError):
@@ -95,10 +98,10 @@ class SnowCLI:
             try:
                 # Log the command about to run (without printing sensitive env)
                 debug_cmd = " ".join(args)
-                print(f"[IGLOO-MCP DEBUG] Executing: {debug_cmd}")
+                logger.debug(f"Executing: {debug_cmd}")
                 # Also echo the SQL in a trimmed form for readability
                 trimmed = " ".join(query.split())
-                print(f"[IGLOO-MCP DEBUG] SQL: {trimmed}")
+                logger.debug(f"SQL: {trimmed}")
             except Exception:
                 pass
 
@@ -162,8 +165,8 @@ class SnowCLI:
         if os.getenv("IGLOO_MCP_DEBUG") == "1":
             try:
                 debug_cmd = " ".join(args)
-                print(f"[IGLOO-MCP DEBUG] Executing file: {debug_cmd}")
-                print(f"[IGLOO-MCP DEBUG] File: {file_path}")
+                logger.debug(f"Executing file: {debug_cmd}")
+                logger.debug(f"File: {file_path}")
             except Exception:
                 pass
 

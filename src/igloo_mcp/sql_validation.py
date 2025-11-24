@@ -284,6 +284,18 @@ def validate_sql_statement(
         statement, effective_allow_list, lowercase_disallow_list
     )
 
+    # FIX #41: Reclassify DESCRIBE statements from 'Command' to 'Describe'
+    statement_upper = statement.strip().upper()
+    if stmt_type == "Command" and statement_upper.startswith("DESCRIBE"):
+        stmt_type = "Describe"
+        # Re-evaluate validity with the corrected type, respecting disallow_list
+        if "describe" in disallow_set:
+            is_valid = False
+        elif "describe" in allow_set:
+            is_valid = True
+        else:
+            is_valid = False
+
     if multi_statement_detected:
         detected: list[str] = []
         for expr in parsed_expressions:

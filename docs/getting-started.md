@@ -3,7 +3,7 @@
 > **Quick Start**: Set up your Snowflake profile → Install igloo-mcp → Start using with your AI assistant
 
 ## How It Works
-- Your LLM calls MCP tools (execute_query, preview_table, build_catalog, etc.) exposed by igloo-mcp.
+- Your LLM calls MCP tools (execute_query, build_catalog, search_catalog, evolve_report, etc.) exposed by igloo-mcp.
 - igloo-mcp uses your Snowflake CLI profile for authentication and session context.
 - Built-in guardrails block write and DDL SQL (INSERT/UPDATE/CREATE/ALTER/DELETE/DROP/TRUNCATE); timeouts and best‑effort cancellation keep runs responsive.
 - Optional JSONL query history records success/timeout/error with minimal fields for auditing.
@@ -30,106 +30,30 @@
 
 ## Step 1: Install igloo-mcp
 
-### Installation Methods
+See the [Installation Guide](installation.md) for complete installation instructions.
 
-**Option 1: PyPI Installation (Recommended for most users)**
+**Quick install**:
 ```bash
 uv pip install igloo-mcp
 ```
 
-**Option 2: Development Installation (For contributors)**
-```bash
-# Clone and install the project
-git clone https://github.com/Evan-Kim2028/igloo-mcp
-cd igloo-mcp
-
-# Install with uv (recommended)
-uv sync
-```
-
 ## Step 2: Set Up Your Snowflake Profile
 
-**Critical**: igloo-mcp uses Snowflake CLI profiles for authentication.
+See the [Installation Guide](installation.md#2-create-a-snowflake-profile) for detailed profile setup instructions.
 
-### Snowflake Parameters
-
-Before creating your profile, gather these Snowflake parameters:
-
-| Parameter | Required | Description | How to Find | Example |
-|-----------|----------|-------------|-------------|---------|
-| **Account Identifier** | Yes | Your Snowflake account location | Snowflake URL (remove `.snowflakecomputing.com`) | `abc12345.us-east-1` |
-| **Username** | Yes | Your Snowflake username | From your Snowflake admin or login | `alex.chen` |
-| **Authentication** | Yes | SSO (Okta via browser), password, or key‑pair | See examples below | `externalbrowser` |
-| **Warehouse** | Recommended | Compute cluster for queries | Snowflake UI → Admin → Warehouses | `COMPUTE_WH` |
-| **Database** | Optional | Default database | Snowflake UI → Data → Databases | `MY_DB` |
-| **Schema** | Optional | Default schema | Inside database view | `PUBLIC` |
-
-**Finding Your Account Identifier**:
-- Your Snowflake URL: `https://abc12345.us-east-1.snowflakecomputing.com`
-- Your account identifier: `abc12345.us-east-1` (the part before `.snowflakecomputing.com`)
-- Format: `<orgname>-<account>.<region>` or `<account>.<region>` (for older accounts)
-
-**Finding Your Warehouse**:
-- Trial accounts: Usually `COMPUTE_WH` (default warehouse)
-- Enterprise: Check Snowflake UI → Admin → Warehouses
-- Ask your Snowflake admin if unsure
-- Common names: `COMPUTE_WH`, `WH_DEV`, `ANALYTICS_WH`
-
-**Don't have this info?** Contact your Snowflake administrator or check your trial account welcome email.
-
-### Create a Snowflake Profile
-
-Recommended: SSO (Okta) via external browser
-
+**Quick setup** (SSO recommended):
 ```bash
-# Create a new profile (interactive)
-snow connection add
-
-# Example with SSO (Okta)
 snow connection add \
   --connection-name my-profile \
-  --account mycompany-prod.us-east-1 \
-  --user alex.chen \
+  --account <account>.<region> \
+  --user <username> \
   --warehouse COMPUTE_WH \
-  --database MY_DB \
-  --schema PUBLIC \
   --authenticator externalbrowser
-
-# If your org requires a direct Okta URL instead of externalbrowser
-# --authenticator https://<your_okta_domain>.okta.com
 ```
 
-Fallbacks:
-
+Verify your profile:
 ```bash
-# Password authentication (no SSO)
-snow connection add \
-  --connection-name my-profile \
-  --account mycompany-prod.us-east-1 \
-  --user alex.chen \
-  --warehouse COMPUTE_WH \
-  --database MY_DB \
-  --schema PUBLIC \
-  --password
-
-# Key-pair authentication (advanced/headless)
-snow connection add \
-  --connection-name my-profile \
-  --account mycompany-prod.us-east-1 \
-  --user alex.chen \
-  --warehouse COMPUTE_WH \
-  --database MY_DB \
-  --schema PUBLIC \
-  --private-key-file ~/.snowflake/key.pem
-```
-
-### Verify Your Profile
-
-```bash
-# List all profiles
 snow connection list
-
-# Test your connection
 snow sql -q "SELECT CURRENT_VERSION()" --connection my-profile
 ```
 
@@ -227,12 +151,16 @@ Once configured, interact with igloo-mcp through Cursor:
 | Tool Name | Description | Key Parameters |
 |-----------|-------------|----------------|
 | `execute_query` | Execute SQL with safety checks, timeouts, cancellation | statement, timeout_seconds, verbose_errors, reason, warehouse, database, schema, role |
-| `preview_table` | Preview table rows without writing SQL | table_name, limit, warehouse, database, schema, role |
 | `build_catalog` | Build comprehensive catalog from INFORMATION_SCHEMA | output_dir, database, account, format |
 | `get_catalog_summary` | Get catalog statistics and metadata | catalog_dir |
+| `search_catalog` | Search locally cached catalog artifacts | catalog_dir, object_types, database, schema, name_contains, column_contains, limit |
+
+**Note**: `build_catalog` uses unified storage by default, saving catalogs to `~/.igloo_mcp/catalogs/{database}/`. See [Configuration Guide](configuration.md) for details on customizing catalog storage.
 | `build_dependency_graph` | Generate object dependency graph (JSON/DOT) | database, schema, account, format |
 | `test_connection` | Test Snowflake connection | — |
 | `health_check` | Check MCP server health | — |
+| `evolve_report` | Evolve living reports with LLM assistance | report_selector, instruction, constraints, dry_run |
+| `render_report` | Render reports to various formats | report_selector, format, persist_output |
 
 **Catalog Building Details**:
 - Queries Snowflake `INFORMATION_SCHEMA` for comprehensive metadata
@@ -243,53 +171,7 @@ Once configured, interact with igloo-mcp through Cursor:
 
 ## Advanced Configuration
 
-### Multiple Profiles
-
-Switch between environments by changing the `SNOWFLAKE_PROFILE`:
-
-```json
-{
-  "mcpServers": {
-    "igloo-dev": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/igloo-mcp",
-        "run",
-        "igloo-mcp",
-        "--profile",
-        "dev"
-      ],
-      "env": {"SNOWFLAKE_PROFILE": "dev"}
-    },
-    "igloo-prod": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/igloo-mcp",
-        "run",
-        "igloo-mcp",
-        "--profile",
-        "prod"
-      ],
-      "env": {"SNOWFLAKE_PROFILE": "prod"}
-    }
-  }
-}
-```
-
-### Environment Variables
-
-```bash
-# Set default Snowflake profile
-export SNOWFLAKE_PROFILE=my-profile
-
-# Set default catalog directory
-export SNOWCLI_CATALOG_DIR=./my_catalog
-
-# Set default lineage directory
-export SNOWCLI_LINEAGE_DIR=./my_lineage
-```
+For advanced configuration options including multiple profiles, environment variables, and custom settings, see the [Configuration Guide](configuration.md).
 
 ## Troubleshooting
 
@@ -321,15 +203,22 @@ export SNOWCLI_LINEAGE_DIR=./my_lineage
 
 ## Next Steps
 
-- 🎯 [Cursor MCP Setup Guide](cursor-mcp-setup.md) - **Recommended for Cursor users**
-- 📖 [MCP Tools Reference](mcp/tools-reference.md) - Detailed tool documentation
+- 🎯 [Cursor MCP Setup Guide](mcp/cursor-mcp-setup.md) - **Recommended for Cursor users**
+- 📖 [API Reference](api-reference.md) - Complete MCP tools documentation
 - 🔧 [Configuration Guide](configuration.md) - Advanced settings
-- 🐛 [Troubleshooting Guide](troubleshooting.md) - Common issues
-- 📊 [Usage Examples](examples/) - Real-world examples
+- 📊 [Usage Examples](examples/catalog-examples.md) - Real-world examples
 
-## Migrating from CLI?
+## See Also
 
-If you were using the old CLI interface from snowcli-tools, see the [Migration Guide](migration-guide.md) for step-by-step instructions.
+- [Installation Guide](installation.md) - Detailed installation and profile setup
+- [MCP Integration Guide](mcp-integration.md) - General MCP client configuration
+- [Authentication Guide](authentication.md) - Authentication options and troubleshooting
+- [Architecture Overview](architecture.md) - System architecture and design
+- [Features Overview](features_overview.md) - Complete feature list
+
+## Administrative CLI Tools
+
+igloo-mcp includes administrative CLI tools for power users and system administrators. The primary interface for development work is through MCP tools in your AI assistant. See the [Administrative Operations](docs/index.md#administrative-operations) section for CLI usage details.
 
 ---
 

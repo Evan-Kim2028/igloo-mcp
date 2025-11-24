@@ -24,7 +24,6 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | `schema` | string | ❌ No | profile | Schema override (Snowflake identifier) |
 | `role` | string | ❌ No | profile | Role override (Snowflake identifier) |
 | `post_query_insight` | string \| object | ❌ No | - | Optional summary/JSON describing the results; stored alongside history and cache artifacts. |
-| `response_mode` | string | ❌ No | auto | `auto` runs synchronously until nearing the 120s tools/call limit, `async` returns immediately with an `execution_id` to poll via `fetch_async_query_result`, and `sync` forces inline execution. |
 
 > Identifiers accept standard Snowflake names such as `ANALYTICS_WH` or double-quoted values like `"Analytics-WH"` / `"Sales Analytics"`.
 
@@ -35,7 +34,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 - **Usage Examples:**
   1. Preview recent sales rows with an analytics warehouse override.
   2. Run a regional revenue aggregation with an explicit analyst role and 30s timeout.
-  3. Enqueue a long-running aggregation with `response_mode="async"` and fetch the cached rows later.
+  3. Run a long-running aggregation with explicit timeout and warehouse override.
 
 ## Returns
 
@@ -118,29 +117,6 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 - Result caching is on by default; subsequent runs with the same SQL, profile, and resolved session context return `cache.hit = true` along with the manifest path and CSV/JSON artifacts for auditability.
 - `key_metrics` and `insights` are automatically derived from the returned rows (no extra SQL) so downstream tools get quick summaries of the seen data. Metrics include non-null ratios, numeric ranges, categorical top values, and time spans based on the sampled result set.
 - `source_databases`/`tables` (added in v0.2.5) enumerate every referenced object extracted from the compiled SQL so history logs and cache hits retain accurate cross-database attribution even when the active session database differs.
-- When `response_mode="auto"` needs to hand execution back before the MCP RPC limit, the response switches to the async form shown below and includes `inline_wait_seconds` to document how long the tool waited before yielding control.
-
-## Async Execution & Polling
-
-Set `response_mode="async"` (or let the default `auto` mode run past the inline wait budget) to enqueue long-running queries without tripping the MCP `tools/call` deadline. The tool immediately returns an `execution_id` along with the recommended poll tool:
-
-```json
-{
-  "status": "accepted",
-  "execution_id": "f0af3d...",
-  "poll_tool": "fetch_async_query_result",
-  "inline_wait_seconds": 90,
-  "message": "Query accepted for asynchronous execution..."
-}
-```
-
-Use [`fetch_async_query_result`](fetch_async_query_result.md) with the execution ID to check status or retrieve cached rows once the warehouse finishes. Results still land in history/caches with the same `execution_id`, so you can reuse existing manifest paths if the client timed out earlier.
-
-### RPC Timeout Alignment
-
-- `response_mode="auto"` now launches every query on the async executor, waits up to `min(timeout_seconds, IGLOO_MCP_RPC_SOFT_TIMEOUT - 5s)`, and returns the full result if the warehouse finishes inside that window.
-- When the inline wait budget expires, the tool yields the async handle shown above (`status: accepted`) so the MCP client can return before the ~120s `tools/call` deadline. The background job keeps running, writes history/artifacts, and is immediately retrievable via `fetch_async_query_result`.
-- Set `IGLOO_MCP_RPC_SOFT_TIMEOUT` if your client’s RPC budget differs from the default 110s. Lowering it (for example to 60s) makes `auto` mode fall back to async sooner; raising it gives the inline wait more time.
 
 ## Post-Query Insights & Key Metrics
 
@@ -237,23 +213,6 @@ except RuntimeError as e:
     print(f"Execution error: {e}")
 ```
 
-### Async Mode (Long-Running Query)
-
-```python
-response = execute_query(
-    statement="CALL analytics.run_heavy_rollup()",
-    timeout_seconds=480,
-    response_mode="async",
-    reason="Overnight dashboard refresh"
-)
-print(response["message"])  # contains execution_id
-
-poll = fetch_async_query_result(execution_id=response["execution_id"])
-if poll["status"] == "success":
-    print(poll["result"]["rowcount"], "rows ready")
-else:
-    print("Status:", poll["status"])
-```
 
 ## Performance Tips
 
@@ -266,7 +225,6 @@ else:
 
 ## Related Tools
 
-- [preview_table](preview_table.md) - Quick table preview without SQL
 - [test_connection](test_connection.md) - Verify connection before queries
 
 ## See Also

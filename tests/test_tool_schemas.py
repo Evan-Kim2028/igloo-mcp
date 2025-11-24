@@ -16,8 +16,7 @@ from igloo_mcp.mcp.tools.build_dependency_graph import BuildDependencyGraphTool
 from igloo_mcp.mcp.tools.execute_query import ExecuteQueryTool
 from igloo_mcp.mcp.tools.get_catalog_summary import GetCatalogSummaryTool
 from igloo_mcp.mcp.tools.health import HealthCheckTool
-from igloo_mcp.mcp.tools.preview_table import PreviewTableTool
-from igloo_mcp.mcp.tools.schema_utils import IDENTIFIER_PATTERN, QUALIFIED_NAME_PATTERN
+from igloo_mcp.mcp.tools.schema_utils import IDENTIFIER_PATTERN
 from igloo_mcp.mcp.tools.test_connection import ConnectionTestTool
 
 
@@ -109,43 +108,6 @@ def test_build_catalog_schema(base_config: Config) -> None:
     # Discovery metadata
     assert tool.category == "metadata"
     assert {"catalog", "metadata"}.issubset(set(tool.tags))
-    assert isinstance(tool.usage_examples, list)
-    assert tool.usage_examples
-    for example in tool.usage_examples:
-        assert {"description", "parameters"} <= set(example.keys())
-
-
-def test_preview_table_schema(base_config: Config) -> None:
-    tool = PreviewTableTool(
-        config=base_config,
-        snowflake_service=Mock(),
-        query_service=Mock(),
-    )
-
-    schema = tool.get_parameter_schema()
-    _validate_schema(schema)
-    assert schema["required"] == ["table_name"]
-
-    props = schema["properties"]
-
-    table_name = props["table_name"]
-    assert table_name["pattern"] == QUALIFIED_NAME_PATTERN
-    assert "examples" in table_name
-    assert re.fullmatch(
-        QUALIFIED_NAME_PATTERN,
-        '"Sales Analytics"."Reporting"."Orders"',
-    )
-
-    limit = props["limit"]
-    assert limit["minimum"] == 1
-    assert limit["default"] == 100
-
-    for override in ("warehouse", "database", "schema"):
-        override_schema = props[override]
-        assert override_schema["pattern"] == IDENTIFIER_PATTERN
-
-    assert tool.category == "query"
-    assert {"preview", "table"}.issubset(set(tool.tags))
     assert isinstance(tool.usage_examples, list)
     assert tool.usage_examples
     for example in tool.usage_examples:

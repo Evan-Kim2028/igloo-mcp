@@ -1,6 +1,6 @@
 [project]
  name = "igloo_mcp"
-version = "0.2.5"
+version = "0.3.0"
 description = "Igloo MCP - Snowflake MCP Server for agentic native workflows"
 readme = "README.md"
 authors = [
@@ -27,8 +27,9 @@ dependencies = [
 # MCP dependencies are included by default - no separate installation needed
 
 [project.scripts]
- igloo_mcp = "igloo_mcp.mcp_server:main"
-igloo-report = "igloo_mcp.report_cli:main"
+# Primary entry point: MCP server for AI assistant integration
+igloo_mcp = "igloo_mcp.mcp_server:main"
+# Administrative entry point: CLI tools for power users and system administrators
 igloo = "igloo_mcp.cli:main"
 
 [project.urls]
@@ -39,6 +40,12 @@ Documentation = "https://github.com/Evan-Kim2028/igloo-mcp#readme"
 [build-system]
 requires = ["uv_build>=0.8.15,<0.9.0"]
 build-backend = "uv_build"
+
+[tool.uv.build]
+# Include template files in package distribution
+include = [
+    "src/igloo_mcp/living_reports/templates/*.j2",
+]
 
 [tool.uv]
 dev-dependencies = [

@@ -83,4 +83,3 @@ else:
 ## Related
 
 - [test_connection](test_connection.md) - Test Snowflake only
-- [get_resource_status](get_resource_status.md) - Resource availability

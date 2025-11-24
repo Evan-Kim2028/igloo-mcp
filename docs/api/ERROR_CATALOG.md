@@ -2,14 +2,48 @@
 
 Complete reference for igloo-mcp errors and solutions.
 
-## ValueError Errors
+## MCP Exception Types
+
+All MCP tools use standardized exception types for consistent error handling:
+
+- **MCPValidationError**: Parameter validation failures (invalid types, missing required fields, out-of-range values)
+- **MCPExecutionError**: Runtime execution failures (connection errors, query failures, timeouts)
+- **MCPSelectorError**: Resource selector resolution failures (not found, ambiguous, invalid format)
+- **MCPToolError**: Base class for all MCP tool errors
+
+All exceptions include:
+- `message`: Human-readable error message
+- `error_code`: Programmatic error code
+- `hints`: List of actionable suggestions
+- `context`: Additional context data
+
+## MCPValidationError Errors
 
 ### 1. Profile Validation Failed
 
+**Exception Type:** `MCPValidationError`
+
 **Message:**
 ```
-Profile validation failed: Profile 'invalid_name' not found
-Available profiles: default, prod, dev
+Snowflake profile validation failed: Profile 'invalid_name' not found
+```
+
+**Error Structure:**
+```json
+{
+  "message": "Snowflake profile validation failed: Profile 'invalid_name' not found",
+  "error_type": "MCPValidationError",
+  "error_code": "VALIDATION_ERROR",
+  "validation_errors": [
+    "Profile: invalid_name",
+    "Available: default, prod, dev"
+  ],
+  "hints": [
+    "Check configuration with 'snow connection list'",
+    "Verify profile settings",
+    "Run 'snow connection add' to create a new profile"
+  ]
+}
 ```
 
 **Cause:** Specified profile doesn't exist in Snowflake CLI configuration
@@ -19,19 +53,33 @@ Available profiles: default, prod, dev
 2. List profiles: `snow connection list`
 3. Create profile: `snow connection add`
 
-**Related Tools:** execute_query, test_connection, check_profile_config
+**Related Tools:** execute_query, test_connection, health_check
 
 ---
 
 ### 2. SQL Statement Not Permitted
 
+**Exception Type:** `MCPValidationError`
+
 **Message:**
 ```
 SQL statement type 'Delete' is not permitted.
+```
 
-Safe alternatives:
-  soft_delete: UPDATE users SET deleted_at = CURRENT_TIMESTAMP() WHERE <condition>
-  create_view: CREATE VIEW active_users AS SELECT * FROM users WHERE NOT (<condition>)
+**Error Structure:**
+```json
+{
+  "message": "SQL statement type 'Delete' is not permitted.",
+  "error_type": "MCPValidationError",
+  "error_code": "VALIDATION_ERROR",
+  "validation_errors": [
+    "Statement type: Delete"
+  ],
+  "hints": [
+    "Set IGLOO_MCP_SQL_PERMISSIONS='write' to enable write operations",
+    "Use SELECT statements for read-only queries"
+  ]
+}
 ```
 
 **Cause:** Attempting a blocked SQL operation. By default igloo-mcp denies write + DDL statements (`INSERT`, `UPDATE`, `CREATE`, `ALTER`) and destructive commands (`DELETE`, `DROP`, `TRUNCATE`). Statements the Snowflake parser cannot classify fall back to `Command` and are also rejected.
@@ -63,38 +111,41 @@ Invalid database name: contains illegal characters
 
 ---
 
-## RuntimeError Errors
+## MCPExecutionError Errors
 
 ### 4. Query Timeout
 
-**Compact Message (~80 tokens):**
+**Exception Type:** `MCPExecutionError`
+
+**Message:**
 ```
-Query timeout (30s). Try: timeout_seconds=480, add WHERE/LIMIT clause,
-or scale warehouse. Use verbose_errors=True for detailed hints. Query ID may be
-unavailable on timeout.
+Query timeout after 30s
 ```
 
-**Verbose Message (~250 tokens):**
+**Error Structure:**
+```json
+{
+  "message": "Query timeout after 30s",
+  "error_type": "MCPExecutionError",
+  "error_code": "EXECUTION_ERROR",
+  "operation": "query",
+  "hints": [
+    "Increase timeout: timeout_seconds=480",
+    "Add WHERE/LIMIT clause to reduce data volume",
+    "Use larger warehouse for complex queries"
+  ],
+  "context": {
+    "timeout_seconds": 30,
+    "warehouse": "COMPUTE_WH",
+    "database": "ANALYTICS"
+  }
+}
 ```
-Query timeout after 30s.
 
-Quick fixes:
-1. Increase timeout: execute_query(..., timeout_seconds=480, reason="Allow longer-running query")
-2. Add filter: Add WHERE clause to reduce data volume
-3. Sample data: Add LIMIT clause for testing (e.g., LIMIT 1000)
-4. Scale warehouse: Use larger warehouse for complex queries
-
-Current settings:
-  - Timeout: 30s
-  - Warehouse: COMPUTE_WH
-  - Database: ANALYTICS
-
-Notes:
-  - Query ID may be unavailable when a timeout triggers early cancellation.
-  - History is written to `logs/doc.jsonl` by default (override with `IGLOO_MCP_QUERY_HISTORY`)
-
-Query preview: SELECT * FROM huge_table WHERE date >= '2024-01-01'...
-```
+**Verbose Mode:** When `verbose_errors=True`, additional hints include:
+- Filter by clustering keys
+- Catalog-guided filtering
+- Detailed query preview
 
 **Cause:** Query exceeded timeout limit (default 30s)
 
@@ -128,16 +179,32 @@ execute_query(
 )
 ```
 
-**Related Tools:** execute_query, preview_table
+**Related Tools:** execute_query
 
 ---
 
 ### 5. Connection Failed
 
+**Exception Type:** `MCPExecutionError`
+
 **Message:**
 ```
-Snowflake connection test failed. Verify credentials, network connectivity,
-and warehouse availability.
+Tool execution failed: Snowflake connection test failed
+```
+
+**Error Structure:**
+```json
+{
+  "message": "Tool execution failed: Snowflake connection test failed",
+  "error_type": "MCPExecutionError",
+  "error_code": "EXECUTION_ERROR",
+  "operation": "test_connection",
+  "hints": [
+    "Check test_connection logs for details",
+    "Verify input parameters are correct",
+    "Check system resources and connectivity"
+  ]
+}
 ```
 
 **Cause:** Cannot establish connection to Snowflake
@@ -154,9 +221,26 @@ and warehouse availability.
 
 ### 6. Catalog Build Failed
 
+**Exception Type:** `MCPExecutionError`
+
 **Message:**
 ```
-Catalog build failed: Permission denied on database 'RESTRICTED_DB'
+Tool execution failed: Permission denied on database 'RESTRICTED_DB'
+```
+
+**Error Structure:**
+```json
+{
+  "message": "Tool execution failed: Permission denied on database 'RESTRICTED_DB'",
+  "error_type": "MCPExecutionError",
+  "error_code": "EXECUTION_ERROR",
+  "operation": "build_catalog",
+  "hints": [
+    "Check build_catalog logs for details",
+    "Verify input parameters are correct",
+    "Check system resources and connectivity"
+  ]
+}
 ```
 
 **Cause:** Insufficient permissions to read database metadata
@@ -170,54 +254,89 @@ Catalog build failed: Permission denied on database 'RESTRICTED_DB'
 
 ---
 
-### 7. Lineage Graph Not Found
+### 7. Catalog Directory Not Found
+
+**Exception Type:** `MCPSelectorError`
 
 **Message:**
 ```
-Lineage graph not found at ./lineage/lineage_graph.pkl.
-Run 'build_catalog' first to generate lineage data.
+Catalog directory not found: ./data_catalogue
 ```
 
-**Cause:** Trying to query lineage before building catalog
+**Error Structure:**
+```json
+{
+  "message": "Catalog directory not found: ./data_catalogue",
+  "error_type": "MCPSelectorError",
+  "error_code": "SELECTOR_ERROR",
+  "selector": "./data_catalogue",
+  "error": "not_found",
+  "hints": [
+    "Verify catalog_dir exists: ./data_catalogue",
+    "Run build_catalog first to create catalog artifacts"
+  ]
+}
+```
+
+**Cause:** Trying to search catalog before building it
 
 **Solutions:**
 1. Build catalog first:
    ```python
    build_catalog(database="ANALYTICS")
    ```
-2. Then query lineage:
+2. Then search catalog:
    ```python
-   query_lineage(object_name="MY_TABLE")
+   search_catalog(database="ANALYTICS")
    ```
 
-**Related Tools:** query_lineage, build_catalog
+**Related Tools:** search_catalog, get_catalog_summary, build_catalog
 
 ---
 
-### 8. Object Not Found in Lineage
+### 8. Report Not Found
+
+**Exception Type:** `MCPSelectorError`
 
 **Message:**
 ```
-Object 'MISSING_TABLE' not found in lineage graph.
-Ensure the object exists and catalog is up-to-date.
+Could not resolve report selector: Sales Report
 ```
 
-**Cause:** Object doesn't exist or catalog is stale
+**Error Structure:**
+```json
+{
+  "message": "Could not resolve report selector: Sales Report",
+  "error_type": "MCPSelectorError",
+  "error_code": "SELECTOR_ERROR",
+  "selector": "Sales Report",
+  "error": "not_found",
+  "hints": [
+    "Verify selector exists: Sales Report",
+    "Check spelling and case sensitivity",
+    "List available resources to see valid selectors"
+  ]
+}
+```
+
+**Cause:** Report selector cannot be resolved (not found, ambiguous, or invalid format)
 
 **Solutions:**
-1. Verify object exists: `SHOW TABLES LIKE 'MISSING_TABLE'`
-2. Rebuild catalog if stale: `build_catalog(database="DB")`
-3. Check object name spelling
+1. Verify report exists: Use `search_report` to list available reports
+2. Use exact report ID instead of title
+3. Check spelling and case sensitivity
 
-**Related Tools:** query_lineage
+**Related Tools:** evolve_report, render_report, search_report
 
 ---
 
 ### 9. Resource Manager Not Available
 
+**Exception Type:** `MCPExecutionError`
+
 **Message:**
 ```
-Resource manager not available. Server may not be fully initialized.
+Tool execution failed: Resource manager not available
 ```
 
 **Cause:** MCP server component not fully initialized
@@ -227,7 +346,7 @@ Resource manager not available. Server may not be fully initialized.
 2. Check server logs for initialization errors
 3. Restart MCP server
 
-**Related Tools:** get_resource_status, check_resource_dependencies
+**Related Tools:** health_check
 
 ---
 
@@ -243,7 +362,7 @@ Warning: Profile validation issue detected: Missing warehouse parameter
 **Cause:** Profile configuration incomplete
 
 **Solutions:**
-1. Check profile: `check_profile_config()`
+1. Check profile: `health_check(include_profile=True)`
 2. Update profile: `snow connection add --connection-name default`
 3. Override in tool call: Use `warehouse="COMPUTE_WH"`
 
@@ -251,17 +370,55 @@ Warning: Profile validation issue detected: Missing warehouse parameter
 
 ## Error Response Format
 
-All errors follow this structure:
+All MCP tool errors follow a standardized structure:
 
+### MCPValidationError
 ```json
 {
-  "error": "RuntimeError",
-  "message": "Query timeout (30s). Try: timeout_seconds=480...",
+  "message": "Parameter validation failed for execute_query",
+  "error_type": "MCPValidationError",
+  "error_code": "VALIDATION_ERROR",
+  "validation_errors": [
+    "Field 'reason': Missing required parameter",
+    "Field 'timeout_seconds': Expected integer, got string"
+  ],
+  "hints": [
+    "Check parameter types and required fields",
+    "Review execute_query parameter schema"
+  ]
+}
+```
+
+### MCPExecutionError
+```json
+{
+  "message": "Query timeout after 30s",
+  "error_type": "MCPExecutionError",
+  "error_code": "EXECUTION_ERROR",
+  "operation": "execute_query",
+  "hints": [
+    "Increase timeout: timeout_seconds=480",
+    "Add WHERE/LIMIT clause to reduce data volume"
+  ],
   "context": {
-    "tool": "execute_query",
-    "statement": "SELECT * FROM large_table",
-    "timeout": 120
+    "timeout_seconds": 30,
+    "warehouse": "COMPUTE_WH"
   }
+}
+```
+
+### MCPSelectorError
+```json
+{
+  "message": "Catalog directory not found: ./data_catalogue",
+  "error_type": "MCPSelectorError",
+  "error_code": "SELECTOR_ERROR",
+  "selector": "./data_catalogue",
+  "error": "not_found",
+  "hints": [
+    "Verify catalog_dir exists: ./data_catalogue",
+    "Run build_catalog first to create catalog artifacts"
+  ]
 }
 ```
 
@@ -278,24 +435,35 @@ execute_query(
 
 **Check System Health:**
 ```python
-health_check()  # Overall system status
-check_profile_config()  # Profile diagnostics
+health_check(include_profile=True, include_catalog=True)  # Overall system status
 test_connection()  # Connection test
 ```
 
 **Review Configuration:**
 ```python
-check_profile_config()  # Returns:
+health_check(include_profile=True)  # Returns:
 {
-  "config_path": "~/.snowflake/config.toml",
-  "config_exists": true,
-  "available_profiles": ["default", "prod"],
-  "validation": {"valid": true},
-  "recommendations": [...]
+  "system": {"healthy": true},
+  "profile": {
+    "config_path": "~/.snowflake/config.toml",
+    "config_exists": true,
+    "available_profiles": ["default", "prod"],
+    "validation": {"valid": true},
+    "recommendations": [...]
 }
 ```
 
 ---
 
-**Last Updated:** December 2024
-**Version:** v2.0.0
+## Error Handling Decorator
+
+All MCP tools use the `@tool_error_handler` decorator which automatically:
+- Converts `ValidationError` to `MCPValidationError`
+- Converts unexpected exceptions to `MCPExecutionError`
+- Logs errors with context
+- Preserves MCP exception types (re-raises as-is)
+
+Tools can raise MCP exceptions directly for fine-grained control, or rely on the decorator for automatic conversion.
+
+**Last Updated:** January 2025
+**Version:** 0.3.0+

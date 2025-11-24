@@ -79,5 +79,11 @@ Use `health_check` (via MCP) to surface the active profile and authenticator:
 }
 ```
 
-If it’s not `externalbrowser` or an Okta URL and you expect SSO, update the profile with `--authenticator` as shown above.
+If it's not `externalbrowser` or an Okta URL and you expect SSO, update the profile with `--authenticator` as shown above.
 
+## See Also
+
+- [Installation Guide](installation.md) - Complete installation and profile setup
+- [Getting Started Guide](getting-started.md) - Quick start overview
+- [Configuration Guide](configuration.md) - Advanced configuration options
+- [MCP Integration Guide](mcp-integration.md) - MCP client setup

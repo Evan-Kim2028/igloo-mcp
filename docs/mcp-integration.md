@@ -6,12 +6,12 @@ Igloo MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 
 1. **Install Igloo MCP**:
    ```bash
-   pip install igloo-mcp-mcp
+   pip install igloo-mcp
    ```
 
 2. **Start the MCP server**:
    ```bash
-   SNOWFLAKE_PROFILE=my-profile igloo-mcp-mcp
+   SNOWFLAKE_PROFILE=my-profile igloo-mcp
    ```
 
 3. **Configure your AI assistant** using the examples below.
@@ -25,8 +25,8 @@ Igloo MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "igloo-mcp-mcp": {
-      "command": "igloo-mcp-mcp",
+    "igloo-mcp": {
+      "command": "igloo-mcp",
       "args": ["--profile", "my-profile"],
       "env": {}
     }
@@ -38,8 +38,8 @@ Igloo MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "igloo-mcp-mcp": {
-      "command": "igloo-mcp-mcp",
+    "igloo-mcp": {
+      "command": "igloo-mcp",
       "env": {
         "SNOWFLAKE_PROFILE": "my-profile"
       }
@@ -61,8 +61,8 @@ Igloo MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "igloo-mcp-mcp": {
-      "command": "igloo-mcp-mcp",
+    "igloo-mcp": {
+      "command": "igloo-mcp",
       "args": ["--profile", "my-profile"],
       "cwd": "/path/to/your/project"
     }
@@ -83,8 +83,8 @@ Igloo MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "igloo-mcp-mcp": {
-      "command": "igloo-mcp-mcp",
+    "igloo-mcp": {
+      "command": "igloo-mcp",
       "args": ["--profile", "my-profile"]
     }
   }
@@ -103,8 +103,8 @@ Igloo MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "igloo-mcp-mcp": {
-      "command": "igloo-mcp-mcp",
+    "igloo-mcp": {
+      "command": "igloo-mcp",
       "args": ["--profile", "your-profile-name"]
     }
   }
@@ -115,8 +115,8 @@ Igloo MCP provides MCP (Model Context Protocol) integration for AI assistants, e
 ```json
 {
   "mcpServers": {
-    "igloo-mcp-mcp": {
-      "command": "igloo-mcp-mcp",
+    "igloo-mcp": {
+      "command": "igloo-mcp",
       "env": {
         "SNOWFLAKE_PROFILE": "your-profile-name"
       }
@@ -132,13 +132,14 @@ Igloo MCP provides these MCP tools for AI assistants:
 | Tool | Purpose | Example Use |
 |------|---------|-------------|
 | `execute_query` | Run SQL queries | "Show me the top 10 customers by revenue" |
-| `preview_table` | Preview table data | "What does the ORDERS table look like?" |
 | `build_catalog` | Build data catalog | "Catalog all tables in my database" |
-| `query_lineage` | Analyze data lineage | "What tables depend on CUSTOMERS?" |
-| `build_dependency_graph` | Create dependency graphs | "Show me the data flow diagram" |
 | `get_catalog_summary` | Get catalog statistics | "How many tables do I have?" |
+| `search_catalog` | Search catalog snapshots | "Find tables with a column named customer_id" |
+| `build_dependency_graph` | Create dependency graphs | "Show me the data flow diagram" |
 | `test_connection` | Test Snowflake connection | "Is my Snowflake connection working?" |
 | `health_check` | Check system health | "Is everything running properly?" |
+| `evolve_report` | Evolve living reports with LLM assistance | "Refine the Q1 revenue report with more regional detail" |
+| `render_report` | Render reports to various formats | "Export the Q1 revenue report as a PDF" |
 
 ## Troubleshooting
 
@@ -157,7 +158,7 @@ ls -la ~/.snowflake/config.toml
 ### AI Assistant Can't Connect
 1. **Verify MCP server is running**:
    ```bash
-   SNOWFLAKE_PROFILE=my-profile igloo-mcp-mcp
+   SNOWFLAKE_PROFILE=my-profile igloo-mcp
    # Should show "FastMCP 2.0 Server Starting..."
    ```
 
@@ -168,7 +169,7 @@ ls -la ~/.snowflake/config.toml
 
 3. **Test with simple query**:
    ```bash
-   echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | SNOWFLAKE_PROFILE=my-profile igloo-mcp-mcp
+   echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | SNOWFLAKE_PROFILE=my-profile igloo-mcp
    ```
 
 ### Common Errors
@@ -193,12 +194,12 @@ ls -la ~/.snowflake/config.toml
 ```json
 {
   "mcpServers": {
-    "igloo-mcp-mcp-prod": {
-      "command": "igloo-mcp-mcp",
+    "igloo-mcp-prod": {
+      "command": "igloo-mcp",
       "args": ["--profile", "prod-profile"]
     },
-    "igloo-mcp-mcp-dev": {
-      "command": "igloo-mcp-mcp",
+    "igloo-mcp-dev": {
+      "command": "igloo-mcp",
       "args": ["--profile", "dev-profile"]
     }
   }
@@ -209,8 +210,8 @@ ls -la ~/.snowflake/config.toml
 ```json
 {
   "mcpServers": {
-    "igloo-mcp-mcp": {
-      "command": "igloo-mcp-mcp",
+    "igloo-mcp": {
+      "command": "igloo-mcp",
       "args": ["--profile", "my-profile"],
       "env": {
         "SNOWCLI_CATALOG_DIR": "/path/to/custom/catalog"

@@ -167,6 +167,13 @@ class FakeSnowflakeCursor:
             self.description = None
             return
 
+        # Generic ALTER SESSION handler for any other session parameters
+        if upper.startswith("ALTER SESSION"):
+            self._rows = []
+            self.description = None
+            return
+
+        # Handle snapshot_session query: SELECT CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA()
         if "CURRENT_ROLE()" in upper and "CURRENT_WAREHOUSE()" in upper:
             self._fetchone_map = {
                 "ROLE": self.session_defaults.role,
@@ -174,6 +181,8 @@ class FakeSnowflakeCursor:
                 "DATABASE": self.session_defaults.database,
                 "SCHEMA": self.session_defaults.schema,
             }
+            self.description = [("ROLE",), ("WAREHOUSE",), ("DATABASE",), ("SCHEMA",)]
+            self._rows = [self._fetchone_map]
             return
 
         if upper.startswith("USE ROLE") or upper.startswith("USE WAREHOUSE"):
@@ -188,6 +197,14 @@ class FakeSnowflakeCursor:
 
         # Main statement execution
         if not self._main_executed:
+            self._execute_plan(normalized)
+            return
+
+        # Allow re-execution if it matches the plan (for cache hit scenarios or retries)
+        expected = " ".join(self.plan.statement.strip().split()).upper()
+        if expected and normalized.upper() == expected:
+            # Reset and re-execute
+            self._main_executed = False
             self._execute_plan(normalized)
             return
 
