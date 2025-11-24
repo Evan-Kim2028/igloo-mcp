@@ -179,19 +179,34 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
             original_middleware = middleware
 
             async def conditional_sql_validation_middleware(
+                context: Any,
                 call_next: Any,
-                name: str,
-                arguments: Dict[str, Any],
             ) -> Any:
-                """Middleware wrapper that only applies SQL validation to execute_query."""
-                # Only apply SQL validation to execute_query tool
-                if name == "execute_query":
-                    # Let the original middleware handle execute_query
-                    return await original_middleware(call_next, name, arguments)
-                else:
-                    # Skip SQL validation for all other tools
-                    logger.debug(f"Skipping SQL validation for non-SQL tool: {name}")
-                    return await call_next(name, arguments)
+                """Middleware wrapper that only applies SQL validation to execute_query.
+
+                FastMCP 2.13+ passes (context, call_next) instead of the older
+                (call_next, name, arguments) signature. We extract the tool name from
+                the message context and only delegate to the original middleware for
+                execute_query. All other tools bypass SQL validation.
+                """
+                message = getattr(context, "message", None)
+                tool_name = getattr(message, "name", None)
+
+                if tool_name == "execute_query":
+                    try:
+                        return await original_middleware(context, call_next=call_next)
+                    except TypeError:
+                        # Fall back to legacy (call_next, name, arguments) signature
+                        arguments = getattr(message, "arguments", {}) if message else {}
+                        return await original_middleware(
+                            call_next, tool_name, arguments
+                        )
+
+                logger.debug(
+                    "Skipping SQL validation for non-SQL tool: %s",
+                    tool_name or "<unknown>",
+                )
+                return await call_next(context)
 
             # Replace the middleware with our conditional wrapper
             middleware_stack[i] = conditional_sql_validation_middleware
