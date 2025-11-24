@@ -2,18 +2,63 @@
 
 This document provides real examples of catalog building with igloo-mcp, showing actual output and usage patterns.
 
-## Basic Catalog Building
+## Unified Storage (Default Behavior)
 
-### Single Database Catalog
+By default, `build_catalog` saves catalogs to unified storage at `~/.igloo_mcp/catalogs/{database}/` for centralized management and incremental updates.
+
+### Single Database Catalog (Unified Storage)
 
 ```bash
-# Build catalog for a specific database
+# Build catalog for a specific database (uses unified storage)
+{
+  "tool": "build_catalog",
+  "arguments": {
+    "database": "PIPELINE_V2_GROOT_DB",
+    "format": "json"
+  }
+}
+```
+
+**Expected Output** (note the resolved `output_dir`):
+```json
+{
+  "status": "success",
+  "output_dir": "/Users/username/.igloo_mcp/catalogs/PIPELINE_V2_GROOT_DB",
+  "database": "PIPELINE_V2_GROOT_DB",
+  "account_scope": false,
+  "format": "json",
+  "totals": {
+    "databases": 1,
+    "schemas": 8,
+    "tables": 440,
+    "views": 199,
+    "materialized_views": 36,
+    "dynamic_tables": 50,
+    "tasks": 81,
+    "functions": 10,
+    "procedures": 36,
+    "columns": 6995
+  }
+}
+```
+
+**Files Created**:
+```
+~/.igloo_mcp/catalogs/PIPELINE_V2_GROOT_DB/
+├── catalog.json
+├── catalog_summary.json
+└── _catalog_metadata.json  # For incremental updates
+```
+
+### Single Database Catalog (Custom Path)
+
+```bash
+# Build catalog with custom output directory
 {
   "tool": "build_catalog",
   "arguments": {
     "database": "PIPELINE_V2_GROOT_DB",
     "output_dir": "./catalog",
-    "account": false,
     "format": "json"
   }
 }
@@ -42,10 +87,10 @@ This document provides real examples of catalog building with igloo-mcp, showing
 }
 ```
 
-### Account-Wide Catalog
+### Account-Wide Catalog (Unified Storage)
 
 ```bash
-# Build catalog for entire account
+# Build catalog for entire account (saves to ~/.igloo_mcp/catalogs/account/)
 {
   "tool": "build_catalog",
   "arguments": {

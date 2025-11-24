@@ -37,6 +37,7 @@ Notes:
 
 Edit your Cursor MCP configuration file at `~/.cursor/mcp.json`:
 
+**Minimal Configuration** (uses defaults):
 ```json
 {
   "mcpServers": {
@@ -58,7 +59,36 @@ Edit your Cursor MCP configuration file at `~/.cursor/mcp.json`:
 }
 ```
 
-**Important**: Replace `/path/to/igloo-mcp` with the actual path to your igloo-mcp installation directory.
+**Full Configuration** (with custom paths - all optional):
+```json
+{
+  "mcpServers": {
+    "igloo-mcp": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/igloo-mcp",
+        "run",
+        "igloo-mcp",
+        "--profile",
+        "cursor-profile"
+      ],
+      "env": {
+        "SNOWFLAKE_PROFILE": "cursor-profile",
+        "IGLOO_MCP_QUERY_HISTORY": "~/.igloo-mcp/logs/query_history.jsonl",
+        "IGLOO_MCP_ARTIFACT_ROOT": "~/.igloo-mcp/artifacts",
+        "IGLOO_MCP_REPORTS_ROOT": "~/.igloo-mcp/reports"
+      }
+    }
+  }
+}
+```
+
+**Important**:
+- Replace `/path/to/igloo-mcp` with the actual path to your igloo-mcp installation directory
+- **All environment variables except `SNOWFLAKE_PROFILE` are optional** - igloo-mcp provides sensible defaults
+- If you omit the history/artifact/report paths, they default to `~/.igloo-mcp/logs/...` (global scope) or `<repo>/logs/...` (repo scope)
+- Each MCP server instance maintains separate storage to avoid conflicts. Reports, query history, and artifacts are all stored together in the instance-specific directory
 
 ## Step 3: Restart Cursor
 
@@ -94,11 +124,13 @@ Once connected, you can use these MCP tools through Cursor:
 |------|-------------|----------------|
 | `test_connection` | Test Snowflake connection | "Test my Snowflake connection" |
 | `execute_query` | Execute SQL queries | "Execute: SELECT * FROM my_table LIMIT 10" |
-| `preview_table` | Preview table contents | "Preview the users table with 5 rows" |
 | `build_catalog` | Build database catalog | "Build a catalog for MY_DATABASE" |
 | `get_catalog_summary` | Get catalog statistics | "Show me catalog summary for MY_DATABASE" |
+| `search_catalog` | Search catalog snapshots | "Find tables with a column named user_id" |
 | `build_dependency_graph` | Build dependency graph | "Build dependency graph for MY_DATABASE" |
 | `health_check` | Check system health | "Check igloo-mcp health" |
+| `evolve_report` | Evolve living reports | "Evolve the Q1 sales report with new insights" |
+| `render_report` | Render reports | "Render the Q1 sales report as HTML" |
 
 ## Troubleshooting
 
@@ -145,7 +177,12 @@ You can configure multiple Snowflake profiles for different environments:
         "--profile",
         "dev"
       ],
-      "env": {"SNOWFLAKE_PROFILE": "dev"}
+      "env": {
+        "SNOWFLAKE_PROFILE": "dev",
+        "IGLOO_MCP_QUERY_HISTORY": "~/.igloo-mcp-dev/logs/query_history.jsonl",
+        "IGLOO_MCP_ARTIFACT_ROOT": "~/.igloo-mcp-dev/artifacts",
+        "IGLOO_MCP_REPORTS_ROOT": "~/.igloo-mcp-dev/reports"
+      }
     },
     "igloo-prod": {
       "command": "uv",
@@ -157,11 +194,18 @@ You can configure multiple Snowflake profiles for different environments:
         "--profile",
         "prod"
       ],
-      "env": {"SNOWFLAKE_PROFILE": "prod"}
+      "env": {
+        "SNOWFLAKE_PROFILE": "prod",
+        "IGLOO_MCP_QUERY_HISTORY": "~/.igloo-mcp-prod/logs/query_history.jsonl",
+        "IGLOO_MCP_ARTIFACT_ROOT": "~/.igloo-mcp-prod/artifacts",
+        "IGLOO_MCP_REPORTS_ROOT": "~/.igloo-mcp-prod/reports"
+      }
     }
   }
 }
 ```
+
+**Note**: The history/artifact/report paths shown above are **optional**. They're included here to demonstrate instance isolation (separate storage per profile). If omitted, igloo-mcp uses defaults: `~/.igloo-mcp/logs/...` for global scope or `<repo>/logs/...` for repo scope.
 
 ### Key-Pair Authentication (advanced)
 

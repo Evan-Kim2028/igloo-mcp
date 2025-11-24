@@ -185,7 +185,7 @@ When reporting errors, please include:
 
 **Error**: JWT token invalid
 **Command**: MCP tool `test_connection` via AI assistant
-**Environment**: Python 3.12, macOS, Snowflake CLI 2.0.0, Igloo MCP 2.0.0
+**Environment**: Python 3.12, macOS, Snowflake CLI 2.0.0, Igloo MCP 0.3.0
 **Steps**:
 1. Generated key pair with openssl
 2. Uploaded public key to Snowflake

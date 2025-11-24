@@ -2,16 +2,33 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from igloo_mcp.catalog import CatalogIndex
+from igloo_mcp.mcp.exceptions import (
+    MCPSelectorError,
+    MCPValidationError,
+)
+from igloo_mcp.path_utils import (
+    resolve_catalog_path,
+    resolve_catalog_root,
+    validate_safe_path,
+)
 
-from .base import MCPTool
+from .base import MCPTool, tool_error_handler
 from .schema_utils import (
     integer_schema,
     snowflake_identifier_schema,
     string_schema,
 )
+
+try:
+    from fastmcp.utilities.logging import get_logger
+except ImportError:
+    from mcp.server.fastmcp.utilities.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class SearchCatalogTool(MCPTool):
@@ -29,7 +46,10 @@ class SearchCatalogTool(MCPTool):
     def description(self) -> str:
         return (
             "Search the locally cached Snowflake catalog built via build_catalog. "
-            "Supports filtering by object type, database/schema, name, and column names."
+            "Supports filtering by object type, database/schema, name, and column names. "
+            "Use this to find specific tables, views, or objects matching criteria. "
+            "Use get_catalog_summary for high-level statistics instead. Requires a catalog "
+            "built with build_catalog first."
         )
 
     @property
@@ -59,6 +79,7 @@ class SearchCatalogTool(MCPTool):
             },
         ]
 
+    @tool_error_handler("search_catalog")
     async def execute(
         self,
         catalog_dir: str = "./data_catalogue",
@@ -68,8 +89,119 @@ class SearchCatalogTool(MCPTool):
         name_contains: Optional[str] = None,
         column_contains: Optional[str] = None,
         limit: int = 20,
+        search_all_databases: bool = False,
+        request_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
+        # If catalog_dir is default and search_all_databases is False, resolve to unified storage
+        if catalog_dir == "./data_catalogue" and not search_all_databases:
+            try:
+                resolved_path = resolve_catalog_path(
+                    database=database,
+                    account_scope=False,
+                )
+                catalog_dir = str(resolved_path)
+            except Exception:
+                # If resolution fails, use default path (backward compatibility)
+                pass
+
+        logger.info(
+            "search_catalog_started",
+            extra={
+                "catalog_dir": catalog_dir,
+                "database": database,
+                "schema": schema,
+                "search_all_databases": search_all_databases,
+                "request_id": request_id,
+            },
+        )
+
+        # Validate catalog directory path (prevent path traversal)
+        # Skip validation for unified storage paths (absolute paths from resolve_catalog_path)
+        # Only validate relative paths
+        catalog_path = Path(catalog_dir)
+        if not catalog_path.is_absolute():
+            try:
+                validated_catalog_dir = validate_safe_path(
+                    catalog_dir,
+                    reject_parent_dirs=True,
+                )
+                catalog_dir = str(validated_catalog_dir)
+            except MCPValidationError:
+                raise  # Re-raise validation errors
+            except Exception as e:
+                raise MCPValidationError(
+                    f"Invalid catalog directory path: {str(e)}",
+                    validation_errors=[f"Path validation failed: {catalog_dir}"],
+                    hints=[
+                        "Use a relative path within the current directory",
+                        "Do not use '..' in paths",
+                    ],
+                ) from e
+
+        # Support searching across multiple databases in unified storage
+        if search_all_databases and catalog_dir == "./data_catalogue":
+            catalog_root = resolve_catalog_root()
+            all_results = []
+            total_matches = 0
+            searched_dirs = []
+
+            # Search all database folders in unified storage
+            if catalog_root.exists():
+                for db_dir in catalog_root.iterdir():
+                    if db_dir.is_dir() and db_dir.name != "account":
+                        try:
+                            index = CatalogIndex(str(db_dir))
+                            results, matches, _ = index.search(
+                                object_types=_normalize_types(object_types),
+                                database=database,  # Filter by database if specified
+                                schema=schema,
+                                name_contains=name_contains,
+                                column_contains=column_contains,
+                                limit=limit,
+                            )
+                            all_results.extend(results)
+                            total_matches += matches
+                            searched_dirs.append(str(db_dir))
+                        except FileNotFoundError:
+                            # Skip directories without catalog files
+                            continue
+
+            # Sort and limit results
+            all_results = all_results[:limit]
+
+            logger.info(
+                "search_catalog_completed",
+                extra={
+                    "catalog_dir": f"{catalog_root} (all databases)",
+                    "searched_dirs": searched_dirs,
+                    "total_matches": total_matches,
+                    "results_count": len(all_results),
+                    "request_id": request_id,
+                },
+            )
+
+            return {
+                "status": "success",
+                "catalog_dir": str(catalog_root),
+                "searched_databases": searched_dirs,
+                "metadata": {},
+                "total_matches": total_matches,
+                "limit": limit,
+                "results": [
+                    {
+                        "object_type": obj.object_type,
+                        "database": obj.database,
+                        "schema": obj.schema,
+                        "name": obj.name,
+                        "comment": obj.comment,
+                        "columns": obj.columns,
+                        "raw": obj.raw,
+                    }
+                    for obj in all_results
+                ],
+            }
+
         try:
             index = CatalogIndex(catalog_dir)
             results, total_matches, metadata = index.search(
@@ -79,6 +211,16 @@ class SearchCatalogTool(MCPTool):
                 name_contains=name_contains,
                 column_contains=column_contains,
                 limit=max(1, limit),
+            )
+
+            logger.info(
+                "search_catalog_completed",
+                extra={
+                    "catalog_dir": catalog_dir,
+                    "total_matches": total_matches,
+                    "results_count": len(results),
+                    "request_id": request_id,
+                },
             )
 
             return {
@@ -101,17 +243,24 @@ class SearchCatalogTool(MCPTool):
                 ],
             }
         except FileNotFoundError as exc:
-            return {
-                "status": "error",
-                "error": str(exc),
-                "catalog_dir": catalog_dir,
-            }
-        except Exception as exc:  # pragma: no cover - defensive
-            return {
-                "status": "error",
-                "error": f"Catalog search failed: {exc}",
-                "catalog_dir": catalog_dir,
-            }
+            logger.warning(
+                "search_catalog_not_found",
+                extra={
+                    "catalog_dir": catalog_dir,
+                    "error": str(exc),
+                    "request_id": request_id,
+                },
+            )
+
+            raise MCPSelectorError(
+                f"Catalog directory not found: {str(exc)}",
+                selector=catalog_dir,
+                error="not_found",
+                hints=[
+                    f"Verify catalog_dir exists: {catalog_dir}",
+                    "Run build_catalog first to create catalog artifacts",
+                ],
+            ) from exc
 
     def get_parameter_schema(self) -> Dict[str, Any]:
         return {
@@ -120,11 +269,19 @@ class SearchCatalogTool(MCPTool):
             "additionalProperties": False,
             "properties": {
                 "catalog_dir": string_schema(
-                    "Directory containing catalog artifacts (catalog.json or catalog.jsonl).",
+                    "Directory containing catalog artifacts (catalog.json or catalog.jsonl). "
+                    "Defaults to './data_catalogue' which resolves to unified storage "
+                    "at ~/.igloo_mcp/catalogs/{database}/. Specify a custom path to override.",
                     title="Catalog Directory",
                     default="./data_catalogue",
                     examples=["./data_catalogue", "./artifacts/catalog"],
                 ),
+                "search_all_databases": {
+                    "type": "boolean",
+                    "description": "If True and catalog_dir is default, search across all database catalogs in unified storage.",
+                    "title": "Search All Databases",
+                    "default": False,
+                },
                 "object_types": {
                     "type": "array",
                     "title": "Object Types",
@@ -161,6 +318,10 @@ class SearchCatalogTool(MCPTool):
                     default=20,
                     examples=[10, 20, 50],
                 ),
+                "request_id": {
+                    "type": "string",
+                    "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
+                },
             },
         }
 

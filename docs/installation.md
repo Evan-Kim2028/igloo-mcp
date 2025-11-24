@@ -97,3 +97,11 @@ Optional connectivity check from your assistant: run `test_connection` or `execu
 - Profile not found → `snow connection list` and use exact name.
 - Server not discovered → restart the client after editing config; verify `which igloo-mcp`.
 - Permission errors → confirm warehouse/database/schema access with your Snowflake admin.
+
+## See Also
+
+- [Getting Started Guide](getting-started.md) - Quick start overview
+- [Configuration Guide](configuration.md) - Advanced configuration options
+- [Authentication Guide](authentication.md) - Detailed authentication setup
+- [MCP Integration Guide](mcp-integration.md) - MCP client configuration
+- [Cursor MCP Setup](mcp/cursor-mcp-setup.md) - Cursor-specific setup

@@ -27,7 +27,14 @@ def _compare_jsonl(expected_path: Path, actual_path: Path) -> None:
     expected_records = load_jsonl(expected_path)
     actual_records = load_jsonl(actual_path)
     assert len(actual_records) == len(expected_records)
-    allowed_extra = {"columns", "key_metrics", "insights", "objects"}
+    allowed_extra = {
+        "columns",
+        "key_metrics",
+        "insights",
+        "objects",
+        "source_databases",
+        "tables",
+    }
     for expected, actual in zip(expected_records, actual_records):
         extra_keys = set(actual) - set(expected)
         assert extra_keys <= allowed_extra

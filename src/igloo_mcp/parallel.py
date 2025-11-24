@@ -39,15 +39,41 @@ class QueryResult:
     row_count: int = 0
 
 
-@dataclass
+@dataclass(init=False)
 class ParallelQueryConfig:
     """Configuration for parallel query execution."""
 
-    max_concurrent_queries: int = 5
-    connection_pool_size: int = 10
-    retry_attempts: int = 3
-    retry_delay: float = 1.0
-    timeout_seconds: int = 300
+    max_concurrent_queries: int
+    retry_attempts: int
+    retry_delay: float
+    timeout_seconds: int
+
+    def __init__(
+        self,
+        max_concurrent_queries: int = 5,
+        retry_attempts: int = 3,
+        retry_delay: float = 1.0,
+        timeout_seconds: int = 300,
+        max_workers: int | None = None,
+        retry_count: int | None = None,
+    ):
+        """Initialize ParallelQueryConfig.
+
+        Args:
+            max_concurrent_queries: Maximum number of concurrent queries
+            retry_attempts: Number of retry attempts
+            retry_delay: Delay between retries
+            timeout_seconds: Timeout for individual queries
+            max_workers: Alias for max_concurrent_queries
+            retry_count: Alias for retry_attempts
+        """
+        # Use aliases if provided, otherwise use direct parameters
+        self.max_concurrent_queries = (
+            max_workers if max_workers is not None else max_concurrent_queries
+        )
+        self.retry_attempts = retry_count if retry_count is not None else retry_attempts
+        self.retry_delay = retry_delay
+        self.timeout_seconds = timeout_seconds
 
     @classmethod
     def from_global_config(cls) -> "ParallelQueryConfig":
@@ -55,33 +81,10 @@ class ParallelQueryConfig:
         config = get_config()
         return cls(
             max_concurrent_queries=config.max_concurrent_queries,
-            connection_pool_size=config.connection_pool_size,
             retry_attempts=config.retry_attempts,
             retry_delay=config.retry_delay,
             timeout_seconds=config.timeout_seconds,
         )
-
-
-class SnowflakeConnectionPool:
-    """Deprecated placeholder left for compatibility (no-op).
-
-    With Snowflake CLI, we don't manage connections directly. This class is
-    retained to minimize diff in the executor internals.
-    """
-
-    def __init__(self, config: Dict[str, Any], pool_size: int = 10):
-        self.config = config
-        self.pool_size = pool_size
-        logger.info("Using Snowflake CLI; connection pool is a no-op.")
-
-    def get_connection(self):  # pragma: no cover - compatibility shim
-        return None
-
-    def return_connection(self, conn):  # pragma: no cover - compatibility shim
-        return None
-
-    def close_all(self):  # pragma: no cover - compatibility shim
-        return None
 
 
 class ParallelQueryExecutor:
@@ -89,7 +92,6 @@ class ParallelQueryExecutor:
     Execute multiple Snowflake queries in parallel.
 
     Optimized for JSON object retrieval with:
-    - Connection pooling for efficient resource usage
     - Configurable concurrency limits
     - Progress tracking and error handling
     - Result aggregation and formatting
@@ -97,7 +99,6 @@ class ParallelQueryExecutor:
 
     def __init__(self, config: Optional[ParallelQueryConfig] = None):
         self.config = config or ParallelQueryConfig.from_global_config()
-        self.connection_pool: Optional[SnowflakeConnectionPool] = None
 
     def _create_context_overrides(self) -> Dict[str, Any]:
         cfg = get_config().snowflake
@@ -117,7 +118,7 @@ class ParallelQueryExecutor:
         """Execute a single query via Snowflake CLI and return results."""
         start_time = time.time()
 
-        for attempt in range(self.config.retry_attempts):
+        for attempt in range(self.config.retry_attempts + 1):
             try:
                 # Execute via Snow CLI; default to CSV for easy parsing
                 out = cli.run_query(
@@ -161,14 +162,14 @@ class ParallelQueryExecutor:
                 execution_time = time.time() - start_time
                 error_msg = f"Attempt {attempt + 1}: {e!s}"
 
-                if attempt < self.config.retry_attempts - 1:
+                if attempt < self.config.retry_attempts:
                     logger.warning(
                         f"⚠️  {object_name} failed ({error_msg}), retrying in {self.config.retry_delay}s...",
                     )
                     time.sleep(self.config.retry_delay)
                 else:
                     logger.exception(
-                        f"❌ {object_name} failed after {self.config.retry_attempts} attempts: {error_msg}",
+                        f"❌ {object_name} failed after {attempt + 1} attempts: {error_msg}",
                     )
                     return QueryResult(
                         object_name=object_name,
@@ -177,14 +178,6 @@ class ParallelQueryExecutor:
                         error=error_msg,
                         execution_time=execution_time,
                     )
-
-            finally:
-                pass
-
-        # This should never be reached, but mypy requires it
-        raise RuntimeError(
-            f"Query execution failed for {object_name} after all retries"
-        )
 
     async def execute_queries_async(
         self,

@@ -11,7 +11,7 @@
 - Query result parsing and structured output
 - Timeout and error handling with detailed diagnostics
 
-**MCP Tools**: `execute_query`, `preview_table`
+**MCP Tools**: `execute_query`
 
 **AI Assistant Usage**:
 ```
@@ -36,10 +36,13 @@
 - Support for tables, views, materialized views, functions, procedures, tasks, dynamic tables
 - DDL extraction with concurrency control
 - JSON/JSONL output formats with configurable structure
-- Incremental catalog updates with change tracking
+- **Unified storage**: Automatic organization in `~/.igloo_mcp/catalogs/{database}/` by default
+- **Per-database catalogs**: Each database maintains its own catalog folder with metadata
+- Incremental catalog updates with change tracking via `_catalog_metadata.json`
 - Cross-database catalog generation
+- Custom path support: Override unified storage with explicit `output_dir` parameter
 
-**MCP Tools**: `build_catalog`, `get_catalog_summary`
+**MCP Tools**: `build_catalog`, `get_catalog_summary`, `search_catalog`
 
 **AI Assistant Usage**:
 ```
@@ -114,7 +117,7 @@
 
 ---
 
-### 5. Configuration Management & Profile Validation (v2.0.0)
+### 5. Configuration Management & Profile Validation
 **Description**: Robust configuration system with advanced profile validation and health monitoring.
 
 **Core Capabilities**:
@@ -143,10 +146,7 @@ igloo-mcp --profile my-profile
 ```
 
 **MCP Tools**:
-- `health_check`: Comprehensive server health status
-- `check_profile_config`: Profile validation and diagnostics
-- `get_resource_status`: Resource availability checking
-- `check_resource_dependencies`: Dependency validation
+- `health_check`: Comprehensive server health status (includes profile validation and resource availability)
 
 **Error Handling Improvements**:
 **Benefits**:
@@ -179,7 +179,7 @@ igloo-mcp --profile my-profile
 
 ---
 
-### 6. MCP Server Integration (v2.0.0)
+### 6. MCP Server Integration
 **Description**: Model Context Protocol server for AI assistant integration with advanced health monitoring and reliability.
 
 **Core Capabilities**:
@@ -197,7 +197,7 @@ igloo-mcp --profile my-profile
 - **Resource management**: Dependency tracking and availability monitoring
 - **Graceful degradation**: Partial functionality when components fail
 
-**CLI Usage**:
+**MCP Server Administration**:
 ```bash
 # Startup with validation
 igloo-mcp  # Shows immediate validation feedback
@@ -509,3 +509,10 @@ The testing coverage is solid for core features (~80 passing tests), with room f
 - Performance and load testing
 
 The codebase demonstrates excellent software engineering practices with the recent addition of circuit breakers, proper error handling, and comprehensive service layer architecture.
+
+## See Also
+
+- [Getting Started Guide](getting-started.md) - Quick start overview
+- [API Reference](api-reference.md) - Complete tool documentation
+- [Architecture Overview](architecture.md) - System architecture details
+- [Configuration Guide](configuration.md) - Configuration options

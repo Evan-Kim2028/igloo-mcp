@@ -5,20 +5,31 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import anyio
 
 from igloo_mcp.catalog import CatalogService
 from igloo_mcp.config import Config
+from igloo_mcp.constants import CATALOG_CONCURRENCY, MAX_DDL_CONCURRENCY
+from igloo_mcp.mcp.exceptions import MCPValidationError
+from igloo_mcp.path_utils import validate_safe_path
 
-from .base import MCPTool
+from .base import MCPTool, tool_error_handler
 from .schema_utils import (
     boolean_schema,
     enum_schema,
     snowflake_identifier_schema,
     string_schema,
 )
+
+try:
+    from fastmcp.utilities.logging import get_logger
+except ImportError:
+    from mcp.server.fastmcp.utilities.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class BuildCatalogTool(MCPTool):
@@ -41,11 +52,12 @@ class BuildCatalogTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Build comprehensive Snowflake catalog metadata from "
-            "INFORMATION_SCHEMA. Includes databases, schemas, tables, views, "
-            "materialized views, dynamic tables, tasks, user-defined functions, "
-            "procedures, and columns. Only includes user-defined functions "
-            "(excludes built-in Snowflake operators)."
+            "Build comprehensive Snowflake catalog metadata from INFORMATION_SCHEMA. "
+            "Includes databases, schemas, tables, views, materialized views, dynamic tables, "
+            "tasks, user-defined functions, procedures, and columns. Only includes user-defined "
+            "functions (excludes built-in Snowflake operators). After building, use "
+            "get_catalog_summary for statistics or search_catalog to find specific objects. "
+            "This is the first step in the catalog workflow."
         )
 
     @property
@@ -76,12 +88,15 @@ class BuildCatalogTool(MCPTool):
             },
         ]
 
+    @tool_error_handler("build_catalog")
     async def execute(
         self,
         output_dir: str = "./data_catalogue",
         database: Optional[str] = None,
         account: bool = False,
-        output_format: str = "json",
+        format: str = "json",
+        include_ddl: bool = True,
+        request_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Build comprehensive Snowflake catalog metadata.
@@ -100,59 +115,137 @@ class BuildCatalogTool(MCPTool):
         - Account-wide or database-specific catalog building
 
         Args:
-            output_dir: Catalog output directory (default: ./data_catalogue)
+            output_dir: Catalog output directory (default: ./data_catalogue, resolves to unified storage)
             database: Specific database to introspect (default: current)
             account: Include entire account (default: False)
-            output_format: Output format - 'json' or 'jsonl' (default: json)
+            format: Output format - 'json' or 'jsonl' (default: json)
+            include_ddl: Include object DDL in catalog (default: True)
+            request_id: Optional request correlation ID for tracing (auto-generated if not provided)
 
         Returns:
             Catalog build results with totals for each object type
 
         Raises:
-            ValueError: If parameters are invalid
-            RuntimeError: If catalog build fails
+            MCPValidationError: If parameters are invalid
+            MCPExecutionError: If catalog build fails
         """
-        if output_format not in ("json", "jsonl"):
-            raise ValueError(
-                f"Invalid output_format '{output_format}'. Must be 'json' or 'jsonl'"
+        # Validate format
+        if format not in ("json", "jsonl"):
+            raise MCPValidationError(
+                f"Invalid format '{format}'. Must be 'json' or 'jsonl'",
+                validation_errors=[f"Invalid format: {format}"],
+                hints=["Use format='json' or format='jsonl'"],
             )
 
+        # Determine if using unified storage (when output_dir is default)
+        # Handle both relative and normalized paths, and check if it's the default
+        default_paths = ["./data_catalogue", "data_catalogue"]
         try:
-            result = await anyio.to_thread.run_sync(
-                lambda: self.catalog_service.build(
-                    output_dir=output_dir,
-                    database=database,
-                    account_scope=account,
-                    output_format=output_format,
-                    include_ddl=True,
-                    max_ddl_concurrency=8,
-                    catalog_concurrency=16,
-                    export_sql=False,
-                )
-            )
+            normalized_default = str(Path("./data_catalogue").resolve())
+            default_paths.append(normalized_default)
+        except Exception:
+            pass
 
-            return {
-                "status": "success",
+        use_unified_storage = output_dir in default_paths or (
+            Path(output_dir).is_absolute()
+            and Path(output_dir).name == "data_catalogue"
+            and Path(output_dir).parent == Path.cwd()
+        )
+
+        # Log for debugging
+        logger.debug(
+            "build_catalog_path_resolution",
+            extra={
                 "output_dir": output_dir,
+                "use_unified_storage": use_unified_storage,
+                "default_paths": default_paths,
+            },
+        )
+
+        # Validate output directory path (prevent path traversal)
+        # Skip validation for default path when using unified storage (will be resolved internally)
+        if not use_unified_storage:
+            try:
+                validated_output_dir = validate_safe_path(
+                    output_dir,
+                    reject_parent_dirs=True,
+                )
+                output_dir = str(validated_output_dir)
+            except MCPValidationError:
+                raise  # Re-raise validation errors
+            except Exception as e:
+                raise MCPValidationError(
+                    f"Invalid output directory path: {str(e)}",
+                    validation_errors=[f"Path validation failed: {output_dir}"],
+                    hints=[
+                        "Use a relative path within the current directory",
+                        "Do not use '..' in paths",
+                    ],
+                ) from e
+
+        logger.info(
+            "build_catalog_started",
+            extra={
+                "output_dir": output_dir,
+                "database": database,
+                "account": account,
+                "format": format,
+                "use_unified_storage": use_unified_storage,
+                "request_id": request_id,
+            },
+        )
+
+        result = await anyio.to_thread.run_sync(
+            lambda: self.catalog_service.build(
+                output_dir=output_dir,
+                database=database,
+                account_scope=account,
+                output_format=format,
+                include_ddl=include_ddl,
+                max_ddl_concurrency=MAX_DDL_CONCURRENCY,
+                catalog_concurrency=CATALOG_CONCURRENCY,
+                export_sql=False,
+                use_unified_storage=use_unified_storage,
+            )
+        )
+
+        # Log the actual resolved path for unified storage
+        resolved_output_dir = result.output_dir
+
+        logger.info(
+            "build_catalog_completed",
+            extra={
+                "output_dir": resolved_output_dir,
                 "database": database or "current",
-                "account_scope": account,
-                "format": output_format,
+                "account": account,
+                "request_id": request_id,
                 "totals": {
                     "databases": result.totals.databases,
                     "schemas": result.totals.schemas,
                     "tables": result.totals.tables,
-                    "views": result.totals.views,
-                    "materialized_views": result.totals.materialized_views,
-                    "dynamic_tables": result.totals.dynamic_tables,
-                    "tasks": result.totals.tasks,
-                    "functions": result.totals.functions,
-                    "procedures": result.totals.procedures,
-                    "columns": result.totals.columns,
                 },
-            }
+            },
+        )
 
-        except Exception as e:
-            raise RuntimeError(f"Catalog build failed: {e}") from e
+        return {
+            "status": "success",
+            "output_dir": resolved_output_dir,
+            "database": database or "current",
+            "account_scope": account,
+            "format": format,
+            "totals": {
+                "databases": result.totals.databases,
+                "schemas": result.totals.schemas,
+                "tables": result.totals.tables,
+                "views": result.totals.views,
+                "materialized_views": result.totals.materialized_views,
+                "dynamic_tables": result.totals.dynamic_tables,
+                "tasks": result.totals.tasks,
+                "functions": result.totals.functions,
+                "procedures": result.totals.procedures,
+                "columns": result.totals.columns,
+            },
+        }
 
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
@@ -162,7 +255,10 @@ class BuildCatalogTool(MCPTool):
             "additionalProperties": False,
             "properties": {
                 "output_dir": string_schema(
-                    "Target directory where catalog artifacts will be written.",
+                    "Target directory where catalog artifacts will be written. "
+                    "Defaults to './data_catalogue' which resolves to unified storage "
+                    "at ~/.igloo_mcp/catalogs/{database}/ or ~/.igloo_mcp/catalogs/account/ "
+                    "for account-wide catalogs. Specify a custom path to override.",
                     title="Output Directory",
                     default="./data_catalogue",
                     examples=["./data_catalogue", "./artifacts/catalog"],
@@ -186,6 +282,15 @@ class BuildCatalogTool(MCPTool):
                         examples=["json"],
                     ),
                     "title": "Output Format",
+                },
+                "include_ddl": boolean_schema(
+                    "Include object DDL (CREATE statements) in catalog artifacts.",
+                    default=True,
+                    examples=[True, False],
+                ),
+                "request_id": {
+                    "type": "string",
+                    "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
                 },
             },
             "allOf": [

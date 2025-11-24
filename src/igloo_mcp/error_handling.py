@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Callable, Dict, Optional, TypeVar, Union
+from typing import Any, Callable, Dict, List, Optional, TypeVar, Union
 
 from .snow_cli import SnowCLIError
 
@@ -23,6 +23,33 @@ class ErrorContext:
     schema: Optional[str] = None
     object_name: Optional[str] = None
     query: Optional[str] = None
+    request_id: Optional[str] = None
+    timing: Dict[str, float] = field(default_factory=dict)
+    parameters: Dict[str, Any] = field(default_factory=dict)
+
+    def add_timing(self, key: str, duration_ms: float) -> None:
+        """Add timing information."""
+        self.timing[key] = duration_ms
+
+    def get_total_duration_ms(self) -> Optional[float]:
+        """Get total duration if available."""
+        return self.timing.get("total_duration_ms")
+
+    def sanitize_parameters(self) -> Dict[str, Any]:
+        """Return sanitized parameters (remove sensitive data, truncate long values)."""
+        sanitized = {}
+        for key, value in self.parameters.items():
+            # Skip sensitive fields
+            if any(
+                sensitive in key.lower()
+                for sensitive in ["password", "secret", "token", "key", "credential"]
+            ):
+                sanitized[key] = "***REDACTED***"
+            elif isinstance(value, str) and len(value) > 200:
+                sanitized[key] = value[:200] + "..."
+            else:
+                sanitized[key] = value
+        return sanitized
 
 
 class SnowflakeConnectionError(Exception):
@@ -203,6 +230,66 @@ def safe_execute(
             extra={"context": ctx},
         )
         return fallback_value
+
+
+def format_error_response(
+    status: str,
+    error_type: str,
+    message: str,
+    context: Optional[ErrorContext] = None,
+    hints: Optional[List[str]] = None,
+    additional_data: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Format a standardized error response.
+
+    Args:
+        status: Error status (e.g., "error", "validation_failed", "selector_error")
+        error_type: Specific error category (e.g., "unexpected", "schema_validation")
+        message: Human-readable error message
+        context: Optional error context with request_id, timing, parameters
+        hints: Optional list of actionable suggestions
+        additional_data: Optional additional error-specific data
+
+    Returns:
+        Standardized error response dictionary
+    """
+    response: Dict[str, Any] = {
+        "status": status,
+        "error_type": error_type,
+        "message": message,
+    }
+
+    if context:
+        if context.request_id:
+            response["request_id"] = context.request_id
+
+        if context.timing:
+            response["timing"] = context.timing
+
+        if context.parameters:
+            response["context"] = {
+                "operation": context.operation,
+                "parameters": context.sanitize_parameters(),
+            }
+            # Add database/schema context if available
+            if context.database:
+                response["context"]["database"] = context.database
+            if context.schema:
+                response["context"]["schema"] = context.schema
+            if context.object_name:
+                response["context"]["object_name"] = context.object_name
+        else:
+            response["context"] = {
+                "operation": context.operation,
+            }
+
+    if hints:
+        response["hints"] = hints
+
+    if additional_data:
+        response.update(additional_data)
+
+    return response
 
 
 class ErrorAggregator:

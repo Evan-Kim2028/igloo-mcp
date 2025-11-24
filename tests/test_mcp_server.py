@@ -13,7 +13,6 @@ import pytest
 
 from igloo_mcp import mcp_server
 from igloo_mcp.config import Config
-from igloo_mcp.snow_cli import SnowCLIError
 
 
 @pytest.fixture(autouse=True)
@@ -106,12 +105,13 @@ def _register_with_stub_execute(
 
     dummy_tool = SimpleNamespace(execute=lambda *_, **__: None)
     for attr in (
-        "PreviewTableTool",
         "BuildCatalogTool",
         "BuildDependencyGraphTool",
         "ConnectionTestTool",
         "HealthCheckTool",
         "GetCatalogSummaryTool",
+        "SearchCatalogTool",
+        "EvolveReportTool",
     ):
         monkeypatch.setattr(
             f"igloo_mcp.mcp_server.{attr}",
@@ -381,50 +381,6 @@ async def test_execute_query_tool_verbose_error(monkeypatch: pytest.MonkeyPatch)
         )  # noqa: FBT003
 
     assert "detailed failure" in str(exc_info.value)
-
-
-@pytest.mark.asyncio
-async def test_cli_bridge_tool_success(monkeypatch: pytest.MonkeyPatch):
-    result_rows = [{"ID": 1}]
-    cli_stub = SimpleNamespace(
-        run_query=lambda *args, **kwargs: SimpleNamespace(
-            rows=result_rows,
-            raw_stdout="ok",
-            raw_stderr="",
-        )
-    )
-    server, _, _ = _register_with_stub_execute(
-        monkeypatch,
-        execute_side_effect={"rows": []},
-        enable_cli_bridge=True,
-        snow_cli_stub=cli_stub,
-    )
-    tool = server.tools.get("run_cli_query")
-    assert tool is not None
-
-    outcome = await tool("SELECT 1", warehouse="WH")
-    assert outcome["rows"] == result_rows
-    assert "stdout" in outcome
-
-
-@pytest.mark.asyncio
-async def test_cli_bridge_tool_converts_error(monkeypatch: pytest.MonkeyPatch):
-    def failing_run_query(*args, **kwargs):
-        raise SnowCLIError("cli boom")
-
-    cli_stub = SimpleNamespace(run_query=failing_run_query)
-    server, _, _ = _register_with_stub_execute(
-        monkeypatch,
-        execute_side_effect={"rows": []},
-        enable_cli_bridge=True,
-        snow_cli_stub=cli_stub,
-    )
-    tool = server.tools["run_cli_query"]
-
-    with pytest.raises(RuntimeError) as exc_info:
-        await tool("SELECT 1")
-
-    assert "cli boom" in str(exc_info.value)
 
 
 def test_apply_config_overrides_sets_env(monkeypatch: pytest.MonkeyPatch):

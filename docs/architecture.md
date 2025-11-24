@@ -1,4 +1,4 @@
-# Igloo MCP Architecture (v2.0.0)
+# Igloo MCP Architecture
 
 > **Overview**: Igloo MCP uses a layered service architecture that provides AI assistant integration through MCP (Model Context Protocol) and a Python API for programmatic access.
 
@@ -289,6 +289,13 @@ class AnalyticsService:
 - **Configuration**: Existing configs supported
 - **Profiles**: All existing Snow CLI profiles supported
 - **CLI**: Removed in v2.0 - see migration guide
+
+## See Also
+
+- [MCP Architecture](mcp/mcp_architecture.md) - MCP protocol-specific architecture
+- [MCP Server Technical Guide](mcp/mcp_server_technical_guide.md) - Implementation details
+- [Getting Started Guide](getting-started.md) - Quick start overview
+- [Features Overview](features_overview.md) - Complete feature list
 
 ---
 

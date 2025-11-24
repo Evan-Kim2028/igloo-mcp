@@ -16,8 +16,15 @@ from igloo_mcp.profile_utils import (
     validate_and_resolve_profile,
 )
 
-from .base import MCPTool
+from .base import MCPTool, tool_error_handler
 from .schema_utils import boolean_schema
+
+try:
+    from fastmcp.utilities.logging import get_logger
+except ImportError:
+    from mcp.server.fastmcp.utilities.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class HealthCheckTool(MCPTool):
@@ -56,8 +63,10 @@ class HealthCheckTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Comprehensive system health check including connection, "
-            "profile, Cortex availability, and catalog status"
+            "Comprehensive system health check including connection, profile validation, "
+            "Cortex availability, and catalog status. Use this for thorough diagnostics "
+            "or troubleshooting. For quick connectivity checks, use test_connection instead. "
+            "Supports optional checks via include_cortex, include_profile, and include_catalog parameters."
         )
 
     @property
@@ -87,11 +96,13 @@ class HealthCheckTool(MCPTool):
             },
         ]
 
+    @tool_error_handler("health_check")
     async def execute(
         self,
         include_cortex: bool = True,
         include_profile: bool = True,
         include_catalog: bool = False,
+        request_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Execute comprehensive health check.
@@ -100,10 +111,21 @@ class HealthCheckTool(MCPTool):
             include_cortex: Check Cortex AI services availability
             include_profile: Validate profile configuration
             include_catalog: Check catalog availability
+            request_id: Optional request correlation ID for tracing (auto-generated if not provided)
 
         Returns:
             Comprehensive health status
         """
+        logger.info(
+            "health_check_started",
+            extra={
+                "include_cortex": include_cortex,
+                "include_profile": include_profile,
+                "include_catalog": include_catalog,
+                "request_id": request_id,
+            },
+        )
+
         results: Dict[str, Any] = {}
 
         # Always test basic connection
@@ -131,6 +153,14 @@ class HealthCheckTool(MCPTool):
         )
 
         results["overall_status"] = "unhealthy" if has_critical_failures else "healthy"
+
+        logger.info(
+            "health_check_completed",
+            extra={
+                "overall_status": results["overall_status"],
+                "request_id": request_id,
+            },
+        )
 
         return results
 
@@ -380,5 +410,9 @@ class HealthCheckTool(MCPTool):
                     default=False,
                     examples=[True, False],
                 ),
+                "request_id": {
+                    "type": "string",
+                    "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
+                },
             },
         }

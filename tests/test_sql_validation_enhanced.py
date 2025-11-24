@@ -414,3 +414,42 @@ class TestEnhancedSQLValidation:
         assert is_valid is False
         assert stmt_type == "Show"
         assert error_msg is not None and "not permitted" in error_msg
+
+    def test_describe_table_classification_fix(self):
+        """Test that DESCRIBE TABLE statements are correctly classified as 'Describe' not 'Command'.
+
+        Regression test for issue #41.
+        """
+        describe_queries = [
+            "DESCRIBE TABLE my_table",
+            "DESCRIBE my_table",
+            "DESCRIBE VIEW my_view",
+            "desc table schema.my_table",  # case insensitive
+            'DESCRIBE TABLE "database"."schema"."table"',
+        ]
+
+        allow_list = ["Select", "Describe"]  # Allow Describe statements
+        disallow_list = []
+
+        for query in describe_queries:
+            stmt_type, is_valid, error_msg = validate_sql_statement(
+                query, allow_list, disallow_list
+            )
+
+            assert is_valid is True, f"DESCRIBE query should be allowed: {query}"
+            assert (
+                stmt_type == "Describe"
+            ), f"DESCRIBE should be classified as 'Describe', got '{stmt_type}' for: {query}"
+            assert (
+                error_msg is None
+            ), f"DESCRIBE should not have error message: {error_msg}"
+
+        # Test that DESCRIBE is blocked when not in allow list
+        disallow_allow_list = ["Select"]  # Don't allow Describe
+        stmt_type, is_valid, error_msg = validate_sql_statement(
+            "DESCRIBE TABLE my_table", disallow_allow_list, disallow_list
+        )
+
+        assert is_valid is False, "DESCRIBE should be blocked when not in allow list"
+        assert stmt_type == "Describe"
+        assert error_msg is not None and "not permitted" in error_msg

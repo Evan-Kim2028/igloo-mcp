@@ -16,13 +16,17 @@ from __future__ import annotations
 from .base import MCPTool, MCPToolSchema
 from .build_catalog import BuildCatalogTool
 from .build_dependency_graph import BuildDependencyGraphTool
+from .create_report import CreateReportTool
+from .evolve_report import EvolveReportTool
 from .execute_query import ExecuteQueryTool
 from .get_catalog_summary import GetCatalogSummaryTool
 from .health import HealthCheckTool
-from .preview_table import PreviewTableTool
+from .render_report import RenderReportTool
 from .search_catalog import SearchCatalogTool
+from .search_report import SearchReportTool
 
 # QueryLineageTool removed - lineage functionality not part of igloo-mcp
+# RefreshReportsTool removed - refresh now integrated into evolve_report
 from .test_connection import ConnectionTestTool
 
 __all__ = [
@@ -30,11 +34,15 @@ __all__ = [
     "MCPToolSchema",
     "BuildCatalogTool",
     "BuildDependencyGraphTool",
+    "CreateReportTool",
     "ExecuteQueryTool",
+    "EvolveReportTool",
     "GetCatalogSummaryTool",
     "HealthCheckTool",
-    "PreviewTableTool",
+    "RenderReportTool",
     "SearchCatalogTool",
+    "SearchReportTool",
     # "QueryLineageTool",  # Removed - lineage functionality not part of igloo-mcp
+    # "RefreshReportsTool",  # Removed - refresh now integrated into evolve_report
     "ConnectionTestTool",
 ]

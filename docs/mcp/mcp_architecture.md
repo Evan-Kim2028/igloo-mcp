@@ -24,12 +24,13 @@ src/igloo_mcp/mcp_server.py
 │   ├── handle_call_tool()   # Tool execution dispatcher
 │   └── Tool Methods:
 │       ├── _execute_query()
-│       ├── _preview_table()
 │       ├── _build_catalog()
-│       ├── _query_lineage()
 │       ├── _build_dependency_graph()
 │       ├── _test_connection()
-│       └── _get_catalog_summary()
+│       ├── _get_catalog_summary()
+│       ├── _search_catalog()
+│       ├── _health_check()
+│       └── _evolve_report()
 ```
 
 ### 3. Integration Points
@@ -127,7 +128,6 @@ types.Tool(
 
 #### 1. Query Tools
 - **execute_query**: Direct SQL execution
-- **preview_table**: Table sampling
 
 ```
 Input → SQL Generation → Execution → Result Formatting
@@ -154,6 +154,14 @@ Input → Graph Building → Traversal → Visualization
 
 ```
 Input → Connection Test → Status Response
+```
+
+#### 5. Living Reports Tools
+- **evolve_report**: LLM-assisted report evolution
+- **render_report**: Report rendering and export
+
+```
+Input → Report Selection → Evolution/Render → Output Generation
 ```
 
 ## Concurrency Model
@@ -324,7 +332,7 @@ def _analyze_performance(self, query: str) -> str:
 
 ```bash
 # Enable debug logging
-export NANUK_MCP_DEBUG=1
+export IGLOO_MCP_DEBUG=1
 
 # MCP protocol logging
 export MCP_DEBUG=1

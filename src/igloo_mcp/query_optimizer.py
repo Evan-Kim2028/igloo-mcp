@@ -129,7 +129,10 @@ def _detect_findings(
             OptimizationFinding(
                 level="error",
                 message="Query timed out",
-                detail="Consider increasing timeout_seconds, running asynchronously, or sampling with LIMIT.",
+                detail=(
+                    "Consider filtering by clustering keys or adding WHERE clauses to reduce data scanned "
+                    "before increasing timeout_seconds. Alternatively, run asynchronously or sample with LIMIT."
+                ),
             )
         )
 

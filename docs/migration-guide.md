@@ -72,58 +72,77 @@ The 'reason' parameter is required in v0.2.4+ for query auditability.
 
 ---
 
-## Migrating from CLI to MCP
+## CLI as Administrative Interface
 
-This section helps you migrate from the deprecated CLI interface to the modern MCP (Model Context Protocol) interface.
+igloo-mcp includes both MCP tools (primary interface for development) and CLI commands (administrative interface for power users and system administrators). This section clarifies the intended usage of each interface.
 
-### Why Migrate?
+### Primary vs Administrative Interfaces
 
-### Benefits of MCP
-- **AI-First Design**: Built for AI assistant integration
-- **Modern Protocol**: Industry standard for tool integration
-- **Better Error Handling**: Structured error responses
-- **Future-Proof**: Aligns with emerging AI tool standards
-- **Reduced Maintenance**: Single interface to maintain
+**MCP Tools (Primary - Recommended for Development)**:
+- Designed for AI assistant integration
+- Structured tool-based interface
+- Industry standard Model Context Protocol
+- Primary interface for report evolution and data operations
 
-### CLI Deprecation Timeline
-- **v1.9.0**: Deprecation warnings added
-- **v2.0.0**: CLI completely removed - MCP-only architecture (Current)
+**CLI Commands (Administrative - For Power Users)**:
+- Direct command-line access for administrators
+- Report creation and management operations
+- System setup and configuration tasks
+- Available but not the primary development workflow
 
-## Migration Checklist
+### CLI Availability Status
+- **Current**: CLI available for administrative operations
+- **Future**: CLI remains available for admin tasks
+- **Note**: CLI is not deprecated - it's repositioned as administrative interface
 
-- [ ] Review current CLI usage
-- [ ] Install MCP dependencies (included by default)
-- [ ] Configure MCP server
-- [ ] Test MCP tools
-- [ ] Update scripts/automation
-- [ ] Remove CLI from workflow
+## Interface Selection Guide
 
-## Command Mapping
+### When to Use MCP Tools (Recommended)
+- AI assistant integration
+- Report evolution and analysis
+- Data exploration and querying
+- Development workflows
 
-| CLI Command | MCP Equivalent | Notes |
-|-------------|----------------|-------|
-| `nanuk verify` | `test_connection` tool | Connection testing |
-| `nanuk catalog -d DB` | `build_catalog` tool | Database cataloging |
-| `nanuk lineage TABLE` | `query_lineage` tool | Lineage analysis |
-| `nanuk depgraph -d DB` | `build_dependency_graph` tool | Dependency mapping |
-| `nanuk query "SQL"` | `execute_query` tool | SQL execution |
-| `nanuk-mcp` | MCP server startup | Server management |
+### When to Use CLI Commands (Administrative)
+- Initial report creation setup
+- Bulk administrative operations
+- System configuration tasks
+- Power-user direct access
+
+### Getting Started with Both Interfaces
+- [ ] Configure MCP server for primary development work
+- [ ] Test MCP tools in your AI assistant
+- [ ] Use CLI for administrative setup when needed
+- [ ] Review administrative operations documentation
+
+## Interface Mapping
+
+| Administrative CLI | Primary MCP Tools | Usage Context |
+|-------------------|-------------------|---------------|
+| `igloo report create` | `evolve_report` (with new report) | Report initialization |
+| `igloo report list` | N/A - use MCP for active work | Administrative listing |
+| `igloo report show` | N/A - use MCP for analysis | Administrative inspection |
+| N/A | `execute_query` | Data exploration and querying |
+| N/A | `build_catalog` | Metadata operations |
+| N/A | `search_catalog` | Data discovery |
+| N/A | `evolve_report` | Report evolution and updates |
+| `igloo-mcp` | MCP server startup | Server management |
 
 ## Migration Examples
 
-### Before (CLI)
+### Before (CLI - Deprecated)
 ```bash
 # Test connection
-nanuk --profile prod verify
+igloo-mcp --profile prod verify
 
 # Build catalog
-nanuk --profile prod catalog -d MY_DATABASE -o ./output
+igloo-mcp --profile prod catalog -d MY_DATABASE -o ./output
 
 # Query lineage
-nanuk --profile prod lineage MY_TABLE
+igloo-mcp --profile prod lineage MY_TABLE
 
 # Execute query
-nanuk --profile prod query "SELECT * FROM users LIMIT 10"
+igloo-mcp --profile prod query "SELECT * FROM users LIMIT 10"
 ```
 
 ### After (MCP)
@@ -166,7 +185,7 @@ nanuk --profile prod query "SELECT * FROM users LIMIT 10"
 export SNOWFLAKE_PROFILE=my-profile
 
 # Start MCP server
-nanuk-mcp
+igloo-mcp
 ```
 
 ### 2. Configure AI Assistant
@@ -176,7 +195,7 @@ Add to your AI assistant configuration:
 {
   "mcpServers": {
     "snowflake": {
-      "command": "nanuk-mcp",
+      "command": "igloo-mcp",
       "args": ["--profile", "my-profile"]
     }
   }
@@ -186,7 +205,7 @@ Add to your AI assistant configuration:
 ### 3. Test MCP Integration
 ```bash
 # Test connection via MCP
-echo '{"tool": "test_connection", "arguments": {}}' | nanuk-mcp
+echo '{"tool": "test_connection", "arguments": {}}' | igloo-mcp
 
 # Expected: JSON response with connection status
 ```
@@ -197,9 +216,9 @@ echo '{"tool": "test_connection", "arguments": {}}' | nanuk-mcp
 **Before**:
 ```bash
 #!/bin/bash
-# Old script using CLI
-nanuk --profile prod catalog -d MY_DB
-nanuk --profile prod lineage MY_TABLE
+# Old script using CLI (deprecated)
+igloo-mcp --profile prod catalog -d MY_DB
+igloo-mcp --profile prod lineage MY_TABLE
 ```
 
 **After**:
@@ -209,7 +228,7 @@ nanuk --profile prod lineage MY_TABLE
 export SNOWFLAKE_PROFILE=prod
 
 # Start MCP server in background
-nanuk-mcp &
+igloo-mcp &
 MCP_PID=$!
 
 # Send MCP requests
@@ -223,9 +242,9 @@ kill $MCP_PID
 ### CI/CD Pipeline Updates
 **Before**:
 ```yaml
-# GitHub Actions using CLI
+# GitHub Actions using CLI (deprecated)
 - name: Build Catalog
-  run: nanuk --profile prod catalog -d MY_DB
+  run: igloo-mcp --profile prod catalog -d MY_DB
 ```
 
 **After**:
@@ -234,7 +253,7 @@ kill $MCP_PID
 - name: Build Catalog
   run: |
     export SNOWFLAKE_PROFILE=prod
-    echo '{"tool": "build_catalog", "arguments": {"database": "MY_DB"}}' | nanuk-mcp
+    echo '{"tool": "build_catalog", "arguments": {"database": "MY_DB"}}' | igloo-mcp
 ```
 
 ## Troubleshooting
@@ -246,7 +265,7 @@ kill $MCP_PID
 **Solution**:
 - Check profile configuration: `snow connection list`
 - Verify environment variables: `echo $SNOWFLAKE_PROFILE`
-- Test basic connection: `nanuk --profile my-profile verify`
+- Test basic connection: `igloo-mcp --profile my-profile verify`
 
 #### Tool Not Found
 **Error**: `Tool 'execute_query' not found`
@@ -266,13 +285,13 @@ kill $MCP_PID
 
 - 📖 [MCP Integration Guide](mcp-integration.md) - Complete MCP setup
 - 🔧 [Configuration Guide](configuration.md) - Advanced settings
-- 🐛 [Error Catalog](api/errors.md) - Common issues and solutions
-- 💬 [GitHub Discussions](https://github.com/Evan-Kim2028/nanuk-mcp/discussions) - Community help
+- 🐛 [Error Catalog](api/ERROR_CATALOG.md) - Common issues and solutions
+- 💬 [GitHub Discussions](https://github.com/Evan-Kim2028/igloo-mcp/discussions) - Community help
 
 ## Legacy CLI Support
 
 ### If You Still Need CLI
-The CLI has been completely removed in v2.0.0. For legacy CLI support, use the previous package:
+The CLI has been completely removed in igloo-mcp v2.0.0 (package rebrand). For legacy CLI support, use the previous package:
 
 ```bash
 # Install legacy snowcli-tools package (v1.x)
@@ -283,7 +302,7 @@ pip install "snowcli-tools>=1.9.0,<2.0.0"
 - Security fixes only
 - No new features
 - Limited support through December 2025
-- Replaced by nanuk-mcp v2.0.0+
+- Replaced by igloo-mcp (current version: 0.3.0+)
 
 ## Success Metrics
 
@@ -304,4 +323,4 @@ After migration, you should have:
 
 ---
 
-*Need help with migration? Check the [Error Catalog](api/errors.md) or [GitHub Discussions](https://github.com/Evan-Kim2028/nanuk-mcp/discussions).*
+*Need help with migration? Check the [Error Catalog](api/ERROR_CATALOG.md) or [GitHub Discussions](https://github.com/Evan-Kim2028/igloo-mcp/discussions).*

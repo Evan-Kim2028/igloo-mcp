@@ -8,17 +8,19 @@ Retrieves summary information about a built catalog, including statistics and me
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `catalog_dir` | string | ❌ No | ./data_catalogue | Directory containing catalog artifacts |
+| `catalog_dir` | string | ❌ No | ./data_catalogue | Directory containing catalog artifacts. Default resolves to unified storage at `~/.igloo_mcp/catalogs/{database}/` when used with `build_catalog` default. |
+| `database` | string | ❌ No | — | Optional database name to resolve unified storage path. Only used when `catalog_dir` is default. |
 
-> Provide a relative or absolute path. The default `./data_catalogue` matches the output from `build_catalog`.
+> **Unified Storage**: When `catalog_dir` is the default (`./data_catalogue`), the tool attempts to resolve to unified storage location. Provide the full path to a specific catalog directory, or use the `database` parameter to resolve unified storage automatically.
 
 ## Discovery Metadata
 
 - **Category:** `metadata`
 - **Tags:** `catalog`, `summary`, `metadata`
 - **Usage Examples:**
-  1. Retrieve summary from the default catalog directory (no parameters).
-  2. Load summary from `./artifacts/catalog` after exporting to a custom location.
+  1. Retrieve summary from unified storage (default resolves to `~/.igloo_mcp/catalogs/{database}/`).
+  2. Load summary from unified storage with explicit database: `get_catalog_summary(database="ANALYTICS")`.
+  3. Load summary from custom directory: `get_catalog_summary(catalog_dir="./artifacts/catalog")`.
 
 ## Returns
 
@@ -128,7 +130,6 @@ Use summary data to generate documentation about your data architecture.
 
 - [build_catalog](build_catalog.md) - Build or rebuild catalog
 - [build_dependency_graph](build_dependency_graph.md) - Build dependency graphs
-- [preview_table](preview_table.md) - Preview table structure
 
 ## Status Indicators
 

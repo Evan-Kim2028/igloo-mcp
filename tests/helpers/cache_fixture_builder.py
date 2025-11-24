@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Dict, List
 from unittest.mock import patch
 
-import anyio
 
 from igloo_mcp.cache.query_result_cache import QueryResultCache
 from igloo_mcp.config import Config, SnowflakeConfig
@@ -129,14 +128,6 @@ def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
             },
         )
 
-        if first.get("status") == "accepted":
-            execution_id = first["execution_id"]
-            while True:
-                poll = await tool.fetch_async_result(execution_id=execution_id)
-                if poll["status"] == "success":
-                    break
-                await anyio.sleep(0.05)
-
         # Second execution should hit the cache immediately.
         second = await tool.execute(
             statement="SELECT month, total_revenue FROM fixture_source",
@@ -145,14 +136,6 @@ def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
             reason="Fixture baseline history",
             response_mode="sync",
         )
-
-        if second.get("status") == "accepted":
-            execution_id = second["execution_id"]
-            while True:
-                poll = await tool.fetch_async_result(execution_id=execution_id)
-                if poll["status"] == "success":
-                    break
-                await anyio.sleep(0.05)
 
     time_sequence = [
         1700000000.0,  # initial requested_ts

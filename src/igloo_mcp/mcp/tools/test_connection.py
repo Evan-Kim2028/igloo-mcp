@@ -5,12 +5,19 @@ Part of v1.9.0 Phase 1 - simplified wrapper around HealthCheckTool for backward 
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from igloo_mcp.config import Config
 
-from .base import MCPTool
+from .base import MCPTool, tool_error_handler
 from .health import HealthCheckTool
+
+try:
+    from fastmcp.utilities.logging import get_logger
+except ImportError:
+    from mcp.server.fastmcp.utilities.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class ConnectionTestTool(MCPTool):
@@ -41,7 +48,12 @@ class ConnectionTestTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return "Quick Snowflake connection test (lightweight)"
+        return (
+            "Quick lightweight Snowflake connection test. Verifies basic connectivity "
+            "and returns active warehouse/database/schema/role. Use this for simple "
+            "connectivity checks before running queries. For comprehensive health "
+            "validation including profile, Cortex, and catalog status, use health_check instead."
+        )
 
     @property
     def category(self) -> str:
@@ -60,19 +72,47 @@ class ConnectionTestTool(MCPTool):
             }
         ]
 
-    async def execute(self, **kwargs: Any) -> Dict[str, Any]:
+    @tool_error_handler("test_connection")
+    async def execute(
+        self, request_id: Optional[str] = None, **kwargs: Any
+    ) -> Dict[str, Any]:
         """Test Snowflake connection.
+
+        Args:
+            request_id: Optional request correlation ID for tracing (auto-generated if not provided)
 
         Returns:
             Connection test results with status and details
         """
+        logger.info(
+            "test_connection_started",
+            extra={
+                "request_id": request_id,
+            },
+        )
+
         # Delegate to health check tool's connection test
-        return await self._health_tool._test_connection()
+        result = await self._health_tool._test_connection()
+
+        logger.info(
+            "test_connection_completed",
+            extra={
+                "connected": result.get("connected", False),
+                "request_id": request_id,
+            },
+        )
+
+        return result
 
     def get_parameter_schema(self) -> Dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "type": "object",
             "additionalProperties": False,
-            "properties": {},
+            "properties": {
+                "request_id": {
+                    "type": "string",
+                    "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
+                },
+            },
         }

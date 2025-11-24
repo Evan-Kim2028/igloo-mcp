@@ -1,54 +1,50 @@
 # MCP Tools Quick Reference
 
-## All 11 Tools
+> **Quick Links**: [Complete API Reference](README.md) | [Error Catalog](ERROR_CATALOG.md) | [Error Handling](ERROR_HANDLING.md)
 
-| Tool | Purpose | Key Parameters |
-|------|---------|----------------|
-| [execute_query](tools/execute_query.md) | Execute SQL queries | statement, timeout_seconds |
-| [preview_table](tools/preview_table.md) | Quick table preview | table_name, limit |
-| [build_catalog](tools/build_catalog.md) | Build metadata catalog | database, format |
-| [get_catalog_summary](tools/get_catalog_summary.md) | Get catalog info | catalog_dir |
-| [query_lineage](tools/query_lineage.md) | Query dependencies | object_name, direction |
-| [build_dependency_graph](tools/build_dependency_graph.md) | Build dep graph | database, format |
-| [test_connection](tools/test_connection.md) | Test connectivity | none |
-| [health_check](tools/health_check.md) | System health | none |
-| [check_profile_config](tools/check_profile_config.md) | Validate profile | none |
-| [get_resource_status](tools/get_resource_status.md) | Resource status | check_catalog |
-| [check_resource_dependencies](tools/check_resource_dependencies.md) | Resource deps | resource_name |
+## Core MCP Tools
+
+| Tool | Purpose | Key Parameters | Documentation |
+|------|---------|----------------|---------------|
+| [execute_query](tools/execute_query.md) | Execute SQL queries with guardrails and timeouts | statement, timeout_seconds, reason | [Details](tools/execute_query.md) |
+| [build_catalog](tools/build_catalog.md) | Build metadata catalog | database, format, output_dir | [Details](tools/build_catalog.md) |
+| [get_catalog_summary](tools/get_catalog_summary.md) | Get catalog info | catalog_dir | [Details](tools/get_catalog_summary.md) |
+| [search_catalog](tools/search_catalog.md) | Search locally built catalog artifacts | catalog_dir, name_contains, column_contains | [Details](tools/search_catalog.md) |
+| [build_dependency_graph](tools/build_dependency_graph.md) | Build dependency graph | database, schema, format | [Details](tools/build_dependency_graph.md) |
+| [test_connection](tools/test_connection.md) | Test connectivity | none | [Details](tools/test_connection.md) |
+| [health_check](tools/health_check.md) | System/profile/catalog health | include_cortex, include_profile, include_catalog | [Details](tools/health_check.md) |
+| [create_report](tools/create_report.md) | Create a new living report | title, template, tags, description | [Details](tools/create_report.md) |
+| [evolve_report](tools/evolve_report.md) | Evolve a living report with LLM assistance | report_selector, instruction, constraints, dry_run | [Details](tools/evolve_report.md) |
+| [render_report](tools/render_report.md) | Render reports to various formats | report_selector, format, persist_output | [Details](tools/render_report.md) |
+| [search_report](tools/search_report.md) | Search for living reports | report_selector | [Details](tools/search_report.md) |
 
 ## By Category
 
 ### Query & Data Access
 - execute_query
-- preview_table
 
 ### Metadata & Discovery
 - build_catalog
 - get_catalog_summary
-- query_lineage
+- search_catalog
 - build_dependency_graph
 
 ### Health & Diagnostics
 - test_connection
 - health_check
-- check_profile_config
-- get_resource_status
-- check_resource_dependencies
 
-## Common Workflows
+### Living Reports
+- create_report
+- evolve_report
+- render_report
+- search_report
 
-### Getting Started
-1. test_connection
-2. check_profile_config
-3. execute_query (simple test)
+Living reports are stored in your igloo-mcp instance directory (default: `~/.igloo-mcp/reports/`) and are accessible across all projects.
 
-### Data Discovery
-1. build_catalog
-2. get_catalog_summary
-3. query_lineage
+## See Also
 
-### Troubleshooting
-1. health_check
-2. check_profile_config
-3. test_connection
-4. get_resource_status
+- [Complete API Reference](README.md) - Full API documentation with examples
+- [Error Catalog](ERROR_CATALOG.md) - Error reference and solutions
+- [Error Handling](ERROR_HANDLING.md) - Error handling architecture
+- [Catalog Examples](../examples/catalog-examples.md) - Real-world catalog examples
+- [Getting Started Guide](../getting-started.md) - Quick start overview

@@ -6,6 +6,7 @@ Snowflake is unavailable or experiencing issues.
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -44,24 +45,26 @@ class CircuitBreaker:
         self.failure_count = 0
         self.last_failure_time: Optional[float] = None
         self.state = CircuitState.CLOSED
+        self._lock = threading.RLock()  # Reentrant lock for thread safety
 
     def call(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
         """Execute a function through the circuit breaker."""
-        if self.state == CircuitState.OPEN:
-            if self._should_attempt_reset():
-                self.state = CircuitState.HALF_OPEN
-            else:
-                raise CircuitBreakerError(
-                    f"Circuit breaker is open. Last failure: {self.last_failure_time}"
-                )
+        with self._lock:
+            if self.state == CircuitState.OPEN:
+                if self._should_attempt_reset():
+                    self.state = CircuitState.HALF_OPEN
+                else:
+                    raise CircuitBreakerError(
+                        f"Circuit breaker is open. Last failure: {self.last_failure_time}"
+                    )
 
-        try:
-            result = func(*args, **kwargs)
-            self._on_success()
-            return result
-        except self.config.expected_exception as e:
-            self._on_failure()
-            raise e
+            try:
+                result = func(*args, **kwargs)
+                self._on_success()
+                return result
+            except self.config.expected_exception as e:
+                self._on_failure()
+                raise e
 
     def _should_attempt_reset(self) -> bool:
         """Check if enough time has passed to attempt a reset."""

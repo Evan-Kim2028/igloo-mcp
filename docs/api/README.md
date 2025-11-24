@@ -2,7 +2,7 @@
 
 ## Overview
 
-Igloo MCP provides 11 MCP tools for Snowflake data operations, built on top of the official `snowflake-labs-mcp` service.
+Igloo MCP provides a focused set of MCP tools for Snowflake data operations, built on top of the official `snowflake-labs-mcp` service.
 
 ## Quick Links
 
@@ -16,25 +16,25 @@ Igloo MCP provides 11 MCP tools for Snowflake data operations, built on top of t
 ### Core Query Tools
 
 1. **[execute_query](tools/execute_query.md)** - Execute SQL queries with validation and timeouts
-2. **[preview_table](tools/preview_table.md)** - Quick table preview with row limits
 
 ### Metadata & Discovery Tools
 
-3. **[build_catalog](tools/build_catalog.md)** - Build comprehensive metadata catalog
-4. **[get_catalog_summary](tools/get_catalog_summary.md)** - Get catalog summary information
-5. **[query_lineage](tools/query_lineage.md)** - Query object dependencies and lineage
-6. **[build_dependency_graph](tools/build_dependency_graph.md)** - Build dependency graph
+2. **[build_catalog](tools/build_catalog.md)** - Build comprehensive metadata catalog
+3. **[get_catalog_summary](tools/get_catalog_summary.md)** - Get catalog summary information
+4. **[search_catalog](tools/search_catalog.md)** - Search locally built catalog artifacts
+5. **[build_dependency_graph](tools/build_dependency_graph.md)** - Build dependency graph
 
-### System & Health Tools
+### Health & Diagnostics Tools
 
-7. **[test_connection](tools/test_connection.md)** - Test Snowflake connectivity
-8. **[health_check](tools/health_check.md)** - Comprehensive health status
-9. **[check_profile_config](tools/check_profile_config.md)** - Validate profile configuration
+6. **[test_connection](tools/test_connection.md)** - Test Snowflake connectivity
+7. **[health_check](tools/health_check.md)** - Comprehensive health status
 
-### Resource Management Tools
+### Living Reports Tools
 
-10. **[get_resource_status](tools/get_resource_status.md)** - Check MCP resource availability
-11. **[check_resource_dependencies](tools/check_resource_dependencies.md)** - Check resource dependencies
+8. **[create_report](tools/create_report.md)** *(MCP-only)* - Create a new living report with optional template and tags
+9. **[evolve_report](tools/evolve_report.md)** *(MCP-only)* - Evolve a living report with LLM assistance and audit logging
+10. **render_report** *(MCP-only)* - Render reports to various formats (see [create_report](tools/create_report.md) for details)
+11. **search_report** *(MCP-only)* - Search for living reports with intelligent fallback behavior (see [create_report](tools/create_report.md) for details)
 
 ## Getting Started
 
@@ -126,25 +126,25 @@ execute_query(
 # 1. Build dependency graph
 build_dependency_graph(database="PROD")
 
-# 2. Query lineage for specific object
-query_lineage(
-    object_name="MY_TABLE",
-    direction="both",
-    depth=3
+# 2. Search catalog for related objects
+search_catalog(
+    catalog_dir="./data_catalogue",  # Default resolves to unified storage
+    name_contains="MY_TABLE"
 )
 ```
 
 ### Pattern 3: Health Monitoring
 
 ```python
-# 1. Check overall health
-health_check()
+# 1. Check overall health (includes profile and catalog status)
+health_check(
+    include_profile=True,
+    include_catalog=True,
+    include_cortex=False
+)
 
-# 2. Verify profile configuration
-check_profile_config()
-
-# 3. Check resource availability
-get_resource_status()
+# 2. Test connection separately if needed
+test_connection()
 ```
 
 ## Performance Tips
@@ -162,7 +162,15 @@ get_resource_status()
 - Examples: `/examples/`
 - Issues: GitHub repository
 
+## See Also
+
+- [Getting Started Guide](../getting-started.md) - Quick start overview
+- [MCP Integration Guide](../mcp-integration.md) - MCP client setup
+- [Error Catalog](ERROR_CATALOG.md) - Error reference
+- [Error Handling](ERROR_HANDLING.md) - Error handling architecture
+- [Tools Index](TOOLS_INDEX.md) - Quick tool reference
+
 ---
 
-**Version:** v2.0.0
-**Last Updated:** December 2024
+**Version:** 0.3.0
+**Last Updated:** November 2025

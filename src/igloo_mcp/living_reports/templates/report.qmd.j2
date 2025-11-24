@@ -1,0 +1,166 @@
+---
+title: "{{ outline.title }}"
+format: {{ format }}
+{% if options.toc %}toc: true{% endif %}
+{% if options.code_folding %}code-fold: true{% endif %}
+---
+
+{% if outline.metadata.get('summary') %}
+{{ outline.metadata.summary }}
+{% endif %}
+
+{% if outline.metadata.get('template') == 'analyst_v1' %}
+{# Analyst mode rendering #}
+{% set citation_map = hints.get('citation_map', {}) if hints else {} %}
+{% set citation_details = hints.get('citation_details', {}) if hints else {} %}
+
+{# Executive Summary Section #}
+{% set exec_summary_ids = outline.metadata.get('executive_summary_insight_ids', []) %}
+{% if not exec_summary_ids %}
+  {# Auto-select high-importance insights #}
+  {% set exec_summary_ids = [] %}
+  {% for insight in outline.insights %}
+    {% if insight.importance >= 8 %}
+      {% set exec_summary_ids = exec_summary_ids + [insight.insight_id] %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+{% if exec_summary_ids|length > 0 %}
+## Executive Summary
+
+{% for insight_id in exec_summary_ids %}
+{% set insight = outline.get_insight(insight_id) %}
+{% if insight %}
+{% set exec_id = insight.supporting_queries[0].execution_id if insight.supporting_queries and insight.supporting_queries|length > 0 else None %}
+{% set citation_num = citation_map.get(exec_id) if exec_id else None %}
+{{ insight.summary }}{% if citation_num %} [{{ citation_num }}]{% endif %}
+
+{% endif %}
+{% endfor %}
+
+{% endif %}
+
+{# Standard sections in fixed order #}
+{% set section_order = ['Network Activity', 'DEX Trading', 'Objects', 'Events'] %}
+{% for section_title in section_order %}
+{% for section in outline.sections %}
+{% if section.title == section_title %}
+
+## {{ section.title }}
+
+{% if section.notes %}
+{{ section.notes }}
+{% endif %}
+
+{% for insight_id in section.insight_ids %}
+{% set insight = outline.get_insight(insight_id) %}
+{% if insight %}
+{% set exec_id = insight.supporting_queries[0].execution_id if insight.supporting_queries and insight.supporting_queries|length > 0 else None %}
+{% set citation_num = citation_map.get(exec_id) if exec_id else None %}
+{{ insight.summary }}{% if citation_num %} [{{ citation_num }}]{% endif %}
+
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+{# Query References Appendix #}
+{% if citation_map|length > 0 %}
+## Appendix: Query References
+
+{% set sorted_citations = citation_map.items() | sort(attribute='1') %}
+{% for exec_id, citation_num in sorted_citations %}
+[{{ citation_num }}] **Query Execution**: `{{ exec_id }}`
+{% set details = citation_details.get(exec_id, {}) %}
+{% if details.timestamp %}  - Executed: {{ details.timestamp }}{% endif %}
+{% if details.duration_ms %}  - Duration: {{ "%.2f"|format(details.duration_ms / 1000.0) }}s{% endif %}
+{% if details.rowcount is not none and details.rowcount is defined %}  - Rows returned: {{ "{:,}"|format(details.rowcount) }}{% endif %}
+{% if details.status %}  - Status: {{ details.status }}{% endif %}
+{% if details.statement_preview %}  - SQL Preview: `{{ details.statement_preview[:100] }}{% if details.statement_preview|length > 100 %}...{% endif %}`{% endif %}
+{% if details.sql_sha256 %}  - SQL Hash: `{{ details.sql_sha256[:16] }}...`{% endif %}
+
+{% endfor %}
+
+{% endif %}
+
+{% else %}
+{# Default rendering mode #}
+{% for section in outline.sections %}
+## {{ section.title }}
+
+{% if section.notes %}
+{{ section.notes }}
+{% endif %}
+
+{% for insight_id in section.insight_ids %}
+{% set insight = outline.get_insight(insight_id) %}
+{% if insight %}
+
+### {{ insight.summary }}
+
+**Importance:** {{ insight.importance }}/10
+
+{% if insight.draft_changes and insight.draft_changes.get('type') == 'chart' %}
+```{python}
+# Chart visualization for {{ insight.insight_id }}
+# TODO: Implement chart generation based on dataset {{ insight.insight_id }}
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Placeholder chart - replace with actual data visualization
+plt.figure(figsize=(10, 6))
+plt.title("{{ insight.summary }}")
+plt.xlabel("X Axis")
+plt.ylabel("Y Axis")
+plt.text(0.5, 0.5, "Chart placeholder - implement with actual dataset", ha='center', va='center', transform=plt.gca().transAxes)
+plt.show()
+```
+{% elif insight.draft_changes and insight.draft_changes.get('type') == 'table' %}
+```{python}
+# Table data for {{ insight.insight_id }}
+import pandas as pd
+
+# Placeholder table - replace with actual dataset query results
+data = {
+    "Metric": ["Value 1", "Value 2", "Value 3"],
+    "Count": [10, 20, 30],
+    "Percentage": [33.3, 66.7, 100.0]
+}
+df = pd.DataFrame(data)
+print(df.to_markdown(index=False))
+```
+{% else %}
+**Supporting Data:**
+
+{% for query in insight.supporting_queries %}
+{% set exec_id = query.execution_id %}
+{% set provenance = query_provenance.get(exec_id) if query_provenance else None %}
+{% if exec_id %}
+- **Query Execution**: `{{ exec_id }}`
+  {% if provenance %}
+  - Executed: {{ provenance.timestamp or 'Unknown time' }}
+  {% if provenance.duration_ms %}  - Duration: {{ "%.2f"|format(provenance.duration_ms / 1000.0) }}s{% endif %}
+  {% if provenance.rowcount is not none and provenance.rowcount is defined %}  - Rows returned: {{ "{:,}"|format(provenance.rowcount) }}{% endif %}
+  {% if provenance.status %}  - Status: {{ provenance.status }}{% endif %}
+  {% if provenance.statement_preview %}  - SQL Preview: `{{ provenance.statement_preview[:100] }}{% if provenance.statement_preview|length > 100 %}...{% endif %}`{% endif %}
+  {% endif %}
+  {% if query.sql_sha256 %}  - SQL Hash: `{{ query.sql_sha256[:16] }}...`{% endif %}
+{% elif query.sql_sha256 %}
+- **SQL Hash**: `{{ query.sql_sha256[:16] }}...`
+{% else %}
+- **Dataset**: Unknown source
+{% endif %}
+{% endfor %}
+
+{% if insight.supporting_queries|length == 0 %}
+*No supporting queries available*
+{% endif %}
+{% endif %}
+
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}

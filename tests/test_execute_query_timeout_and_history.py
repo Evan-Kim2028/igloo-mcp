@@ -233,3 +233,44 @@ async def test_large_result_triggers_truncation(tmp_path, monkeypatch):
     assert len(executed_cursors) == 1
     # Cache hit should not execute an additional query; the last cursor is the snapshot used for cache lookup.
     assert service.cursors[-1]._main_executed is False
+
+
+@pytest.mark.asyncio
+async def test_timeout_error_message_prioritizes_catalog_filtering(
+    tmp_path, monkeypatch
+):
+    """Test that timeout error messages prioritize catalog-based filtering before timeout increases."""
+    history_path = tmp_path / "history.jsonl"
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
+    artifact_root = tmp_path / "artifacts"
+    monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
+
+    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+    service = FakeSnowflakeService(
+        [
+            FakeQueryPlan(
+                statement="SELECT * FROM large_table",
+                rows=[{"A": 1}],
+                duration=2.0,
+            )
+        ]
+    )
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
+
+    with pytest.raises(RuntimeError) as exc:
+        await tool.execute(statement="SELECT * FROM large_table", timeout_seconds=1)
+
+    error_msg = str(exc.value)
+
+    # Check that catalog/clustering guidance comes before timeout increase
+    assert "filter by clustering keys" in error_msg
+    assert "catalog columns first" in error_msg
+
+    # Timeout increase should be mentioned but not first
+    timeout_mention = error_msg.find("increase timeout_seconds")
+    clustering_mention = error_msg.find("clustering keys")
+
+    if timeout_mention != -1 and clustering_mention != -1:
+        assert (
+            clustering_mention < timeout_mention
+        ), "Clustering guidance should come before timeout increase"

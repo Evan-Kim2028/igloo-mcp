@@ -9,11 +9,14 @@ Use this tool after running `build_catalog` to explore the locally cached
 snapshot without reconnecting to Snowflake. It supports substring filtering on
 object names or column names and returns at most `limit` matches.
 
+**Unified Storage**: When `catalog_dir` is the default, the tool resolves to unified storage location (`~/.igloo_mcp/catalogs/{database}/`). Set `search_all_databases=true` to search across all database catalogs in unified storage.
+
 ## Parameters
 
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
-| `catalog_dir` | string | ❌ No | `./data_catalogue` | Directory containing `catalog.json` or `catalog.jsonl`. |
+| `catalog_dir` | string | ❌ No | `./data_catalogue` | Directory containing `catalog.json` or `catalog.jsonl`. Default resolves to unified storage at `~/.igloo_mcp/catalogs/{database}/` when used with `build_catalog` default. |
+| `search_all_databases` | boolean | ❌ No | `false` | If `true` and `catalog_dir` is default, search across all database catalogs in unified storage. |
 | `object_types` | array[string] | ❌ No | — | Optional list of object types (`table`, `view`, `function`, …). |
 | `database` | string | ❌ No | — | Filter results to a specific database. |
 | `schema` | string | ❌ No | — | Filter results to a specific schema. |

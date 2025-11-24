@@ -1,7 +1,8 @@
 # Incremental Catalog Building Guide
 
-**Version**: v2.0.0
 **Feature**: LAST_DDL-based delta detection for 10-20x faster catalog refreshes
+
+> **⚠️ STATUS**: Incremental catalog building is **planned** but not yet fully implemented. The metadata structure (`_catalog_metadata.json`) is created automatically when using unified storage, enabling future incremental updates. This guide documents the planned functionality.
 
 ## Overview
 
@@ -26,16 +27,39 @@ Based on real-world testing (583 tables):
 | Refresh (100 changes) | 5 min | 1 min | **5x faster** |
 | Refresh (0 changes) | 5 min | 2 sec | **150x faster** |
 
-## Quick Start
+## Current Status
 
-### Python API
+The infrastructure for incremental catalog building is in place:
+
+- ✅ **Metadata files**: `_catalog_metadata.json` is automatically created in unified storage (`~/.igloo_mcp/catalogs/{database}/`)
+- ✅ **Metadata structure**: Contains `last_build`, `last_full_refresh`, object counts, and timestamps
+- ⏳ **Incremental logic**: The actual incremental update logic is planned for a future release
+
+## Current Usage
+
+Currently, `build_catalog` always performs a full catalog build. The metadata file is created to enable future incremental updates:
 
 ```python
-from nanuk_mcp.catalog import build_incremental_catalog
+# Build catalog (creates metadata for future incremental updates)
+result = build_catalog(
+    database="ANALYTICS"
+)
+
+# Metadata file created at:
+# ~/.igloo_mcp/catalogs/ANALYTICS/_catalog_metadata.json
+```
+
+## Planned API (Future)
+
+Once implemented, incremental catalog building will work as follows:
+
+### Python API (Planned)
+
+```python
+from igloo_mcp.catalog import build_incremental_catalog
 
 # First build (creates metadata)
 result = build_incremental_catalog(
-    output_dir="./data_catalogue",
     database="ANALYTICS",
 )
 
@@ -44,7 +68,6 @@ print(f"Changes: {result['changes']}")  # All objects counted
 
 # Subsequent builds (incremental)
 result = build_incremental_catalog(
-    output_dir="./data_catalogue",
     database="ANALYTICS",
 )
 
@@ -53,13 +76,13 @@ print(f"Changes: {result['changes']}")  # Only changed objects
 print(f"Changed objects: {result['changed_objects']}")
 ```
 
-### Class-Based API
+### Class-Based API (Planned)
 
 ```python
-from nanuk_mcp.catalog import IncrementalCatalogBuilder
+from igloo_mcp.catalog import IncrementalCatalogBuilder
 
 # Create builder
-builder = IncrementalCatalogBuilder(cache_dir="./data_catalogue")
+builder = IncrementalCatalogBuilder()
 
 # Build or refresh
 result = builder.build_or_refresh(
@@ -71,10 +94,6 @@ result = builder.build_or_refresh(
 print(f"Status: {result.status}")
 print(f"Last build: {result.last_build}")
 print(f"Changes detected: {result.changes}")
-
-if result.metadata:
-    print(f"Total objects: {result.metadata.total_objects}")
-    print(f"Last full refresh: {result.metadata.last_full_refresh}")
 ```
 
 ## How It Works
@@ -89,7 +108,7 @@ The incremental builder maintains a `_catalog_metadata.json` file with:
   "last_full_refresh": "2025-01-04T12:00:00+00:00",
   "databases": ["ANALYTICS"],
   "total_objects": 583,
-  "version": "2.0.0",
+  "version": "0.2.0",
   "schema_count": 12,
   "table_count": 583
 }
@@ -303,29 +322,29 @@ cp ./data_catalogue/_catalog_metadata.json \
 
 ## Integration Examples
 
-### With MCP Server
+### With MCP Server (Planned)
 
-The incremental builder can be integrated with MCP tools:
+The incremental builder will be integrated with MCP tools:
 
 ```python
 # Future: build_catalog tool with incremental option
 result = await build_catalog(
-    output_dir="./data_catalogue",
     database="ANALYTICS",
-    incremental=True,  # Incremental catalog building
+    incremental=True,  # Incremental catalog building (planned)
 )
 ```
 
-### With Airflow
+**Current**: Use `build_catalog` which creates metadata files for future incremental updates.
+
+### With Airflow (Planned)
 
 ```python
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from nanuk_mcp.catalog import build_incremental_catalog
+from igloo_mcp.catalog import build_incremental_catalog  # Planned
 
 def refresh_catalog():
     result = build_incremental_catalog(
-        output_dir="/opt/airflow/catalogs/snowflake",
         database="ANALYTICS",
     )
     print(f"Catalog refreshed: {result['changes']} changes")
@@ -339,13 +358,15 @@ refresh_task = PythonOperator(
 )
 ```
 
-### With CLI
+**Current**: Use `build_catalog` which creates metadata files. Full incremental logic coming in a future release.
+
+### With CLI (Planned)
 
 ```bash
-# Create a simple CLI wrapper
+# Future CLI wrapper (planned)
 python -c "
-from nanuk_mcp.catalog import build_incremental_catalog
-result = build_incremental_catalog('./data_catalogue')
+from igloo_mcp.catalog import build_incremental_catalog
+result = build_incremental_catalog(database='ANALYTICS')
 print(f\"Status: {result['status']}\")
 print(f\"Changes: {result['changes']}\")
 "
@@ -370,5 +391,7 @@ Planned for v1.10.0+:
 
 ## See Also
 
-- [Migration Guide](./migration-guide.md)
-- [API Reference](./api/README.md)
+- [Getting Started Guide](getting-started.md) - Quick start overview
+- [Migration Guide](migration-guide.md) - Version migration instructions
+- [API Reference](api-reference.md) - Complete tool documentation
+- [Catalog Examples](examples/catalog-examples.md) - Real-world catalog examples
