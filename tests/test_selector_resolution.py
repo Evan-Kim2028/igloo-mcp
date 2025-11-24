@@ -1,6 +1,5 @@
 """Tests for report selector resolution."""
 
-
 import pytest
 
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError

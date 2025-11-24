@@ -86,7 +86,6 @@ from .session_utils import (
 # QueryHistory and update_cache_manifest_insight no longer used in mcp_server
 
 
-
 # SnowCLI no longer used - CLI bridge removed
 
 logger = get_logger(__name__)
