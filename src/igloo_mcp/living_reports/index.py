@@ -48,6 +48,7 @@ class ReportIndex:
 
         entries = {}
         title_to_id = {}
+        corrupted_lines = []
 
         try:
             with self.index_path.open("r", encoding="utf-8") as f:
@@ -65,9 +66,30 @@ class ReportIndex:
                         title_to_id[entry.current_title.lower()] = entry.report_id
 
                     except Exception as e:
-                        raise IndexCorruptionError(
-                            f"Corrupted index entry at line {line_num}: {e}"
-                        ) from e
+                        # Log corrupted line but continue loading valid entries
+                        corrupted_lines.append((line_num, line, str(e)))
+                        continue
+
+            # If we found corrupted entries, try to rebuild from filesystem
+            if corrupted_lines:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Found {len(corrupted_lines)} corrupted index entries. "
+                    f"Attempting to rebuild index from filesystem..."
+                )
+                # Backup corrupted index
+                backup_path = self.index_path.with_suffix(".jsonl.corrupted")
+                try:
+                    self.index_path.rename(backup_path)
+                    logger.info(f"Backed up corrupted index to {backup_path}")
+                except Exception:
+                    pass
+
+                # Rebuild from filesystem
+                self.rebuild_from_filesystem()
+                return
 
         except (json.JSONDecodeError, IOError) as e:
             raise IndexCorruptionError(f"Failed to load index: {e}") from e
