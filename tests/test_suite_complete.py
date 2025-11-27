@@ -63,7 +63,13 @@ def test_template_system_complete():
     from igloo_mcp.living_reports.templates import TEMPLATES, get_template
 
     # Check all expected templates exist
-    expected_templates = {"default", "monthly_sales", "quarterly_review", "deep_dive"}
+    expected_templates = {
+        "default",
+        "monthly_sales",
+        "quarterly_review",
+        "deep_dive",
+        "analyst_v1",
+    }
     assert set(TEMPLATES.keys()) == expected_templates
 
     # Verify each template returns sections

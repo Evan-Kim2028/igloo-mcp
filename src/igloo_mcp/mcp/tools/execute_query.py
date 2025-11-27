@@ -146,6 +146,12 @@ class ExecuteQueryTool(MCPTool):
         self._cache_enabled = self.cache.enabled
         self._cache_mode = self.cache.mode
         self._static_audit_warnings.extend(self.cache.pop_warnings())
+        # Avoid global cache bleed-through when no explicit cache settings are provided
+        if not os.environ.get("IGLOO_MCP_CACHE_MODE") and not os.environ.get(
+            "IGLOO_MCP_CACHE_ROOT"
+        ):
+            self._cache_enabled = False
+            self._cache_mode = "disabled"
 
     @property
     def name(self) -> str:
@@ -982,26 +988,30 @@ class ExecuteQueryTool(MCPTool):
         if post_query_insight is not None:
             normalized_insight = normalize_insight(post_query_insight)
 
+        coerced_timeout: Optional[int] = None
         if timeout_seconds is not None:
-            if isinstance(timeout_seconds, str):
-                try:
-                    timeout_seconds = int(timeout_seconds)
-                except (TypeError, ValueError):
-                    raise TypeError(
-                        "timeout_seconds must be an integer value in seconds."
-                    ) from None
-            if isinstance(timeout_seconds, bool) or not isinstance(
-                timeout_seconds, int
-            ):
+            if isinstance(timeout_seconds, bool):
                 raise TypeError("timeout_seconds must be an integer value in seconds.")
+
+            try:
+                numeric = float(timeout_seconds)
+            except (TypeError, ValueError):
+                raise TypeError(
+                    "timeout_seconds must be an integer value in seconds."
+                ) from None
+
+            if not numeric.is_integer():
+                raise TypeError("timeout_seconds must be an integer value in seconds.")
+
+            coerced_timeout = int(numeric)
             if (
                 not MIN_QUERY_TIMEOUT_SECONDS
-                <= timeout_seconds
+                <= coerced_timeout
                 <= MAX_QUERY_TIMEOUT_SECONDS
             ):
                 raise MCPValidationError(
                     f"timeout_seconds must be between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS} seconds",
-                    validation_errors=[f"Invalid timeout: {timeout_seconds}"],
+                    validation_errors=[f"Invalid timeout: {coerced_timeout}"],
                     hints=[
                         f"Use a timeout between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS} seconds",
                     ],
@@ -1039,7 +1049,7 @@ class ExecuteQueryTool(MCPTool):
             database=database,
             schema=schema,
             role=role,
-            timeout_seconds=timeout_seconds,
+            timeout_seconds=coerced_timeout,
             verbose_errors=verbose_errors,
             reason=reason,
             normalized_insight=normalized_insight,
@@ -1126,7 +1136,7 @@ class ExecuteQueryTool(MCPTool):
                     return name.upper() in ALLOWED_SESSION_PARAMETERS
 
                 def _escape_sql_identifier(identifier: str) -> str:
-                    """Escape SQL identifier for use in LIKE clause.
+                    r"""Escape SQL identifier for use in LIKE clause.
 
                     Escapes:
                     - Single quotes (' -> '')
@@ -1523,13 +1533,29 @@ class ExecuteQueryTool(MCPTool):
                     title="Role",
                     examples=["ANALYST", "SECURITYADMIN"],
                 ),
-                "timeout_seconds": integer_schema(
-                    "Query timeout in seconds (falls back to config default).",
-                    minimum=1,
-                    maximum=3600,
-                    default=30,
-                    examples=[30, 60, 300],
-                ),
+                "timeout_seconds": {
+                    "title": "Timeout Seconds",
+                    "description": (
+                        "Query timeout in seconds (falls back to config default). Accepts "
+                        "either an integer or a numeric string so CLI clients that serialize "
+                        "arguments as strings continue to work."
+                    ),
+                    "default": 30,
+                    "anyOf": [
+                        integer_schema(
+                            "Numeric timeout value",
+                            minimum=MIN_QUERY_TIMEOUT_SECONDS,
+                            maximum=MAX_QUERY_TIMEOUT_SECONDS,
+                            examples=[30, 60, 300],
+                        ),
+                        {
+                            "type": "string",
+                            "pattern": r"^[0-9]+$",
+                            "description": "Numeric string timeout (e.g., '120').",
+                            "examples": ["30", "60", "300"],
+                        },
+                    ],
+                },
                 "verbose_errors": boolean_schema(
                     "Include detailed optimization hints in error messages.",
                     default=False,

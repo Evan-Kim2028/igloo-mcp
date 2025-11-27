@@ -8,7 +8,12 @@ from igloo_mcp.living_reports.service import ReportService
 
 
 def test_revert_to_previous_state(tmp_path):
-    """Test basic revert operation."""
+    """Test basic revert operation.
+
+    Note: Revert restores the state that existed BEFORE the target action.
+    The backup in an audit event contains the state before that action was applied.
+    So reverting to action2 (which changed to "Changed Title 2") restores "Changed Title 1".
+    """
     service = ReportService(reports_root=tmp_path / "reports")
 
     # Create report
@@ -30,14 +35,17 @@ def test_revert_to_previous_state(tmp_path):
     outline = service.get_report_outline(report_id)
     outline.title = "Changed Title 2"
     service.update_report_outline(report_id, outline, actor="cli")
+    action2_events = storage.load_audit_events()
+    action2_id = action2_events[-1].action_id
 
-    # Revert to first change
-    result = service.revert_report(report_id, action1_id)
+    # Revert to action2 - this restores the state BEFORE action2 was applied
+    # (which is "Changed Title 1")
+    result = service.revert_report(report_id, action2_id)
 
     assert result["success"] is True
-    assert result["reverted_to_action_id"] == action1_id
+    assert result["reverted_to_action_id"] == action2_id
 
-    # Verify state restored
+    # Verify state restored to the state BEFORE action2 (i.e., "Changed Title 1")
     outline = service.get_report_outline(report_id)
     assert outline.title == "Changed Title 1"
 
@@ -83,6 +91,8 @@ def test_revert_audit_log(tmp_path):
 
 def test_revert_missing_backup(tmp_path):
     """Test error when backup file is missing."""
+    import json
+
     service = ReportService(reports_root=tmp_path / "reports")
     report_id = service.create_report("Test")
 
@@ -113,14 +123,15 @@ def test_revert_missing_backup(tmp_path):
 
     # This is a bit of a hack - in practice the audit events are immutable
     # But for testing, we can temporarily add a fake event
-    events.append(fake_event)
     # Re-write audit log with fake event
-    import json
-
     audit_path = storage.audit_path
     with audit_path.open("w", encoding="utf-8") as f:
         for event in events:
-            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+            # Convert AuditEvent objects to dict
+            event_dict = event.model_dump() if hasattr(event, "model_dump") else event
+            f.write(json.dumps(event_dict, ensure_ascii=False) + "\n")
+        # Add the fake event
+        f.write(json.dumps(fake_event, ensure_ascii=False) + "\n")
 
     with pytest.raises(ValueError, match="Backup file missing"):
         service.revert_report(report_id, fake_action_id)
@@ -152,64 +163,79 @@ def test_revert_corrupted_backup(tmp_path):
 
 def test_revert_no_backup_in_payload(tmp_path):
     """Test error when action has no backup filename in payload."""
+    import json
+
     service = ReportService(reports_root=tmp_path / "reports")
     report_id = service.create_report("Test")
 
     # Manually create an audit event without backup_filename
+    # Using valid action_type that doesn't typically have backups
     fake_action_id = str(uuid.uuid4())
     fake_event = {
         "action_id": fake_action_id,
         "report_id": report_id,
         "ts": "2024-01-01T00:00:00Z",
         "actor": "cli",
-        "action_type": "manual_edit",  # Not evolve/update
+        "action_type": "manual_edit_detected",  # Valid action type without backup
         "payload": {"some": "data"},
     }
 
     storage = service.global_storage.get_report_storage(report_id)
     events = storage.load_audit_events()
-    events.append(fake_event)
 
     # Re-write audit log
-    import json
-
     audit_path = storage.audit_path
     with audit_path.open("w", encoding="utf-8") as f:
         for event in events:
-            f.write(json.dumps(event, ensure_ascii=False) + "\n")
+            # Convert AuditEvent objects to dict
+            event_dict = event.model_dump() if hasattr(event, "model_dump") else event
+            f.write(json.dumps(event_dict, ensure_ascii=False) + "\n")
+        # Add the fake event
+        f.write(json.dumps(fake_event, ensure_ascii=False) + "\n")
 
     with pytest.raises(ValueError, match="No backup associated with action"):
         service.revert_report(report_id, fake_action_id)
 
 
 def test_revert_preserves_index(tmp_path):
-    """Test that revert updates the index correctly."""
+    """Test that revert updates the index correctly.
+
+    Revert restores the backup from the target action, which is the state BEFORE that action.
+    """
     service = ReportService(reports_root=tmp_path / "reports")
 
     report_id = service.create_report("Original Title", tags=["tag1"])
 
-    # Make a change that includes tags
+    # Make first change
     outline = service.get_report_outline(report_id)
-    outline.title = "Changed Title"
+    outline.title = "Changed Title 1"
+    outline.metadata["tags"] = ["tag1", "intermediate"]
+    service.update_report_outline(report_id, outline)
+
+    # Make second change that we'll revert from
+    outline = service.get_report_outline(report_id)
+    outline.title = "Changed Title 2"
     outline.metadata["tags"] = ["tag2"]
     service.update_report_outline(report_id, outline)
 
-    # Get action_id
+    # Get action_id of the second change
     storage = service.global_storage.get_report_storage(report_id)
     events = storage.load_audit_events()
     change_action_id = events[-1].action_id
 
-    # Revert
+    # Revert to the second change - restores state BEFORE that action
     service.revert_report(report_id, change_action_id)
 
-    # Check index was updated
+    # Check index was updated - should show state BEFORE the second change
     entry = service.index.get_entry(report_id)
-    assert entry.current_title == "Original Title"
-    assert entry.tags == ["tag1"]
+    assert entry.current_title == "Changed Title 1"
+    assert "intermediate" in entry.tags
 
 
 def test_revert_creates_current_backup(tmp_path):
     """Test that revert creates a backup of current state before restoring."""
+    import time
+
     service = ReportService(reports_root=tmp_path / "reports")
 
     report_id = service.create_report("Original")
@@ -224,17 +250,23 @@ def test_revert_creates_current_backup(tmp_path):
     events = storage.load_audit_events()
     change_action_id = events[-1].action_id
 
-    # Count backups before revert
-    initial_backup_count = len(list(storage.backups_dir.glob("*.bak")))
+    # Get initial backup filenames
+    initial_backups = set(storage.backups_dir.glob("*.bak"))
+
+    # Small delay to ensure different timestamps for backup filenames
+    time.sleep(0.1)
 
     # Revert
     result = service.revert_report(report_id, change_action_id)
-
-    # Should have created an additional backup
-    final_backup_count = len(list(storage.backups_dir.glob("*.bak")))
-    assert final_backup_count == initial_backup_count + 1
 
     # Check that revert event mentions the current state backup
     revert_event = storage.load_audit_events()[-1]
     assert "current_state_backup" in revert_event.payload
     assert revert_event.payload["current_state_backup"] is not None
+
+    # Verify the mentioned backup file exists
+    current_state_backup = revert_event.payload["current_state_backup"]
+    expected_backup_path = storage.backups_dir / current_state_backup
+    assert (
+        expected_backup_path.exists()
+    ), f"Backup file {current_state_backup} should exist"

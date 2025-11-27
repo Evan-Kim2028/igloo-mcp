@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 from ..path_utils import resolve_history_path
 from .history_index import HistoryIndex, ResolvedDataset
 from .index import ReportIndex
-from .models import AuditEvent, IndexEntry, Outline, ReportId
+from .models import AuditEvent, IndexEntry, Outline, ReportId, Section
 from .quarto_renderer import QuartoNotFoundError, QuartoRenderer, RenderResult
 from .storage import GlobalStorage, ReportStorage
 
@@ -52,7 +52,12 @@ class ReportService:
         return self._history_index
 
     def create_report(
-        self, title: str, template: str = "default", actor: str = "cli", **metadata: Any
+        self,
+        title: str,
+        template: str = "default",
+        actor: str = "cli",
+        initial_sections: Optional[List[Dict[str, Any]]] = None,
+        **metadata: Any,
     ) -> str:
         """Create a new report.
 
@@ -60,6 +65,7 @@ class ReportService:
             title: Human-readable title for the report
             template: Template name (default, monthly_sales, quarterly_review, deep_dive)
             actor: Who is creating the report (cli, agent, human) - defaults to "cli" for backward compatibility
+            initial_sections: Optional inline sections (with optional inline insights) to seed the outline
             **metadata: Additional metadata (tags, owner, etc.)
 
         Returns:
@@ -97,13 +103,85 @@ class ReportService:
         report_id = ReportId.new()
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-        # Get template sections
-        try:
-            sections = get_template(template)
-        except ValueError as e:
-            raise ValueError(f"Invalid template: {e}") from e
+        insights: list[Any] = []
+        if initial_sections:
+            sections: list[Any] = []
 
-        # Create initial outline with template sections
+            def _ensure_supporting(payload: Dict[str, Any]) -> None:
+                if (
+                    "supporting_queries" not in payload
+                    or payload["supporting_queries"] is None
+                ):
+                    payload["supporting_queries"] = []
+                if (
+                    "citations" in payload
+                    and payload["citations"] is not None
+                    and not payload["supporting_queries"]
+                ):
+                    payload["supporting_queries"] = payload["citations"]
+                if payload.get("supporting_queries") and not payload.get("citations"):
+                    payload["citations"] = payload["supporting_queries"]
+
+            for idx, section_data in enumerate(initial_sections):
+                data = dict(section_data)
+                if "section_id" not in data or data["section_id"] is None:
+                    data["section_id"] = str(uuid.uuid4())
+                if "title" not in data or data["title"] is None:
+                    data["title"] = f"Section {idx + 1}"
+                if "order" not in data or data["order"] is None:
+                    data["order"] = idx
+
+                insight_ids: list[str] = []
+                if "insights" in data and data["insights"] is not None:
+                    raw_insights = data["insights"]
+                    if not isinstance(raw_insights, list):
+                        raise ValueError(
+                            "initial_sections.insights must be a list of insight dicts"
+                        )
+                    for insight_idx, raw_insight in enumerate(raw_insights):
+                        if not isinstance(raw_insight, dict):
+                            raise ValueError("Each insight must be a dict")
+                        payload = dict(raw_insight)
+                        if "insight_id" not in payload or payload["insight_id"] is None:
+                            payload["insight_id"] = str(uuid.uuid4())
+                        if (
+                            payload.get("summary") is None
+                            or payload.get("importance") is None
+                        ):
+                            raise ValueError(
+                                "Insights must include summary and importance"
+                            )
+                        if "status" not in payload or payload["status"] is None:
+                            payload["status"] = "active"
+                        _ensure_supporting(payload)
+                        insights.append(Insight(**payload))
+                        insight_ids.append(payload["insight_id"])
+
+                elif data.get("insight_ids"):
+                    if not isinstance(data["insight_ids"], list):
+                        raise ValueError("initial_sections.insight_ids must be a list")
+                    insight_ids = data["insight_ids"]
+
+                section = Section(
+                    section_id=data["section_id"],
+                    title=data["title"],
+                    order=data.get("order", idx),
+                    notes=data.get("notes"),
+                    content=data.get("content"),
+                    content_format=data.get("content_format", "markdown"),
+                    insight_ids=insight_ids,
+                )
+                sections.append(section)
+        else:
+            # Get template sections
+            try:
+                sections = get_template(template)
+            except ValueError as e:
+                raise ValueError(f"Invalid template: {e}") from e
+            # Note: Empty sections from template (like "default") is intentional
+            # and should remain empty for maximum flexibility
+
+        # Create initial outline with either template or provided sections
         outline = Outline(
             report_id=str(report_id),
             title=title,
@@ -111,7 +189,7 @@ class ReportService:
             updated_at=now,
             version="1.0",
             sections=sections,
-            insights=[],
+            insights=insights,
             metadata={**metadata, "template": template},
         )
 
@@ -162,6 +240,37 @@ class ReportService:
             return storage.load_outline()
         except FileNotFoundError as e:
             raise ValueError(f"Report not found: {report_id}") from e
+
+    def update_report_status(
+        self,
+        report_id: str,
+        status: str,
+        actor: str = "agent",
+        request_id: Optional[str] = None,
+    ) -> None:
+        """Update report status in index and audit log."""
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        entry = self.index.get_entry(report_id)
+        if entry:
+            entry.status = status
+            entry.updated_at = now
+            self.index.add_entry(entry)
+        else:
+            raise ValueError(f"Report not found: {report_id}")
+
+        # Record audit event
+        storage = self.global_storage.get_report_storage(report_id)
+        with storage.lock():
+            audit_event = AuditEvent(
+                action_id=str(uuid.uuid4()),
+                report_id=report_id,
+                ts=now,
+                actor=actor,
+                action_type="status_change",
+                request_id=request_id,
+                payload={"status": status},
+            )
+            storage.append_audit_event(audit_event)
 
     def update_report_outline(
         self,
@@ -261,7 +370,7 @@ class ReportService:
             created_at=outline.created_at,
             updated_at=now,
             tags=outline.metadata.get("tags", []),
-            status="active",
+            status=outline.metadata.get("status", "active"),
             path=f"by_id/{report_id}",
         )
         self.index.add_entry(index_entry)
@@ -662,19 +771,22 @@ class ReportService:
         Raises:
             ValueError: If source report not found
         """
-        # Verify source exists
+        # Verify source exists (check for outline.json, not just directory)
         source_storage = self.global_storage.get_report_storage(source_id)
-        if not source_storage.report_dir.exists():
+        if not source_storage.outline_path.exists():
             raise ValueError(f"Source report not found: {source_id}")
 
         # Generate new ID
         new_id = ReportId.new()
-        new_storage = self.global_storage.get_report_storage(str(new_id))
+        new_report_dir = self.reports_root / "by_id" / str(new_id)
 
-        # Copy entire directory structure
+        # Copy entire directory structure (use dirs_exist_ok in case parent exists)
         import shutil
 
-        shutil.copytree(source_storage.report_dir, new_storage.report_dir)
+        shutil.copytree(source_storage.report_dir, new_report_dir, dirs_exist_ok=True)
+
+        # Now get storage for the new report
+        new_storage = self.global_storage.get_report_storage(str(new_id))
 
         # Load and update outline
         with new_storage.lock():
@@ -743,10 +855,10 @@ class ReportService:
         if not source_ids:
             raise ValueError("At least one source report is required")
 
-        # Verify all sources exist
+        # Verify all sources exist (check for outline.json, not just directory)
         for source_id in source_ids:
             storage = self.global_storage.get_report_storage(source_id)
-            if not storage.report_dir.exists():
+            if not storage.outline_path.exists():
                 raise ValueError(f"Source report not found: {source_id}")
 
         # Create new report (empty)
@@ -761,12 +873,16 @@ class ReportService:
             source_outline = self.get_report_outline(source_id)
 
             # Copy sections (with updated order to avoid conflicts)
-            for i, section in enumerate(source_outline.sections):
-                section.order = len(all_sections) + i
-                all_sections.append(section)
+            for section in source_outline.sections:
+                # Create a copy with the new order (use current list length as order)
+                section_copy = section.model_copy(deep=True)
+                section_copy.order = len(all_sections)
+                all_sections.append(section_copy)
 
-            # Copy insights
-            all_insights.extend(source_outline.insights)
+            # Copy insights (create copies to avoid mutation issues)
+            all_insights.extend(
+                insight.model_copy(deep=True) for insight in source_outline.insights
+            )
 
             # Merge tags
             all_tags.update(source_outline.metadata.get("tags", []))
@@ -775,6 +891,8 @@ class ReportService:
         new_outline = self.get_report_outline(new_id)
         new_outline.sections = all_sections
         new_outline.insights = all_insights
+        # Preserve "synthesized" tag and add source tags
+        all_tags.add("synthesized")
         new_outline.metadata["tags"] = sorted(list(all_tags))
         new_outline.metadata["synthesized_from"] = source_ids
         new_outline.metadata["synthesis_note"] = (
@@ -806,12 +924,10 @@ class ReportService:
             for insight_id in section.insight_ids:
                 try:
                     insight = outline.get_insight(insight_id)
-                    # Only use first supporting query for citation
-                    if (
-                        insight.supporting_queries
-                        and len(insight.supporting_queries) > 0
-                    ):
-                        exec_id = insight.supporting_queries[0].execution_id
+                    references = insight.citations or insight.supporting_queries
+                    # Only use first citation/supporting query for citation numbering
+                    if references and len(references) > 0:
+                        exec_id = references[0].execution_id
                         if exec_id and exec_id not in citation_map:
                             citation_map[exec_id] = citation_number
                             citation_number += 1
@@ -890,6 +1006,7 @@ class ReportService:
             outline = self.get_report_outline(resolved_id)
             storage = self.global_storage.get_report_storage(resolved_id)
             report_dir = storage.report_dir
+            qmd_path = report_dir / "report.qmd"
 
             # Load dataset sources if they exist
             datasets = {}
@@ -904,7 +1021,8 @@ class ReportService:
                 from .models import DatasetSource
 
                 for insight in outline.insights:
-                    for query in insight.supporting_queries:
+                    references = insight.citations or insight.supporting_queries
+                    for query in references:
                         if query.execution_id:
                             try:
                                 # Convert to DatasetSource for resolution
@@ -980,7 +1098,7 @@ class ReportService:
                     report_dir, format, options or {}, outline, datasets, render_hints
                 )
                 result = RenderResult(
-                    output_paths=[],
+                    output_paths=[str(qmd_path)],
                     stdout="Dry run: QMD file generated successfully",
                     stderr="",
                     warnings=["Dry run mode - Quarto render was skipped"],
@@ -1010,6 +1128,8 @@ class ReportService:
                     datasets=datasets,
                     hints=render_hints,
                 )
+                if qmd_path.exists() and str(qmd_path) not in result.output_paths:
+                    result.output_paths.insert(0, str(qmd_path))
             except Exception as e:
                 return {
                     "status": "render_failed",
@@ -1044,14 +1164,39 @@ class ReportService:
             storage.append_audit_event(audit_event)
 
         # Prepare response
+        primary_output_path = result.output_paths[0] if result.output_paths else None
+        rendered_output_path: Optional[str] = None
+        qmd_output_path = str(qmd_path.resolve()) if qmd_path.exists() else None
+
+        if result.output_paths:
+            rendered_output_path = next(
+                (
+                    str(Path(p).resolve())
+                    for p in result.output_paths
+                    if not str(p).endswith(".qmd") and Path(p).exists()
+                ),
+                None,
+            )
+
+        if rendered_output_path is None:
+            candidate = primary_output_path
+            if candidate and Path(candidate).exists():
+                rendered_output_path = str(Path(candidate).resolve())
+            else:
+                ext = {"markdown": "md"}.get(format, format)
+                fallback_path = (report_dir / f"report.{ext}").resolve()
+                if fallback_path.exists():
+                    rendered_output_path = str(fallback_path)
+
         response = {
             "status": "success",
             "report_id": resolved_id,
             "output": {
                 "format": format,
-                "output_path": result.output_paths[0] if result.output_paths else None,
+                "output_path": rendered_output_path or qmd_output_path,
+                "qmd_path": qmd_output_path,
                 "assets_dir": (
-                    str(report_dir / "_files")
+                    str((report_dir / "_files").resolve())
                     if format == "html" and (report_dir / "_files").exists()
                     else None
                 ),
@@ -1061,14 +1206,17 @@ class ReportService:
         }
 
         # Generate preview if requested
-        if include_preview and result.output_paths:
-            try:
-                preview = self._generate_preview(result.output_paths[0])
-                if preview:
-                    response["preview"] = preview
-            except Exception:
-                # Don't fail the render if preview generation fails
-                pass
+        if include_preview:
+            preview_path = rendered_output_path or qmd_output_path
+            if preview_path:
+                try:
+                    preview = self._generate_preview(preview_path)
+                    if preview:
+                        response["preview"] = preview
+                        response["output"]["preview"] = preview
+                except Exception:
+                    # Don't fail the render if preview generation fails
+                    pass
 
         # Open in browser if requested and it's HTML
         if open_browser and format == "html" and result.output_paths:

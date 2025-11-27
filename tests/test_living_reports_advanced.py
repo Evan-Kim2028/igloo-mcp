@@ -39,10 +39,12 @@ def test_fork_report(tmp_path):
     # Fork it
     forked_id = service.fork_report(source_id, "Forked Report")
 
-    # Verify fork has same content
+    # Verify fork has same content (source has template section + added section)
     forked_outline = service.get_report_outline(forked_id)
     assert forked_outline.title == "Forked Report"
-    assert len(forked_outline.sections) == 1
+    assert len(forked_outline.sections) == len(
+        source_outline.sections
+    )  # Should match source
     assert len(forked_outline.insights) == 1
     assert forked_outline.metadata["forked_from"] == source_id
 

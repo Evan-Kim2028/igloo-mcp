@@ -107,6 +107,7 @@ class CreateReportTool(MCPTool):
         template: str = "default",
         tags: Optional[List[str]] = None,
         description: Optional[str] = None,
+        initial_sections: Optional[List[Dict[str, Any]]] = None,
         request_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute report creation.
@@ -116,6 +117,7 @@ class CreateReportTool(MCPTool):
             template: Template name (default, monthly_sales, quarterly_review, deep_dive, analyst_v1)
             tags: Optional list of tags for categorization
             description: Optional description (stored in metadata)
+            initial_sections: Optional list of sections (with optional inline insights) to create atomically
             request_id: Optional request correlation ID for tracing (auto-generated if not provided)
 
         Returns:
@@ -164,7 +166,11 @@ class CreateReportTool(MCPTool):
         create_start = time.time()
         try:
             report_id = self.report_service.create_report(
-                title=title, template=template, actor="agent", **metadata
+                title=title,
+                template=template,
+                actor="agent",
+                initial_sections=initial_sections,
+                **metadata,
             )
         except ValueError as e:
             # Template validation errors from service
@@ -273,6 +279,35 @@ class CreateReportTool(MCPTool):
                         "Comprehensive analysis of customer retention patterns",
                         "Monthly sales performance review",
                     ],
+                },
+                "initial_sections": {
+                    "type": "array",
+                    "description": "Optional sections to seed the report (supports inline insights via 'insights')",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "section_id": {"type": "string"},
+                            "title": {"type": "string"},
+                            "order": {"type": "integer", "minimum": 0},
+                            "notes": {"type": "string"},
+                            "content": {"type": "string"},
+                            "content_format": {
+                                "type": "string",
+                                "enum": ["markdown", "html", "plain"],
+                                "default": "markdown",
+                            },
+                            "insight_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "insights": {
+                                "type": "array",
+                                "items": {"type": "object"},
+                                "description": "Inline insights to create and link to this section",
+                            },
+                        },
+                        "additionalProperties": True,
+                    },
                 },
                 "request_id": {
                     "type": "string",

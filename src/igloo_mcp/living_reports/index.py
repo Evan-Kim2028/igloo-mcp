@@ -139,7 +139,7 @@ class ReportIndex:
                 created_at=outline.created_at,
                 updated_at=outline.updated_at,
                 tags=outline.metadata.get("tags", []),
-                status="active",  # Assume active unless marked otherwise
+                status=outline.metadata.get("status", "active"),
                 path=f"by_id/{report_id}",
             )
 

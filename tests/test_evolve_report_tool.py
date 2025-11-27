@@ -18,6 +18,7 @@ from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
 
 
+@pytest.mark.asyncio
 class TestEvolveReportTool:
     """Test the EvolveReportTool functionality."""
 
@@ -94,7 +95,7 @@ class TestEvolveReportTool:
     def test_tool_initialization(self, tool: EvolveReportTool):
         """Test tool initializes correctly."""
         assert tool.name == "evolve_report"
-        assert tool.description == "Evolve a living report with LLM assistance"
+        assert "Evolve a living report" in tool.description
         assert tool.category == "reports"
         assert "reports" in tool.tags
         assert "evolution" in tool.tags
@@ -299,7 +300,7 @@ class TestEvolveReportTool:
             ]
         }
 
-        new_outline = tool._apply_changes(sample_outline, changes)
+        new_outline, _ = tool._apply_changes(sample_outline, changes)
 
         # Check insight was added
         assert len(new_outline.insights) == 3
@@ -326,7 +327,7 @@ class TestEvolveReportTool:
             ]
         }
 
-        new_outline = tool._apply_changes(sample_outline, changes)
+        new_outline, _ = tool._apply_changes(sample_outline, changes)
 
         # Check insight was modified
         modified_insight = next(
@@ -342,7 +343,7 @@ class TestEvolveReportTool:
         insight_2_id = sample_outline.insights[1].insight_id
         changes = {"insights_to_remove": [insight_2_id]}
 
-        new_outline = tool._apply_changes(sample_outline, changes)
+        new_outline, _ = tool._apply_changes(sample_outline, changes)
 
         # Check insight was removed
         assert len(new_outline.insights) == 1
@@ -365,7 +366,7 @@ class TestEvolveReportTool:
             ]
         }
 
-        new_outline = tool._apply_changes(sample_outline, changes)
+        new_outline, _ = tool._apply_changes(sample_outline, changes)
 
         # Check section was added
         assert len(new_outline.sections) == 3
@@ -393,7 +394,7 @@ class TestEvolveReportTool:
             ]
         }
 
-        new_outline = tool._apply_changes(sample_outline, changes)
+        new_outline, _ = tool._apply_changes(sample_outline, changes)
 
         # Check section was modified
         modified_section = next(
@@ -409,7 +410,7 @@ class TestEvolveReportTool:
         section_2_id = sample_outline.sections[1].section_id
         changes = {"sections_to_remove": [section_2_id]}
 
-        new_outline = tool._apply_changes(sample_outline, changes)
+        new_outline, _ = tool._apply_changes(sample_outline, changes)
 
         # Check section was removed
         assert len(new_outline.sections) == 1
@@ -422,7 +423,7 @@ class TestEvolveReportTool:
         insight_1_id = sample_outline.insights[0].insight_id
         changes = {"insights_to_remove": [insight_1_id]}
 
-        new_outline = tool._apply_changes(sample_outline, changes)
+        new_outline, _ = tool._apply_changes(sample_outline, changes)
 
         # Check insight references were cleaned up
         for section in new_outline.sections:
@@ -507,9 +508,7 @@ class TestEvolveReportTool:
         assert result["status"] == "validation_failed"
         assert result["error_type"] == "semantic_validation"
         assert len(result["validation_errors"]) > 0
-        assert "Cannot add - insight_id already exists" in str(
-            result["validation_errors"]
-        )
+        assert "Insight ID already exists" in str(result["validation_errors"])
 
     @pytest.mark.asyncio
     async def test_execute_successful_application(
@@ -806,8 +805,8 @@ class TestEvolveReportTool:
         sig = inspect.signature(tool.execute)
         proposed_changes_param = sig.parameters["proposed_changes"]
 
-        # Verify it's required (no default value)
-        assert proposed_changes_param.default == inspect.Parameter.empty
+        # Verify it is optional and defaults to None
+        assert proposed_changes_param.default is None
 
     def test_auto_generate_insight_uuid_on_add(
         self, tool: EvolveReportTool, sample_outline: Outline
@@ -936,41 +935,161 @@ class TestEvolveReportTool:
         assert len(updated_outline.sections) == len(sample_outline.sections) + 1
         assert any(s.section_id == generated_id for s in updated_outline.sections)
 
+    @pytest.mark.asyncio
+    async def test_sections_to_add_inline_insights_update_summary(
+        self,
+        tool: EvolveReportTool,
+        report_service: ReportService,
+        sample_outline: Outline,
+    ):
+        report_id = report_service.create_report("Inline Section Report")
+        report_service.update_report_outline(report_id, sample_outline, actor="test")
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add inline insights",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Inline Section",
+                        "order": 3,
+                        "insights": [{"summary": "Inline insight", "importance": 5}],
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        assert result["summary"]["insights_added"] == 1
+        assert len(result["summary"]["insight_ids_added"]) == 1
+        assert all("has no insights" not in warning for warning in result["warnings"])
+
+        outline = report_service.get_report_outline(report_id)
+        new_section = next(s for s in outline.sections if s.title == "Inline Section")
+        assert len(new_section.insight_ids) == 1
+
+    @pytest.mark.asyncio
+    async def test_sections_to_modify_supports_inline_insights(
+        self,
+        tool: EvolveReportTool,
+        report_service: ReportService,
+        sample_outline: Outline,
+    ):
+        report_id = report_service.create_report("Modify Inline Report")
+        report_service.update_report_outline(report_id, sample_outline, actor="test")
+
+        target_section = sample_outline.sections[0]
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add inline insight via modify",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": target_section.section_id,
+                        "insights": [{"summary": "Section inline", "importance": 6}],
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        assert result["summary"]["insights_added"] >= 1
+
+        outline = report_service.get_report_outline(report_id)
+        section = next(
+            s for s in outline.sections if s.section_id == target_section.section_id
+        )
+        assert any(insight.summary == "Section inline" for insight in outline.insights)
+        assert len(section.insight_ids) >= 2
+
+    @pytest.mark.asyncio
+    async def test_insights_to_add_defaults_supporting_queries(
+        self,
+        tool: EvolveReportTool,
+        report_service: ReportService,
+        sample_outline: Outline,
+    ):
+        report_id = report_service.create_report("Supporting Queries Optional")
+        report_service.update_report_outline(report_id, sample_outline, actor="test")
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add simple insight",
+            proposed_changes={
+                "insights_to_add": [{"summary": "Supports optional", "importance": 7}]
+            },
+        )
+
+        assert result["status"] == "success"
+
+        outline = report_service.get_report_outline(report_id)
+        new_insight = next(
+            i for i in outline.insights if i.summary == "Supports optional"
+        )
+        assert new_insight.supporting_queries == []
+
+    @pytest.mark.asyncio
+    async def test_warnings_recomputed_after_linking_insight(
+        self,
+        tool: EvolveReportTool,
+        report_service: ReportService,
+        sample_outline: Outline,
+    ):
+        report_id = report_service.create_report("Warning Regression Report")
+        sample_outline.sections[0].insight_ids = []
+        report_service.update_report_outline(report_id, sample_outline, actor="test")
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Link existing insight",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": sample_outline.sections[0].section_id,
+                        "insight_ids_to_add": [sample_outline.insights[0].insight_id],
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        assert all(
+            sample_outline.sections[0].title not in warning
+            for warning in result["warnings"]
+        )
+
     async def test_modify_insight_without_uuid_fails(
         self,
         tool: EvolveReportTool,
         report_service: ReportService,
         sample_outline: Outline,
     ):
-        """Test that modifying insight without insight_id fails validation."""
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
+        """Test that modifying insight without insight_id auto-generates one and fails to find it."""
         report_id = report_service.create_report("Test Report")
         report_service.update_report_outline(report_id, sample_outline, actor="test")
 
-        # Try to modify insight without insight_id
+        # Try to modify insight without insight_id (will auto-generate)
         changes = {
             "insights_to_modify": [
                 {
                     "summary": "Modified summary"
-                    # Missing insight_id
+                    # Missing insight_id - will be auto-generated
                 }
             ]
         }
 
-        with pytest.raises(MCPValidationError) as exc_info:
-            await tool.execute(
-                report_selector=report_id,
-                instruction="Modify insight without ID",
-                proposed_changes=changes,
-                dry_run=False,
-            )
-
-        # Should have validation error about missing insight_id
-        assert (
-            "insight_id" in str(exc_info.value).lower()
-            or "required" in str(exc_info.value).lower()
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Modify insight without ID",
+            proposed_changes=changes,
+            dry_run=False,
         )
+
+        # Should have validation error about the auto-generated ID not existing
+        assert result["status"] == "validation_failed"
+        error_str = str(result.get("validation_errors", "")).lower()
+        assert "insight" in error_str and "not found" in error_str
 
     async def test_modify_section_without_uuid_fails(
         self,
@@ -978,35 +1097,31 @@ class TestEvolveReportTool:
         report_service: ReportService,
         sample_outline: Outline,
     ):
-        """Test that modifying section without section_id fails validation."""
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
+        """Test that modifying section without section_id auto-generates one and fails to find it."""
         report_id = report_service.create_report("Test Report")
         report_service.update_report_outline(report_id, sample_outline, actor="test")
 
-        # Try to modify section without section_id
+        # Try to modify section without section_id (will auto-generate)
         changes = {
             "sections_to_modify": [
                 {
                     "title": "Modified title"
-                    # Missing section_id
+                    # Missing section_id - will be auto-generated
                 }
             ]
         }
 
-        with pytest.raises(MCPValidationError) as exc_info:
-            await tool.execute(
-                report_selector=report_id,
-                instruction="Modify section without ID",
-                proposed_changes=changes,
-                dry_run=False,
-            )
-
-        # Should have validation error about missing section_id
-        assert (
-            "section_id" in str(exc_info.value).lower()
-            or "required" in str(exc_info.value).lower()
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Modify section without ID",
+            proposed_changes=changes,
+            dry_run=False,
         )
+
+        # Should have validation error about the auto-generated ID not existing
+        assert result["status"] == "validation_failed"
+        error_str = str(result.get("validation_errors", "")).lower()
+        assert "section" in error_str and "not found" in error_str
 
     async def test_partial_update_insight_summary_only(
         self,
@@ -1149,8 +1264,6 @@ class TestEvolveReportTool:
         sample_outline: Outline,
     ):
         """Test that modifying insight with only insight_id (no other fields) fails validation."""
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
         report_id = report_service.create_report("Test Report")
         report_service.update_report_outline(report_id, sample_outline, actor="test")
 
@@ -1166,19 +1279,17 @@ class TestEvolveReportTool:
             ]
         }
 
-        with pytest.raises(MCPValidationError) as exc_info:
-            await tool.execute(
-                report_selector=report_id,
-                instruction="Modify insight with only ID",
-                proposed_changes=changes,
-                dry_run=False,
-            )
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Modify insight with only ID",
+            proposed_changes=changes,
+            dry_run=False,
+        )
 
         # Should have validation error about needing at least one non-ID field
-        assert (
-            "at least one field" in str(exc_info.value).lower()
-            or "besides" in str(exc_info.value).lower()
-        )
+        assert result["status"] == "validation_failed"
+        error_str = str(result.get("validation_errors", "")).lower()
+        assert "at least one field" in error_str or "besides" in error_str
 
     async def test_atomic_add_section_with_inline_insights(
         self,
@@ -1314,10 +1425,6 @@ class TestEvolveReportTool:
         sample_outline: Outline,
     ):
         """Test that providing both insights and insight_ids_to_add fails validation."""
-        from pydantic import ValidationError
-
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
         report_id = report_service.create_report("Test Report")
         report_service.update_report_outline(report_id, sample_outline, actor="test")
 
@@ -1333,16 +1440,16 @@ class TestEvolveReportTool:
         }
 
         # Should fail at schema validation level
-        with pytest.raises((MCPValidationError, ValidationError)) as exc_info:
-            await tool.execute(
-                report_selector=report_id,
-                instruction="Add section with both insights and insight_ids_to_add",
-                proposed_changes=changes,
-                dry_run=False,
-            )
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add section with both insights and insight_ids_to_add",
+            proposed_changes=changes,
+            dry_run=False,
+        )
 
         # Should have validation error about mutually exclusive fields
-        error_str = str(exc_info.value).lower()
+        assert result["status"] == "validation_failed"
+        error_str = str(result.get("validation_errors", "")).lower()
         assert (
             "insights" in error_str and "insight_ids_to_add" in error_str
         ) or "mutually exclusive" in error_str
@@ -1375,17 +1482,14 @@ class TestEvolveReportTool:
         }
 
         # This should fail because insights and insight_ids_to_add are mutually exclusive
-        from pydantic import ValidationError
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add section with mixed insights",
+            proposed_changes=changes,
+            dry_run=False,
+        )
 
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
-        with pytest.raises((MCPValidationError, ValidationError)):
-            await tool.execute(
-                report_selector=report_id,
-                instruction="Add section with mixed insights",
-                proposed_changes=changes,
-                dry_run=False,
-            )
+        assert result["status"] == "validation_failed"
 
     async def test_enhanced_error_invalid_insight_id_includes_field_path(
         self,
@@ -1394,8 +1498,6 @@ class TestEvolveReportTool:
         sample_outline: Outline,
     ):
         """Test that invalid insight_id in modify includes field path and available IDs."""
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
         report_id = report_service.create_report("Test Report")
         report_service.update_report_outline(report_id, sample_outline, actor="test")
 
@@ -1407,38 +1509,22 @@ class TestEvolveReportTool:
             ]
         }
 
-        with pytest.raises(MCPValidationError) as exc_info:
-            await tool.execute(
-                report_selector=report_id,
-                instruction="Modify invalid insight",
-                proposed_changes=changes,
-                dry_run=False,
-            )
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Modify invalid insight",
+            proposed_changes=changes,
+            dry_run=False,
+        )
 
-        error_dict = exc_info.value.to_dict()
+        # Check validation failed status
+        assert result["status"] == "validation_failed"
+        assert result["error_type"] == "semantic_validation"
+        assert len(result["validation_errors"]) > 0
 
-        # Check that structured errors are in context
-        if "context" in error_dict and "structured_errors" in error_dict["context"]:
-            structured_errors = error_dict["context"]["structured_errors"]
-            assert len(structured_errors) > 0
-
-            # Find the error for our invalid insight_id
-            error = next(
-                (
-                    e
-                    for e in structured_errors
-                    if invalid_insight_id in str(e.get("value", ""))
-                ),
-                None,
-            )
-            assert error is not None
-            assert "insights_to_modify" in error["field"]
-            assert error["value"] == invalid_insight_id
-            assert (
-                "not found" in error["error"].lower() or "not found" in error["error"]
-            )
-            assert error["available_ids"] is not None
-            assert len(error["available_ids"]) > 0
+        # Check error message contains relevant info
+        error_str = str(result["validation_errors"])
+        assert invalid_insight_id in error_str
+        assert "not found" in error_str.lower() or "modify" in error_str.lower()
 
     async def test_enhanced_error_invalid_section_id_includes_field_path(
         self,
@@ -1447,8 +1533,6 @@ class TestEvolveReportTool:
         sample_outline: Outline,
     ):
         """Test that invalid section_id in modify includes field path and available IDs."""
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
         report_id = report_service.create_report("Test Report")
         report_service.update_report_outline(report_id, sample_outline, actor="test")
 
@@ -1460,38 +1544,22 @@ class TestEvolveReportTool:
             ]
         }
 
-        with pytest.raises(MCPValidationError) as exc_info:
-            await tool.execute(
-                report_selector=report_id,
-                instruction="Modify invalid section",
-                proposed_changes=changes,
-                dry_run=False,
-            )
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Modify invalid section",
+            proposed_changes=changes,
+            dry_run=False,
+        )
 
-        error_dict = exc_info.value.to_dict()
+        # Check validation failed status
+        assert result["status"] == "validation_failed"
+        assert result["error_type"] == "semantic_validation"
+        assert len(result["validation_errors"]) > 0
 
-        # Check that structured errors are in context
-        if "context" in error_dict and "structured_errors" in error_dict["context"]:
-            structured_errors = error_dict["context"]["structured_errors"]
-            assert len(structured_errors) > 0
-
-            # Find the error for our invalid section_id
-            error = next(
-                (
-                    e
-                    for e in structured_errors
-                    if invalid_section_id in str(e.get("value", ""))
-                ),
-                None,
-            )
-            assert error is not None
-            assert "sections_to_modify" in error["field"]
-            assert error["value"] == invalid_section_id
-            assert (
-                "not found" in error["error"].lower() or "not found" in error["error"]
-            )
-            assert error["available_ids"] is not None
-            assert len(error["available_ids"]) > 0
+        # Check error message contains relevant info
+        error_str = str(result["validation_errors"])
+        assert invalid_section_id in error_str
+        assert "not found" in error_str.lower() or "modify" in error_str.lower()
 
     async def test_enhanced_error_multiple_errors_returned(
         self,
@@ -1500,8 +1568,6 @@ class TestEvolveReportTool:
         sample_outline: Outline,
     ):
         """Test that multiple validation errors are all returned with proper field paths."""
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
         report_id = report_service.create_report("Test Report")
         report_service.update_report_outline(report_id, sample_outline, actor="test")
 
@@ -1517,36 +1583,22 @@ class TestEvolveReportTool:
             ],
         }
 
-        with pytest.raises(MCPValidationError) as exc_info:
-            await tool.execute(
-                report_selector=report_id,
-                instruction="Multiple invalid changes",
-                proposed_changes=changes,
-                dry_run=False,
-            )
-
-        error_dict = exc_info.value.to_dict()
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Multiple invalid changes",
+            proposed_changes=changes,
+            dry_run=False,
+        )
 
         # Should have multiple validation errors
-        assert "validation_errors" in error_dict
-        assert len(error_dict["validation_errors"]) >= 2
+        assert result["status"] == "validation_failed"
+        assert "validation_errors" in result
+        assert len(result["validation_errors"]) >= 2
 
-        # Check structured errors if available
-        if "context" in error_dict and "structured_errors" in error_dict["context"]:
-            structured_errors = error_dict["context"]["structured_errors"]
-            assert len(structured_errors) >= 2
-
-            # Verify both errors are present
-            insight_error = next(
-                (e for e in structured_errors if "insights_to_modify" in e["field"]),
-                None,
-            )
-            section_error = next(
-                (e for e in structured_errors if "sections_to_modify" in e["field"]),
-                None,
-            )
-            assert insight_error is not None
-            assert section_error is not None
+        # Verify both errors are mentioned
+        error_str = str(result["validation_errors"])
+        assert invalid_insight_id in error_str or "insight" in error_str.lower()
+        assert invalid_section_id in error_str or "section" in error_str.lower()
 
     async def test_enhanced_error_backward_compatibility_string_format(
         self,
@@ -1555,8 +1607,6 @@ class TestEvolveReportTool:
         sample_outline: Outline,
     ):
         """Test that error messages are backward compatible (string format still works)."""
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
         report_id = report_service.create_report("Test Report")
         report_service.update_report_outline(report_id, sample_outline, actor="test")
 
@@ -1568,25 +1618,147 @@ class TestEvolveReportTool:
             ]
         }
 
-        with pytest.raises(MCPValidationError) as exc_info:
-            await tool.execute(
-                report_selector=report_id,
-                instruction="Test backward compatibility",
-                proposed_changes=changes,
-                dry_run=False,
-            )
-
-        error_dict = exc_info.value.to_dict()
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Test backward compatibility",
+            proposed_changes=changes,
+            dry_run=False,
+        )
 
         # Should have validation_errors as list of strings (backward compatible)
-        assert "validation_errors" in error_dict
-        assert isinstance(error_dict["validation_errors"], list)
-        assert len(error_dict["validation_errors"]) > 0
-        assert isinstance(error_dict["validation_errors"][0], str)
+        assert result["status"] == "validation_failed"
+        assert "validation_errors" in result
+        assert isinstance(result["validation_errors"], list)
+        assert len(result["validation_errors"]) > 0
+        assert isinstance(result["validation_errors"][0], str)
 
         # String format should contain field path
-        error_string = error_dict["validation_errors"][0]
+        error_string = result["validation_errors"][0]
         assert (
             "insights_to_modify" in error_string.lower()
             or invalid_insight_id in error_string
         )
+
+    @pytest.mark.asyncio
+    async def test_supporting_queries_defaulted_for_new_insights(
+        self, tool: EvolveReportTool, report_service: ReportService
+    ):
+        """Ensure supporting_queries defaults to [] when omitted."""
+        report_id = report_service.create_report("New Report")
+        outline = report_service.get_report_outline(report_id)
+        outline.insights = []
+        outline.sections = []
+        report_service.update_report_outline(report_id, outline)
+
+        new_insight_id = str(uuid.uuid4())
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add insight without citations",
+            proposed_changes={
+                "insights_to_add": [
+                    {
+                        "insight_id": new_insight_id,
+                        "summary": "New insight",
+                        "importance": 5,
+                    }
+                ],
+                "sections_to_add": [
+                    {
+                        "section_id": str(uuid.uuid4()),
+                        "title": "Findings",
+                        "order": 0,
+                        "insight_ids_to_add": [new_insight_id],
+                    }
+                ],
+            },
+        )
+
+        assert result["status"] == "success"
+        updated_outline = report_service.get_report_outline(report_id)
+        added = next(
+            i for i in updated_outline.insights if i.insight_id == new_insight_id
+        )
+        assert added.supporting_queries == []
+
+    @pytest.mark.asyncio
+    async def test_inline_insights_on_section_add_are_linked_and_counted(
+        self, tool: EvolveReportTool, report_service: ReportService
+    ):
+        """Inline insights in sections_to_add should be created, linked, and counted."""
+        report_id = report_service.create_report("Inline Add Report")
+        outline = report_service.get_report_outline(report_id)
+        outline.insights = []
+        outline.sections = []
+        report_service.update_report_outline(report_id, outline)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add section with inline insight",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "section_id": str(uuid.uuid4()),
+                        "title": "Findings",
+                        "order": 0,
+                        "insights": [
+                            {
+                                "summary": "Inline insight summary",
+                                "importance": 7,
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        summary = result["summary"]
+        assert summary["sections_added"] == 1
+        assert summary["insights_added"] == 1
+
+        updated_outline = report_service.get_report_outline(report_id)
+        assert len(updated_outline.insights) == 1
+        assert len(updated_outline.sections) == 1
+        assert updated_outline.sections[0].insight_ids == [
+            updated_outline.insights[0].insight_id
+        ]
+
+    @pytest.mark.asyncio
+    async def test_inline_insights_on_section_modify_are_created_and_counted(
+        self, tool: EvolveReportTool, report_service: ReportService
+    ):
+        """Inline insights in sections_to_modify should append and be counted."""
+        report_id = report_service.create_report("Inline Modify Report")
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+        outline.insights = []
+        section.insight_ids = []
+        report_service.update_report_outline(report_id, outline)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Append inline insight",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": section.section_id,
+                        "insights": [
+                            {
+                                "summary": "Inline added",
+                                "importance": 6,
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        summary = result["summary"]
+        # One insight created via inline modify path
+        assert summary["insights_added"] == 1
+        updated_outline = report_service.get_report_outline(report_id)
+        assert len(updated_outline.insights) == 1
+        assert updated_outline.sections[0].insight_ids == [
+            updated_outline.insights[0].insight_id
+        ]

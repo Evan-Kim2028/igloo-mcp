@@ -3,6 +3,43 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.3.2] - 2025-11-27
+
+### Changed (Breaking)
+- **Default result truncation limits significantly reduced** to optimize token usage and prevent context window overflow:
+  - `RESULT_SIZE_LIMIT_MB`: 100 MB → 1 MB (100x reduction)
+  - `RESULT_KEEP_FIRST_ROWS`: 1000 → 500 (2x reduction)
+  - `RESULT_KEEP_LAST_ROWS`: 1000 → 50 (20x reduction)
+  - `RESULT_TRUNCATION_THRESHOLD`: 10000 → 1000 (10x reduction)
+  - **Impact**: Large query results will be truncated more aggressively by default
+  - **Mitigation**: Configure via environment variables if you need larger limits:
+    - `IGLOO_MCP_RESULT_SIZE_LIMIT_MB`
+    - `IGLOO_MCP_RESULT_KEEP_FIRST_ROWS`
+    - `IGLOO_MCP_RESULT_KEEP_LAST_ROWS`
+    - `IGLOO_MCP_RESULT_TRUNCATION_THRESHOLD`
+
+### Fixed
+- **#48 timeout_seconds type error**: `execute_query` now accepts both integer and numeric string values (e.g., `240` or `"240"`), coercing strings to integers during validation. Fixes MCP client compatibility issues where timeouts were passed as strings.
+- **#60 render_report preview**: `include_preview=True` now correctly returns truncated rendered content in the response. Also fixed `output_path` to always return the resolved absolute path to the rendered file (or QMD path for dry runs).
+- **#59 evolve_report stale warnings**: Warnings are now computed AFTER changes are applied, ensuring accurate reporting (e.g., no "Section has no insights" warning after linking insights).
+- **#58 supporting_queries optional**: `insights_to_add` now defaults `supporting_queries` to empty list `[]` when not provided, eliminating boilerplate for draft insights.
+- **#57 inline insights**: `sections_to_add` and `sections_to_modify` now support inline `insights` array for atomic insight creation and linking. Summary counts correctly reflect inline-created insights.
+
+### Added
+- **Section prose content**: Sections now support optional `content` and `content_format` fields for free-form narrative text (markdown by default), enabling richer report structure beyond insights.
+- **Status change support**: `evolve_report` now accepts `status_change` parameter to transition reports between `active`, `archived`, and `deleted` states with full audit trail.
+- **Citations field (model-level)**: Insights now have `citations` field alongside `supporting_queries` for future multi-source support (web/API/manual). Backward compatible shim ensures existing code continues working.
+- Enhanced `render_report` service to return usable `output_path` and optional `preview` in standardized response format.
+
+### Changed
+- **evolve_report validation**: Validation errors now return structured dictionaries (`status: "validation_failed"`) instead of raising exceptions, providing better MCP client compatibility.
+- Improved test coverage: 58/58 evolve_report tests passing, 18/18 render_report tests passing, all execute_query tests passing.
+
+### Infrastructure
+- Added comprehensive test suite for render service preview/output path behavior.
+- Updated tool schemas to match new validation return format.
+- Enhanced error messages with clearer field-level validation feedback.
+
 # [0.3.1] - 2025-11-24
 
 ### Fixed

@@ -52,11 +52,19 @@ format: {{ format }}
 {% if section.notes %}
 {{ section.notes }}
 {% endif %}
+{% if section.content %}
+{% if section.content_format == 'html' %}
+{{ section.content | safe }}
+{% else %}
+{{ section.content }}
+{% endif %}
+{% endif %}
 
 {% for insight_id in section.insight_ids %}
 {% set insight = outline.get_insight(insight_id) %}
 {% if insight %}
-{% set exec_id = insight.supporting_queries[0].execution_id if insight.supporting_queries and insight.supporting_queries|length > 0 else None %}
+{% set references = insight.citations if insight.citations else insight.supporting_queries %}
+{% set exec_id = references[0].execution_id if references and references|length > 0 else None %}
 {% set citation_num = citation_map.get(exec_id) if exec_id else None %}
 {{ insight.summary }}{% if citation_num %} [{{ citation_num }}]{% endif %}
 
@@ -93,6 +101,13 @@ format: {{ format }}
 
 {% if section.notes %}
 {{ section.notes }}
+{% endif %}
+{% if section.content %}
+{% if section.content_format == 'html' %}
+{{ section.content | safe }}
+{% else %}
+{{ section.content }}
+{% endif %}
 {% endif %}
 
 {% for insight_id in section.insight_ids %}

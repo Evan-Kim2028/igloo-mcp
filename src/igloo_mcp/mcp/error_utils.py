@@ -77,6 +77,7 @@ def wrap_timeout_error(
     """
     hints = [
         f"Increase timeout: timeout_seconds={max(timeout_seconds * 2, 480)}",
+        "Filter by clustering keys: Check catalog for clustered columns",
         "Add WHERE/LIMIT clause to reduce data volume",
         "Use larger warehouse for complex queries",
     ]
@@ -90,7 +91,10 @@ def wrap_timeout_error(
         ]
         hints.extend(detailed_hints)
 
-    message = f"{operation.capitalize()} timeout after {timeout_seconds}s"
+    message = (
+        f"{operation.capitalize()} timeout after {timeout_seconds}s. "
+        "filter by clustering keys or catalog columns first, then add WHERE/LIMIT before increasing timeout."
+    )
     if verbose:
         message += ". Use verbose_errors=False for compact error message."
 

@@ -128,13 +128,14 @@ class SearchReportTool(MCPTool):
             status = "active"
 
         # Validate status
-        if status not in ("active", "archived"):
+        if status not in ("active", "archived", "deleted"):
             raise MCPValidationError(
-                f"Invalid status '{status}'. Must be 'active' or 'archived'.",
+                f"Invalid status '{status}'. Must be 'active', 'archived', or 'deleted'.",
                 validation_errors=[f"Invalid status: {status}"],
                 hints=[
                     "Use status='active' to search active reports only",
                     "Use status='archived' to search archived reports only",
+                    "Use status='deleted' to search deleted reports",
                     "Status parameter is case-sensitive",
                 ],
                 context={"request_id": request_id},
@@ -305,9 +306,9 @@ class SearchReportTool(MCPTool):
                 "status": {
                     "type": "string",
                     "description": "Filter by report status",
-                    "enum": ["active", "archived"],
+                    "enum": ["active", "archived", "deleted"],
                     "default": "active",
-                    "examples": ["active", "archived"],
+                    "examples": ["active", "archived", "deleted"],
                 },
                 "limit": {
                     "type": "integer",

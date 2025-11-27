@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class DatasetSource(BaseModel):
@@ -166,6 +166,10 @@ class Insight(BaseModel):
         default_factory=list,
         description="List of query references that support this insight",
     )
+    citations: List[DatasetSource] = Field(
+        default_factory=list,
+        description="List of citation references (preferred over supporting_queries)",
+    )
     draft_changes: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Pending changes from LLM evolution",
@@ -180,6 +184,15 @@ class Insight(BaseModel):
         except ValueError as e:
             raise ValueError(f"insight_id must be valid UUID string: {v}") from e
         return v
+
+    @model_validator(mode="after")
+    def _sync_citations(self) -> "Insight":
+        """Keep citations and supporting_queries in sync for compatibility."""
+        if not self.citations and self.supporting_queries:
+            self.citations = list(self.supporting_queries)
+        if not self.supporting_queries and self.citations:
+            self.supporting_queries = list(self.citations)
+        return self
 
 
 class Section(BaseModel):
@@ -212,6 +225,15 @@ class Section(BaseModel):
     notes: Optional[str] = Field(
         default=None,
         description="Optional human notes or prose for this section",
+    )
+    content: Optional[str] = Field(
+        default=None,
+        description="Optional prose content for this section (e.g., markdown)",
+    )
+    content_format: Optional[str] = Field(
+        default="markdown",
+        description="Format for content field (markdown, html, plain)",
+        pattern="^(markdown|html|plain)$",
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
@@ -355,7 +377,7 @@ class AuditEvent(BaseModel):
     action_type: str = Field(
         ...,
         description="Type of action performed",
-        pattern=r"^(create|evolve|revert|rename|tag_update|render|manual_edit_detected|backup)$",
+        pattern=r"^(create|evolve|revert|rename|tag_update|render|manual_edit_detected|backup|status_change|fork|synthesize|archive|delete)$",
     )
     request_id: Optional[str] = Field(
         default=None,
@@ -420,8 +442,8 @@ class IndexEntry(BaseModel):
     )
     status: str = Field(
         "active",
-        description="Report status: active or archived",
-        pattern="^(active|archived)$",
+        description="Report status: active, archived, or deleted",
+        pattern="^(active|archived|deleted)$",
     )
     path: str = Field(
         ...,

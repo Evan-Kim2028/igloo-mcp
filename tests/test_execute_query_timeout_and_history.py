@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from igloo_mcp.config import Config, SnowflakeConfig
+from igloo_mcp.mcp.exceptions import MCPExecutionError
 from igloo_mcp.mcp.tools.execute_query import ExecuteQueryTool
 from igloo_mcp.service_layer.query_service import QueryService
 from tests.helpers.fake_snowflake_connector import (
@@ -32,7 +33,7 @@ async def test_timeout_cancels_and_logs_history(tmp_path, monkeypatch):
     )
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
-    with pytest.raises(RuntimeError) as exc:
+    with pytest.raises((RuntimeError, MCPExecutionError)) as exc:
         await tool.execute(statement="SELECT LONG_RUNNING", timeout_seconds=1)
     assert "Query timeout" in str(exc.value)
 
@@ -125,6 +126,26 @@ async def test_timeout_seconds_accepts_numeric_string(tmp_path, monkeypatch):
     data = history_path.read_text(encoding="utf-8").strip().splitlines()
     event = json.loads(data[-1])
     assert event["timeout_seconds"] == 45
+
+
+@pytest.mark.asyncio
+async def test_timeout_seconds_accepts_floatish_values(tmp_path, monkeypatch):
+    history_path = tmp_path / "history.jsonl"
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
+
+    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+    service = FakeSnowflakeService(
+        [FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}])]
+    )
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
+
+    res = await tool.execute(statement="SELECT QUICK", timeout_seconds=30.0)
+    assert res["rowcount"] == 1
+
+    event = json.loads(
+        history_path.read_text(encoding="utf-8").strip().splitlines()[-1]
+    )
+    assert event["timeout_seconds"] == 30
 
 
 @pytest.mark.asyncio
@@ -257,7 +278,7 @@ async def test_timeout_error_message_prioritizes_catalog_filtering(
     )
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
-    with pytest.raises(RuntimeError) as exc:
+    with pytest.raises((RuntimeError, MCPExecutionError)) as exc:
         await tool.execute(statement="SELECT * FROM large_table", timeout_seconds=1)
 
     error_msg = str(exc.value)

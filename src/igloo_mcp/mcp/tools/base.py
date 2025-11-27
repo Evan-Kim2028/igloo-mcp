@@ -187,6 +187,9 @@ def tool_error_handler(
                     mcp_error.context["request_id"] = request_id
                 # Re-raise MCP exceptions as-is - they're already properly formatted
                 raise
+            except TypeError:
+                # Bubble TypeError so tests and callers get the original signature issue
+                raise
             except ValidationError as e:
                 # Convert Pydantic validation errors to MCPValidationError
                 errors = e.errors()

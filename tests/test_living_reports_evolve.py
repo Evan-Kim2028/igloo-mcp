@@ -13,6 +13,7 @@ from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
 
 
+@pytest.mark.asyncio
 class TestEvolveReportTool:
     """Test EvolveReportTool functionality."""
 
@@ -54,10 +55,7 @@ class TestEvolveReportTool:
     def test_tool_properties(self, tool: EvolveReportTool) -> None:
         """Test tool properties."""
         assert tool.name == "evolve_report"
-        assert (
-            tool.description
-            == "⚠️ EXPERIMENTAL: Evolve a living report with LLM assistance (stub implementation)"
-        )
+        assert "Evolve a living report" in tool.description
         assert tool.category == "reports"
         assert "reports" in tool.tags
         assert "evolution" in tool.tags
@@ -227,7 +225,7 @@ class TestEvolveReportTool:
             "sections_to_remove": [],
         }
 
-        new_outline = tool._apply_changes(sample_outline, changes)
+        new_outline, _ = tool._apply_changes(sample_outline, changes)
 
         assert len(new_outline.insights) == 1
         assert new_outline.insights[0].insight_id == new_insight_id
@@ -269,7 +267,7 @@ class TestEvolveReportTool:
             "sections_to_remove": [],
         }
 
-        new_outline = tool._apply_changes(outline, changes)
+        new_outline, _ = tool._apply_changes(outline, changes)
 
         assert len(new_outline.insights) == 0
         assert insight_id not in new_outline.sections[0].insight_ids

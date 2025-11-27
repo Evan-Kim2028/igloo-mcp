@@ -41,10 +41,8 @@ class TestCreateReportTool:
     def test_tool_properties(self, tool):
         """Test tool properties."""
         assert tool.name == "create_report"
-        assert (
-            tool.description
-            == "Create a new living report with optional template and tags"
-        )
+        assert "Create a new living report" in tool.description
+        assert "template" in tool.description
         assert tool.category == "reports"
         assert "reports" in tool.tags
         assert "creation" in tool.tags
@@ -145,14 +143,16 @@ class TestCreateReportTool:
 
     @pytest.mark.asyncio
     async def test_create_report_invalid_template(self, tool):
-        """Test report creation with invalid template."""
-        result = await tool.execute(
-            title="Invalid Template Report", template="nonexistent_template"
-        )
+        """Test report creation with invalid template raises MCPValidationError."""
+        from igloo_mcp.mcp.exceptions import MCPValidationError
 
-        assert result["status"] == "validation_failed"
-        assert result["error_type"] == "invalid_template"
-        assert "Invalid template" in result["message"]
+        with pytest.raises(MCPValidationError) as exc_info:
+            await tool.execute(
+                title="Invalid Template Report", template="nonexistent_template"
+            )
+
+        assert "Invalid template" in str(exc_info.value)
+        assert "nonexistent_template" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_create_report_actor_is_agent(self, tool, report_service):
@@ -192,6 +192,7 @@ class TestCreateReportTool:
             "monthly_sales",
             "quarterly_review",
             "deep_dive",
+            "analyst_v1",
         ]
         assert template_prop["default"] == "default"
 

@@ -179,25 +179,45 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
             original_middleware = middleware
 
             async def conditional_sql_validation_middleware(
-                context: Any,
-                call_next: Any,
+                *args: Any, **kwargs: Any
             ) -> Any:
-                """Middleware wrapper that only applies SQL validation to execute_query.
+                """Middleware wrapper that only applies SQL validation to execute_query."""
 
-                FastMCP 2.13+ passes (context, call_next) instead of the older
-                (call_next, name, arguments) signature. We extract the tool name from
-                the message context and only delegate to the original middleware for
-                execute_query. All other tools bypass SQL validation.
-                """
-                message = getattr(context, "message", None)
-                tool_name = getattr(message, "name", None)
+                # FastMCP 2.13+ passes (context, call_next); legacy path passes
+                # (call_next, name, arguments). Detect signature dynamically.
+                message = None
+                tool_name = None
+                arguments: Dict[str, Any] | None = None
+                call_next = None
+
+                # Prefer kwargs to avoid duplicate values when both are provided
+                if kwargs:
+                    call_next = kwargs.get("call_next")
+                    tool_name = kwargs.get("name")
+                    arguments = kwargs.get("arguments")
+
+                # If first arg looks like a Context, extract the tool name from message
+                if not tool_name and args and hasattr(args[0], "message"):
+                    context = args[0]
+                    message = getattr(context, "message", None)
+                    tool_name = getattr(message, "name", None)
+                    arguments = getattr(message, "arguments", {}) if message else {}
+                    if call_next is None and len(args) >= 2:
+                        call_next = args[1]
+                elif tool_name is None and len(args) >= 3:
+                    # Legacy signature (call_next, name, arguments)
+                    call_next, tool_name, arguments = args[0], args[1], args[2]
+
+                # If we still couldn't resolve, fall back to original middleware
+                if tool_name is None or call_next is None:
+                    return await original_middleware(*args, **kwargs)
 
                 if tool_name == "execute_query":
+                    # Let the original middleware handle execute_query
                     try:
-                        return await original_middleware(context, call_next=call_next)
+                        return await original_middleware(*args, **kwargs)
                     except TypeError:
-                        # Fall back to legacy (call_next, name, arguments) signature
-                        arguments = getattr(message, "arguments", {}) if message else {}
+                        # Legacy signature fallback
                         return await original_middleware(
                             call_next, tool_name, arguments
                         )
@@ -206,7 +226,12 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
                     "Skipping SQL validation for non-SQL tool: %s",
                     tool_name or "<unknown>",
                 )
-                return await call_next(context)
+                # Call next middleware in chain with the appropriate signature
+                if message is not None:
+                    # New-style middleware: call_next(context)
+                    return await call_next(args[0])
+                # Legacy middleware expects (call_next, name, arguments)
+                return await call_next(call_next, tool_name, arguments)
 
             # Replace the middleware with our conditional wrapper
             middleware_stack[i] = conditional_sql_validation_middleware
@@ -353,15 +378,15 @@ def register_igloo_mcp(
             Optional[str], Field(description="Role override", default=None)
         ] = None,
         timeout_seconds: Annotated[
-            Optional[int],
+            Optional[int | str],
             Field(
                 description=(
-                    f"Query timeout in seconds (default: 30s from config). "
-                    f"Integer between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS}. "
-                    f"Maximum timeout is configurable via IGLOO_MCP_MAX_QUERY_TIMEOUT_SECONDS environment variable."
+                    "Query timeout in seconds (default: 30s from config). "
+                    "Accepts either an integer or a numeric string. "
+                    f"Must resolve to a value between {MIN_QUERY_TIMEOUT_SECONDS} and "
+                    f"{MAX_QUERY_TIMEOUT_SECONDS}. Maximum timeout is configurable via "
+                    "IGLOO_MCP_MAX_QUERY_TIMEOUT_SECONDS environment variable."
                 ),
-                ge=MIN_QUERY_TIMEOUT_SECONDS,
-                le=MAX_QUERY_TIMEOUT_SECONDS,
                 default=None,
             ),
         ] = None,
@@ -433,6 +458,14 @@ def register_igloo_mcp(
         dry_run: Annotated[
             bool, Field(description="Validate without applying changes", default=False)
         ] = False,
+        status_change: Annotated[
+            Optional[str],
+            Field(
+                description="Optional status change for the report",
+                default=None,
+                pattern="^(active|archived|deleted)$",
+            ),
+        ] = None,
     ) -> Dict[str, Any]:
         """Evolve report - delegates to EvolveReportTool."""
         return await evolve_report_inst.execute(
@@ -441,6 +474,7 @@ def register_igloo_mcp(
             proposed_changes=proposed_changes,
             constraints=constraints,
             dry_run=dry_run,
+            status_change=status_change,
         )
 
     @server.tool(
@@ -523,75 +557,15 @@ def register_igloo_mcp(
         Note: This is a non-SQL tool that operates on file system, not Snowflake.
         It should not be subject to SQL validation from upstream middleware.
         """
-        try:
-            return await create_report_inst.execute(
-                title=title,
-                template=template,
-                tags=tags,
-                description=description,
-            )
-        except Exception as e:
-            # Catch SQL validation errors from upstream middleware that incorrectly
-            # validates non-SQL tools. The error message typically contains "Statement type"
-            # and "not allowed" when upstream middleware tries to validate tool names as SQL.
-            error_msg = str(e).lower()
-            error_type = type(e).__name__
-
-            # Check if this is a SQL validation error that should be bypassed
-            is_sql_validation_error = (
-                (
-                    "statement type" in error_msg
-                    and (
-                        "not allowed" in error_msg
-                        or "create" in error_msg
-                        or "permission" in error_msg
-                    )
-                )
-                or ("sql" in error_msg and "permission" in error_msg)
-                or ("validation" in error_msg and "sql" in error_msg)
-            )
-
-            if is_sql_validation_error:
-                # This is a non-SQL tool - log the issue but proceed anyway
-                # The middleware patch should prevent this, but if it still happens,
-                # we'll log it and try to execute the tool directly
-                logger.warning(
-                    "Upstream SQL validation incorrectly applied to non-SQL tool 'create_report', bypassing",
-                    extra={
-                        "error": str(e),
-                        "error_type": error_type,
-                        "tool": "create_report",
-                    },
-                )
-                # Try to execute directly, bypassing middleware
-                try:
-                    return await create_report_inst.execute(
-                        title=title,
-                        template=template,
-                        tags=tags,
-                        description=description,
-                    )
-                except Exception as direct_error:
-                    # If direct execution also fails, raise the original error
-                    logger.error(
-                        "Direct execution of create_report also failed",
-                        extra={
-                            "original_error": str(e),
-                            "direct_error": str(direct_error),
-                        },
-                    )
-                    raise MCPExecutionError(
-                        f"Report creation failed: {str(direct_error)}",
-                        operation="create_report",
-                        original_error=direct_error,
-                        hints=[
-                            "Check file system permissions",
-                            "Verify reports directory is writable",
-                        ],
-                    ) from direct_error
-
-            # Re-raise other exceptions as-is
-            raise
+        # The middleware patch should prevent SQL validation on non-SQL tools.
+        # If SQL validation errors still occur, they indicate a middleware patching issue
+        # that should be fixed there, not worked around here with redundant retries.
+        return await create_report_inst.execute(
+            title=title,
+            template=template,
+            tags=tags,
+            description=description,
+        )
 
     @server.tool(
         name="search_report",
@@ -621,7 +595,7 @@ def register_igloo_mcp(
             Field(
                 description="Filter by report status",
                 default="active",
-                pattern="^(active|archived)$",
+                pattern="^(active|archived|deleted)$",
             ),
         ] = "active",
         limit: Annotated[
