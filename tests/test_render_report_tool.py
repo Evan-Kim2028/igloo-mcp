@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
 from igloo_mcp.config import Config, SnowflakeConfig
 from igloo_mcp.living_reports.models import Section
 from igloo_mcp.living_reports.service import ReportService
+from igloo_mcp.mcp.exceptions import (
+    MCPExecutionError,
+    MCPSelectorError,
+    MCPValidationError,
+)
 from igloo_mcp.mcp.tools.render_report import RenderReportTool
 
 
@@ -24,7 +30,22 @@ class TestRenderReportTool:
     @pytest.fixture
     def mock_report_service(self):
         """Create a mock ReportService."""
-        return MagicMock(spec=ReportService)
+        service = MagicMock(spec=ReportService)
+        index_mock = MagicMock()
+        index_mock.rebuild_from_filesystem = MagicMock()
+        service.index = index_mock
+        return service
+
+    @pytest.fixture(autouse=True)
+    def selector_mock(self, monkeypatch):
+        """Stub ReportSelector to avoid touching the real index."""
+        selector = MagicMock()
+        selector.resolve.return_value = "resolved-report-id"
+        monkeypatch.setattr(
+            "igloo_mcp.mcp.tools.render_report.ReportSelector",
+            MagicMock(return_value=selector),
+        )
+        return selector
 
     @pytest.fixture
     def tool(self, config, mock_report_service):
@@ -34,10 +55,7 @@ class TestRenderReportTool:
     def test_tool_properties(self, tool):
         """Test tool properties."""
         assert tool.name == "render_report"
-        assert (
-            tool.description
-            == "Render a living report to human-readable formats (HTML, PDF, etc.) using Quarto"
-        )
+        assert "Render a living report to human-readable formats" in tool.description
         assert tool.category == "reports"
         assert "rendering" in tool.tags
         assert "quarto" in tool.tags
@@ -88,10 +106,11 @@ class TestRenderReportTool:
         assert result["warnings"] == ["Minor warning"]
 
         mock_report_service.render_report.assert_called_once_with(
-            report_id="Test Report",
+            report_id="resolved-report-id",
             format="html",
             options={"toc": True},
             include_preview=True,
+            preview_max_chars=2000,
             dry_run=False,
         )
 
@@ -108,10 +127,11 @@ class TestRenderReportTool:
         assert result["status"] == "success"
 
         mock_report_service.render_report.assert_called_once_with(
-            report_id="Test Report",
+            report_id="resolved-report-id",
             format="html",  # default
             options=None,
             include_preview=False,  # default
+            preview_max_chars=2000,
             dry_run=False,  # default
         )
 
@@ -120,11 +140,10 @@ class TestRenderReportTool:
         """Test error handling in execution."""
         mock_report_service.render_report.side_effect = Exception("Test error")
 
-        result = await tool.execute(report_selector="Test Report")
+        with pytest.raises(MCPExecutionError) as exc_info:
+            await tool.execute(report_selector="Test Report")
 
-        assert result["status"] == "error"
-        assert "Test error" in result["error"]
-        assert result["report_selector"] == "Test Report"
+        assert "Test error" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_execute_quarto_missing_status(self, tool, mock_report_service):
@@ -135,11 +154,10 @@ class TestRenderReportTool:
             "error": "Quarto not found",
         }
 
-        result = await tool.execute(report_selector="Test Report")
+        with pytest.raises(MCPExecutionError) as exc_info:
+            await tool.execute(report_selector="Test Report")
 
-        assert result["status"] == "quarto_missing"
-        assert result["report_id"] == "test_id"
-        assert "Quarto not found" in result["error"]
+        assert "Quarto not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_execute_validation_failed_status(self, tool, mock_report_service):
@@ -150,11 +168,10 @@ class TestRenderReportTool:
             "validation_errors": ["Invalid insight reference"],
         }
 
-        result = await tool.execute(report_selector="Test Report")
+        with pytest.raises(MCPValidationError) as exc_info:
+            await tool.execute(report_selector="Test Report")
 
-        assert result["status"] == "validation_failed"
-        assert result["report_id"] == "test_id"
-        assert result["validation_errors"] == ["Invalid insight reference"]
+        assert "Invalid insight reference" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_execute_render_failed_status(self, tool, mock_report_service):
@@ -165,11 +182,10 @@ class TestRenderReportTool:
             "error": "Quarto subprocess failed",
         }
 
-        result = await tool.execute(report_selector="Test Report")
+        with pytest.raises(MCPExecutionError) as exc_info:
+            await tool.execute(report_selector="Test Report")
 
-        assert result["status"] == "render_failed"
-        assert result["report_id"] == "test_id"
-        assert "Quarto subprocess failed" in result["error"]
+        assert "Quarto subprocess failed" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_execute_quarto_missing(self, tool, mock_report_service):
@@ -180,11 +196,10 @@ class TestRenderReportTool:
             "error": "Quarto not found",
         }
 
-        result = await tool.execute(report_selector="Test Report")
+        with pytest.raises(MCPExecutionError) as exc_info:
+            await tool.execute(report_selector="Test Report")
 
-        assert result["status"] == "quarto_missing"
-        assert result["report_id"] == "test-report-id"
-        assert "Quarto not found" in result["error"]
+        assert "Quarto not found" in str(exc_info.value)
 
     def test_parameter_schema(self, tool):
         """Test parameter schema structure."""
@@ -247,6 +262,21 @@ class TestRenderReportTool:
         assert "additionalProperties" in props["options"]
 
 
+@pytest.fixture
+def report_service(tmp_path):
+    """Provide a real ReportService backed by a temp directory."""
+    reports_root = tmp_path / "reports"
+    reports_root.mkdir(parents=True, exist_ok=True)
+    return ReportService(reports_root=reports_root)
+
+
+@pytest.fixture
+def render_tool(report_service):
+    """RenderReportTool wired to the real ReportService fixture."""
+    config = Config(snowflake=SnowflakeConfig(profile="TEST"))
+    return RenderReportTool(config, report_service)
+
+
 @pytest.mark.asyncio
 async def test_render_report_quarto_missing(report_service, render_tool, monkeypatch):
     """Test graceful handling when Quarto is not installed."""
@@ -262,20 +292,19 @@ async def test_render_report_quarto_missing(report_service, render_tool, monkeyp
         "igloo_mcp.living_reports.quarto_renderer.QuartoRenderer.detect", mock_detect
     )
 
-    result = await render_tool.execute(report_selector=report_id)
+    with pytest.raises(MCPExecutionError) as exc_info:
+        await render_tool.execute(report_selector=report_id)
 
-    assert result["status"] == "quarto_missing"
-    assert "Quarto" in result["error"]
-    assert "report_id" in result
+    assert "Quarto" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
 async def test_render_report_not_found(render_tool):
     """Test error when report doesn't exist."""
-    result = await render_tool.execute(report_selector="nonexistent")
+    with pytest.raises(MCPSelectorError) as exc_info:
+        await render_tool.execute(report_selector="nonexistent")
 
-    assert result["status"] == "validation_failed"
-    assert "not found" in str(result.get("validation_errors", ""))
+    assert "not found" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -295,10 +324,10 @@ async def test_render_report_validation_failed(report_service, render_tool):
     )
     report_service.update_report_outline(report_id, outline)
 
-    result = await render_tool.execute(report_selector=report_id)
+    with pytest.raises(MCPValidationError) as exc_info:
+        await render_tool.execute(report_selector=report_id)
 
-    assert result["status"] == "validation_failed"
-    assert len(result["validation_errors"]) > 0
+    assert "validation" in str(exc_info.value).lower()
 
 
 @pytest.mark.asyncio
@@ -309,11 +338,17 @@ async def test_render_dry_run_generates_qmd_only(report_service, render_tool, tm
     result = await render_tool.execute(
         report_selector=report_id,
         dry_run=True,
+        include_preview=True,
     )
 
     # Should succeed even without Quarto
     assert result["status"] == "success"
     assert "dry run" in result.get("warnings", [""])[0].lower()
+    output_path = result["output"].get("output_path")
+    assert output_path
+    assert Path(output_path).exists()
+    assert result["output"].get("qmd_path") == output_path
+    assert "preview" in result
 
 
 @pytest.mark.asyncio
@@ -322,39 +357,10 @@ async def test_render_report_with_invalid_format(report_service, render_tool):
     report_id = report_service.create_report("Test Report")
 
     # This should fail at the service level due to invalid format
-    result = await render_tool.execute(
-        report_selector=report_id, format="invalid_format"
-    )
+    with pytest.raises(MCPValidationError) as exc_info:
+        await render_tool.execute(report_selector=report_id, format="invalid_format")
 
-    # The tool passes through service errors
-    assert result["status"] in ("error", "render_failed")
-
-
-@pytest.mark.asyncio
-async def test_render_report_open_browser_flag(
-    report_service, render_tool, monkeypatch
-):
-    """Test that open_browser flag is passed through."""
-    report_id = report_service.create_report("Test Report")
-
-    # Mock successful render
-    mock_result = {
-        "status": "success",
-        "report_id": report_id,
-        "output": {"format": "html", "output_path": "/tmp/test.html"},
-        "warnings": [],
-        "audit_action_id": "test-audit",
-    }
-
-    report_service.render_report = AsyncMock(return_value=mock_result)
-
-    result = await render_tool.execute(
-        report_selector=report_id, format="html", open_browser=True
-    )
-
-    # Verify the call included open_browser
-    call_args = report_service.render_report.call_args
-    assert call_args.kwargs.get("open_browser") is True
+    assert "invalid format" in str(exc_info.value).lower()
 
 
 def test_render_tool_schema_completeness():

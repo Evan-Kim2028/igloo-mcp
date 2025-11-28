@@ -289,7 +289,7 @@ class ReportStorage:
         """Create timestamped backup of current outline.
 
         Returns:
-            Backup filename (e.g., 'outline.json.20231023T143022.bak')
+            Backup filename (e.g., 'outline.json.20231023T143022_123456.bak')
             or None if no backup created
         """
         if not self.outline_path.exists():
@@ -297,8 +297,9 @@ class ReportStorage:
 
         import datetime
 
-        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        timestamp_clean = timestamp.replace(":", "").replace("-", "").split(".")[0]
+        now = datetime.datetime.now(datetime.timezone.utc)
+        # Include microseconds to avoid filename collisions within the same second
+        timestamp_clean = now.strftime("%Y%m%dT%H%M%S") + f"_{now.microsecond:06d}"
         backup_filename = f"outline.json.{timestamp_clean}.bak"
         backup_path = self.backups_dir / backup_filename
 

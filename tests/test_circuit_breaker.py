@@ -236,6 +236,7 @@ def test_circuit_breaker_half_open_failure():
     assert breaker.state == CircuitState.OPEN
 
 
+@pytest.mark.slow
 class TestCircuitBreakerConcurrentAccess:
     """Test concurrent access scenarios for circuit breaker."""
 
@@ -396,6 +397,7 @@ class TestCircuitBreakerConcurrentAccess:
         assert len(successes) == 100, "Should have all successful calls"
 
 
+@pytest.mark.slow
 class TestCircuitBreakerTimingEdgeCases:
     """Test timing-related edge cases in circuit breaker."""
 
@@ -548,7 +550,7 @@ class TestCircuitBreakerTimingEdgeCases:
 
             # Try recovery
             try:
-                result = breaker.call(lambda: "recovered")
+                _ = breaker.call(lambda: "recovered")
                 results.append("recovery_success")
             except CircuitBreakerError:
                 results.append("recovery_failed_circuit_open")

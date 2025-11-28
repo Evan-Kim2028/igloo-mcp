@@ -95,6 +95,7 @@ class SearchReportTool(MCPTool):
         report_id: Optional[str] = None,
         status: Optional[str] = None,
         limit: int = 20,
+        fields: Optional[List[str]] = None,
         request_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute report search with fallback behavior.
@@ -105,6 +106,7 @@ class SearchReportTool(MCPTool):
             report_id: Optional exact report ID to search for
             status: Optional status filter ("active" or "archived"), default: "active"
             limit: Maximum number of results to return (1-50), default: 20
+            fields: Optional list of fields to return (default: all fields)
             request_id: Optional request correlation ID for tracing (auto-generated if not provided)
 
         Returns:
@@ -128,13 +130,14 @@ class SearchReportTool(MCPTool):
             status = "active"
 
         # Validate status
-        if status not in ("active", "archived"):
+        if status not in ("active", "archived", "deleted"):
             raise MCPValidationError(
-                f"Invalid status '{status}'. Must be 'active' or 'archived'.",
+                f"Invalid status '{status}'. Must be 'active', 'archived', or 'deleted'.",
                 validation_errors=[f"Invalid status: {status}"],
                 hints=[
                     "Use status='active' to search active reports only",
                     "Use status='archived' to search archived reports only",
+                    "Use status='deleted' to search deleted reports",
                     "Status parameter is case-sensitive",
                 ],
                 context={"request_id": request_id},
@@ -218,20 +221,54 @@ class SearchReportTool(MCPTool):
                 )
                 results = all_reports[:5]
 
-            # Convert IndexEntry objects to dicts
+            # Convert IndexEntry objects to dicts with optional field filtering
             reports_data = []
+            all_fields = [
+                "report_id",
+                "title",
+                "created_at",
+                "updated_at",
+                "tags",
+                "status",
+                "path",
+            ]
+
+            # Determine which fields to include
+            if fields:
+                # Validate requested fields
+                invalid_fields = [f for f in fields if f not in all_fields]
+                if invalid_fields:
+                    raise MCPValidationError(
+                        f"Invalid fields: {', '.join(invalid_fields)}",
+                        validation_errors=[
+                            f"Unknown field: {f}" for f in invalid_fields
+                        ],
+                        hints=[
+                            f"Valid fields are: {', '.join(all_fields)}",
+                            "Use fields=['report_id', 'title'] for minimal responses",
+                        ],
+                        context={"request_id": request_id},
+                    )
+                selected_fields = fields
+            else:
+                selected_fields = all_fields
+
+            # Build report data with selected fields
+            field_map = {
+                "report_id": lambda e: e.report_id,
+                "title": lambda e: e.current_title,
+                "created_at": lambda e: e.created_at,
+                "updated_at": lambda e: e.updated_at,
+                "tags": lambda e: e.tags,
+                "status": lambda e: e.status,
+                "path": lambda e: e.path,
+            }
+
             for entry in results:
-                reports_data.append(
-                    {
-                        "report_id": entry.report_id,
-                        "title": entry.current_title,
-                        "created_at": entry.created_at,
-                        "updated_at": entry.updated_at,
-                        "tags": entry.tags,
-                        "status": entry.status,
-                        "path": entry.path,
-                    }
-                )
+                report_dict = {}
+                for field in selected_fields:
+                    report_dict[field] = field_map[field](entry)
+                reports_data.append(report_dict)
 
             total_duration = (time.time() - start_time) * 1000
 
@@ -305,9 +342,9 @@ class SearchReportTool(MCPTool):
                 "status": {
                     "type": "string",
                     "description": "Filter by report status",
-                    "enum": ["active", "archived"],
+                    "enum": ["active", "archived", "deleted"],
                     "default": "active",
-                    "examples": ["active", "archived"],
+                    "examples": ["active", "archived", "deleted"],
                 },
                 "limit": {
                     "type": "integer",

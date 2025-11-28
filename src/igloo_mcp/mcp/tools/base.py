@@ -9,7 +9,17 @@ import functools
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Optional, TypeVar
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Optional,
+    ParamSpec,
+    TypeVar,
+    cast,
+    overload,
+)
 
 from pydantic import BaseModel, ValidationError
 
@@ -31,6 +41,7 @@ from igloo_mcp.mcp.exceptions import (
 )
 
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 def ensure_request_id(request_id: Optional[str] = None) -> str:
@@ -145,7 +156,7 @@ class MCPTool(ABC):
 
 def tool_error_handler(
     tool_name: str,
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
+) -> Callable[[Callable[P, Any]], Callable[P, Any]]:
     """Decorator for consistent error handling in MCP tools.
 
     This decorator provides standardized error handling for all MCP tool
@@ -171,13 +182,19 @@ def tool_error_handler(
         ```
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    @overload
+    def decorator(func: Callable[P, Awaitable[T]]) -> Callable[P, Awaitable[T]]: ...
+
+    @overload
+    def decorator(func: Callable[P, T]) -> Callable[P, T]: ...
+
+    def decorator(func: Callable[P, Any]) -> Callable[P, Any]:
         @functools.wraps(func)
-        async def async_wrapper(*args: Any, **kwargs: Any) -> T:
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             logger = get_logger(f"igloo_mcp.mcp.tools.{tool_name}")
 
             try:
-                return await func(*args, **kwargs)
+                return await cast(Callable[P, Awaitable[T]], func)(*args, **kwargs)
             except (MCPValidationError, MCPExecutionError, MCPToolError) as mcp_error:
                 # Add request_id to MCP exceptions if available in kwargs
                 request_id = kwargs.get("request_id")
@@ -186,6 +203,9 @@ def tool_error_handler(
                         mcp_error.context = {}
                     mcp_error.context["request_id"] = request_id
                 # Re-raise MCP exceptions as-is - they're already properly formatted
+                raise
+            except TypeError:
+                # Bubble TypeError so tests and callers get the original signature issue
                 raise
             except ValidationError as e:
                 # Convert Pydantic validation errors to MCPValidationError
@@ -250,7 +270,7 @@ def tool_error_handler(
                 ) from e
 
         @functools.wraps(func)
-        def sync_wrapper(*args: Any, **kwargs: Any) -> T:
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             # Handle synchronous functions (though most tools are async)
             logger = get_logger(f"igloo_mcp.mcp.tools.{tool_name}")
 

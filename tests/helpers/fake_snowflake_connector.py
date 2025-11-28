@@ -72,6 +72,14 @@ class FakeSnowflakeService:
     def get_query_tag_param(self) -> Dict[str, Any]:
         return dict(self._query_tag_param)
 
+    def add_query_plan(self, plan: FakeQueryPlan) -> None:
+        """Add a new query plan to the service.
+
+        Plans are consumed in order as queries are executed.
+        Useful for system tests that dynamically add queries.
+        """
+        self._plans.append(plan.clone())
+
     def get_connection(self, **_: Any) -> "FakeSnowflakeConnection":
         plan = self._consume_plan()
         cursor = FakeSnowflakeCursor(plan, self.session_defaults)
@@ -173,7 +181,8 @@ class FakeSnowflakeCursor:
             self.description = None
             return
 
-        # Handle snapshot_session query: SELECT CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA()
+        # Handle snapshot_session query:
+        # SELECT CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA()
         if "CURRENT_ROLE()" in upper and "CURRENT_WAREHOUSE()" in upper:
             self._fetchone_map = {
                 "ROLE": self.session_defaults.role,

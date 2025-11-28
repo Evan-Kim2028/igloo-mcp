@@ -171,13 +171,26 @@ class ParallelQueryExecutor:
                     logger.exception(
                         f"❌ {object_name} failed after {attempt + 1} attempts: {error_msg}",
                     )
-                    return QueryResult(
-                        object_name=object_name,
-                        query=query,
-                        success=False,
-                        error=error_msg,
-                        execution_time=execution_time,
-                    )
+                return QueryResult(
+                    object_name=object_name,
+                    query=query,
+                    success=False,
+                    error=error_msg,
+                    execution_time=execution_time,
+                )
+
+        fallback_error_msg = (
+            "Query execution ended without producing a result after exhausting retries."
+        )
+        execution_time = time.time() - start_time
+        return QueryResult(
+            object_name=object_name,
+            query=query,
+            success=False,
+            error=fallback_error_msg,
+            execution_time=execution_time,
+            row_count=0,
+        )
 
     async def execute_queries_async(
         self,

@@ -3,6 +3,7 @@
 These tests verify that the getting started documentation accurately reflects
 the actual behavior and that new users can successfully complete the setup process.
 """
+
 # pylint: disable=redefined-outer-name
 
 import os
@@ -25,12 +26,12 @@ class TestGettingStartedProcess:
         # Test that basic config creation works
         config = Config.from_env()
         assert config is not None
-        assert hasattr(config, 'snowflake')
+        assert hasattr(config, "snowflake")
 
     def test_snowflake_cli_profile_setup(self, mock_config_with_profiles):
         """Test that Snowflake CLI profile setup works as documented."""
         from igloo_mcp.profile_utils import validate_and_resolve_profile
-        
+
         with mock_config_with_profiles(["dev", "prod"], default="dev"):
             with patch.dict(os.environ, {}, clear=True):
                 # Test profile validation as documented in getting started
@@ -62,7 +63,9 @@ class TestGettingStartedProcess:
                                 main()
                                 assert True  # If we get here, startup succeeded
                             except SystemExit:
-                                pytest.fail("MCP server should start with valid profile")
+                                pytest.fail(
+                                    "MCP server should start with valid profile"
+                                )
 
     def test_mcp_server_startup_fails_without_profile(self, mock_empty_config):
         """Test that MCP server fails gracefully without profiles."""
@@ -88,7 +91,7 @@ class TestGettingStartedProcess:
     def test_snowflake_cli_wrapper_functionality(self):
         """Test that SnowCLI wrapper works as expected."""
         from igloo_mcp.snow_cli import SnowCLI
-        
+
         with patch("igloo_mcp.snow_cli.shutil.which", return_value="/usr/bin/snow"):
             cli = SnowCLI(profile="test")
             assert cli.profile == "test"
@@ -96,7 +99,7 @@ class TestGettingStartedProcess:
     def test_config_precedence_as_documented(self, mock_config_with_profiles):
         """Test that configuration precedence works as documented."""
         from igloo_mcp.profile_utils import validate_and_resolve_profile
-        
+
         with mock_config_with_profiles(["dev", "prod"], default="prod"):
             # Test environment variable precedence
             with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "dev"}):
@@ -115,7 +118,7 @@ class TestDocumentationAccuracy:
     def test_readme_examples_work(self, mock_config_with_profiles):
         """Test that examples in README actually work."""
         from igloo_mcp.profile_utils import validate_and_resolve_profile
-        
+
         with mock_config_with_profiles(["quickstart"], default="quickstart"):
             # Test the basic profile setup example
             with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "quickstart"}):
@@ -130,7 +133,7 @@ class TestDocumentationAccuracy:
                 "igloo-mcp": {
                     "command": "igloo-mcp",
                     "args": ["--profile", "quickstart"],
-                    "env": {"SNOWFLAKE_PROFILE": "quickstart"}
+                    "env": {"SNOWFLAKE_PROFILE": "quickstart"},
                 }
             }
         }
@@ -145,13 +148,13 @@ class TestDocumentationAccuracy:
     def test_error_messages_are_helpful(self, mock_config_with_profiles):
         """Test that error messages provide helpful guidance."""
         from igloo_mcp.profile_utils import validate_and_resolve_profile
-        
+
         with mock_config_with_profiles(["dev", "prod"], default="dev"):
             with patch.dict(os.environ, {}, clear=True):
                 # This should work with default profile
                 profile = validate_and_resolve_profile()
                 assert profile == "dev"
-                
+
                 # Test error case with invalid profile
                 with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "invalid"}):
                     with pytest.raises(Exception) as exc_info:
@@ -159,9 +162,10 @@ class TestDocumentationAccuracy:
 
                     error_msg = str(exc_info.value)
                     # Should mention available profiles or setup instructions
-                    assert any(keyword in error_msg.lower() for keyword in [
-                        "profile", "snowflake", "connection", "setup"
-                    ])
+                    assert any(
+                        keyword in error_msg.lower()
+                        for keyword in ["profile", "snowflake", "connection", "setup"]
+                    )
 
 
 class TestNewUserExperience:
@@ -170,7 +174,7 @@ class TestNewUserExperience:
     def test_new_user_without_snowflake_cli(self, mock_empty_config):
         """Test experience when user hasn't set up Snowflake CLI."""
         from igloo_mcp.profile_utils import validate_and_resolve_profile
-        
+
         with mock_empty_config():
             with patch.dict(os.environ, {}, clear=True):
                 with pytest.raises(Exception) as exc_info:
@@ -178,14 +182,15 @@ class TestNewUserExperience:
 
                 error_msg = str(exc_info.value)
                 # Should provide guidance on setting up Snowflake CLI
-                assert any(keyword in error_msg.lower() for keyword in [
-                    "snowflake", "profile", "connection", "add"
-                ])
+                assert any(
+                    keyword in error_msg.lower()
+                    for keyword in ["snowflake", "profile", "connection", "add"]
+                )
 
     def test_new_user_with_invalid_profile(self, mock_config_with_profiles):
         """Test experience when user specifies invalid profile."""
         from igloo_mcp.profile_utils import validate_and_resolve_profile
-        
+
         with mock_config_with_profiles(["dev", "prod"], default="dev"):
             with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "invalid"}):
                 with pytest.raises(Exception) as exc_info:
@@ -198,7 +203,7 @@ class TestNewUserExperience:
     def test_new_user_without_default_profile(self, mock_config_with_profiles):
         """Test experience when no default profile is set."""
         from igloo_mcp.profile_utils import validate_and_resolve_profile
-        
+
         with mock_config_with_profiles(["dev", "prod"], default=None):
             with patch.dict(os.environ, {}, clear=True):
                 with pytest.raises(Exception) as exc_info:

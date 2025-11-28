@@ -280,9 +280,18 @@ def validate_sql_statement(
 
     # CRITICAL FIX: Use lowercase lists for upstream validation (it's case-sensitive)
     lowercase_disallow_list = [item.lower() for item in disallow_list]
-    stmt_type, is_valid = validate_sql_type(
-        statement, effective_allow_list, lowercase_disallow_list
-    )
+    try:
+        stmt_type, is_valid = validate_sql_type(
+            statement, effective_allow_list, lowercase_disallow_list
+        )
+    except (ValueError, TypeError):
+        # Re-raise expected validation errors as-is
+        raise
+    except Exception as e:
+        # Wrap ALL sqlglot/parsing errors as ValueError
+        # This handles TokenError, ParseError, IndexError, and other sqlglot internals
+        error_type = type(e).__name__
+        raise ValueError(f"Invalid SQL syntax ({error_type}): {e}") from e
 
     # FIX #41: Reclassify DESCRIBE statements from 'Command' to 'Describe'
     statement_upper = statement.strip().upper()
@@ -567,8 +576,20 @@ def get_sql_statement_type(statement: str) -> str:
 
     Returns:
         Statement type (e.g., "Select", "Delete", "Unknown")
+
+    Raises:
+        ValueError: If SQL statement cannot be parsed
     """
-    stmt_type = get_statement_type(statement)
+    try:
+        stmt_type = get_statement_type(statement)
+    except (ValueError, TypeError):
+        # Re-raise expected validation errors as-is
+        raise
+    except Exception as e:
+        # Wrap ALL sqlglot/parsing errors (TokenError, ParseError, etc.) as ValueError
+        # to maintain consistent error contract for property-based tests
+        error_type = type(e).__name__
+        raise ValueError(f"Invalid SQL syntax ({error_type}): {e}") from e
 
     if _is_select_equivalent(stmt_type):
         return "Select"

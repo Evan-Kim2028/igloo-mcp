@@ -388,10 +388,12 @@ class TestSmokeIntegration:
         assert "insights" in metric_schema["description"].lower()
         assert len(metric_schema["examples"]) >= 2
 
-        # Verify timeout validation
+        # Verify timeout accepts both int and string (changed in v0.3.2 for #48)
         timeout_schema = schema["properties"]["timeout_seconds"]
-        assert timeout_schema["minimum"] == 1
-        assert timeout_schema["maximum"] == 3600
+        # Schema now accepts anyOf [int, str] so no direct minimum/maximum
+        assert "anyOf" in timeout_schema or "type" in timeout_schema
+        # Description should mention string acceptance
+        assert "string" in timeout_schema.get("description", "").lower()
 
     def test_joined_enhancements_integration(self):
         """Test that all enhancements work together seamlessly."""
