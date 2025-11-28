@@ -642,12 +642,14 @@ class EvolveReportTool(MCPTool):
 
                 if not supporting_queries or len(supporting_queries) == 0:
                     issues.append(
-                        f"Analyst reports require citations. Insight '{insight_id}' missing supporting_queries[0] with execution_id. "
+                        f"Analyst reports require citations. Insight '{insight_id}' "
+                        "missing supporting_queries[0] with execution_id. "
                         "Use execute_query() first to get an execution_id, then include it in supporting_queries"
                     )
                 elif not supporting_queries[0].get("execution_id"):
                     issues.append(
-                        f"Analyst reports require citations. Insight '{insight_id}' missing execution_id in supporting_queries[0]. "
+                        f"Analyst reports require citations. Insight '{insight_id}' "
+                        "missing execution_id in supporting_queries[0]. "
                         "Use execute_query() first to get an execution_id, then include it in supporting_queries"
                     )
 
@@ -672,13 +674,17 @@ class EvolveReportTool(MCPTool):
                         ) or modify_data.get("supporting_queries", [])
                         if not supporting_queries or len(supporting_queries) == 0:
                             issues.append(
-                                f"Analyst reports require citations. Insight '{insight_id}' missing supporting_queries[0] with execution_id. "
-                                "Use execute_query() first to get an execution_id, then include it in supporting_queries"
+                                f"Analyst reports require citations. Insight '{insight_id}' "
+                                "missing supporting_queries[0] with execution_id. "
+                                "Use execute_query() first to get an execution_id, "
+                                "then include it in supporting_queries"
                             )
                         elif not supporting_queries[0].get("execution_id"):
                             issues.append(
-                                f"Analyst reports require citations. Insight '{insight_id}' missing execution_id in supporting_queries[0]. "
-                                "Use execute_query() first to get an execution_id, then include it in supporting_queries"
+                                f"Analyst reports require citations. Insight '{insight_id}' "
+                                "missing execution_id in supporting_queries[0]. "
+                                "Use execute_query() first to get an execution_id, "
+                                "then include it in supporting_queries"
                             )
                     # If not modifying supporting_queries, check current value
                     elif (
@@ -686,24 +692,30 @@ class EvolveReportTool(MCPTool):
                         and not current_insight.citations
                     ):
                         issues.append(
-                            f"Analyst reports require citations. Insight '{insight_id}' missing supporting_queries[0] with execution_id. "
-                            "Use execute_query() first to get an execution_id, then include it in supporting_queries"
+                            f"Analyst reports require citations. Insight '{insight_id}' "
+                            "missing supporting_queries[0] with execution_id. "
+                            "Use execute_query() first to get an execution_id, "
+                            "then include it in supporting_queries"
                         )
                     elif (
                         current_insight.supporting_queries
                         and not current_insight.supporting_queries[0].execution_id
                     ):
                         issues.append(
-                            f"Analyst reports require citations. Insight '{insight_id}' missing execution_id in supporting_queries[0]. "
-                            "Use execute_query() first to get an execution_id, then include it in supporting_queries"
+                            f"Analyst reports require citations. Insight '{insight_id}' "
+                            "missing execution_id in supporting_queries[0]. "
+                            "Use execute_query() first to get an execution_id, "
+                            "then include it in supporting_queries"
                         )
                     elif (
                         current_insight.citations
                         and not current_insight.citations[0].execution_id
                     ):
                         issues.append(
-                            f"Analyst reports require citations. Insight '{insight_id}' missing execution_id in citations[0]. "
-                            "Use execute_query() first to get an execution_id, then include it in citations"
+                            f"Analyst reports require citations. Insight '{insight_id}' "
+                            "missing execution_id in citations[0]. "
+                            "Use execute_query() first to get an execution_id, "
+                            "then include it in citations"
                         )
 
         return issues
@@ -1050,7 +1062,8 @@ class EvolveReportTool(MCPTool):
                         try:
                             if not isinstance(modify_data["insight_ids_to_add"], list):
                                 raise ValueError(
-                                    f"insight_ids_to_add must be a list, got {type(modify_data['insight_ids_to_add']).__name__}"
+                                    f"insight_ids_to_add must be a list, got "
+                                    f"{type(modify_data['insight_ids_to_add']).__name__}"
                                 )
 
                             insight_ids_to_add = modify_data["insight_ids_to_add"]
@@ -1119,7 +1132,8 @@ class EvolveReportTool(MCPTool):
                                 modify_data["insight_ids_to_remove"], list
                             ):
                                 raise ValueError(
-                                    f"insight_ids_to_remove must be a list, got {type(modify_data['insight_ids_to_remove']).__name__}"
+                                    f"insight_ids_to_remove must be a list, got "
+                                    f"{type(modify_data['insight_ids_to_remove']).__name__}"
                                 )
 
                             insight_ids_to_remove = modify_data["insight_ids_to_remove"]
@@ -1245,7 +1259,7 @@ class EvolveReportTool(MCPTool):
         Returns:
             Dict with schema examples for each operation type
         """
-        examples = {}
+        examples: Dict[str, Any] = {}
 
         if "insights_to_add" in operations:
             examples["insights_to_add"] = [
@@ -1354,7 +1368,8 @@ class EvolveReportTool(MCPTool):
                 },
                 "instruction": {
                     "type": "string",
-                    "description": "Natural language instruction describing desired report evolution (for audit/generation)",
+                    "description": "Natural language instruction describing desired "
+                    "report evolution (for audit/generation)",
                     "examples": [
                         "Add insights about customer retention trends",
                         "Prioritize revenue metrics over user acquisition",

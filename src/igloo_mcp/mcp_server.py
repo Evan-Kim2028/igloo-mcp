@@ -410,6 +410,19 @@ def register_igloo_mcp(
         ctx: Context | None = None,
     ) -> Dict[str, Any]:
         """Execute a SQL query against Snowflake - delegates to ExecuteQueryTool."""
+        # Coerce timeout_seconds from string to int if needed
+        timeout_int: Optional[int] = None
+        if timeout_seconds is not None:
+            if isinstance(timeout_seconds, str):
+                try:
+                    timeout_int = int(timeout_seconds)
+                except ValueError:
+                    raise MCPValidationError(
+                        f"timeout_seconds must be a valid integer, got: {timeout_seconds}"
+                    )
+            else:
+                timeout_int = timeout_seconds
+        
         try:
             return await execute_query_inst.execute(
                 statement=statement,
@@ -418,7 +431,7 @@ def register_igloo_mcp(
                 schema=schema,
                 role=role,
                 reason=reason,
-                timeout_seconds=timeout_seconds,
+                timeout_seconds=timeout_int,
                 verbose_errors=verbose_errors,
                 post_query_insight=post_query_insight,
                 ctx=ctx,

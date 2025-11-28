@@ -88,7 +88,7 @@ class ReportService:
         templates_mod.__package__ = "igloo_mcp.living_reports"
         templates_mod.__name__ = "igloo_mcp.living_reports.templates"
         # Set up models import for templates
-        templates_mod.models = living_reports_models
+        templates_mod.models = living_reports_models  # type: ignore[attr-defined]
         spec.loader.exec_module(templates_mod)
         get_template = templates_mod.get_template
 
@@ -482,7 +482,8 @@ class ReportService:
             # Load backup to verify it's valid
             try:
                 backup_data = json.loads(backup_path.read_text(encoding="utf-8"))
-                backup_outline = Outline(**backup_data)
+                # Validate backup file structure
+                Outline(**backup_data)
             except Exception as e:
                 raise ValueError(f"Backup file is corrupted: {e}") from e
 
