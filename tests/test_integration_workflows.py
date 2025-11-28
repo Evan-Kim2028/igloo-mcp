@@ -211,6 +211,10 @@ class TestWorkflowIntegration:
 
         assert "quick_reference" in schema_result
 
+        # Step 2.5: Get section_id from the template (deep_dive has 3 sections)
+        outline = report_service.get_report_outline(report_id)
+        section_id = outline.sections[0].section_id  # Use first section
+
         # Step 3: evolve_report to add initial content
         evolve_result = await evolve_tool.execute(
             report_selector=report_id,
@@ -218,7 +222,7 @@ class TestWorkflowIntegration:
             proposed_changes={
                 "insights_to_add": [
                     {
-                        "section_id": report_id,
+                        "section_id": section_id,  # Use actual section_id
                         "insight": {"summary": "Initial finding", "importance": 8},
                     }
                 ]
@@ -367,16 +371,18 @@ class TestWorkflowIntegration:
         )
         report_id = create_result["report_id"]
 
-        # Step 2: evolve_report (build content)
+        # Step 2: evolve_report (build content) - use inline insights
         await evolve_tool.execute(
             report_selector=report_id,
             instruction="Add content",
             proposed_changes={
-                "sections_to_add": [{"title": "Summary", "order": 0}],
-                "insights_to_add": [
+                "sections_to_add": [
                     {
-                        "section_id": report_id,
-                        "insight": {"summary": "Key finding", "importance": 9},
+                        "title": "Summary",
+                        "order": 0,
+                        "insights": [  # Use inline insights feature
+                            {"summary": "Key finding", "importance": 9}
+                        ],
                     }
                 ],
             },
