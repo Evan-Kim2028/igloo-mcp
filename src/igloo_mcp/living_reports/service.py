@@ -104,16 +104,9 @@ class ReportService:
             sections: list[Any] = []
 
             def _ensure_supporting(payload: Dict[str, Any]) -> None:
-                if (
-                    "supporting_queries" not in payload
-                    or payload["supporting_queries"] is None
-                ):
+                if "supporting_queries" not in payload or payload["supporting_queries"] is None:
                     payload["supporting_queries"] = []
-                if (
-                    "citations" in payload
-                    and payload["citations"] is not None
-                    and not payload["supporting_queries"]
-                ):
+                if "citations" in payload and payload["citations"] is not None and not payload["supporting_queries"]:
                     payload["supporting_queries"] = payload["citations"]
                 if payload.get("supporting_queries") and not payload.get("citations"):
                     payload["citations"] = payload["supporting_queries"]
@@ -131,22 +124,15 @@ class ReportService:
                 if "insights" in data and data["insights"] is not None:
                     raw_insights = data["insights"]
                     if not isinstance(raw_insights, list):
-                        raise ValueError(
-                            "initial_sections.insights must be a list of insight dicts"
-                        )
+                        raise ValueError("initial_sections.insights must be a list of insight dicts")
                     for insight_idx, raw_insight in enumerate(raw_insights):
                         if not isinstance(raw_insight, dict):
                             raise ValueError("Each insight must be a dict")
                         payload = dict(raw_insight)
                         if "insight_id" not in payload or payload["insight_id"] is None:
                             payload["insight_id"] = str(uuid.uuid4())
-                        if (
-                            payload.get("summary") is None
-                            or payload.get("importance") is None
-                        ):
-                            raise ValueError(
-                                "Insights must include summary and importance"
-                            )
+                        if payload.get("summary") is None or payload.get("importance") is None:
+                            raise ValueError("Insights must include summary and importance")
                         if "status" not in payload or payload["status"] is None:
                             payload["status"] = "active"
                         _ensure_supporting(payload)
@@ -184,6 +170,7 @@ class ReportService:
             created_at=now,
             updated_at=now,
             version="1.0",
+            outline_version=1,
             sections=sections,
             insights=insights,
             metadata={**metadata, "template": template},
@@ -343,10 +330,8 @@ class ReportService:
                 payload={
                     "old_title": old_outline.title,
                     "new_title": outline.title,
-                    "sections_changed": len(outline.sections)
-                    != len(old_outline.sections),
-                    "insights_changed": len(outline.insights)
-                    != len(old_outline.insights),
+                    "sections_changed": len(outline.sections) != len(old_outline.sections),
+                    "insights_changed": len(outline.insights) != len(old_outline.insights),
                     "sections_added": sections_added,
                     "insights_added": insights_added,
                     "section_ids_added": section_ids_added,
@@ -431,9 +416,7 @@ class ReportService:
 
         return reports
 
-    def revert_report(
-        self, report_id: str, action_id: str, actor: str = "cli"
-    ) -> Dict[str, Any]:
+    def revert_report(self, report_id: str, action_id: str, actor: str = "cli") -> Dict[str, Any]:
         """Revert a report to a previous state.
 
         Args:
@@ -462,8 +445,7 @@ class ReportService:
 
             if not target_event:
                 raise ValueError(
-                    f"Action not found: {action_id}. "
-                    f"Use 'igloo report history {report_id}' to see available actions."
+                    f"Action not found: {action_id}. Use 'igloo report history {report_id}' to see available actions."
                 )
 
             # Get backup filename from event payload
@@ -557,9 +539,7 @@ class ReportService:
         for section in outline.sections:
             for insight_id in section.insight_ids:
                 if insight_id not in insight_ids:
-                    errors.append(
-                        f"Section '{section.title}' references unknown insight: {insight_id}"
-                    )
+                    errors.append(f"Section '{section.title}' references unknown insight: {insight_id}")
 
         # Validate insight references
         section_insight_ids = set()
@@ -568,9 +548,7 @@ class ReportService:
 
         for insight in outline.insights:
             if insight.insight_id not in section_insight_ids:
-                errors.append(
-                    f"Insight '{insight.summary}' not referenced by any section"
-                )
+                errors.append(f"Insight '{insight.summary}' not referenced by any section")
 
         return errors
 
@@ -832,9 +810,7 @@ class ReportService:
 
         return str(new_id)
 
-    def synthesize_reports(
-        self, source_ids: List[str], title: str, actor: str = "cli"
-    ) -> str:
+    def synthesize_reports(self, source_ids: List[str], title: str, actor: str = "cli") -> str:
         """Create new report combining insights from multiple sources.
 
         Copies all sections and insights from source reports into a new report.
@@ -879,9 +855,7 @@ class ReportService:
                 all_sections.append(section_copy)
 
             # Copy insights (create copies to avoid mutation issues)
-            all_insights.extend(
-                insight.model_copy(deep=True) for insight in source_outline.insights
-            )
+            all_insights.extend(insight.model_copy(deep=True) for insight in source_outline.insights)
 
             # Merge tags
             all_tags.update(source_outline.metadata.get("tags", []))
@@ -1030,24 +1004,16 @@ class ReportService:
                                     execution_id=query.execution_id,
                                     sql_sha256=query.sql_sha256,
                                 )
-                                history_record = (
-                                    self.history_index._resolve_history_record(source)
-                                )
+                                history_record = self.history_index._resolve_history_record(source)
                                 if history_record:
                                     query_provenance[query.execution_id] = {
                                         "execution_id": query.execution_id,
-                                        "timestamp": history_record.get("timestamp")
-                                        or history_record.get("ts"),
-                                        "duration_ms": history_record.get(
-                                            "duration_ms"
-                                        ),
+                                        "timestamp": history_record.get("timestamp") or history_record.get("ts"),
+                                        "duration_ms": history_record.get("duration_ms"),
                                         "rowcount": history_record.get("rowcount"),
                                         "status": history_record.get("status"),
-                                        "statement_preview": history_record.get(
-                                            "statement_preview"
-                                        ),
-                                        "sql_sha256": history_record.get("sql_sha256")
-                                        or query.sql_sha256,
+                                        "statement_preview": history_record.get("statement_preview"),
+                                        "sql_sha256": history_record.get("sql_sha256") or query.sql_sha256,
                                     }
                             except Exception:
                                 # Gracefully handle resolution failures
@@ -1091,12 +1057,8 @@ class ReportService:
                 render_hints["citation_map"] = citation_map
                 render_hints["citation_details"] = citation_details
 
-                renderer = (
-                    renderer or QuartoRenderer()
-                )  # Create instance for QMD generation
-                renderer._generate_qmd_file(
-                    report_dir, format, options or {}, outline, datasets, render_hints
-                )
+                renderer = renderer or QuartoRenderer()  # Create instance for QMD generation
+                renderer._generate_qmd_file(report_dir, format, options or {}, outline, datasets, render_hints)
                 result = RenderResult(
                     output_paths=[str(qmd_path)],
                     stdout="Dry run: QMD file generated successfully",
@@ -1139,9 +1101,7 @@ class ReportService:
 
         # Create audit event
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        outline_sha256 = hashlib.sha256(
-            json.dumps(outline.model_dump(), sort_keys=True).encode()
-        ).hexdigest()
+        outline_sha256 = hashlib.sha256(json.dumps(outline.model_dump(), sort_keys=True).encode()).hexdigest()
 
         audit_event = AuditEvent(
             action_id=str(uuid.uuid4()),
@@ -1210,9 +1170,7 @@ class ReportService:
             preview_path = rendered_output_path or qmd_output_path
             if preview_path:
                 try:
-                    preview = self._generate_preview(
-                        preview_path, max_chars=preview_max_chars
-                    )
+                    preview = self._generate_preview(preview_path, max_chars=preview_max_chars)
                     if preview:
                         response["preview"] = preview
                         response["output"]["preview"] = preview
@@ -1230,9 +1188,7 @@ class ReportService:
 
         return response
 
-    def _generate_preview(
-        self, output_path: str, max_chars: int = 2000
-    ) -> Optional[str]:
+    def _generate_preview(self, output_path: str, max_chars: int = 2000) -> Optional[str]:
         """Generate a truncated preview of the rendered output.
 
         Args:

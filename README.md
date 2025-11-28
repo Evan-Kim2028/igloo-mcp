@@ -21,6 +21,7 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 - ⚡ **Token Efficiency**: 70% reduction in multi-turn workflows via progressive disclosure and configurable verbosity (v0.3.2+). Read only what you need, when you need it.
 - 📂 **Unified Storage**: All data (query history, artifacts, reports) stored together per instance for easy access across projects. Reports use `~/.igloo_mcp/reports/` by default in v0.3.0+.
 - 📋 **Living Reports**: JSON-backed, auditable business reports that evolve safely with LLM assistance (v0.3.0+). Three-layer architecture: Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs. **Complete tooling ecosystem in v0.3.2**.
+- 🔍 **API Completeness** ✨ v0.3.3: Distributed tracing with `request_id` (UUID4), performance monitoring with `timing` metrics, complete audit trails with symmetric CRUD tracking (`*_ids_added`/`*_ids_modified`/`*_ids_removed`), and structured `warnings` for graceful handling of partial results. Full observability for multi-step workflows.
 - ⚡ **Simple Backend**: SnowCLI integration for max performance; CLI/REST modes. Python 3.12+, MIT-licensed.
 
 Full API in [docs/api/README.md](./docs/api/README.md).

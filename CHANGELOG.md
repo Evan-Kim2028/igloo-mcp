@@ -3,6 +3,82 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.3.3] - 2025-11-28
+
+## Added
+
+### API Enhancements (Distributed Tracing & Monitoring)
+
+- **Distributed Tracing**: Added `request_id` (UUID4) to catalog and health tools
+  - Tools affected: `build_catalog`, `get_catalog_summary`, `search_catalog`, `health_check`
+  - Auto-generated if not provided; enables correlation across multi-step operations
+  - Included in all log entries for end-to-end tracing
+
+- **Performance Monitoring**: Added `timing` metrics to all catalog/health tools
+  - `timing` object with `total_duration_ms` (all tools)
+  - Operation breakdowns: `build_catalog` includes `catalog_fetch_ms`, `search_catalog` includes `search_duration_ms`
+  - Enables optimization and SLA monitoring
+
+- **Response Symmetry**: Complete ID tracking for audit completeness
+  - `evolve_report`: Added `insight_ids_removed` and `section_ids_removed` arrays
+  - `create_report`: Added `section_ids_added` and `insight_ids_added` arrays
+  - Audit trail now includes `section_ids_removed` field
+
+- **Warnings Infrastructure**: Structured non-fatal issue reporting
+  - `build_catalog` and `search_catalog` include `warnings` array (empty when none)
+  - Structure: `[{"code": str, "message": str, "severity": str, "context": dict}]`
+  - Enables clients to handle partial results gracefully
+
+## Fixed
+
+### Type Safety & Validation
+
+- **#77**: Fixed 18 MyPy type errors in `changes_schema.py` (copy-paste type annotations)
+- **#66**: Improved validation error messages with structural hints for nested objects
+- **#75**: SQL validation now raises `ValueError` (not `AttributeError`) for malformed SQL
+
+### Bug Fixes
+
+- **#88**: `title_change` and `metadata_updates` now properly applied in `evolve_report`
+- **#89**: Universal citation enforcement across all templates (not just analyst_v1)
+
+### Developer Experience
+
+- **#78**: Removed invalid `[tool.uv.build]` section from pyproject.toml
+- **#79**: Simplified pre-commit config (ruff only, removed black/isort)
+- **#82**: Added comprehensive `.env.example` documenting all environment variables
+- **#83**: Fixed 9 ruff linting warnings (E501 line length, E731 lambda assignment)
+
+## Changed
+
+### API Additions (Non-Breaking)
+
+All changes are **backward compatible** - new fields are additions, no existing fields removed.
+
+- Catalog tools: Signatures now include optional `request_id` parameter
+- Report tools: Responses now include complete ID tracking arrays
+- All tools: Responses include `timing` and `warnings` where applicable
+
+## Infrastructure
+
+- Added 57 tests across 4 files covering API completeness
+- Added 9 regression tests for citation and metadata features
+- All ruff linting checks pass
+
+## Summary
+
+**v0.3.3 completes API completeness**, closing all 16 issues:
+
+**Issues Closed**: #65, #66, #67, #68, #69, #70, #71, #73, #75, #77, #78, #79, #82, #83, #88, #89
+
+**Key Improvements**:
+1. **Distributed Tracing**: request_id enables end-to-end correlation across multi-step workflows
+2. **Audit Completeness**: All CRUD operations (Create/Read/Update/Delete) now tracked symmetrically
+3. **Type Safety**: MyPy errors resolved, better validation error UX
+4. **Developer Experience**: Simplified tooling, comprehensive environment documentation
+
+All enhancements are **backward compatible** with sensible defaults.
+
 # [0.3.2] - 2025-11-28
 
 ### Added

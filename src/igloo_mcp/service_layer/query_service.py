@@ -20,10 +20,8 @@ class QueryService:
             context: Service context with profile information
         """
         self.context = context
-        driver_name = (
-            driver or os.environ.get("IGLOO_MCP_SNOW_DRIVER") or "cli"
-        ).lower()
-        if hasattr(context, "config") and hasattr(context.config, "snowflake"):
+        driver_name = (driver or os.environ.get("IGLOO_MCP_SNOW_DRIVER") or "cli").lower()
+        if context is not None and hasattr(context, "config") and hasattr(context.config, "snowflake"):
             self.profile = context.config.snowflake.profile
         else:
             self.profile = None
@@ -32,7 +30,7 @@ class QueryService:
         self.rest_client: Optional[SnowRestClient] = None
         if driver_name == "rest":
             default_ctx = {}
-            if hasattr(context, "config") and hasattr(context.config, "snowflake"):
+            if context is not None and hasattr(context, "config") and hasattr(context.config, "snowflake"):
                 default_ctx = context.config.snowflake.session_defaults()
             try:
                 self.rest_client = SnowRestClient.from_env(default_context=default_ctx)
@@ -78,9 +76,7 @@ class QueryService:
         if not self.cli:
             raise RuntimeError("Snowflake CLI driver unavailable")
 
-        return self.cli.run_query(
-            query, output_format=output_format, timeout=timeout, ctx_overrides=session
-        )
+        return self.cli.run_query(query, output_format=output_format, timeout=timeout, ctx_overrides=session)
 
     def session_from_mapping(self, mapping: Dict[str, Any]) -> Dict[str, Any]:
         """Create session context from mapping."""
@@ -91,8 +87,6 @@ class QueryService:
             "role": mapping.get("role"),
         }
 
-    def execute_with_service(
-        self, query: str, service: Any = None, **kwargs
-    ) -> QueryOutput:
+    def execute_with_service(self, query: str, service: Any = None, **kwargs) -> QueryOutput:
         """Execute query with service."""
         return self.execute(query, **kwargs)

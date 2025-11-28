@@ -13,7 +13,7 @@ class DependencyService:
             context: Service context with profile information
         """
         self.context = context
-        if hasattr(context, "config") and hasattr(context.config, "snowflake"):
+        if context is not None and hasattr(context, "config") and hasattr(context.config, "snowflake"):
             self.profile = context.config.snowflake.profile
         else:
             self.profile = None
