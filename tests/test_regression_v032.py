@@ -142,6 +142,7 @@ class TestBug57InlineInsights:
                 "sections_to_add": [
                     {
                         "title": "New Section",
+                        "order": 1,  # order is required
                         "insights": [
                             {  # Inline insights - must include summary and importance
                                 "summary": "Test insight summary",
@@ -155,8 +156,10 @@ class TestBug57InlineInsights:
         )
 
         assert result["status"] == "success"
-        assert result["insights_added"] == 1  # Inline insight should be counted
-        assert result["sections_added"] == 1
+        assert (
+            result["summary"]["insights_added"] == 1
+        )  # Inline insight should be counted
+        assert result["summary"]["sections_added"] == 1
 
     @pytest.mark.asyncio
     async def test_sections_to_modify_with_inline_insights(self, tmp_path: Path):
@@ -173,9 +176,11 @@ class TestBug57InlineInsights:
         result1 = await EvolveReportTool(config, report_service).execute(
             report_selector=report_id,
             instruction="Add initial section",
-            proposed_changes={"sections_to_add": [{"title": "Initial Section"}]},
+            proposed_changes={
+                "sections_to_add": [{"title": "Initial Section", "order": 1}]
+            },
         )
-        section_id = result1["sections_added_details"][0]["section_id"]
+        section_id = result1["summary"]["section_ids_added"][0]
 
         # Modify section with inline insights
         tool = EvolveReportTool(config, report_service)
@@ -199,7 +204,9 @@ class TestBug57InlineInsights:
         )
 
         assert result["status"] == "success"
-        assert result["insights_added"] == 1  # Inline insight should be counted
+        assert (
+            result["summary"]["insights_added"] == 1
+        )  # Inline insight should be counted
 
 
 class TestBug58SupportingQueriesOptional:
@@ -234,7 +241,7 @@ class TestBug58SupportingQueriesOptional:
         )
 
         assert result["status"] == "success"
-        assert result["insights_added"] == 1
+        assert result["summary"]["insights_added"] == 1
 
 
 class TestBug59StaleWarnings:
@@ -258,13 +265,13 @@ class TestBug59StaleWarnings:
             report_selector=report_id,
             instruction="Add section and insight",
             proposed_changes={
-                "sections_to_add": [{"title": "Test Section"}],
+                "sections_to_add": [{"title": "Test Section", "order": 1}],
                 "insights_to_add": [{"summary": "Test insight", "importance": 5}],
             },
         )
 
-        section_id = result1["sections_added_details"][0]["section_id"]
-        insight_id = result1["insights_added_details"][0]["insight_id"]
+        section_id = result1["summary"]["section_ids_added"][0]
+        insight_id = result1["summary"]["insight_ids_added"][0]
 
         # Link insight to section - should not warn about empty section
         result2 = await tool.execute(
@@ -272,7 +279,7 @@ class TestBug59StaleWarnings:
             instruction="Link insight to section",
             proposed_changes={
                 "sections_to_modify": [
-                    {"section_id": section_id, "insight_ids": [insight_id]}
+                    {"section_id": section_id, "insight_ids_to_add": [insight_id]}
                 ]
             },
         )
@@ -304,7 +311,7 @@ class TestBug60RenderPreview:
             report_selector=report_id, format="html", dry_run=True, include_preview=True
         )
 
-        assert result["status"] == "dry_run_success"
+        assert result["status"] == "success"
         # Should include preview content
         assert "preview" in result
         assert result["preview"] is not None
@@ -328,11 +335,13 @@ class TestBug60RenderPreview:
             report_selector=report_id, format="html", dry_run=True
         )
 
-        assert result["status"] == "dry_run_success"
-        assert "output_path" in result
+        assert result["status"] == "success"
+        # output_path should be in the output dict for dry run
+        assert "output" in result
+        assert "output_path" in result["output"]
 
         # Path should be absolute
-        output_path = Path(result["output_path"])
+        output_path = Path(result["output"]["output_path"])
         assert output_path.is_absolute()
 
 
