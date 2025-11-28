@@ -390,7 +390,7 @@ class EvolveReportTool(MCPTool):
             # Semantic validation
             # Legacy validation hook
             validation_issues = self._validate_changes(
-                current_outline, proposed_changes
+                current_outline, proposed_changes, constraints or {}
             )
             if validation_issues:
                 return {
@@ -656,7 +656,10 @@ class EvolveReportTool(MCPTool):
         # and format them appropriately, so we don't need a catch-all here
 
     def _validate_changes(
-        self, current_outline: Outline, changes: Dict[str, Any]
+        self,
+        current_outline: Outline,
+        changes: Dict[str, Any],
+        constraints: Dict[str, Any],
     ) -> List[str]:
         """Validate proposed changes against safety constraints.
 
@@ -703,8 +706,13 @@ class EvolveReportTool(MCPTool):
             if section_id not in existing_section_ids:
                 issues.append(f"Section ID not found for removal: {section_id}")
 
-        # Citation enforcement for analyst reports
-        if current_outline.metadata.get("template") == "analyst_v1":
+        # Citation enforcement for ALL reports (universal requirement)
+        # Template should only control formatting, not data quality requirements
+        citation_validation_enabled = not (constraints or {}).get(
+            "skip_citation_validation", False
+        )
+
+        if citation_validation_enabled:
             # Validate insights_to_add
             for insight_data in changes.get("insights_to_add", []):
                 insight_id = insight_data.get("insight_id", "unknown")
@@ -714,15 +722,17 @@ class EvolveReportTool(MCPTool):
 
                 if not supporting_queries or len(supporting_queries) == 0:
                     issues.append(
-                        f"Analyst reports require citations. Insight '{insight_id}' "
+                        f"All insights require citations for reproducibility. Insight '{insight_id}' "
                         "missing supporting_queries[0] with execution_id. "
-                        "Use execute_query() first to get an execution_id, then include it in supporting_queries"
+                        "Use execute_query() first to get an execution_id, then include it in citations. "
+                        "To disable validation (not recommended): "
+                        "set skip_citation_validation=True in constraints"
                     )
                 elif not supporting_queries[0].get("execution_id"):
                     issues.append(
-                        f"Analyst reports require citations. Insight '{insight_id}' "
-                        "missing execution_id in supporting_queries[0]. "
-                        "Use execute_query() first to get an execution_id, then include it in supporting_queries"
+                        f"All insights require citations. Insight '{insight_id}' "
+                        "missing execution_id in citations[0]. "
+                        "Use execute_query() first to get an execution_id, then include it in citations"
                     )
 
             # Validate insights_to_modify
@@ -746,17 +756,19 @@ class EvolveReportTool(MCPTool):
                         ) or modify_data.get("supporting_queries", [])
                         if not supporting_queries or len(supporting_queries) == 0:
                             issues.append(
-                                f"Analyst reports require citations. Insight '{insight_id}' "
+                                f"All insights require citations. Insight '{insight_id}' "
                                 "missing supporting_queries[0] with execution_id. "
                                 "Use execute_query() first to get an execution_id, "
-                                "then include it in supporting_queries"
+                                "then include it in citations. "
+                                "To disable validation (not recommended): "
+                                "set skip_citation_validation=True in constraints"
                             )
                         elif not supporting_queries[0].get("execution_id"):
                             issues.append(
-                                f"Analyst reports require citations. Insight '{insight_id}' "
-                                "missing execution_id in supporting_queries[0]. "
+                                f"All insights require citations. Insight '{insight_id}' "
+                                "missing execution_id in citations[0]. "
                                 "Use execute_query() first to get an execution_id, "
-                                "then include it in supporting_queries"
+                                "then include it in citations"
                             )
                     # If not modifying supporting_queries, check current value
                     elif (
@@ -764,27 +776,28 @@ class EvolveReportTool(MCPTool):
                         and not current_insight.citations
                     ):
                         issues.append(
-                            f"Analyst reports require citations. Insight '{insight_id}' "
+                            f"All insights require citations. Insight '{insight_id}' "
                             "missing supporting_queries[0] with execution_id. "
                             "Use execute_query() first to get an execution_id, "
-                            "then include it in supporting_queries"
+                            "then include it in citations. "
+                            "To disable validation (not recommended): set skip_citation_validation=True in constraints"
                         )
                     elif (
                         current_insight.supporting_queries
                         and not current_insight.supporting_queries[0].execution_id
                     ):
                         issues.append(
-                            f"Analyst reports require citations. Insight '{insight_id}' "
-                            "missing execution_id in supporting_queries[0]. "
+                            f"All insights require citations. Insight '{insight_id}' "
+                            "missing execution_id in citations[0]. "
                             "Use execute_query() first to get an execution_id, "
-                            "then include it in supporting_queries"
+                            "then include it in citations"
                         )
                     elif (
                         current_insight.citations
                         and not current_insight.citations[0].execution_id
                     ):
                         issues.append(
-                            f"Analyst reports require citations. Insight '{insight_id}' "
+                            f"All insights require citations. Insight '{insight_id}' "
                             "missing execution_id in citations[0]. "
                             "Use execute_query() first to get an execution_id, "
                             "then include it in citations"
@@ -1022,8 +1035,7 @@ class EvolveReportTool(MCPTool):
                     apply_stats["section_ids_added"].append(section.section_id)
             except Exception as e:
                 raise ValueError(
-                    f"Failed to create section {section_id}: {str(e)}. "
-                    f"Section data: {filtered_data}"
+                    f"Failed to create section {section_id}: {str(e)}. Section data: {filtered_data}"
                 ) from e
 
         # Apply section modifications
@@ -1252,6 +1264,27 @@ class EvolveReportTool(MCPTool):
         new_outline.sections = [
             s for s in new_outline.sections if s.section_id not in sections_to_remove
         ]
+
+        # Apply title change
+        if changes.get("title_change"):
+            logger.info(
+                "Applied title change",
+                extra={
+                    "old_title": current_outline.title,
+                    "new_title": changes["title_change"],
+                },
+            )
+            new_outline.title = changes["title_change"]
+
+        # Apply metadata updates
+        if changes.get("metadata_updates"):
+            logger.info(
+                "Applied metadata updates",
+                extra={"updated_keys": list(changes["metadata_updates"].keys())},
+            )
+            # Merge metadata updates (shallow merge)
+            new_outline.metadata.update(changes["metadata_updates"])
+
         return new_outline, apply_stats
 
     def _format_validation_errors(self, errors: List[Any]) -> Dict[str, Any]:
