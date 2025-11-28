@@ -97,7 +97,11 @@ class EvolveReportTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return "Evolve a living report with LLM assistance"
+        return (
+            "Evolve a living report with LLM assistance. "
+            "Use this tool to add insights, modify sections, or restructure an existing report. "
+            "Requires structured changes describing what to add, modify, or remove from the report outline."
+        )
 
     @property
     def category(self) -> str:

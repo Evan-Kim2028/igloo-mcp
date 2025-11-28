@@ -234,8 +234,9 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
                 if message is not None:
                     # New-style middleware: call_next(context)
                     return await call_next(args[0])
-                # Legacy middleware expects (call_next, name, arguments)
-                return await call_next(call_next, tool_name, arguments)
+                # Legacy middleware: call_next is the next handler, invoke with (name, arguments)
+                # Note: In legacy FastMCP, call_next expects just the tool execution args
+                return await call_next(tool_name, arguments)
 
             # Replace the middleware with our conditional wrapper
             middleware_stack[i] = conditional_sql_validation_middleware
