@@ -187,6 +187,7 @@ class EvolveReportTool(MCPTool):
         constraints: Optional[Dict[str, Any]] = None,
         dry_run: bool = False,
         status_change: Optional[str] = None,
+        response_detail: str = "standard",
         request_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute report evolution with structured error handling.
@@ -197,6 +198,8 @@ class EvolveReportTool(MCPTool):
             proposed_changes: Structured changes to apply
             constraints: Optional constraints on evolution
             dry_run: If True, validate without applying changes
+            status_change: Optional status change for the report
+            response_detail: Response verbosity level ('minimal', 'standard', 'full')
             request_id: Optional request correlation ID for tracing
 
         Returns:
@@ -209,6 +212,20 @@ class EvolveReportTool(MCPTool):
         """
         start_time = time.time()
         request_id = ensure_request_id(request_id)
+
+        # Validate response_detail parameter
+        valid_levels = ("minimal", "standard", "full")
+        if response_detail not in valid_levels:
+            raise MCPValidationError(
+                f"Invalid response_detail '{response_detail}'. Must be one of: {', '.join(valid_levels)}",
+                validation_errors=[f"Invalid response_detail: {response_detail}"],
+                hints=[
+                    "Use 'minimal' for compact responses (~200 tokens)",
+                    "Use 'standard' for balanced responses with IDs (~400 tokens)",
+                    "Use 'full' for complete responses with all details (~1000+ tokens)",
+                ],
+                context={"request_id": request_id},
+            )
 
         proposed_changes = proposed_changes or {}
 
@@ -570,30 +587,63 @@ class EvolveReportTool(MCPTool):
                 },
             )
 
-            changes_applied = changes_obj.model_dump(exclude_none=True)
-            # Drop empty citations lists for backward compatibility
-            for collection_key in ("insights_to_add", "insights_to_modify"):
-                for insight_change in changes_applied.get(collection_key, []):
-                    if insight_change.get("citations") in ([], None):
-                        insight_change.pop("citations", None)
-            changes_applied.setdefault("title_change", None)
+            # Build response based on response_detail level
+            if response_detail == "minimal":
+                # Minimal response: just status, IDs, version, and counts
+                minimal_summary: Dict[str, Any] = {
+                    "sections_added": summary["sections_added"],
+                    "insights_added": summary["insights_added"],
+                    "sections_modified": summary["sections_modified"],
+                    "insights_modified": summary["insights_modified"],
+                    "sections_removed": summary["sections_removed"],
+                    "insights_removed": summary["insights_removed"],
+                }
+                if changes_obj.status_change:
+                    minimal_summary["status_change"] = changes_obj.status_change
 
-            return {
-                "status": "success",
-                "report_id": report_id,
-                "changes_applied": changes_applied,
-                "outline_version": int(
-                    new_outline.outline_version
-                ),  # Ensure integer type
-                "summary": summary,
-                "warnings": warnings,
-                "request_id": request_id,
-                "timing": {
-                    "apply_duration_ms": round(apply_duration, 2),
-                    "storage_duration_ms": round(storage_duration, 2),
-                    "total_duration_ms": round(total_duration, 2),
-                },
-            }
+                response = {
+                    "status": "success",
+                    "report_id": report_id,
+                    "outline_version": int(new_outline.outline_version),
+                    "summary": minimal_summary,
+                }
+            elif response_detail == "standard":
+                # Standard response: add IDs and warnings but no full echo
+                response = {
+                    "status": "success",
+                    "report_id": report_id,
+                    "outline_version": int(new_outline.outline_version),
+                    "summary": summary,
+                    "warnings": warnings,
+                }
+            else:  # response_detail == "full"
+                # Full response: complete details including changes_applied
+                changes_applied = changes_obj.model_dump(exclude_none=True)
+                # Drop empty citations lists for backward compatibility
+                for collection_key in ("insights_to_add", "insights_to_modify"):
+                    for insight_change in changes_applied.get(collection_key, []):
+                        if insight_change.get("citations") in ([], None):
+                            insight_change.pop("citations", None)
+                changes_applied.setdefault("title_change", None)
+
+                response = {
+                    "status": "success",
+                    "report_id": report_id,
+                    "changes_applied": changes_applied,
+                    "outline_version": int(new_outline.outline_version),
+                    "summary": summary,
+                    "warnings": warnings,
+                    "timing": {
+                        "apply_duration_ms": round(apply_duration, 2),
+                        "storage_duration_ms": round(storage_duration, 2),
+                        "total_duration_ms": round(total_duration, 2),
+                    },
+                }
+
+            # Add request_id to all response levels
+            response["request_id"] = request_id
+
+            return response
 
         except Exception:
             # Re-raise to let @tool_error_handler decorator handle it

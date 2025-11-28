@@ -3,7 +3,43 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# [0.3.2] - 2025-11-27
+# [0.3.2] - 2025-11-28
+
+### Added
+
+#### New MCP Tools
+
+- **`get_report` tool (#51)**: Read living reports with selective retrieval for token efficiency
+  - 4 retrieval modes: `summary` (lightweight overview), `sections` (section details), `insights` (insight details), `full` (complete report)
+  - Selective filtering: `section_ids`, `section_titles`, `insight_ids`, `min_importance`
+  - Pagination support with `limit` and `offset` parameters
+  - Enables progressive disclosure: agents can start with summary, then drill down to specific content
+  - Critical for multi-turn workflows: agents can now read reports to get section_ids/insight_ids before modifying them
+
+- **`get_report_schema` tool (#51)**: Self-documenting schema introspection
+  - 3 output formats: `json_schema` (full JSON Schema draft 7), `examples` (copy-paste-ready payloads), `compact` (quick reference)
+  - Auto-generated from Pydantic models (single source of truth)
+  - Returns schemas for `proposed_changes`, `insight`, `section`, `outline`, or `all`
+  - Enables agents to discover valid structures at runtime before constructing evolve_report payloads
+
+#### Token Efficiency Enhancements
+
+- **`evolve_report` response_detail parameter**: Control response verbosity for 50-80% token reduction
+  - `minimal` (~200 tokens): Just status, report_id, version, and counts
+  - `standard` (~400 tokens, default): Adds IDs of created items and warnings
+  - `full` (~1000+ tokens): Complete details including changes_applied echo and timing
+  - Backward compatible: defaults to `standard` for balanced responses
+
+- **`search_report` fields parameter**: Filter returned fields for 30-50% token reduction
+  - Specify which fields to return: `fields=["report_id", "title"]` for minimal responses
+  - Valid fields: `report_id`, `title`, `created_at`, `updated_at`, `tags`, `status`, `path`
+  - Default: all fields (backward compatible)
+  - Enables efficient report discovery without loading full metadata
+
+- **`render_report` preview_max_chars parameter**: Configurable preview truncation
+  - Control preview size: 100-10,000 characters (default: 2000)
+  - Allows agents to request smaller previews for token efficiency
+  - Backward compatible with existing default
 
 ### Changed (Breaking)
 - **Default result truncation limits significantly reduced** to optimize token usage and prevent context window overflow:
@@ -41,9 +77,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **#52 JSON Schema Reference**: Added comprehensive JSON schema reference section to user guide with copy-paste-ready examples for all operations (adding/modifying/removing insights, sections, status changes, dry run validation, etc.). Includes common validation error examples.
 
 ### Infrastructure
-- Added comprehensive test suite for render service preview/output path behavior.
-- Updated tool schemas to match new validation return format.
-- Enhanced error messages with clearer field-level validation feedback.
+- Added comprehensive test suite for render service preview/output path behavior
+- Added 23 tests for new tools and token efficiency enhancements (100% passing)
+- Updated tool schemas to match new validation return format
+- Enhanced error messages with clearer field-level validation feedback
+
+### Summary
+
+**v0.3.2 completes the Living Reports tooling ecosystem**, closing all 9 open issues and delivering significant token efficiency improvements:
+
+**Issues Closed**: #48, #49, #50, #51, #52, #53, #54, #55, #56
+
+**Token Savings**: Agents can now achieve ~70% reduction in response tokens through selective retrieval (`get_report`) and configurable verbosity (`response_detail`, `fields`, `preview_max_chars`).
+
+**Workflow Impact**: Agents can now:
+1. **Discover** reports efficiently (`search_report` with `fields`)
+2. **Read** report structure (`get_report` with `mode="summary"`)
+3. **Understand** schemas (`get_report_schema` with `format="examples"`)
+4. **Modify** precisely (`evolve_report` with correct IDs from get_report)
+5. **Verify** changes (`get_report` with selective filtering)
+6. **Render** with control (`render_report` with `preview_max_chars`)
+
+All enhancements are **backward compatible** with sensible defaults.
 
 # [0.3.1] - 2025-11-24
 

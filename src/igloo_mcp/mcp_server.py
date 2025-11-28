@@ -56,6 +56,8 @@ from .mcp.tools import (  # QueryLineageTool,  # Removed - lineage functionality
     EvolveReportTool,
     ExecuteQueryTool,
     GetCatalogSummaryTool,
+    GetReportSchemaTool,
+    GetReportTool,
     HealthCheckTool,
     RenderReportTool,
     SearchCatalogTool,
@@ -102,6 +104,8 @@ NON_SQL_TOOLS = {
     "evolve_report",
     "render_report",
     "search_report",
+    "get_report",
+    "get_report_schema",
     "build_catalog",
     "build_dependency_graph",
     "get_catalog_summary",
@@ -349,6 +353,8 @@ def register_igloo_mcp(
     evolve_report_inst = EvolveReportTool(config, report_service)
     render_report_inst = RenderReportTool(config, report_service)
     search_report_inst = SearchReportTool(config, report_service)
+    get_report_inst = GetReportTool(config, report_service)
+    get_report_schema_inst = GetReportSchemaTool(config)
 
     @server.tool(
         name="execute_query", description="Execute a SQL query against Snowflake"
@@ -422,7 +428,7 @@ def register_igloo_mcp(
                     )
             else:
                 timeout_int = timeout_seconds
-        
+
         try:
             return await execute_query_inst.execute(
                 statement=statement,
@@ -479,6 +485,14 @@ def register_igloo_mcp(
                 pattern="^(active|archived|deleted)$",
             ),
         ] = None,
+        response_detail: Annotated[
+            str,
+            Field(
+                description="Response verbosity level for token efficiency",
+                default="standard",
+                pattern="^(minimal|standard|full)$",
+            ),
+        ] = "standard",
     ) -> Dict[str, Any]:
         """Evolve report - delegates to EvolveReportTool."""
         return await evolve_report_inst.execute(
@@ -488,6 +502,7 @@ def register_igloo_mcp(
             constraints=constraints,
             dry_run=dry_run,
             status_change=status_change,
+            response_detail=response_detail,
         )
 
     @server.tool(
@@ -514,6 +529,15 @@ def register_igloo_mcp(
             bool,
             Field(description="Include truncated preview in response", default=False),
         ] = False,
+        preview_max_chars: Annotated[
+            int,
+            Field(
+                description="Maximum characters for preview truncation (default 2000)",
+                default=2000,
+                ge=100,
+                le=10000,
+            ),
+        ] = 2000,
         dry_run: Annotated[
             bool,
             Field(
@@ -532,6 +556,7 @@ def register_igloo_mcp(
             format=format,
             regenerate_outline_view=regenerate_outline_view,
             include_preview=include_preview,
+            preview_max_chars=preview_max_chars,
             dry_run=dry_run,
             options=options,
         )
@@ -625,6 +650,17 @@ def register_igloo_mcp(
                 le=50,
             ),
         ] = 20,
+        fields: Annotated[
+            Optional[List[str]],
+            Field(
+                description=(
+                    "Optional list of fields to return (default: all fields). "
+                    "Valid fields: report_id, title, created_at, updated_at, "
+                    "tags, status, path"
+                ),
+                default=None,
+            ),
+        ] = None,
     ) -> Dict[str, Any]:
         """Search report - delegates to SearchReportTool."""
         return await search_report_inst.execute(
@@ -633,6 +669,127 @@ def register_igloo_mcp(
             report_id=report_id,
             status=status,
             limit=limit,
+            fields=fields,
+        )
+
+    @server.tool(
+        name="get_report",
+        description="Get the structure and content of a living report with selective retrieval",
+    )
+    async def get_report_tool(
+        report_selector: Annotated[
+            str, Field(description="Report ID or title to retrieve")
+        ],
+        mode: Annotated[
+            str,
+            Field(
+                description="Retrieval mode for token efficiency",
+                default="summary",
+                pattern="^(summary|sections|insights|full)$",
+            ),
+        ] = "summary",
+        section_ids: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Filter to specific section IDs (mode='sections' or mode='insights')",
+                default=None,
+            ),
+        ] = None,
+        section_titles: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Filter to sections matching titles (fuzzy, case-insensitive)",
+                default=None,
+            ),
+        ] = None,
+        insight_ids: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Filter to specific insight IDs (mode='insights')",
+                default=None,
+            ),
+        ] = None,
+        min_importance: Annotated[
+            Optional[int],
+            Field(
+                description="Filter insights with importance >= this value (mode='insights')",
+                default=None,
+                ge=0,
+                le=10,
+            ),
+        ] = None,
+        limit: Annotated[
+            int,
+            Field(
+                description="Maximum items to return (default 50, max 100)",
+                default=50,
+                ge=1,
+                le=100,
+            ),
+        ] = 50,
+        offset: Annotated[
+            int,
+            Field(
+                description="Skip first N items (pagination, default 0)",
+                default=0,
+                ge=0,
+            ),
+        ] = 0,
+        include_content: Annotated[
+            bool,
+            Field(
+                description="Include section prose content (mode='sections' or mode='full')",
+                default=False,
+            ),
+        ] = False,
+        include_audit: Annotated[
+            bool,
+            Field(
+                description="Include recent audit events (mode='summary' or mode='full')",
+                default=False,
+            ),
+        ] = False,
+    ) -> Dict[str, Any]:
+        """Get report - delegates to GetReportTool."""
+        return await get_report_inst.execute(
+            report_selector=report_selector,
+            mode=mode,
+            section_ids=section_ids,
+            section_titles=section_titles,
+            insight_ids=insight_ids,
+            min_importance=min_importance,
+            limit=limit,
+            offset=offset,
+            include_content=include_content,
+            include_audit=include_audit,
+        )
+
+    @server.tool(
+        name="get_report_schema",
+        description="Get JSON schema for Living Reports operations - self-documenting API",
+    )
+    async def get_report_schema_tool(
+        schema_type: Annotated[
+            str,
+            Field(
+                description="What schema to return",
+                default="proposed_changes",
+                pattern="^(proposed_changes|insight|section|outline|all)$",
+            ),
+        ] = "proposed_changes",
+        format: Annotated[
+            str,
+            Field(
+                description="Output format for schema",
+                default="json_schema",
+                pattern="^(json_schema|examples|compact)$",
+            ),
+        ] = "json_schema",
+    ) -> Dict[str, Any]:
+        """Get report schema - delegates to GetReportSchemaTool."""
+        return await get_report_schema_inst.execute(
+            schema_type=schema_type,
+            format=format,
         )
 
     @server.tool(name="build_catalog", description="Build Snowflake catalog metadata")

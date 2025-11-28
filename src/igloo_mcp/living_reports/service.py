@@ -941,6 +941,7 @@ class ReportService:
         options: Optional[Dict[str, Any]] = None,
         open_browser: bool = False,
         include_preview: bool = False,
+        preview_max_chars: int = 2000,
         dry_run: bool = False,
     ) -> Dict[str, Any]:
         """Render a living report to the specified format using Quarto.
@@ -1207,7 +1208,9 @@ class ReportService:
             preview_path = rendered_output_path or qmd_output_path
             if preview_path:
                 try:
-                    preview = self._generate_preview(preview_path)
+                    preview = self._generate_preview(
+                        preview_path, max_chars=preview_max_chars
+                    )
                     if preview:
                         response["preview"] = preview
                         response["output"]["preview"] = preview

@@ -181,7 +181,8 @@ class FakeSnowflakeCursor:
             self.description = None
             return
 
-        # Handle snapshot_session query: SELECT CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA()
+        # Handle snapshot_session query:
+        # SELECT CURRENT_ROLE(), CURRENT_WAREHOUSE(), CURRENT_DATABASE(), CURRENT_SCHEMA()
         if "CURRENT_ROLE()" in upper and "CURRENT_WAREHOUSE()" in upper:
             self._fetchone_map = {
                 "ROLE": self.session_defaults.role,
