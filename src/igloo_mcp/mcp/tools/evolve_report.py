@@ -573,6 +573,8 @@ class EvolveReportTool(MCPTool):
                 "section_ids_modified": [
                     c.section_id for c in changes_obj.sections_to_modify if c.section_id
                 ],
+                "insight_ids_removed": [c for c in changes_obj.insights_to_remove],
+                "section_ids_removed": [c for c in changes_obj.sections_to_remove],
             }
             if changes_obj.status_change:
                 summary["status_change"] = changes_obj.status_change

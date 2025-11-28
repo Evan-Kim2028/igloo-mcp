@@ -52,8 +52,10 @@ class CreateReportTool(MCPTool):
         return (
             "Create a new living report with optional template and tags. "
             "Use this tool to start a new report that can be evolved over time with insights and analysis. "
-            "Supports templates for common report types (default, monthly_sales, quarterly_review, deep_dive, analyst_v1). "
-            "The analyst_v1 template provides standardized blockchain analysis reports with citation enforcement."
+            "Supports templates for common report types "
+            "(default, monthly_sales, quarterly_review, deep_dive, analyst_v1). "
+            "The analyst_v1 template provides standardized blockchain analysis reports "
+            "with citation enforcement."
         )
 
     @property
@@ -172,6 +174,14 @@ class CreateReportTool(MCPTool):
                 initial_sections=initial_sections,
                 **metadata,
             )
+
+            # Get outline to retrieve created section/insight IDs
+            outline_start = time.time()
+            outline = self.report_service.get_report_outline(report_id)
+            section_ids_added = [s.section_id for s in outline.sections]
+            insight_ids_added = [i.insight_id for i in outline.insights]
+            outline_duration = (time.time() - outline_start) * 1000
+
         except ValueError as e:
             # Template validation errors from service
             create_duration = (time.time() - create_start) * 1000
@@ -217,13 +227,18 @@ class CreateReportTool(MCPTool):
                 "template": template,
                 "request_id": request_id,
                 "create_duration_ms": create_duration,
+                "outline_duration_ms": outline_duration,
                 "total_duration_ms": total_duration,
+                "section_ids_added": section_ids_added,
+                "insight_ids_added": insight_ids_added,
             },
         )
 
         return {
             "status": "success",
             "report_id": report_id,
+            "section_ids_added": section_ids_added,
+            "insight_ids_added": insight_ids_added,
             "title": title,
             "template": template,
             "tags": tags or [],
@@ -231,6 +246,7 @@ class CreateReportTool(MCPTool):
             "request_id": request_id,
             "timing": {
                 "create_duration_ms": round(create_duration, 2),
+                "outline_duration_ms": round(outline_duration, 2),
                 "total_duration_ms": round(total_duration, 2),
             },
         }
@@ -254,7 +270,11 @@ class CreateReportTool(MCPTool):
                 },
                 "template": {
                     "type": "string",
-                    "description": "Report template to use. Defaults to 'default' if not specified. Available templates: default (empty report), monthly_sales, quarterly_review, deep_dive, analyst_v1 (blockchain analysis with citation enforcement).",
+                    "description": (
+                        "Report template to use. Defaults to 'default' if not specified. "
+                        "Available templates: default (empty report), monthly_sales, quarterly_review, "
+                        "deep_dive, analyst_v1 (blockchain analysis with citation enforcement)."
+                    ),
                     "enum": [
                         "default",
                         "monthly_sales",

@@ -5,6 +5,7 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -17,7 +18,7 @@ from igloo_mcp.mcp.exceptions import (
 )
 from igloo_mcp.path_utils import resolve_catalog_path, validate_safe_path
 
-from .base import MCPTool, tool_error_handler
+from .base import MCPTool, ensure_request_id, tool_error_handler
 from .schema_utils import string_schema
 
 try:
@@ -95,6 +96,10 @@ class GetCatalogSummaryTool(MCPTool):
             MCPSelectorError: If catalog directory or summary file not found
             MCPExecutionError: If summary cannot be loaded
         """
+        # Timing and request correlation
+        start_time = time.time()
+        request_id = ensure_request_id(request_id)
+
         # If catalog_dir is default, try to resolve to unified storage
         if catalog_dir == "./data_catalogue":
             try:
@@ -144,16 +149,24 @@ class GetCatalogSummaryTool(MCPTool):
                 self.catalog_service.load_summary, catalog_dir
             )
 
+            # Calculate total duration
+            total_duration = (time.time() - start_time) * 1000
+
             logger.info(
                 "get_catalog_summary_completed",
                 extra={
                     "catalog_dir": catalog_dir,
                     "request_id": request_id,
+                    "total_duration_ms": total_duration,
                 },
             )
 
             return {
                 "status": "success",
+                "request_id": request_id,
+                "timing": {
+                    "total_duration_ms": round(total_duration, 2),
+                },
                 "catalog_dir": catalog_dir,
                 "summary": summary,
             }
