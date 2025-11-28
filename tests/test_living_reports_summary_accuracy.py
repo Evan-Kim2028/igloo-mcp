@@ -13,7 +13,6 @@ the summary SHOULD do to prevent regressions.
 import uuid
 
 
-
 class TestSummaryInsightCounts:
     """Test that summary accurately counts insights from all sources.
 

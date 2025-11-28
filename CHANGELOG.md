@@ -30,10 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Status change support**: `evolve_report` now accepts `status_change` parameter to transition reports between `active`, `archived`, and `deleted` states with full audit trail.
 - **Citations field (model-level)**: Insights now have `citations` field alongside `supporting_queries` for future multi-source support (web/API/manual). Backward compatible shim ensures existing code continues working.
 - Enhanced `render_report` service to return usable `output_path` and optional `preview` in standardized response format.
+- **#50, #49 Enhanced validation errors**: Validation errors now include field paths, input values, operation-specific schema examples, and hints for common mistakes. Makes debugging schema issues significantly easier for LLM agents and users.
+- **#55 Enhanced dry_run**: Dry run validation now returns detailed validation errors with schema help when validation fails, enabling iterative debugging without applying changes.
 
 ### Changed
 - **evolve_report validation**: Validation errors now return structured dictionaries (`status: "validation_failed"`) instead of raising exceptions, providing better MCP client compatibility.
 - Improved test coverage: 58/58 evolve_report tests passing, 18/18 render_report tests passing, all execute_query tests passing.
+
+### Documentation
+- **#52 JSON Schema Reference**: Added comprehensive JSON schema reference section to user guide with copy-paste-ready examples for all operations (adding/modifying/removing insights, sections, status changes, dry run validation, etc.). Includes common validation error examples.
 
 ### Infrastructure
 - Added comprehensive test suite for render service preview/output path behavior.

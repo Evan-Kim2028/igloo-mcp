@@ -15,9 +15,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..path_utils import resolve_history_path
+from . import models as living_reports_models
 from .history_index import HistoryIndex, ResolvedDataset
 from .index import ReportIndex
-from .models import AuditEvent, IndexEntry, Outline, ReportId, Section
+from .models import AuditEvent, IndexEntry, Insight, Outline, ReportId, Section
 from .quarto_renderer import QuartoNotFoundError, QuartoRenderer, RenderResult
 from .storage import GlobalStorage, ReportStorage
 
@@ -76,12 +77,7 @@ class ReportService:
         """
         # Import templates.py module directly (avoiding conflict with templates/ directory)
         import importlib.util
-        import sys
 
-        # Set up parent package context for relative imports
-        parent_module = sys.modules.get("igloo_mcp.living_reports")
-        if parent_module is None:
-            from igloo_mcp import living_reports as parent_module
         templates_file = Path(__file__).parent / "templates.py"
         spec = importlib.util.spec_from_file_location(
             "igloo_mcp.living_reports.templates",
@@ -91,8 +87,8 @@ class ReportService:
         templates_mod = importlib.util.module_from_spec(spec)
         templates_mod.__package__ = "igloo_mcp.living_reports"
         templates_mod.__name__ = "igloo_mcp.living_reports.templates"
-        # Set up models import
-        templates_mod.models = parent_module.models
+        # Set up models import for templates
+        templates_mod.models = living_reports_models
         spec.loader.exec_module(templates_mod)
         get_template = templates_mod.get_template
 
@@ -865,8 +861,8 @@ class ReportService:
         new_id = self.create_report(title, tags=["synthesized"], actor=actor)
 
         # Load all source outlines
-        all_sections = []
-        all_insights = []
+        all_sections: list[Section] = []
+        all_insights: list[Insight] = []
         all_tags = set()
 
         for source_id in source_ids:

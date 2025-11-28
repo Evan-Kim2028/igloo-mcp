@@ -532,6 +532,233 @@ igloo report history "Q1 Sales Analysis"
 
 Living Reports provide a new way to maintain business intelligence that's both human-friendly and AI-enhanced, ensuring reports stay current while maintaining their accuracy and auditability.
 
+## JSON Schema Reference
+
+This section provides copy-paste-ready JSON examples for all `evolve_report` operations. These examples match the exact structure expected by the MCP tool.
+
+### Adding Insights
+
+**Required Fields:**
+- `section_id` (UUID) - Section to add insight to
+- `insight.summary` (string) - Insight content
+- `insight.importance` (integer 1-10) - Importance score
+
+**Optional Fields:**
+- `insight.supporting_queries` (array) - Defaults to `[]` if omitted
+
+**Example:**
+```json
+{
+  "report_selector": "Q1 Analysis",
+  "instruction": "Add revenue growth insight",
+  "proposed_changes": {
+    "insights_to_add": [{
+      "section_id": "550e8400-e29b-41d4-a716-446655440012",
+      "insight": {
+        "summary": "Revenue grew 25% YoY to $2.4M",
+        "importance": 9,
+        "supporting_queries": []
+      }
+    }]
+  }
+}
+```
+
+### Adding Sections
+
+**Required Fields:**
+- `title` (string) - Section name
+
+**Optional Fields:**
+- `order` (integer) - Display order (defaults to append)
+- `notes` (string) - Section metadata/notes
+- `content` (string) - Free-form markdown/text content (new in v0.3.2)
+- `content_format` (string) - Content format: "markdown" (default), "text", or "html"
+
+**Example:**
+```json
+{
+  "report_selector": "Q1 Analysis",
+  "instruction": "Add executive summary section with overview",
+  "proposed_changes": {
+    "sections_to_add": [{
+      "title": "Executive Summary",
+      "order": 1,
+      "notes": "High-level overview for stakeholders",
+      "content": "## Overview\n\nQ1 performance exceeded expectations across all key metrics...",
+      "content_format": "markdown"
+    }]
+  }
+}
+```
+
+### Modifying Sections
+
+**Required Fields:**
+- `section_id` (UUID) - Section to modify
+
+**Optional Fields** (at least one required):
+- `title` (string) - New title
+- `order` (integer) - New display order
+- `notes` (string) - Updated notes
+- `content` (string) - Updated content
+- `content_format` (string) - Content format
+- `insight_ids_to_add` (array of UUIDs) - Link existing insights
+- `insight_ids_to_remove` (array of UUIDs) - Unlink insights
+
+**Example:**
+```json
+{
+  "report_selector": "Q1 Analysis",
+  "instruction": "Rename section and link new insights",
+  "proposed_changes": {
+    "sections_to_modify": [{
+      "section_id": "550e8400-e29b-41d4-a716-446655440012",
+      "title": "Revenue & Growth Metrics",
+      "order": 2,
+      "insight_ids_to_add": ["insight-uuid-1", "insight-uuid-2"],
+      "content": "Updated analysis with Q1 data..."
+    }]
+  }
+}
+```
+
+### Removing Sections
+
+**Required Fields:**
+- Section IDs (array of UUIDs) to remove
+
+**Example:**
+```json
+{
+  "report_selector": "Q1 Analysis",
+  "instruction": "Remove outdated preliminary analysis section",
+  "proposed_changes": {
+    "sections_to_remove": ["550e8400-e29b-41d4-a716-446655440013"]
+  }
+}
+```
+
+### Changing Report Status (Archive/Restore/Delete)
+
+**Required Fields:**
+- `status_change` (string) - "active", "archived", or "deleted"
+
+**Important:** Status changes cannot be combined with content changes in the same operation.
+
+**Example - Archive Report:**
+```json
+{
+  "report_selector": "Q3 2024 Analysis",
+  "instruction": "Archive obsolete quarterly report",
+  "proposed_changes": {
+    "status_change": "archived"
+  }
+}
+```
+
+**Example - Restore Archived Report:**
+```json
+{
+  "report_selector": "Q3 2024 Analysis",
+  "instruction": "Restore archived report for reference",
+  "proposed_changes": {
+    "status_change": "active"
+  }
+}
+```
+
+### Combining Multiple Operations
+
+You can combine multiple operations in a single `evolve_report` call (except status changes):
+
+**Example:**
+```json
+{
+  "report_selector": "Q1 Analysis",
+  "instruction": "Add new section with insights and update existing section",
+  "proposed_changes": {
+    "sections_to_add": [{
+      "title": "Customer Acquisition",
+      "order": 3,
+      "content": "## CAC Analysis\n\nCustomer acquisition costs..."
+    }],
+    "insights_to_add": [{
+      "section_id": "existing-section-uuid",
+      "insight": {
+        "summary": "CAC decreased 15% due to organic growth",
+        "importance": 8,
+        "supporting_queries": [{"execution_id": "exec_cac_analysis"}]
+      }
+    }],
+    "sections_to_modify": [{
+      "section_id": "existing-section-uuid",
+      "title": "Updated Section Title"
+    }]
+  }
+}
+```
+
+### Dry Run Validation
+
+Use `dry_run: true` to validate changes without applying them:
+
+**Example:**
+```json
+{
+  "report_selector": "Q1 Analysis",
+  "instruction": "Validate proposed structure changes",
+  "proposed_changes": {
+    "sections_to_add": [{"title": "New Section"}]
+  },
+  "dry_run": true
+}
+```
+
+**Response includes:**
+- `validation_passed`: boolean
+- `planned_changes`: Preview of what would be applied
+- `validation_errors`: Array of errors if validation fails (new in v0.3.2)
+- `schema_examples`: Targeted examples for operations with errors (new in v0.3.2)
+
+### Common Validation Errors
+
+**Missing Required Field:**
+```json
+// Error response
+{
+  "status": "validation_failed",
+  "validation_errors": [{
+    "field": "insights_to_add[0].section_id",
+    "message": "Missing required field",
+    "input_value": null
+  }],
+  "schema_examples": {
+    "insights_to_add": [
+      {
+        "section_id": "550e8400-e29b-41d4-a716-446655440012",
+        "insight": {"summary": "...", "importance": 9}
+      }
+    ]
+  }
+}
+```
+
+**Invalid UUID Format:**
+```json
+// Error response
+{
+  "status": "validation_failed",
+  "validation_errors": [{
+    "field": "sections_to_modify[0].section_id",
+    "message": "Input should be a valid UUID",
+    "input_value": "not-a-uuid"
+  }],
+  "hints": ["insight_id and section_id must be valid UUID strings"],
+  "examples": {"section_id": "550e8400-e29b-41d4-a716-446655440000"}
+}
+```
+
 ## See Also
 
 - [Living Reports Technical Plan](technical-plan.md) - Technical implementation details

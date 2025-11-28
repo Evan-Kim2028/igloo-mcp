@@ -9,7 +9,6 @@ expected input types, not full functionality (which is tested elsewhere).
 """
 
 
-
 class TestExecuteQuerySchemaContracts:
     """Test execute_query tool schema accepts expected input types.
 

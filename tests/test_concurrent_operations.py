@@ -6,8 +6,6 @@ same-second operations would overwrite each other's backups.
 """
 
 
-
-
 class TestBackupFileCollisions:
     """Test that rapid mutations create unique backup files.
 

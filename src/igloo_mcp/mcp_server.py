@@ -532,7 +532,12 @@ def register_igloo_mcp(
         template: Annotated[
             str,
             Field(
-                description="Report template to use. Defaults to 'default' if not specified. Available templates: default (empty report), monthly_sales, quarterly_review, deep_dive, analyst_v1 (blockchain analysis with citation enforcement).",
+                description=(
+                    "Report template to use. Defaults to 'default' if not specified. "
+                    "Available templates: default (empty report), monthly_sales, "
+                    "quarterly_review, deep_dive, analyst_v1 (blockchain analysis with "
+                    "citation enforcement)."
+                ),
                 default="default",
                 pattern="^(default|monthly_sales|quarterly_review|deep_dive|analyst_v1)$",
             ),
@@ -656,7 +661,7 @@ def register_igloo_mcp(
         schema: Annotated[
             Optional[str], Field(description="Specific schema", default=None)
         ] = None,
-        account_scope: Annotated[
+        account: Annotated[
             bool, Field(description="Include account-level metadata", default=False)
         ] = False,
         format: Annotated[
@@ -667,14 +672,22 @@ def register_igloo_mcp(
         return await build_dependency_graph_inst.execute(
             database=database,
             schema=schema,
-            account_scope=account_scope,
+            account=account,
             format=format,
         )
 
     @server.tool(name="test_connection", description="Validate Snowflake connectivity")
-    async def test_connection_tool() -> Dict[str, Any]:
+    async def test_connection_tool(
+        request_id: Annotated[
+            Optional[str],
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
+    ) -> Dict[str, Any]:
         """Test Snowflake connection - delegates to TestConnectionTool."""
-        return await test_connection_inst.execute()
+        return await test_connection_inst.execute(request_id=request_id)
 
     @server.tool(name="health_check", description="Get comprehensive health status")
     async def health_check_tool() -> Dict[str, Any]:

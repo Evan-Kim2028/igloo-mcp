@@ -5,7 +5,6 @@ These tests would have caught the v0.3.2 templates/ vs templates.py namespace co
 """
 
 
-
 class TestLivingReportsImports:
     """Test that all living reports public APIs are importable."""
 

@@ -370,7 +370,7 @@ class EvolveReportTool(MCPTool):
 
                 # Format structured errors for logging and response
                 error_strings = [err.to_string() for err in semantic_errors]
-                error_details = [
+                structured_errors = [
                     {
                         "field": err.field,
                         "value": err.value,
@@ -390,7 +390,7 @@ class EvolveReportTool(MCPTool):
                     extra={
                         "report_id": report_id,
                         "semantic_errors": error_strings,
-                        "semantic_errors_structured": error_details,
+                        "semantic_errors_structured": structured_errors,
                         "request_id": request_id,
                         "validation_duration_ms": validation_duration,
                     },
@@ -1175,28 +1175,40 @@ class EvolveReportTool(MCPTool):
             errors: List of Pydantic ValidationError error dicts
 
         Returns:
-            Dict with errors, hints, and examples
+            Dict with errors, hints, examples, and schema help
         """
-        formatted_errors = []
-        hints = []
-        examples = {}
+        formatted_errors: list[Dict[str, Any]] = []
+        hints: list[str] = []
+        examples: Dict[str, Any] = {}
+
+        # Track which operation types had errors for targeted schema help
+        operations_with_errors = set()
 
         for error in errors:
             error_type = error.get("type", "unknown")
             loc = error.get("loc", ())
             msg = error.get("msg", "")
+            input_value = error.get("input")
+
+            field_path = ".".join(str(x) for x in loc)
 
             formatted_errors.append(
                 {
-                    "field": ".".join(str(x) for x in loc),
+                    "field": field_path,
                     "type": error_type,
                     "message": msg,
+                    "input_value": input_value,
                 }
             )
 
+            # Track operation type
+            if loc and len(loc) > 0:
+                operation = str(loc[0])
+                operations_with_errors.add(operation)
+
             # Add hints based on error type
-            if error_type == "value_error.missing":
-                hints.append(f"Missing required field: {'.'.join(str(x) for x in loc)}")
+            if error_type == "value_error.missing" or "missing" in error_type.lower():
+                hints.append(f"Missing required field: {field_path}")
             elif "uuid" in error_type.lower() or "uuid" in msg.lower():
                 hints.append("insight_id and section_id must be valid UUID strings")
                 examples["insight_id"] = str(uuid.uuid4())
@@ -1204,12 +1216,78 @@ class EvolveReportTool(MCPTool):
             elif "int" in error_type.lower() and "importance" in str(loc):
                 hints.append("importance must be an integer between 0 and 10")
                 examples["importance"] = 8
+            elif "list" in error_type.lower():
+                hints.append(f"{field_path} must be a list/array")
+                if "supporting_queries" in field_path:
+                    hints.append("supporting_queries defaults to [] if omitted")
+
+        # Add operation-specific schema examples
+        schema_examples = self._get_schema_examples_for_operations(
+            operations_with_errors
+        )
 
         return {
             "errors": formatted_errors,
             "hints": hints if hints else None,
             "examples": examples if examples else None,
+            "schema_examples": schema_examples if schema_examples else None,
+            "documentation": "https://github.com/Evan-Kim2028/igloo-mcp/blob/main/docs/living-reports/user-guide.md",
         }
+
+    def _get_schema_examples_for_operations(
+        self, operations: set[str]
+    ) -> Dict[str, Any]:
+        """Get schema examples for specific operations that had errors.
+
+        Args:
+            operations: Set of operation types that had validation errors
+
+        Returns:
+            Dict with schema examples for each operation type
+        """
+        examples = {}
+
+        if "insights_to_add" in operations:
+            examples["insights_to_add"] = [
+                {
+                    "section_id": "550e8400-e29b-41d4-a716-446655440012",
+                    "insight": {
+                        "summary": "Revenue grew 25% YoY to $2.4M",
+                        "importance": 9,
+                        "supporting_queries": [],  # Optional, defaults to []
+                    },
+                }
+            ]
+
+        if "sections_to_add" in operations:
+            examples["sections_to_add"] = [
+                {
+                    "title": "Executive Summary",
+                    "order": 1,
+                    "notes": "Optional section notes",
+                    "content": "Optional markdown content",  # New in v0.3.2
+                    "content_format": "markdown",  # Optional, defaults to "markdown"
+                }
+            ]
+
+        if "sections_to_modify" in operations:
+            examples["sections_to_modify"] = [
+                {
+                    "section_id": "550e8400-e29b-41d4-a716-446655440012",
+                    "title": "New Title",  # Optional
+                    "order": 2,  # Optional
+                    "insight_ids_to_add": [
+                        "insight-uuid-1",
+                        "insight-uuid-2",
+                    ],  # Optional
+                    "content": "Updated content",  # Optional
+                }
+            ]
+
+        if "status_change" in operations:
+            examples["status_change"] = "archived"  # or "active" or "deleted"
+
+        return examples
 
     def _calculate_outline_warnings(self, outline: Outline) -> List[str]:
         """Calculate warnings based on the post-change outline state."""
