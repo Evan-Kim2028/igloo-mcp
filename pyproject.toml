@@ -41,12 +41,6 @@ Documentation = "https://github.com/Evan-Kim2028/igloo-mcp#readme"
 requires = ["uv_build>=0.8.15,<0.9.0"]
 build-backend = "uv_build"
 
-[tool.uv.build]
-# Include template files in package distribution
-include = [
-    "src/igloo_mcp/living_reports/templates/*.j2",
-]
-
 [tool.uv]
 dev-dependencies = [
     "pytest>=7.0.0",
@@ -71,8 +65,8 @@ line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default
-select = ["E", "F"]
+# Enable pycodestyle (`E`), Pyflakes (`F`), and isort (`I`) codes by default
+select = ["E", "F", "I"]
 ignore = []
 
 [tool.ruff.format]

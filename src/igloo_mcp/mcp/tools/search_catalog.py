@@ -278,7 +278,9 @@ class SearchCatalogTool(MCPTool):
                 ),
                 "search_all_databases": {
                     "type": "boolean",
-                    "description": "If True and catalog_dir is default, search across all database catalogs in unified storage.",
+                    "description": (
+                        "If True and catalog_dir is default, search across all database catalogs in unified storage."
+                    ),
                     "title": "Search All Databases",
                     "default": False,
                 },

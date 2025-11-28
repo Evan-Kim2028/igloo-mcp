@@ -52,8 +52,10 @@ class CreateReportTool(MCPTool):
         return (
             "Create a new living report with optional template and tags. "
             "Use this tool to start a new report that can be evolved over time with insights and analysis. "
-            "Supports templates for common report types (default, monthly_sales, quarterly_review, deep_dive, analyst_v1). "
-            "The analyst_v1 template provides standardized blockchain analysis reports with citation enforcement."
+            "Supports templates for common report types "
+            "(default, monthly_sales, quarterly_review, deep_dive, analyst_v1). "
+            "The analyst_v1 template provides standardized blockchain analysis reports "
+            "with citation enforcement."
         )
 
     @property
@@ -254,7 +256,11 @@ class CreateReportTool(MCPTool):
                 },
                 "template": {
                     "type": "string",
-                    "description": "Report template to use. Defaults to 'default' if not specified. Available templates: default (empty report), monthly_sales, quarterly_review, deep_dive, analyst_v1 (blockchain analysis with citation enforcement).",
+                    "description": (
+                        "Report template to use. Defaults to 'default' if not specified. "
+                        "Available templates: default (empty report), monthly_sales, quarterly_review, "
+                        "deep_dive, analyst_v1 (blockchain analysis with citation enforcement)."
+                    ),
                     "enum": [
                         "default",
                         "monthly_sales",

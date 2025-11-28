@@ -28,7 +28,10 @@ try:  # Prefer the standalone fastmcp package when available
 except ImportError:  # Fall back to the implementation bundled with python-sdk
     from mcp.server.fastmcp import Context, FastMCP  # type: ignore[import-untyped,assignment]
     from mcp.server.fastmcp.exceptions import NotFoundError  # type: ignore[import-untyped,assignment]
-    from mcp.server.fastmcp.utilities.logging import configure_logging, get_logger  # type: ignore[import-untyped,assignment]
+    from mcp.server.fastmcp.utilities.logging import (  # type: ignore[import-untyped,assignment]
+        configure_logging,
+        get_logger,
+    )
 
 from mcp_server_snowflake.server import (  # type: ignore[import-untyped]
     SnowflakeService,
@@ -145,9 +148,7 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
         # Log all available attributes for debugging
         attrs = [attr for attr in dir(server) if not attr.startswith("__")]
         logger.debug(f"Server attributes: {attrs[:20]}...")  # First 20 to avoid spam
-        logger.warning(
-            "Could not find middleware stack, SQL validation patch may not work"
-        )
+        logger.warning("Could not find middleware stack, SQL validation patch may not work")
         return
 
     if not middleware_stack:
@@ -158,11 +159,7 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
     patched = False
     for i, middleware in enumerate(middleware_stack):
         # Check if this is the CheckQueryType middleware by inspecting its type/name
-        middleware_type_name = (
-            type(middleware).__name__
-            if hasattr(middleware, "__class__")
-            else str(middleware)
-        )
+        middleware_type_name = type(middleware).__name__ if hasattr(middleware, "__class__") else str(middleware)
         middleware_str = str(middleware)
 
         # Check for various SQL validation middleware patterns
@@ -182,9 +179,7 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
             # Create a wrapper that only applies to execute_query
             original_middleware = middleware
 
-            async def conditional_sql_validation_middleware(
-                *args: Any, **kwargs: Any
-            ) -> Any:
+            async def conditional_sql_validation_middleware(*args: Any, **kwargs: Any) -> Any:
                 """Middleware wrapper that only applies SQL validation to execute_query."""
 
                 # FastMCP 2.13+ passes (context, call_next); legacy path passes
@@ -222,9 +217,7 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
                         return await original_middleware(*args, **kwargs)
                     except TypeError:
                         # Legacy signature fallback
-                        return await original_middleware(
-                            call_next, tool_name, arguments
-                        )
+                        return await original_middleware(call_next, tool_name, arguments)
 
                 logger.debug(
                     "Skipping SQL validation for non-SQL tool: %s",
@@ -240,9 +233,7 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
 
             # Replace the middleware with our conditional wrapper
             middleware_stack[i] = conditional_sql_validation_middleware
-            logger.info(
-                "Patched SQL validation middleware to only apply to execute_query"
-            )
+            logger.info("Patched SQL validation middleware to only apply to execute_query")
             patched = True
             break
 
@@ -261,17 +252,11 @@ def read_sql_artifact_by_sha(sql_sha256: str) -> str:
         raise ValueError("sql_sha256 must be a 64-character hexadecimal digest")
 
     artifact_root = resolve_artifact_root().resolve()
-    artifact_path = (
-        artifact_root / "queries" / "by_sha" / f"{sql_sha256}.sql"
-    ).resolve()
+    artifact_path = (artifact_root / "queries" / "by_sha" / f"{sql_sha256}.sql").resolve()
     if not artifact_path.is_relative_to(artifact_root):
-        raise FileNotFoundError(
-            f"SQL artifact for {sql_sha256} not found under {artifact_root}"
-        )
+        raise FileNotFoundError(f"SQL artifact for {sql_sha256} not found under {artifact_root}")
     if not artifact_path.exists() or not artifact_path.is_file():
-        raise FileNotFoundError(
-            f"SQL artifact for {sql_sha256} not found under {artifact_root}"
-        )
+        raise FileNotFoundError(f"SQL artifact for {sql_sha256} not found under {artifact_root}")
     return artifact_path.read_text(encoding="utf-8")
 
 
@@ -338,9 +323,7 @@ def register_igloo_mcp(
     # snow_cli bridge removed - no longer needed
 
     # Instantiate all extracted tool classes
-    execute_query_inst = ExecuteQueryTool(
-        config, snowflake_service, query_service, _health_monitor
-    )
+    execute_query_inst = ExecuteQueryTool(config, snowflake_service, query_service, _health_monitor)
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
     build_dependency_graph_inst = BuildDependencyGraphTool(dependency_service)
     test_connection_inst = ConnectionTestTool(config, snowflake_service)
@@ -357,9 +340,7 @@ def register_igloo_mcp(
     get_report_inst = GetReportTool(config, report_service)
     get_report_schema_inst = GetReportSchemaTool(config)
 
-    @server.tool(
-        name="execute_query", description="Execute a SQL query against Snowflake"
-    )
+    @server.tool(name="execute_query", description="Execute a SQL query against Snowflake")
     async def execute_query_tool(
         statement: Annotated[str, Field(description="SQL statement to execute")],
         reason: Annotated[
@@ -372,18 +353,10 @@ def register_igloo_mcp(
                 min_length=5,
             ),
         ],
-        warehouse: Annotated[
-            Optional[str], Field(description="Warehouse override", default=None)
-        ] = None,
-        database: Annotated[
-            Optional[str], Field(description="Database override", default=None)
-        ] = None,
-        schema: Annotated[
-            Optional[str], Field(description="Schema override", default=None)
-        ] = None,
-        role: Annotated[
-            Optional[str], Field(description="Role override", default=None)
-        ] = None,
+        warehouse: Annotated[Optional[str], Field(description="Warehouse override", default=None)] = None,
+        database: Annotated[Optional[str], Field(description="Database override", default=None)] = None,
+        schema: Annotated[Optional[str], Field(description="Schema override", default=None)] = None,
+        role: Annotated[Optional[str], Field(description="Role override", default=None)] = None,
         timeout_seconds: Annotated[
             Optional[int | str],
             Field(
@@ -424,9 +397,7 @@ def register_igloo_mcp(
                 try:
                     timeout_int = int(timeout_seconds)
                 except ValueError:
-                    raise MCPValidationError(
-                        f"timeout_seconds must be a valid integer, got: {timeout_seconds}"
-                    )
+                    raise MCPValidationError(f"timeout_seconds must be a valid integer, got: {timeout_seconds}")
             else:
                 timeout_int = timeout_seconds
 
@@ -454,30 +425,22 @@ def register_igloo_mcp(
             # This catch-all is a safety net for unexpected errors
             raise
 
-    @server.tool(
-        name="evolve_report", description="Evolve a living report with LLM assistance"
-    )
+    @server.tool(name="evolve_report", description="Evolve a living report with LLM assistance")
     async def evolve_report_tool(
-        report_selector: Annotated[
-            str, Field(description="Report ID or title to evolve")
-        ],
+        report_selector: Annotated[str, Field(description="Report ID or title to evolve")],
         instruction: Annotated[
             str,
             Field(description="Natural language evolution instruction for audit trail"),
         ],
         proposed_changes: Annotated[
             Dict[str, Any],
-            Field(
-                description="Structured changes generated by LLM based on instruction and current outline"
-            ),
+            Field(description="Structured changes generated by LLM based on instruction and current outline"),
         ],
         constraints: Annotated[
             Optional[Dict[str, Any]],
             Field(description="Optional evolution constraints", default=None),
         ] = None,
-        dry_run: Annotated[
-            bool, Field(description="Validate without applying changes", default=False)
-        ] = False,
+        dry_run: Annotated[bool, Field(description="Validate without applying changes", default=False)] = False,
         status_change: Annotated[
             Optional[str],
             Field(
@@ -511,9 +474,7 @@ def register_igloo_mcp(
         description="Render a living report to human-readable formats (HTML, PDF, etc.) using Quarto",
     )
     async def render_report_tool(
-        report_selector: Annotated[
-            str, Field(description="Report ID or title to render")
-        ],
+        report_selector: Annotated[str, Field(description="Report ID or title to render")],
         format: Annotated[
             str,
             Field(
@@ -678,9 +639,7 @@ def register_igloo_mcp(
         description="Get the structure and content of a living report with selective retrieval",
     )
     async def get_report_tool(
-        report_selector: Annotated[
-            str, Field(description="Report ID or title to retrieve")
-        ],
+        report_selector: Annotated[str, Field(description="Report ID or title to retrieve")],
         mode: Annotated[
             str,
             Field(
@@ -803,15 +762,9 @@ def register_igloo_mcp(
             Optional[str],
             Field(description="Specific database to introspect", default=None),
         ] = None,
-        account: Annotated[
-            bool, Field(description="Include entire account", default=False)
-        ] = False,
-        format: Annotated[
-            str, Field(description="Output format (json/jsonl)", default="json")
-        ] = "json",
-        include_ddl: Annotated[
-            bool, Field(description="Include object DDL", default=True)
-        ] = True,
+        account: Annotated[bool, Field(description="Include entire account", default=False)] = False,
+        format: Annotated[str, Field(description="Output format (json/jsonl)", default="json")] = "json",
+        include_ddl: Annotated[bool, Field(description="Include object DDL", default=True)] = True,
     ) -> Dict[str, Any]:
         """Build catalog metadata - delegates to BuildCatalogTool."""
         return await build_catalog_inst.execute(
@@ -822,22 +775,12 @@ def register_igloo_mcp(
             include_ddl=include_ddl,
         )
 
-    @server.tool(
-        name="build_dependency_graph", description="Build object dependency graph"
-    )
+    @server.tool(name="build_dependency_graph", description="Build object dependency graph")
     async def build_dependency_graph_tool(
-        database: Annotated[
-            Optional[str], Field(description="Specific database", default=None)
-        ] = None,
-        schema: Annotated[
-            Optional[str], Field(description="Specific schema", default=None)
-        ] = None,
-        account: Annotated[
-            bool, Field(description="Include account-level metadata", default=False)
-        ] = False,
-        format: Annotated[
-            str, Field(description="Output format (json/dot)", default="json")
-        ] = "json",
+        database: Annotated[Optional[str], Field(description="Specific database", default=None)] = None,
+        schema: Annotated[Optional[str], Field(description="Specific schema", default=None)] = None,
+        account: Annotated[bool, Field(description="Include account-level metadata", default=False)] = False,
+        format: Annotated[str, Field(description="Output format (json/dot)", default="json")] = "json",
     ) -> Dict[str, Any]:
         """Build dependency graph - delegates to BuildDependencyGraphTool."""
         return await build_dependency_graph_inst.execute(
@@ -875,9 +818,7 @@ def register_igloo_mcp(
         """Get catalog summary - delegates to GetCatalogSummaryTool."""
         return await get_catalog_summary_inst.execute(catalog_dir=catalog_dir)
 
-    @server.tool(
-        name="search_catalog", description="Search locally built catalog artifacts"
-    )
+    @server.tool(name="search_catalog", description="Search locally built catalog artifacts")
     async def search_catalog_tool(
         catalog_dir: Annotated[
             str,
@@ -944,9 +885,7 @@ def register_igloo_mcp(
         except FileNotFoundError as exc:
             raise NotFoundError(str(exc)) from exc
         except Exception as exc:  # pragma: no cover - unlikely I/O error
-            raise NotFoundError(
-                f"SQL artifact for {sql_sha256} is unreadable: {exc}"
-            ) from exc
+            raise NotFoundError(f"SQL artifact for {sql_sha256} is unreadable: {exc}") from exc
 
 
 def _apply_config_overrides(args: argparse.Namespace) -> Config:
@@ -1111,16 +1050,10 @@ def create_combined_lifespan(args: argparse.Namespace):
                     True,  # force_refresh
                 )
                 if not profile_health.is_valid:
-                    logger.warning(
-                        f"Profile validation issue detected: {profile_health.validation_error}"
-                    )
-                    _health_monitor.record_error(
-                        f"Profile validation failed: {profile_health.validation_error}"
-                    )
+                    logger.warning(f"Profile validation issue detected: {profile_health.validation_error}")
+                    _health_monitor.record_error(f"Profile validation failed: {profile_health.validation_error}")
                 else:
-                    logger.info(
-                        f"✓ Profile health check passed for: {profile_health.profile_name}"
-                    )
+                    logger.info(f"✓ Profile health check passed for: {profile_health.profile_name}")
         except Exception as e:
             logger.warning(f"Early profile validation failed: {e}")
             _health_monitor.record_error(f"Early profile validation failed: {e}")
@@ -1134,9 +1067,7 @@ def create_combined_lifespan(args: argparse.Namespace):
                 if connection_health.value == "healthy":
                     logger.info("✓ Snowflake connection health check passed")
                 else:
-                    logger.warning(
-                        f"Snowflake connection health check failed: {connection_health}"
-                    )
+                    logger.warning(f"Snowflake connection health check failed: {connection_health}")
             except Exception as e:
                 logger.warning(f"Connection health check failed: {e}")
                 _health_monitor.record_error(f"Connection health check failed: {e}")
@@ -1195,9 +1126,7 @@ def main(argv: list[str] | None = None) -> None:
         if e.available_profiles:
             logger.error(f"Available profiles: {', '.join(e.available_profiles)}")
             logger.error("To fix this issue:")
-            logger.error(
-                "1. Set SNOWFLAKE_PROFILE environment variable to one of the available profiles"
-            )
+            logger.error("1. Set SNOWFLAKE_PROFILE environment variable to one of the available profiles")
             logger.error("2. Or pass --profile <profile_name> when starting the server")
             logger.error("3. Or run 'snow connection add' to create a new profile")
         else:

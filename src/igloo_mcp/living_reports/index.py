@@ -288,11 +288,17 @@ class ReportIndex:
 
         # Sort
         if sort_by == "created_at":
-            key_func = lambda e: e.created_at
+
+            def key_func(e):
+                return e.created_at
         elif sort_by == "current_title":
-            key_func = lambda e: e.current_title.lower()
+
+            def key_func(e):
+                return e.current_title.lower()
         else:  # updated_at (default)
-            key_func = lambda e: e.updated_at
+
+            def key_func(e):
+                return e.updated_at
 
         entries.sort(key=key_func, reverse=reverse)
 

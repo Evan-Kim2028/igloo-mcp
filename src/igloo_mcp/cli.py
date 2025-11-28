@@ -38,10 +38,7 @@ def _command_query_optimize(args: argparse.Namespace) -> int:
         objs = ", ".join(
             filter(
                 None,
-                [
-                    obj.get("name") if isinstance(obj, dict) else None
-                    for obj in report["objects"]
-                ],
+                [obj.get("name") if isinstance(obj, dict) else None for obj in report["objects"]],
             )
         )
         if objs:
@@ -64,9 +61,7 @@ def _command_report_create(args: argparse.Namespace) -> int:
     """Create a new living report."""
     try:
         service = ReportService()
-        report_id = service.create_report(
-            args.title, template=args.template, tags=args.tags
-        )
+        report_id = service.create_report(args.title, template=args.template, tags=args.tags)
         print(f"Created report '{args.title}' with ID: {report_id}")
         if args.template != "default":
             print(f"Using template: {args.template}")
@@ -204,15 +199,14 @@ def _command_report_list(args: argparse.Namespace) -> int:
             print("No reports found")
             return 0
 
-        print(
-            f"{'ID':<36} {'Title':<30} {'Created':<20} {'Updated':<20} {'Status':<8} {'Tags'}"
-        )
+        print(f"{'ID':<36} {'Title':<30} {'Created':<20} {'Updated':<20} {'Status':<8} {'Tags'}")
         print("-" * 120)
 
         for report in reports:
             tags_str = ", ".join(report.get("tags", []))
             print(
-                f"{report['id']:<36} {report['title']:<30} {report['created_at']:<20} {report['updated_at']:<20} {report['status']:<8} {tags_str}"
+                f"{report['id']:<36} {report['title']:<30} {report['created_at']:<20} "
+                f"{report['updated_at']:<20} {report['status']:<8} {tags_str}"
             )
 
         return 0
@@ -333,9 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     query_parser = subparsers.add_parser("query", help="Query tooling")
     query_sub = query_parser.add_subparsers(dest="query_command", required=True)
 
-    optimize_parser = query_sub.add_parser(
-        "optimize", help="Analyze a recorded query execution"
-    )
+    optimize_parser = query_sub.add_parser("optimize", help="Analyze a recorded query execution")
     optimize_parser.add_argument(
         "--execution-id",
         dest="execution_id",
@@ -380,9 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
     create_parser.set_defaults(func=_command_report_create)
 
     # report evolve
-    evolve_parser = report_sub.add_parser(
-        "evolve", help="Evolve a report with LLM assistance"
-    )
+    evolve_parser = report_sub.add_parser("evolve", help="Evolve a report with LLM assistance")
     evolve_parser.add_argument("selector", help="Report ID or title")
     evolve_parser.add_argument("instruction", help="Evolution instruction")
     evolve_parser.add_argument(
@@ -400,9 +390,7 @@ def build_parser() -> argparse.ArgumentParser:
     evolve_parser.set_defaults(func=_command_report_evolve)
 
     # report render
-    render_parser = report_sub.add_parser(
-        "render", help="Render report to final format"
-    )
+    render_parser = report_sub.add_parser("render", help="Render report to final format")
     render_parser.add_argument("selector", help="Report ID or title")
     render_parser.add_argument(
         "--format",
@@ -429,9 +417,7 @@ def build_parser() -> argparse.ArgumentParser:
     render_parser.set_defaults(func=_command_report_render)
 
     # report revert
-    revert_parser = report_sub.add_parser(
-        "revert", help="Revert report to previous state"
-    )
+    revert_parser = report_sub.add_parser("revert", help="Revert report to previous state")
     revert_parser.add_argument("selector", help="Report ID or title")
     revert_parser.add_argument("action_id", help="Action ID to revert to")
     revert_parser.set_defaults(func=_command_report_revert)
@@ -456,9 +442,7 @@ def build_parser() -> argparse.ArgumentParser:
     archive_parser.set_defaults(func=_command_report_archive)
 
     # report delete
-    delete_parser = report_sub.add_parser(
-        "delete", help="Delete a report (move to .trash)"
-    )
+    delete_parser = report_sub.add_parser("delete", help="Delete a report (move to .trash)")
     delete_parser.add_argument("selector", help="Report ID or title")
     delete_parser.add_argument(
         "--force",
@@ -491,9 +475,7 @@ def build_parser() -> argparse.ArgumentParser:
     fork_parser.set_defaults(func=_command_report_fork)
 
     # report synthesize
-    synthesize_parser = report_sub.add_parser(
-        "synthesize", help="Synthesize multiple reports into one"
-    )
+    synthesize_parser = report_sub.add_parser("synthesize", help="Synthesize multiple reports into one")
     synthesize_parser.add_argument(
         "source_selectors",
         nargs="+",
