@@ -133,9 +133,11 @@ class TestCreateReportResponseSchema:
         # Verify response schema
         assert set(result.keys()) == snapshot(
             {
+                "insight_ids_added",
                 "message",
                 "report_id",
                 "request_id",
+                "section_ids_added",
                 "status",
                 "tags",
                 "template",
@@ -163,9 +165,11 @@ class TestCreateReportResponseSchema:
         # Schema should be same regardless of template
         assert set(result.keys()) == snapshot(
             {
+                "insight_ids_added",
                 "message",
                 "report_id",
                 "request_id",
+                "section_ids_added",
                 "status",
                 "tags",
                 "template",
@@ -210,9 +214,7 @@ class TestErrorResponseSchema:
 
         error_dict = error.to_dict()
 
-        assert set(error_dict.keys()) == snapshot(
-            {"context", "error_code", "error_type", "message", "operation"}
-        )
+        assert set(error_dict.keys()) == snapshot({"context", "error_code", "error_type", "message", "operation"})
 
         assert error_dict["error_type"] == "MCPExecutionError"
         assert error_dict["operation"] == "test_op"
@@ -264,9 +266,7 @@ class TestKeyMetricsSchema:
         # Verify column metadata structure
         if metrics["columns"]:
             first_col = metrics["columns"][0]
-            assert set(first_col.keys()) == snapshot(
-                {"avg", "kind", "max", "min", "name", "non_null_ratio"}
-            )
+            assert set(first_col.keys()) == snapshot({"avg", "kind", "max", "min", "name", "non_null_ratio"})
 
 
 class TestPostQueryInsightSchema:

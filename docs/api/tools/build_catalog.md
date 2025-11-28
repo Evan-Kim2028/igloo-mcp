@@ -47,6 +47,7 @@ You can also configure the catalog root directory using the `IGLOO_MCP_CATALOG_R
 | `database` | string | ❌ No | current | Specific database to catalog (Snowflake identifier) |
 | `account` | boolean | ❌ No | false | Include entire account (ACCOUNT_USAGE) |
 | `format` | string | ❌ No | json | Output format (`json` or `jsonl`) |
+| `request_id` | string | ❌ No | auto-generated | Request correlation ID for distributed tracing (UUID4). Auto-generated if not provided. Use for multi-step workflows and log correlation. |
 
 > If `account` is `true`, omit `database`. Identifiers support both unquoted names (e.g., `ANALYTICS`) and quoted names (e.g., `"Sales Analytics"`).
 
@@ -65,6 +66,7 @@ When using unified storage (default), the `output_dir` in the response shows the
 ```json
 {
   "status": "success",
+  "request_id": "550e8400-e29b-41d4-a716-446655440000",
   "output_dir": "/Users/username/.igloo_mcp/catalogs/ANALYTICS",
   "database": "ANALYTICS",
   "account_scope": false,
@@ -80,9 +82,23 @@ When using unified storage (default), the `output_dir` in the response shows the
     "functions": 12,
     "procedures": 8,
     "columns": 2847
-  }
+  },
+  "timing": {
+    "catalog_fetch_ms": 245.67,
+    "total_duration_ms": 258.01
+  },
+  "warnings": []
 }
 ```
+
+### Response Fields
+
+- **`request_id`**: UUID4 correlation ID for distributed tracing
+- **`timing`**: Performance metrics in milliseconds
+  - `catalog_fetch_ms`: Time spent fetching catalog data from Snowflake
+  - `total_duration_ms`: Total execution time including file I/O
+- **`warnings`**: Array of non-fatal issues encountered (empty if none)
+  - Structure: `[{"code": string, "message": string, "severity": "low|medium|high", "context": {}}]`
 
 > **Note**: The `output_dir` in the response reflects the actual directory where files were saved, which may differ from the input parameter when using unified storage.
 

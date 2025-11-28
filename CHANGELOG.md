@@ -63,7 +63,8 @@ All changes are **backward compatible** - new fields are additions, no existing 
 
 - Added 57 tests across 4 files covering API completeness
 - Added 9 regression tests for citation and metadata features
-- All ruff linting checks pass
+- All ruff linting checks pass for production code (src/)
+- 21 pre-existing test linting issues deferred to v0.3.4
 
 ## Summary
 
@@ -78,6 +79,23 @@ All changes are **backward compatible** - new fields are additions, no existing 
 4. **Developer Experience**: Simplified tooling, comprehensive environment documentation
 
 All enhancements are **backward compatible** with sensible defaults.
+
+## Migration Notes
+
+### Citation Enforcement (Issue #89)
+
+**BEHAVIOR CHANGE**: Citation validation now applies to **ALL templates** (previously only `analyst_v1`).
+
+**Impact**: Reports using `default` or `deep_dive` templates now require citations on all insights.
+
+**Migration**:
+- **Option 1** (Recommended): Add citations to existing insights that lack them
+- **Option 2** (Temporary): Use escape hatch in `evolve_report`:
+  ```python
+  constraints={"skip_citation_validation": True}
+  ```
+
+**Why this change**: Universal citation enforcement improves data quality and auditability across all report types.
 
 # [0.3.2] - 2025-11-28
 
