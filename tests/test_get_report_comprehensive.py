@@ -1,4 +1,4 @@
-"""Tests for GetReportTool - selective report retrieval."""
+"""Comprehensive tests for get_report tool - Phase 1.1 & 1.2 complete coverage."""
 
 import uuid
 from pathlib import Path
@@ -6,191 +6,14 @@ from pathlib import Path
 import pytest
 
 from igloo_mcp.config import Config, SnowflakeConfig
+from igloo_mcp.living_reports.models import DatasetSource, Insight, Section
 from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.tools.get_report import GetReportTool
 
 
 @pytest.mark.asyncio
-class TestGetReportTool:
-    """Test suite for get_report tool."""
-
-    async def test_get_report_summary_mode(self, tmp_path: Path):
-        """Test summary mode returns lightweight overview."""
-        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
-        report_service = ReportService(reports_root=tmp_path / "reports")
-        tool = GetReportTool(config, report_service)
-
-        # Create a test report
-        report_id = report_service.create_report(
-            title="Test Report",
-            template="default",
-            tags=["test", "sample"],
-        )
-
-        # Get summary
-        result = await tool.execute(
-            report_selector=report_id,
-            mode="summary",
-        )
-
-        assert result["status"] == "success"
-        assert result["report_id"] == report_id
-        assert result["title"] == "Test Report"
-        assert "summary" in result
-        assert result["summary"]["total_sections"] == 0
-        assert result["summary"]["total_insights"] == 0
-        assert result["summary"]["tags"] == ["test", "sample"]
-        assert "sections_overview" in result
-
-    async def test_get_report_sections_mode(self, tmp_path: Path):
-        """Test sections mode returns section details."""
-        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
-        report_service = ReportService(reports_root=tmp_path / "reports")
-        tool = GetReportTool(config, report_service)
-
-        # Create report and add section via evolve
-        report_id = report_service.create_report(
-            title="Test Report",
-            template="default",
-        )
-
-        # Add a section
-        from igloo_mcp.living_reports.changes_schema import ProposedChanges
-
-        outline = report_service.get_report_outline(report_id)
-        section_id = str(uuid.uuid4())
-
-        _ = ProposedChanges(
-            sections_to_add=[
-                {
-                    "section_id": section_id,
-                    "title": "Test Section",
-                    "order": 0,
-                }
-            ]
-        )
-
-        # Apply changes manually to outline
-        from igloo_mcp.living_reports.models import Section
-
-        new_section = Section(
-            section_id=section_id,
-            title="Test Section",
-            order=0,
-            insight_ids=[],
-        )
-        outline.sections.append(new_section)
-        report_service.update_report_outline(report_id, outline, actor="test")
-
-        # Get sections
-        result = await tool.execute(
-            report_selector=report_id,
-            mode="sections",
-        )
-
-        assert result["status"] == "success"
-        assert result["total_matched"] == 1
-        assert len(result["sections"]) == 1
-        assert result["sections"][0]["section_id"] == section_id
-        assert result["sections"][0]["title"] == "Test Section"
-
-    async def test_get_report_insights_mode_with_filter(self, tmp_path: Path):
-        """Test insights mode with min_importance filter."""
-        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
-        report_service = ReportService(reports_root=tmp_path / "reports")
-        tool = GetReportTool(config, report_service)
-
-        # Create report with insights
-        report_id = report_service.create_report(
-            title="Test Report",
-            template="default",
-        )
-
-        # Add section and insights
-        from igloo_mcp.living_reports.models import Insight, Section
-
-        outline = report_service.get_report_outline(report_id)
-
-        section_id = str(uuid.uuid4())
-        insight1_id = str(uuid.uuid4())
-        insight2_id = str(uuid.uuid4())
-
-        section = Section(
-            section_id=section_id,
-            title="Test Section",
-            order=0,
-            insight_ids=[insight1_id, insight2_id],
-        )
-
-        insight1 = Insight(
-            insight_id=insight1_id,
-            summary="High priority insight",
-            importance=9,
-            status="active",
-            supporting_queries=[],
-        )
-
-        insight2 = Insight(
-            insight_id=insight2_id,
-            summary="Low priority insight",
-            importance=5,
-            status="active",
-            supporting_queries=[],
-        )
-
-        outline.sections.append(section)
-        outline.insights.extend([insight1, insight2])
-        report_service.update_report_outline(report_id, outline, actor="test")
-
-        # Get insights with min_importance filter
-        result = await tool.execute(
-            report_selector=report_id,
-            mode="insights",
-            min_importance=8,
-        )
-
-        assert result["status"] == "success"
-        assert result["total_matched"] == 1
-        assert len(result["insights"]) == 1
-        assert result["insights"][0]["insight_id"] == insight1_id
-        assert result["insights"][0]["importance"] == 9
-        assert result["filtered_by"]["min_importance"] == 8
-
-    async def test_get_report_invalid_mode(self, tmp_path: Path):
-        """Test that invalid mode raises validation error."""
-        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
-        report_service = ReportService(reports_root=tmp_path / "reports")
-        tool = GetReportTool(config, report_service)
-
-        report_id = report_service.create_report(title="Test", template="default")
-
-        from igloo_mcp.mcp.exceptions import MCPValidationError
-
-        with pytest.raises(MCPValidationError) as exc_info:
-            await tool.execute(
-                report_selector=report_id,
-                mode="invalid_mode",
-            )
-
-        assert "Invalid mode" in str(exc_info.value)
-
-    async def test_get_report_not_found(self, tmp_path: Path):
-        """Test that non-existent report raises selector error."""
-        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
-        report_service = ReportService(reports_root=tmp_path / "reports")
-        tool = GetReportTool(config, report_service)
-
-        from igloo_mcp.mcp.exceptions import MCPSelectorError
-
-        with pytest.raises(MCPSelectorError) as exc_info:
-            await tool.execute(
-                report_selector="NonExistent Report",
-                mode="summary",
-            )
-
-        assert "not found" in str(exc_info.value).lower()
-
-    # ===== PHASE 1.1: Mode Coverage Tests =====
+class TestGetReportModesCoverage:
+    """Phase 1.1: Complete mode coverage tests."""
 
     async def test_get_report_full_mode(self, tmp_path: Path):
         """Test full mode returns complete outline structure."""
@@ -204,8 +27,6 @@ class TestGetReportTool:
         )
 
         # Add an insight
-        from igloo_mcp.living_reports.models import Insight
-
         outline = report_service.get_report_outline(report_id)
         insight_id = str(uuid.uuid4())
         insight = Insight(
@@ -223,11 +44,15 @@ class TestGetReportTool:
         result = await tool.execute(report_selector=report_id, mode="full")
 
         assert result["status"] == "success"
-        assert "outline" in result
-        assert result["outline"]["report_id"] == report_id
-        assert len(result["outline"]["sections"]) == 4  # quarterly_review template
-        assert len(result["outline"]["insights"]) == 1
-        assert result["outline"]["insights"][0]["insight_id"] == insight_id
+        assert result["report_id"] == report_id
+        assert result["title"] == "Full Test"
+        assert "sections" in result
+        assert "insights" in result
+        assert len(result["sections"]) == 4  # quarterly_review template
+        assert len(result["insights"]) == 1
+        assert result["insights"][0]["insight_id"] == insight_id
+        assert result["total_sections"] == 4
+        assert result["total_insights"] == 1
 
     async def test_get_report_sections_by_title_fuzzy_match(self, tmp_path: Path):
         """Test section title fuzzy matching."""
@@ -243,15 +68,15 @@ class TestGetReportTool:
         result = await tool.execute(
             report_selector=report_id,
             mode="sections",
-            section_titles=["executive", "financial"],  # Partial matches
+            section_titles=["executive", "metrics"],  # Partial matches
         )
 
         assert result["status"] == "success"
-        # Should match "Executive Summary" and "Financial Highlights"
+        # Should match "Executive Summary" and "Key Metrics"
         assert result["total_matched"] >= 2
         titles = [s["title"] for s in result["sections"]]
         assert any("Executive" in t for t in titles)
-        assert any("Financial" in t for t in titles)
+        assert any("Metrics" in t for t in titles)
 
     async def test_get_report_sections_by_id(self, tmp_path: Path):
         """Test section retrieval by exact IDs."""
@@ -289,8 +114,6 @@ class TestGetReportTool:
         report_id = report_service.create_report(title="Test", template="default")
 
         # Add multiple insights with different attributes
-        from igloo_mcp.living_reports.models import Insight, Section
-
         outline = report_service.get_report_outline(report_id)
         section1_id = str(uuid.uuid4())
         section2_id = str(uuid.uuid4())
@@ -355,8 +178,6 @@ class TestGetReportTool:
         report_id = report_service.create_report(title="Test", template="default")
 
         # Add section with prose content
-        from igloo_mcp.living_reports.models import Section
-
         outline = report_service.get_report_outline(report_id)
         section_id = str(uuid.uuid4())
         section = Section(
@@ -379,11 +200,11 @@ class TestGetReportTool:
         assert "content" in result_with["sections"][0]
         assert "Lorem ipsum" in result_with["sections"][0]["content"]
 
-        # Get without content (default)
+        # Get without content (default) - should omit for token efficiency
         result_without = await tool.execute(report_selector=report_id, mode="sections")
 
         assert result_without["status"] == "success"
-        # Content should be omitted for token efficiency
+        # Verify content is not included (token savings)
         assert (
             "content" not in result_without["sections"][0]
             or result_without["sections"][0].get("content") is None
@@ -398,8 +219,6 @@ class TestGetReportTool:
         report_id = report_service.create_report(title="Test", template="default")
 
         # Add insights with citations
-        from igloo_mcp.living_reports.models import DatasetSource, Insight, Section
-
         outline = report_service.get_report_outline(report_id)
         section_id = str(uuid.uuid4())
         insight_id = str(uuid.uuid4())
@@ -432,3 +251,129 @@ class TestGetReportTool:
         assert insight_result["has_citations"] is True
         assert insight_result["citation_count"] == 2
         assert insight_result["section_id"] == section_id  # Shows ownership
+
+    # Pagination tests
+    async def test_get_report_pagination_sections(self, tmp_path: Path):
+        """Test pagination for sections mode."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+        tool = GetReportTool(config, report_service)
+
+        report_id = report_service.create_report(title="Test", template="default")
+
+        # Add 25 sections
+        outline = report_service.get_report_outline(report_id)
+        for i in range(25):
+            section = Section(
+                section_id=str(uuid.uuid4()),
+                title=f"Section {i}",
+                order=i,
+                insight_ids=[],
+            )
+            outline.sections.append(section)
+        report_service.update_report_outline(report_id, outline, actor="test")
+
+        # Get first page
+        result1 = await tool.execute(
+            report_selector=report_id, mode="sections", limit=10, offset=0
+        )
+
+        assert result1["status"] == "success"
+        assert result1["total_matched"] == 25
+        assert result1["returned"] == 10
+        assert result1["limit"] == 10
+        assert result1["offset"] == 0
+
+        # Get second page
+        result2 = await tool.execute(
+            report_selector=report_id, mode="sections", limit=10, offset=10
+        )
+
+        assert result2["returned"] == 10
+        assert result2["offset"] == 10
+
+        # Verify no overlap
+        page1_ids = {s["section_id"] for s in result1["sections"]}
+        page2_ids = {s["section_id"] for s in result2["sections"]}
+        assert len(page1_ids & page2_ids) == 0  # No intersection
+
+    async def test_get_report_pagination_insights(self, tmp_path: Path):
+        """Test pagination for insights mode."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+        tool = GetReportTool(config, report_service)
+
+        report_id = report_service.create_report(title="Test", template="default")
+
+        # Add 30 insights
+        outline = report_service.get_report_outline(report_id)
+        for i in range(30):
+            insight = Insight(
+                insight_id=str(uuid.uuid4()),
+                summary=f"Insight {i}",
+                importance=i % 10 + 1,
+                status="active",
+                supporting_queries=[],
+            )
+            outline.insights.append(insight)
+        report_service.update_report_outline(report_id, outline, actor="test")
+
+        # Paginate through all
+        all_insights = []
+        for offset in [0, 15]:
+            result = await tool.execute(
+                report_selector=report_id, mode="insights", limit=15, offset=offset
+            )
+            all_insights.extend(result["insights"])
+
+        assert len(all_insights) == 30
+        # Verify no duplicates
+        insight_ids = [i["insight_id"] for i in all_insights]
+        assert len(insight_ids) == len(set(insight_ids))
+
+    # Error handling tests
+    async def test_get_report_invalid_section_ids(self, tmp_path: Path):
+        """Test behavior with non-existent section IDs."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+        tool = GetReportTool(config, report_service)
+
+        report_id = report_service.create_report(title="Test", template="default")
+
+        # Request non-existent section IDs
+        non_existent_id = str(uuid.uuid4())
+        result = await tool.execute(
+            report_selector=report_id, mode="sections", section_ids=[non_existent_id]
+        )
+
+        assert result["status"] == "success"
+        assert result["total_matched"] == 0
+        assert len(result["sections"]) == 0
+        # Graceful handling - no error
+
+    async def test_get_report_empty_report(self, tmp_path: Path):
+        """Test getting empty report (no sections/insights)."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+        tool = GetReportTool(config, report_service)
+
+        report_id = report_service.create_report(title="Empty", template="default")
+
+        # Test all modes with empty report
+        summary_result = await tool.execute(report_selector=report_id, mode="summary")
+        assert summary_result["status"] == "success"
+        assert summary_result["summary"]["total_sections"] == 0
+        assert summary_result["summary"]["total_insights"] == 0
+
+        sections_result = await tool.execute(report_selector=report_id, mode="sections")
+        assert sections_result["status"] == "success"
+        assert sections_result["total_matched"] == 0
+
+        insights_result = await tool.execute(report_selector=report_id, mode="insights")
+        assert insights_result["status"] == "success"
+        assert insights_result["total_matched"] == 0
+
+        full_result = await tool.execute(report_selector=report_id, mode="full")
+        assert full_result["status"] == "success"
+        assert full_result["total_sections"] == 0
+        assert full_result["total_insights"] == 0

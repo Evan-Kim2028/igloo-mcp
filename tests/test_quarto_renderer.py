@@ -13,12 +13,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from igloo_mcp.living_reports.models import Insight, Outline, Section
+from igloo_mcp.living_reports.models import Insight, Section
 from igloo_mcp.living_reports.quarto_renderer import (
     QuartoNotFoundError,
     QuartoRenderer,
     RenderResult,
 )
+from tests.helpers.outline_factory import create_test_outline
 
 
 @pytest.fixture(autouse=True)
@@ -111,12 +112,12 @@ class TestQuartoRenderer:
             # Create mock outline using proper Outline model
             import uuid
 
-            from igloo_mcp.living_reports.models import Insight, Outline, Section
+            from igloo_mcp.living_reports.models import Insight, Section
 
             sec_id = str(uuid.uuid4())
             insight_id = str(uuid.uuid4())
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Test Report",
                 sections=[
@@ -142,6 +143,10 @@ class TestQuartoRenderer:
                     returncode=0, stdout="Output created: report.html\n", stderr=""
                 )
 
+                # Create the output file that Quarto would create
+                # (renderer checks if file exists before adding to output_paths)
+                (report_dir / "report.html").write_text("<html>Test</html>")
+
                 result = renderer.render(
                     report_dir=str(report_dir),
                     format="html",
@@ -152,7 +157,9 @@ class TestQuartoRenderer:
                 )
 
                 assert isinstance(result, RenderResult)
-                assert result.output_paths == [str(report_dir / "report.html")]
+                # Use resolved path to handle macOS /var -> /private/var symlink
+                expected_path = str((report_dir / "report.html").resolve())
+                assert result.output_paths == [expected_path]
                 assert "Output created" in result.stdout
                 assert result.warnings == []
 
@@ -176,9 +183,7 @@ class TestQuartoRenderer:
 
             import uuid
 
-            from igloo_mcp.living_reports.models import Outline
-
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Test Report",
                 sections=[],
@@ -288,12 +293,11 @@ class TestQuartoRenderer:
 
             from igloo_mcp.living_reports.models import (
                 Insight,
-                Outline,
                 QueryReference,
                 Section,
             )
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id="test-report",
                 title="Test Report",
                 sections=[
@@ -380,12 +384,11 @@ class TestQuartoRenderer:
 
             from igloo_mcp.living_reports.models import (
                 Insight,
-                Outline,
                 QueryReference,
                 Section,
             )
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id="complex-report",
                 title="Complex Test Report",
                 metadata={
@@ -455,7 +458,7 @@ class TestQuartoRenderer:
             report_dir = Path(temp_dir)
 
             insight_id = str(uuid.uuid4())
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Test Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -543,7 +546,7 @@ class TestTemplateResolution:
         with tempfile.TemporaryDirectory() as temp_dir:
             report_dir = Path(temp_dir)
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Test Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -592,7 +595,7 @@ class TestTemplateResolution:
                 '---\ntitle: "{{ outline.title }}"\nformat: {{ format }}\n---\n\n# {{ outline.title }}\n'
             )
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Dev Mode Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -650,7 +653,7 @@ class TestTemplateResolution:
                 '---\ntitle: "{{ outline.title }}"\n---\n\n# {{ outline.title }}\n'
             )
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Fallback Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -707,7 +710,7 @@ class TestTemplateResolution:
         with tempfile.TemporaryDirectory() as temp_dir:
             report_dir = Path(temp_dir)
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Test Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -763,7 +766,7 @@ class TestTemplateResolution:
         with tempfile.TemporaryDirectory() as temp_dir:
             report_dir = Path(temp_dir)
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Real Package Test",
                 created_at="2024-01-01T00:00:00Z",

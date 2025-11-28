@@ -110,6 +110,7 @@ class TestRenderReportTool:
             format="html",
             options={"toc": True},
             include_preview=True,
+            preview_max_chars=2000,
             dry_run=False,
         )
 
@@ -130,6 +131,7 @@ class TestRenderReportTool:
             format="html",  # default
             options=None,
             include_preview=False,  # default
+            preview_max_chars=2000,
             dry_run=False,  # default
         )
 

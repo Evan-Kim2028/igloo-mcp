@@ -484,6 +484,7 @@ class GetReportTool(MCPTool):
             "created_at": outline.created_at,
             "updated_at": outline.updated_at,
             "outline_version": outline.outline_version,
+            "outline": outline.model_dump(),  # Add full outline object
             "metadata": outline.metadata,
             "sections": sections_data,
             "insights": insights_data,
