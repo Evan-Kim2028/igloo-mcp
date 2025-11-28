@@ -21,6 +21,22 @@ from igloo_mcp.living_reports.quarto_renderer import (
 )
 
 
+@pytest.fixture(autouse=True)
+def reset_quarto_cache():
+    """Reset QuartoRenderer cache before each test for isolation.
+
+    This prevents cache pollution between tests where one test's
+    cached_bin_path or cached_version affects another test's expectations.
+    """
+    # Reset cache before test
+    QuartoRenderer._cached_bin_path = None
+    QuartoRenderer._cached_version = None
+    yield
+    # Reset cache after test (cleanup)
+    QuartoRenderer._cached_bin_path = None
+    QuartoRenderer._cached_version = None
+
+
 class TestQuartoRenderer:
     """Test QuartoRenderer class."""
 
