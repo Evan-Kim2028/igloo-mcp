@@ -307,20 +307,38 @@ class EvolveReportTool(MCPTool):
                 current_outline = self.report_service.get_report_outline(report_id)
             except ValueError as e:
                 outline_duration = (time.time() - outline_start) * 1000
-                logger.error(
-                    "evolve_report_outline_load_failed",
-                    extra={
-                        "report_id": report_id,
-                        "error": str(e),
-                        "request_id": request_id,
-                        "outline_duration_ms": outline_duration,
-                    },
-                )
-                raise MCPExecutionError(
-                    f"Failed to load report outline: {str(e)}",
-                    operation="evolve_report",
-                    hints=["Verify the report exists and is accessible"],
-                ) from e
+                error_msg = str(e)
+                # If it's a "not found" error, raise selector error instead of execution error
+                if "not found" in error_msg.lower():
+                    logger.warning(
+                        "evolve_report_report_not_found",
+                        extra={
+                            "report_id": report_id,
+                            "request_id": request_id,
+                            "outline_duration_ms": outline_duration,
+                        },
+                    )
+                    raise MCPSelectorError(
+                        error_msg,
+                        selector=report_id,
+                        error="not_found",
+                        candidates=[],
+                    ) from e
+                else:
+                    logger.error(
+                        "evolve_report_outline_load_failed",
+                        extra={
+                            "report_id": report_id,
+                            "error": error_msg,
+                            "request_id": request_id,
+                            "outline_duration_ms": outline_duration,
+                        },
+                    )
+                    raise MCPExecutionError(
+                        f"Failed to load report outline: {error_msg}",
+                        operation="evolve_report",
+                        hints=["Verify the report exists and is accessible"],
+                    ) from e
 
             # Step 3: Parse and validate proposed changes
             validation_start = time.time()

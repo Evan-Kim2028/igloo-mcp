@@ -320,7 +320,9 @@ async def test_execute_query_tool_handles_timeout(monkeypatch: pytest.MonkeyPatc
 
 @pytest.mark.asyncio
 async def test_execute_query_tool_handles_value_errors(monkeypatch: pytest.MonkeyPatch):
-    """Test that validation errors are properly propagated."""
+    """Test that validation errors are properly propagated for non-numeric timeout strings."""
+    from igloo_mcp.mcp.exceptions import MCPValidationError
+
     server, _, _ = _register_with_stub_execute(
         monkeypatch,
         execute_side_effect=ValueError(
@@ -329,23 +331,25 @@ async def test_execute_query_tool_handles_value_errors(monkeypatch: pytest.Monke
     )
     tool = server.tools["execute_query"]
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(MCPValidationError) as exc_info:
         await tool("SELECT 1", timeout_seconds="invalid", reason="test param error")
 
     assert "timeout_seconds" in str(exc_info.value)
+    assert "invalid" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
 async def test_execute_query_tool_accepts_string_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """Test that numeric string timeouts are accepted."""
+    """Test that numeric string timeouts are accepted and coerced to int (#48)."""
     server, execute_mock, _ = _register_with_stub_execute(monkeypatch)
     tool = server.tools["execute_query"]
 
     await tool("SELECT 1", timeout_seconds="45", reason="string timeout")
 
-    assert execute_mock.await_args.kwargs["timeout_seconds"] == "45"
+    # String should be coerced to int
+    assert execute_mock.await_args.kwargs["timeout_seconds"] == 45
 
 
 @pytest.mark.asyncio

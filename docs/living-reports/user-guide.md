@@ -532,6 +532,88 @@ igloo report history "Q1 Sales Analysis"
 
 Living Reports provide a new way to maintain business intelligence that's both human-friendly and AI-enhanced, ensuring reports stay current while maintaining their accuracy and auditability.
 
+## Citations vs Supporting Queries
+
+Insights support two fields for source references that serve different purposes:
+
+### `supporting_queries` (Legacy Field)
+
+The original field for linking insights to Snowflake query executions:
+
+```json
+{
+  "supporting_queries": [{
+    "execution_id": "exec_abc123",
+    "sql_sha256": "def456..."
+  }]
+}
+```
+
+- **Purpose**: Link insights to specific Snowflake query executions
+- **Source**: Snowflake `execute_query` results only
+- **Usage**: Analyst reports enforce this field for citation numbering
+
+### `citations` (Flexible Field)
+
+A more flexible field supporting multiple source types beyond just Snowflake queries:
+
+```json
+{
+  "citations": [
+    {
+      "source": "query",
+      "provider": "snowflake",
+      "execution_id": "exec_abc123",
+      "statement": "SELECT COUNT(*) FROM orders"
+    },
+    {
+      "source": "url",
+      "url": "https://docs.example.com/api",
+      "title": "Official API Documentation"
+    },
+    {
+      "source": "observation",
+      "content": "Observed during production deployment",
+      "timestamp": "2025-11-27T10:30:00Z"
+    },
+    {
+      "source": "document",
+      "title": "Q4 Board Report",
+      "location": "docs/board_reports/q4_2024.pdf"
+    }
+  ]
+}
+```
+
+- **Purpose**: Multi-source attribution (queries, docs, URLs, observations, APIs)
+- **Status**: Model-level field added in v0.3.2 for future multi-source support
+- **Compatibility**: Backward compatible shim ensures existing code works
+
+### When to Use Which?
+
+**Use `supporting_queries` for:**
+- Analyst reports (required for citation enforcement)
+- Simple Snowflake-only reports
+- Backward compatibility with existing reports
+
+**Use `citations` for:**
+- Reports combining data from multiple sources (Snowflake + APIs + documents)
+- Observations and manual findings
+- Web research and documentation references
+- Future-proofing new reports
+
+### Backward Compatibility
+
+Both fields are kept in sync automatically:
+- Setting `supporting_queries` auto-populates `citations` with query type entries
+- Existing reports continue working without changes
+- Full migration path planned for future version (see #62)
+
+**Current Status (v0.3.2):**
+- ✅ `citations` field exists in models
+- ✅ Backward compatible shim in place
+- ⏳ Full rendering/migration support coming in v0.3.3+
+
 ## JSON Schema Reference
 
 This section provides copy-paste-ready JSON examples for all `evolve_report` operations. These examples match the exact structure expected by the MCP tool.
