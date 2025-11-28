@@ -324,6 +324,7 @@ class ReportService:
             new_section_ids = {s.section_id for s in outline.sections}
             section_ids_added = list(new_section_ids - old_section_ids)
             section_ids_modified = list(new_section_ids & old_section_ids)
+            section_ids_removed = list(old_section_ids - new_section_ids)
 
             old_insight_ids = {i.insight_id for i in old_outline.insights}
             new_insight_ids = {i.insight_id for i in outline.insights}
@@ -350,6 +351,7 @@ class ReportService:
                     "insights_added": insights_added,
                     "section_ids_added": section_ids_added,
                     "section_ids_modified": section_ids_modified,
+                    "section_ids_removed": section_ids_removed,
                     "insight_ids_added": insight_ids_added,
                     "insight_ids_modified": insight_ids_modified,
                     "insight_ids_removed": insight_ids_removed,

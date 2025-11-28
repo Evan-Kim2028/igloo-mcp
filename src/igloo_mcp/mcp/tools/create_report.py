@@ -174,6 +174,14 @@ class CreateReportTool(MCPTool):
                 initial_sections=initial_sections,
                 **metadata,
             )
+
+            # Get outline to retrieve created section/insight IDs
+            outline_start = time.time()
+            outline = self.report_service.get_report_outline(report_id)
+            section_ids_added = [s.section_id for s in outline.sections]
+            insight_ids_added = [i.insight_id for i in outline.insights]
+            outline_duration = (time.time() - outline_start) * 1000
+
         except ValueError as e:
             # Template validation errors from service
             create_duration = (time.time() - create_start) * 1000
@@ -219,13 +227,18 @@ class CreateReportTool(MCPTool):
                 "template": template,
                 "request_id": request_id,
                 "create_duration_ms": create_duration,
+                "outline_duration_ms": outline_duration,
                 "total_duration_ms": total_duration,
+                "section_ids_added": section_ids_added,
+                "insight_ids_added": insight_ids_added,
             },
         )
 
         return {
             "status": "success",
             "report_id": report_id,
+            "section_ids_added": section_ids_added,
+            "insight_ids_added": insight_ids_added,
             "title": title,
             "template": template,
             "tags": tags or [],
@@ -233,6 +246,7 @@ class CreateReportTool(MCPTool):
             "request_id": request_id,
             "timing": {
                 "create_duration_ms": round(create_duration, 2),
+                "outline_duration_ms": round(outline_duration, 2),
                 "total_duration_ms": round(total_duration, 2),
             },
         }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
@@ -16,7 +17,7 @@ from igloo_mcp.path_utils import (
     validate_safe_path,
 )
 
-from .base import MCPTool, tool_error_handler
+from .base import MCPTool, ensure_request_id, tool_error_handler
 from .schema_utils import (
     integer_schema,
     snowflake_identifier_schema,
@@ -93,6 +94,13 @@ class SearchCatalogTool(MCPTool):
         request_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
+        # Timing and request correlation
+        start_time = time.time()
+        request_id = ensure_request_id(request_id)
+
+        # Warnings collection
+        warnings: list[dict[str, Any]] = []
+
         # If catalog_dir is default and search_all_databases is False, resolve to unified storage
         if catalog_dir == "./data_catalogue" and not search_all_databases:
             try:
@@ -146,6 +154,9 @@ class SearchCatalogTool(MCPTool):
             total_matches = 0
             searched_dirs = []
 
+            # Timing: Search operation
+            search_start = time.time()
+
             # Search all database folders in unified storage
             if catalog_root.exists():
                 for db_dir in catalog_root.iterdir():
@@ -169,6 +180,10 @@ class SearchCatalogTool(MCPTool):
 
             # Sort and limit results
             all_results = all_results[:limit]
+            search_duration = (time.time() - search_start) * 1000
+
+            # Calculate total duration
+            total_duration = (time.time() - start_time) * 1000
 
             logger.info(
                 "search_catalog_completed",
@@ -178,11 +193,19 @@ class SearchCatalogTool(MCPTool):
                     "total_matches": total_matches,
                     "results_count": len(all_results),
                     "request_id": request_id,
+                    "search_duration_ms": search_duration,
+                    "total_duration_ms": total_duration,
                 },
             )
 
             return {
                 "status": "success",
+                "request_id": request_id,
+                "warnings": warnings,
+                "timing": {
+                    "search_duration_ms": round(search_duration, 2),
+                    "total_duration_ms": round(total_duration, 2),
+                },
                 "catalog_dir": str(catalog_root),
                 "searched_databases": searched_dirs,
                 "metadata": {},
@@ -203,6 +226,8 @@ class SearchCatalogTool(MCPTool):
             }
 
         try:
+            # Timing: Search operation
+            search_start = time.time()
             index = CatalogIndex(catalog_dir)
             results, total_matches, metadata = index.search(
                 object_types=_normalize_types(object_types),
@@ -212,6 +237,10 @@ class SearchCatalogTool(MCPTool):
                 column_contains=column_contains,
                 limit=max(1, limit),
             )
+            search_duration = (time.time() - search_start) * 1000
+
+            # Calculate total duration
+            total_duration = (time.time() - start_time) * 1000
 
             logger.info(
                 "search_catalog_completed",
@@ -220,11 +249,19 @@ class SearchCatalogTool(MCPTool):
                     "total_matches": total_matches,
                     "results_count": len(results),
                     "request_id": request_id,
+                    "search_duration_ms": search_duration,
+                    "total_duration_ms": total_duration,
                 },
             )
 
             return {
                 "status": "success",
+                "request_id": request_id,
+                "warnings": warnings,
+                "timing": {
+                    "search_duration_ms": round(search_duration, 2),
+                    "total_duration_ms": round(total_duration, 2),
+                },
                 "catalog_dir": catalog_dir,
                 "metadata": metadata,
                 "total_matches": total_matches,
