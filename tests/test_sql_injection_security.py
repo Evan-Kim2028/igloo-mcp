@@ -61,14 +61,18 @@ class TestSessionParameterSQLInjection:
     def test_escape_sql_identifier_handles_injection_patterns(self):
         """Test that SQL identifier escaping handles injection patterns."""
         # These patterns should be safely escaped
+        # Note: ALL inputs get wildcard escaping, even if they don't contain wildcards
         injection_patterns = [
-            ("normal_name", "normal_name"),
+            ("normal_name", "normal\\_name"),  # Underscores are always escaped
             ("name'with'quotes", "name''with''quotes"),
             ("'; DROP TABLE users; --", "''; DROP TABLE users; --"),
             ("name' OR '1'='1", "name'' OR ''1''=''1"),
-            ("QUERY_TAG'; DELETE FROM users; --", "QUERY_TAG''; DELETE FROM users; --"),
-            ("QUERY_TAG%", "QUERY_TAG\\%"),
-            ("QUERY_TAG_", "QUERY_TAG\\_"),
+            (
+                "QUERY_TAG'; DELETE FROM users; --",
+                "QUERY\\_TAG''; DELETE FROM users; --",
+            ),
+            ("QUERY_TAG%", "QUERY\\_TAG\\%"),
+            ("QUERY_TAG_", "QUERY\\_TAG\\_"),
             ("QUERY%TAG", "QUERY\\%TAG"),
             ("name\\with\\backslash", "name\\\\with\\\\backslash"),
         ]

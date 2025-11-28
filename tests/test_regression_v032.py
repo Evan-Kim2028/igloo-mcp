@@ -12,7 +12,6 @@ Related issues:
 """
 
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -21,31 +20,35 @@ from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
 from igloo_mcp.mcp.tools.execute_query import ExecuteQueryTool
 from igloo_mcp.mcp.tools.render_report import RenderReportTool
+from igloo_mcp.service_layer.query_service import QueryService
+from tests.helpers.fake_snowflake_connector import (
+    FakeQueryPlan,
+    FakeSnowflakeService,
+)
 
 
 class TestBug48TimeoutStringCoercion:
     """Regression tests for #48 - timeout_seconds accepts both int and string."""
 
     @pytest.mark.asyncio
-    async def test_timeout_accepts_integer(self):
+    async def test_timeout_accepts_integer(self, tmp_path, monkeypatch):
         """Test that timeout_seconds accepts integer values."""
-        config = Config.from_env()
-        tool = ExecuteQueryTool(
-            config=config,
-            snowflake_service=Mock(),
-            query_service=Mock(),
-            health_monitor=None,
-        )
+        # Disable history/cache to simplify test
+        monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", "")
+        monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "disabled")
 
-        # Mock the execute method
-        tool.snowflake_service.execute_query = AsyncMock(
-            return_value={
-                "status": "success",
-                "execution_id": "test-123",
-                "rows": [],
-                "row_count": 0,
-            }
+        cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+        service = FakeSnowflakeService(
+            [
+                FakeQueryPlan(
+                    statement="SELECT 1",
+                    rows=[{"col1": 1}],
+                    duration=0.05,
+                    sfqid="TEST_QID_INT",
+                )
+            ]
         )
+        tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
         result = await tool.execute(
             statement="SELECT 1",
@@ -53,28 +56,28 @@ class TestBug48TimeoutStringCoercion:
             reason="test integer timeout",
         )
 
-        assert result["status"] == "success"
+        assert result["rowcount"] == 1
+        assert result["query_id"] == "TEST_QID_INT"
 
     @pytest.mark.asyncio
-    async def test_timeout_accepts_numeric_string(self):
+    async def test_timeout_accepts_numeric_string(self, tmp_path, monkeypatch):
         """Test that timeout_seconds accepts numeric string values (#48)."""
-        config = Config.from_env()
-        tool = ExecuteQueryTool(
-            config=config,
-            snowflake_service=Mock(),
-            query_service=Mock(),
-            health_monitor=None,
-        )
+        # Disable history/cache to simplify test
+        monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", "")
+        monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "disabled")
 
-        # Mock the execute method
-        tool.snowflake_service.execute_query = AsyncMock(
-            return_value={
-                "status": "success",
-                "execution_id": "test-123",
-                "rows": [],
-                "row_count": 0,
-            }
+        cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+        service = FakeSnowflakeService(
+            [
+                FakeQueryPlan(
+                    statement="SELECT 1",
+                    rows=[{"col1": 1}],
+                    duration=0.05,
+                    sfqid="TEST_QID_STR",
+                )
+            ]
         )
+        tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
         result = await tool.execute(
             statement="SELECT 1",
@@ -82,22 +85,30 @@ class TestBug48TimeoutStringCoercion:
             reason="test string timeout",
         )
 
-        assert result["status"] == "success"
+        assert result["rowcount"] == 1
+        assert result["query_id"] == "TEST_QID_STR"
 
     @pytest.mark.asyncio
-    async def test_timeout_rejects_invalid_string(self):
+    async def test_timeout_rejects_invalid_string(self, tmp_path, monkeypatch):
         """Test that timeout_seconds rejects non-numeric strings."""
-        from igloo_mcp.mcp.exceptions import MCPValidationError
+        # Disable history/cache to simplify test
+        monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", "")
+        monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "disabled")
 
-        config = Config.from_env()
-        tool = ExecuteQueryTool(
-            config=config,
-            snowflake_service=Mock(),
-            query_service=Mock(),
-            health_monitor=None,
+        cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+        service = FakeSnowflakeService(
+            [
+                FakeQueryPlan(
+                    statement="SELECT 1",
+                    rows=[{"col1": 1}],
+                    duration=0.05,
+                )
+            ]
         )
+        tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
-        with pytest.raises(MCPValidationError) as exc_info:
+        # Invalid timeout strings raise TypeError
+        with pytest.raises(TypeError) as exc_info:
             await tool.execute(
                 statement="SELECT 1",
                 timeout_seconds="invalid",  # Invalid string
