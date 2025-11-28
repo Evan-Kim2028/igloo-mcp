@@ -72,6 +72,14 @@ class FakeSnowflakeService:
     def get_query_tag_param(self) -> Dict[str, Any]:
         return dict(self._query_tag_param)
 
+    def add_query_plan(self, plan: FakeQueryPlan) -> None:
+        """Add a new query plan to the service.
+
+        Plans are consumed in order as queries are executed.
+        Useful for system tests that dynamically add queries.
+        """
+        self._plans.append(plan.clone())
+
     def get_connection(self, **_: Any) -> "FakeSnowflakeConnection":
         plan = self._consume_plan()
         cursor = FakeSnowflakeCursor(plan, self.session_defaults)

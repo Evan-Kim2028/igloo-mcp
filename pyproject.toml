@@ -96,8 +96,10 @@ python_functions = ["test_*"]
 markers = [
     "requires_snowflake: marks tests requiring live Snowflake connection (skipped unless --snowflake)",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "integration: marks integration tests",
-    "unit: marks unit tests",
+    "integration: marks integration tests (cross-component)",
+    "system: marks system tests (end-to-end workflows)",
+    "unit: marks unit tests (fast, isolated)",
+    "performance: marks performance and scale tests",
 ]
 # Default options (can override with CLI flags)
 addopts = [
