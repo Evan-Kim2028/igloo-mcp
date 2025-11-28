@@ -127,11 +127,10 @@ class TestBug57InlineInsights:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        # Create a test report
-        outline = report_service.create_report(
+        # Create a test report - returns report_id string
+        report_id = report_service.create_report(
             title="Test Report for Bug 57", template="default"
         )
-        report_id = outline.report_id
 
         tool = EvolveReportTool(config, report_service)
 
@@ -144,8 +143,9 @@ class TestBug57InlineInsights:
                     {
                         "title": "New Section",
                         "insights": [
-                            {  # Inline insights
-                                "content": "Test insight",
+                            {  # Inline insights - must include summary and importance
+                                "summary": "Test insight summary",
+                                "importance": 5,
                                 "supporting_queries": [],
                             }
                         ],
@@ -164,11 +164,10 @@ class TestBug57InlineInsights:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        # Create a test report with a section
-        outline = report_service.create_report(
+        # Create a test report - returns report_id string
+        report_id = report_service.create_report(
             title="Test Report for Bug 57 Modify", template="default"
         )
-        report_id = outline.report_id
 
         # Add a section first
         result1 = await EvolveReportTool(config, report_service).execute(
@@ -188,8 +187,9 @@ class TestBug57InlineInsights:
                     {
                         "section_id": section_id,
                         "insights": [
-                            {  # Inline insights
-                                "content": "Added insight",
+                            {  # Inline insights - must include summary and importance
+                                "summary": "Added insight summary",
+                                "importance": 5,
                                 "supporting_queries": [],
                             }
                         ],
@@ -211,11 +211,10 @@ class TestBug58SupportingQueriesOptional:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        # Create a test report
-        outline = report_service.create_report(
+        # Create a test report - returns report_id string
+        report_id = report_service.create_report(
             title="Test Report for Bug 58", template="default"
         )
-        report_id = outline.report_id
 
         tool = EvolveReportTool(config, report_service)
 
@@ -226,7 +225,8 @@ class TestBug58SupportingQueriesOptional:
             proposed_changes={
                 "insights_to_add": [
                     {
-                        "content": "Draft insight without queries"
+                        "summary": "Draft insight without queries",
+                        "importance": 5,
                         # No supporting_queries field - should default to []
                     }
                 ]
@@ -246,11 +246,10 @@ class TestBug59StaleWarnings:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        # Create a test report with section and insight
-        outline = report_service.create_report(
+        # Create a test report - returns report_id string
+        report_id = report_service.create_report(
             title="Test Report for Bug 59", template="default"
         )
-        report_id = outline.report_id
 
         tool = EvolveReportTool(config, report_service)
 
@@ -260,7 +259,7 @@ class TestBug59StaleWarnings:
             instruction="Add section and insight",
             proposed_changes={
                 "sections_to_add": [{"title": "Test Section"}],
-                "insights_to_add": [{"content": "Test insight"}],
+                "insights_to_add": [{"summary": "Test insight", "importance": 5}],
             },
         )
 
@@ -293,11 +292,10 @@ class TestBug60RenderPreview:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        # Create a test report
-        outline = report_service.create_report(
+        # Create a test report - returns report_id string
+        report_id = report_service.create_report(
             title="Test Report for Bug 60", template="default"
         )
-        report_id = outline.report_id
 
         tool = RenderReportTool(config, report_service)
 
@@ -318,11 +316,10 @@ class TestBug60RenderPreview:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        # Create a test report
-        outline = report_service.create_report(
+        # Create a test report - returns report_id string
+        report_id = report_service.create_report(
             title="Test Report Output Path", template="default"
         )
-        report_id = outline.report_id
 
         tool = RenderReportTool(config, report_service)
 

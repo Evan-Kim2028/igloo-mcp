@@ -93,18 +93,26 @@ class TestQuartoRenderer:
             qmd_file = report_dir / "report.qmd"
 
             # Create mock outline using proper Outline model
+            import uuid
+
             from igloo_mcp.living_reports.models import Insight, Outline, Section
 
+            sec_id = str(uuid.uuid4())
+            insight_id = str(uuid.uuid4())
+
             outline = Outline(
-                report_id="test-report",
+                report_id=str(uuid.uuid4()),
                 title="Test Report",
                 sections=[
                     Section(
-                        section_id="sec1", title="Section 1", insight_ids=["insight1"]
+                        section_id=sec_id,
+                        title="Section 1",
+                        order=0,
+                        insight_ids=[insight_id],
                     )
                 ],
                 insights=[
-                    Insight(insight_id="insight1", summary="Test insight", importance=5)
+                    Insight(insight_id=insight_id, summary="Test insight", importance=5)
                 ],
                 metadata={},
             )
@@ -150,10 +158,12 @@ class TestQuartoRenderer:
             report_dir = Path(temp_dir)
             outline_file = report_dir / "outline.json"
 
+            import uuid
+
             from igloo_mcp.living_reports.models import Outline
 
             outline = Outline(
-                report_id="test-report",
+                report_id=str(uuid.uuid4()),
                 title="Test Report",
                 sections=[],
                 insights=[],
