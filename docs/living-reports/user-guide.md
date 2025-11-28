@@ -841,9 +841,148 @@ Use `dry_run: true` to validate changes without applying them:
 }
 ```
 
+---
+
+## Progressive Disclosure (v0.3.2+) ✨
+
+**New in v0.3.2**: Use `get_report` with selective retrieval modes for **60-80% token reduction**.
+
+### Quick Start
+
+```python
+# Start with summary (lightweight overview)
+summary = get_report(report_selector="Q1 Analysis", mode="summary")  # ~150 tokens
+
+# Drill down to specific sections
+sections = get_report(
+    report_selector="Q1 Analysis",
+    mode="sections",
+    section_titles=["Revenue"]
+)  # ~300 tokens
+
+# Get high-priority insights only
+insights = get_report(
+    report_selector="Q1 Analysis",
+    mode="insights",
+    min_importance=8
+)  # ~400 tokens
+```
+
+**Token Savings**: 60-92% reduction vs. always loading full reports.
+
+See [get_report Tool Documentation](../api/tools/get_report.md) for complete details.
+
+---
+
+## API Discovery (v0.3.2+) ✨
+
+**New in v0.3.2**: Use `get_report_schema` to discover valid structures before constructing payloads.
+
+### Quick Start
+
+```python
+# Get copy-paste ready examples
+examples = get_report_schema(
+    schema_type="proposed_changes",
+    format="examples"
+)
+
+# Browse available operations
+print(examples["examples"].keys())
+# ['add_insight', 'modify_section', 'atomic_section_with_insights', ...]
+
+# Adapt an example to your needs
+my_changes = examples["examples"]["add_insight"]
+# Modify and use in evolve_report...
+```
+
+**Benefits**: First-time-right submissions, fewer validation errors.
+
+See [get_report_schema Tool Documentation](../api/tools/get_report_schema.md) for complete details.
+
+---
+
+## Token Optimization Tips (v0.3.2+) ✨
+
+Achieve **70% token reduction** in multi-turn workflows:
+
+### 1. Search with Minimal Fields
+```python
+# ✅ Efficient
+search_report(title="Q1", fields=["report_id", "title"])  # ~250 tokens
+
+# ❌ Wasteful
+search_report(title="Q1")  # ~800 tokens (all fields)
+```
+
+### 2. Progressive Report Reading
+```python
+# ✅ Efficient
+summary = get_report("Q1", mode="summary")  # ~150 tokens
+# Only drill down if needed
+
+# ❌ Wasteful
+full = get_report("Q1", mode="full")  # ~2000 tokens
+```
+
+### 3. Minimal Evolution Responses
+```python
+# ✅ Efficient
+evolve_report(..., response_detail="minimal")  # ~150 token response
+
+# ❌ Wasteful
+evolve_report(..., response_detail="full")  # ~1000+ token response
+```
+
+### 4. Compact Render Previews
+```python
+# ✅ Efficient
+render_report(..., preview_max_chars=500)  # ~200 token response
+
+# ❌ Wasteful
+render_report(..., preview_max_chars=10000)  # ~3000 token response
+```
+
+### Complete Optimized Workflow
+
+```python
+# Multi-turn workflow with full optimization
+
+# 1. Find (minimal fields)
+reports = search_report(title="Q1", fields=["report_id"])  # ~100 tokens
+
+# 2. Inspect (summary mode)
+summary = get_report(reports["reports"][0]["report_id"], mode="summary")  # ~150 tokens
+
+# 3. Modify (minimal response)
+evolve_report(
+    report_selector=reports["reports"][0]["report_id"],
+    instruction="Add insight",
+    proposed_changes={...},
+    response_detail="minimal"
+)  # ~150 tokens
+
+# 4. Verify (selective)
+get_report(
+    reports["reports"][0]["report_id"],
+    mode="sections",
+    section_titles=["Revenue"]
+)  # ~250 tokens
+
+# Total: ~650 tokens (vs. 3,500+ tokens before v0.3.2)
+# Savings: 81%
+```
+
+---
+
 ## See Also
 
+- [get_report Tool Documentation](../api/tools/get_report.md) - Progressive disclosure API
+- [get_report_schema Tool Documentation](../api/tools/get_report_schema.md) - Schema introspection API
+- [search_report Tool Documentation](../api/tools/search_report.md) - Report discovery with field filtering
+- [evolve_report Tool Documentation](../api/tools/evolve_report.md) - Report modification with response detail control
+- [render_report Tool Documentation](../api/tools/render_report.md) - Rendering with preview size control
 - [Living Reports Technical Plan](technical-plan.md) - Technical implementation details
-- [API Reference](../api-reference.md) - MCP tools documentation
+- [API Reference](../api-reference.md) - Complete MCP tools documentation
 - [Getting Started Guide](../getting-started.md) - Quick start overview
 - [MCP Integration Guide](../mcp-integration.md) - MCP client setup

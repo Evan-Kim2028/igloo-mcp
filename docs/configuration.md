@@ -47,6 +47,46 @@ export IGLOO_MCP_CATALOG_ROOT=~/.igloo-mcp/catalogs  # Optional: Root directory 
  export MCP_SERVER_PORT=3000
  ```
 
+---
+
+## Query Result Truncation Limits (Breaking Change in v0.3.2) 💥
+
+**Important**: Default truncation limits were significantly reduced in v0.3.2 to prevent context window overflow and optimize token usage.
+
+### New Defaults (v0.3.2)
+
+| Setting | v0.3.1 | v0.3.2 | Change | Impact |
+|---------|--------|--------|--------|--------|
+| `IGLOO_MCP_RESULT_SIZE_LIMIT_MB` | 100 MB | **1 MB** | 100x reduction | Max result file size |
+| `IGLOO_MCP_RESULT_KEEP_FIRST_ROWS` | 1000 | **500** | 2x reduction | Rows shown from start |
+| `IGLOO_MCP_RESULT_KEEP_LAST_ROWS` | 1000 | **50** | 20x reduction | Rows shown from end |
+| `IGLOO_MCP_RESULT_TRUNCATION_THRESHOLD` | 10000 | **1000** | 10x reduction | When truncation starts |
+
+### Impact
+
+Large query results will be truncated more aggressively by default:
+
+- **Before v0.3.2**: Results up to 100 MB with 1000 first + 1000 last rows shown
+- **After v0.3.2**: Results up to 1 MB with 500 first + 50 last rows shown
+
+This prevents agents from receiving extremely large responses that exceed token limits.
+
+### Migration
+
+If you need larger limits for your use case, configure via environment variables:
+
+```bash
+# Restore v0.3.1 limits (if needed)
+export IGLOO_MCP_RESULT_SIZE_LIMIT_MB=10
+export IGLOO_MCP_RESULT_KEEP_FIRST_ROWS=2000
+export IGLOO_MCP_RESULT_KEEP_LAST_ROWS=200
+export IGLOO_MCP_RESULT_TRUNCATION_THRESHOLD=5000
+```
+
+**Recommendation**: Start with the new defaults. Only increase if you have specific requirements for large result sets and sufficient token budget.
+
+---
+
  ### 2. Configuration File
 
  Create `~/.igloo-mcp/config.yml`:

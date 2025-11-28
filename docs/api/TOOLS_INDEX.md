@@ -4,6 +4,8 @@
 
 ## Core MCP Tools
 
+Igloo MCP provides **13 focused tools** for Snowflake operations and Living Reports management.
+
 | Tool | Purpose | Key Parameters | Documentation |
 |------|---------|----------------|---------------|
 | [execute_query](tools/execute_query.md) | Execute SQL queries with guardrails and timeouts | statement, timeout_seconds, reason | [Details](tools/execute_query.md) |
@@ -14,9 +16,11 @@
 | [test_connection](tools/test_connection.md) | Test connectivity | none | [Details](tools/test_connection.md) |
 | [health_check](tools/health_check.md) | System/profile/catalog health | include_cortex, include_profile, include_catalog | [Details](tools/health_check.md) |
 | [create_report](tools/create_report.md) | Create a new living report | title, template, tags, description | [Details](tools/create_report.md) |
-| [evolve_report](tools/evolve_report.md) | Evolve a living report with LLM assistance | report_selector, instruction, constraints, dry_run | [Details](tools/evolve_report.md) |
-| [render_report](tools/render_report.md) | Render reports to various formats | report_selector, format, persist_output | [Details](tools/render_report.md) |
-| [search_report](tools/search_report.md) | Search for living reports | report_selector | [Details](tools/search_report.md) |
+| [evolve_report](tools/evolve_report.md) | Evolve a living report with LLM assistance | report_selector, instruction, constraints, dry_run, response_detail | [Details](tools/evolve_report.md) |
+| [render_report](tools/render_report.md) | Render reports to various formats | report_selector, format, persist_output, preview_max_chars | [Details](tools/render_report.md) |
+| [search_report](tools/search_report.md) | Search for living reports | report_selector, fields | [Details](tools/search_report.md) |
+| [get_report](tools/get_report.md) **✨ v0.3.2** | Read reports with progressive disclosure | report_selector, mode, section_ids, filters | [Details](tools/get_report.md) |
+| [get_report_schema](tools/get_report_schema.md) **✨ v0.3.2** | Get report structure schemas | schema_type, format | [Details](tools/get_report_schema.md) |
 
 ## By Category
 
@@ -34,10 +38,14 @@
 - health_check
 
 ### Living Reports
-- create_report
-- evolve_report
-- render_report
-- search_report
+- [create_report](tools/create_report.md) - Initialize new structured reports
+- [evolve_report](tools/evolve_report.md) - Modify reports with structured changes (Enhanced in v0.3.2 with `response_detail` parameter)
+- [render_report](tools/render_report.md) - Generate HTML/PDF/Markdown outputs (Enhanced in v0.3.2 with `preview_max_chars` parameter)
+- [search_report](tools/search_report.md) - Find reports by title/tags (Enhanced in v0.3.2 with `fields` parameter for token efficiency)
+- [get_report](tools/get_report.md) - Read reports with progressive disclosure (**New in v0.3.2**)
+- [get_report_schema](tools/get_report_schema.md) - API schema introspection (**New in v0.3.2**)
+
+**v0.3.2 Token Efficiency**: Achieve ~70% token reduction in multi-turn workflows using progressive disclosure (`get_report` modes), selective field retrieval (`search_report` fields), and configurable response verbosity (`evolve_report` response_detail).
 
 Living reports are stored in your igloo-mcp instance directory (default: `~/.igloo-mcp/reports/`) and are accessible across all projects.
 

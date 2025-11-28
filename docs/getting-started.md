@@ -148,19 +148,27 @@ Once configured, interact with igloo-mcp through Cursor:
 
 ## Available MCP Tools
 
+Igloo MCP provides **13 focused tools** for Snowflake operations and Living Reports management.
+
 | Tool Name | Description | Key Parameters |
 |-----------|-------------|----------------|
 | `execute_query` | Execute SQL with safety checks, timeouts, cancellation | statement, timeout_seconds, verbose_errors, reason, warehouse, database, schema, role |
 | `build_catalog` | Build comprehensive catalog from INFORMATION_SCHEMA | output_dir, database, account, format |
 | `get_catalog_summary` | Get catalog statistics and metadata | catalog_dir |
 | `search_catalog` | Search locally cached catalog artifacts | catalog_dir, object_types, database, schema, name_contains, column_contains, limit |
-
-**Note**: `build_catalog` uses unified storage by default, saving catalogs to `~/.igloo_mcp/catalogs/{database}/`. See [Configuration Guide](configuration.md) for details on customizing catalog storage.
 | `build_dependency_graph` | Generate object dependency graph (JSON/DOT) | database, schema, account, format |
 | `test_connection` | Test Snowflake connection | — |
 | `health_check` | Check MCP server health | — |
-| `evolve_report` | Evolve living reports with LLM assistance | report_selector, instruction, constraints, dry_run |
-| `render_report` | Render reports to various formats | report_selector, format, persist_output |
+| `create_report` | Create a new living report | title, template, tags, description |
+| `evolve_report` | Evolve living reports with LLM assistance | report_selector, instruction, constraints, dry_run, response_detail ✨ |
+| `render_report` | Render reports to various formats | report_selector, format, persist_output, preview_max_chars ✨ |
+| `search_report` | Search for living reports | report_selector, fields ✨ |
+| `get_report` **✨ v0.3.2** | Read reports with progressive disclosure | report_selector, mode, section_ids, filters |
+| `get_report_schema` **✨ v0.3.2** | API schema introspection | schema_type, format |
+
+**Note**: ✨ indicates new or enhanced features in v0.3.2.
+
+**Catalog Storage**: `build_catalog` uses unified storage by default, saving catalogs to `~/.igloo_mcp/catalogs/{database}/`. See [Configuration Guide](configuration.md) for details on customizing catalog storage.
 
 **Catalog Building Details**:
 - Queries Snowflake `INFORMATION_SCHEMA` for comprehensive metadata
@@ -168,6 +176,54 @@ Once configured, interact with igloo-mcp through Cursor:
 - **Functions**: Only user-defined functions (excludes built-in Snowflake functions like operators `!=`, `%`, `*`, etc.)
 - **Performance**: Optimized queries with proper filtering and ordering
 - **Output**: Structured JSON with detailed metadata for each object type
+
+---
+
+## Token-Efficient Report Workflows (v0.3.2+) ✨
+
+Achieve **70% token reduction** in multi-turn Living Reports workflows with progressive disclosure:
+
+```python
+# Efficient workflow example
+
+# 1. Find reports (minimal fields)
+reports = search_report(
+    title="Q1 Sales",
+    fields=["report_id", "title"]
+)  # ~100 tokens
+
+# 2. Inspect with summary mode
+summary = get_report(
+    report_selector=reports["reports"][0]["report_id"],
+    mode="summary"
+)  # ~150 tokens
+
+# 3. Discover valid schemas
+schema = get_report_schema(
+    schema_type="proposed_changes",
+    format="examples"
+)  # ~600 tokens
+
+# 4. Evolve with minimal response
+result = evolve_report(
+    report_selector=reports["reports"][0]["report_id"],
+    instruction="Add revenue insight",
+    proposed_changes={...},  # Based on schema
+    response_detail="minimal"  # Token-efficient
+)  # ~150 tokens
+
+# Total: ~1,000 tokens (vs. 3,500+ tokens pre-v0.3.2)
+# Savings: 71%
+```
+
+**Key v0.3.2 Features**:
+- **Progressive disclosure**: `get_report` with 4 modes (summary/sections/insights/full)
+- **Schema discovery**: `get_report_schema` for runtime API introspection
+- **Field filtering**: `search_report` with selective field retrieval
+- **Response control**: `evolve_report` with configurable verbosity
+- **Preview sizing**: `render_report` with adjustable preview truncation
+
+See [Living Reports User Guide](living-reports/user-guide.md) for complete workflows.
 
 ## Advanced Configuration
 

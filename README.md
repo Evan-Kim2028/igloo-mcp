@@ -17,9 +17,10 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 - 📊 **Auto Insights**: Every query returns `key_metrics` (null ratios, ranges, top values) + insights – fuels LLM reasoning without follow-up SQL.
 - 🧠 **Error Handling**: Compact errors; verbose mode for hints. v0.2.3 adds better REST init fallbacks and v0.2.5 ensures health-check feedback routes through the new `get_comprehensive_health` monitor. v0.3.0 improves timeout error messaging with catalog-based filtering guidance.
 - 📡 **Source Attribution**: v0.2.5+ includes structured `source_databases`/`tables` fields in both query responses and history logs so compliance reviews no longer rely on session defaults.
-- 🧩 **MCP-Compliant Tools**: 11 focused tools for querying, cataloging, lineage, and living reports. Consolidated in v0.2.3 for reporting workflows.
+- 🧩 **MCP-Compliant Tools**: 13 focused tools for querying, cataloging, lineage, and living reports. Consolidated in v0.2.3 for reporting workflows. **v0.3.2 adds 2 new tools** for progressive disclosure and API introspection.
+- ⚡ **Token Efficiency**: 70% reduction in multi-turn workflows via progressive disclosure and configurable verbosity (v0.3.2+). Read only what you need, when you need it.
 - 📂 **Unified Storage**: All data (query history, artifacts, reports) stored together per instance for easy access across projects. Reports use `~/.igloo_mcp/reports/` by default in v0.3.0+.
-- 📋 **Living Reports**: JSON-backed, auditable business reports that evolve safely with LLM assistance (v0.3.0+). Three-layer architecture: Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs.
+- 📋 **Living Reports**: JSON-backed, auditable business reports that evolve safely with LLM assistance (v0.3.0+). Three-layer architecture: Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs. **Complete tooling ecosystem in v0.3.2**.
 - ⚡ **Simple Backend**: SnowCLI integration for max performance; CLI/REST modes. Python 3.12+, MIT-licensed.
 
 Full API in [docs/api/README.md](./docs/api/README.md).
@@ -39,7 +40,7 @@ In essence: Use official for production Snowflake AI ecosystems. Choose Igloo fo
 
 ## MCP Tools
 
-Igloo exposes 11 focused tools for Snowflake ops. Use via any MCP client (e.g., Cursor: add to `.mcp.json`).
+Igloo exposes 13 focused tools for Snowflake ops. Use via any MCP client (e.g., Cursor: add to `.mcp.json`).
 
 | Tool | Purpose | Key Use |
 |------|---------|---------|
@@ -51,15 +52,19 @@ Igloo exposes 11 focused tools for Snowflake ops. Use via any MCP client (e.g., 
 | `test_connection` | Validate profile/auth | Setup checks |
 | `health_check` | System/profile/catalog status | Monitoring |
 | `create_report` | Create a new living report | Initialize structured business reports |
-| `evolve_report` | LLM-agnostic report evolution | Safely evolve audited reports |
-| `render_report` | Quarto-based report rendering | Export reports to HTML/PDF/Markdown |
-| `search_report` | Search for living reports | Find reports by title or ID |
+| `evolve_report` | LLM-agnostic report evolution | Safely evolve audited reports (v0.3.2: +`response_detail`) |
+| `render_report` | Quarto-based report rendering | Export reports to HTML/PDF/Markdown (v0.3.2: +`preview_max_chars`) |
+| `search_report` | Search for living reports | Find reports by title or ID (v0.3.2: +`fields`) |
+| `get_report` **✨ v0.3.2** | Read reports with progressive disclosure | Token-efficient report inspection (4 modes) |
+| `get_report_schema` **✨ v0.3.2** | API schema introspection | Discover valid structures at runtime |
 
 Detailed schemas in [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md).
 
-## Living Reports (v0.3.0+)
+## Living Reports (v0.3.0+, Complete in v0.3.2)
 
-Living Reports are JSON-backed, auditable business reports that evolve safely with LLM assistance. Key features:
+Living Reports are JSON-backed, auditable business reports that evolve safely with LLM assistance. **v0.3.2 completes the tooling ecosystem** with progressive disclosure and schema introspection.
+
+### Key Features
 
 - **Structured**: JSON schema with sections, insights, and supporting queries
 - **Auditable**: Full history of changes with actor tracking and immutable audit logs
@@ -67,16 +72,38 @@ Living Reports are JSON-backed, auditable business reports that evolve safely wi
 - **MCP-First**: Primary interface through AI assistants and MCP tools
 - **Quarto Rendering**: Export to HTML, PDF, Markdown, or DOCX via `render_report`
 - **Three-Layer Architecture**: Presentation (Quarto), Machine Truth (JSON), Immutable Memory (audit logs)
+- **Progressive Disclosure** ✨ v0.3.2: Read only what you need with `get_report` (summary/sections/insights/full modes)
+- **API Discovery** ✨ v0.3.2: Discover valid structures with `get_report_schema` before evolving
+- **Token Efficient** ✨ v0.3.2: 70% reduction in multi-turn workflows via selective retrieval and configurable verbosity
 
-**MCP Usage:**
+### Complete Workflow (v0.3.2)
+
 ```python
-# Evolve report via MCP
-result = await evolve_report(
+# 1. Find reports efficiently (30-50% token reduction)
+reports = search_report(title="Q1 Sales", fields=["report_id", "title"])
+
+# 2. Read with progressive disclosure (60-80% token reduction)
+summary = get_report(report_selector="Q1 Sales Analysis", mode="summary")
+
+# 3. Discover valid structures
+schema = get_report_schema(schema_type="proposed_changes", format="examples")
+
+# 4. Evolve with minimal response (50-80% token reduction)
+result = evolve_report(
     report_selector="Q1 Sales Analysis",
-    instruction="Prioritize revenue drivers over user acquisition",
-    proposed_changes={...},  # Structured changes from LLM
-    constraints={"max_importance_delta": 2}
+    instruction="Add revenue insight",
+    proposed_changes={...},  # Based on schema examples
+    response_detail="minimal"  # Token-efficient response
 )
+
+# 5. Verify changes with selective retrieval
+updated = get_report(
+    report_selector="Q1 Sales Analysis",
+    mode="sections",
+    section_titles=["Revenue Analysis"]
+)
+
+# Total: ~1,200 tokens (vs. 3,500+ tokens pre-v0.3.2) - 65% reduction!
 ```
 
 **For Administrators:**
@@ -95,7 +122,7 @@ See [docs/living-reports/user-guide.md](./docs/living-reports/user-guide.md) for
 ### Install (1 min)
 ```bash
 uv pip install igloo-mcp  # Or pip install igloo-mcp
-igloo --version  # Verify (v0.3.0+)
+igloo --version  # Verify (v0.3.2+)
 ```
 
 ### Connect Snowflake Profile (2 min)

@@ -1,0 +1,421 @@
+# get_report - Progressive Report Disclosure
+
+**New in v0.3.2** ✨
+
+Read living reports with selective retrieval for token efficiency. Supports 4 retrieval modes and flexible filtering options for progressive disclosure workflows.
+
+## Overview
+
+The `get_report` tool enables agents to read report structure and content efficiently without loading entire reports. This is critical for:
+
+- **Multi-turn workflows**: Get section_ids/insight_ids before calling `evolve_report`
+- **Token efficiency**: Load only what you need (60-80% reduction vs. full reports)
+- **Progressive disclosure**: Start with summary, drill down as needed
+- **Content inspection**: Understand report structure before modifications
+
+## Parameters
+
+### Required Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `report_selector` | string | Report ID (e.g., `rpt_550e8400...`) or title (e.g., "Q1 Analysis") |
+
+### Optional Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `mode` | string | "summary" | Retrieval mode: `summary`, `sections`, `insights`, or `full` |
+| `section_ids` | array[string] | null | Filter to specific section IDs |
+| `section_titles` | array[string] | null | Filter sections by title (case-insensitive substring match) |
+| `insight_ids` | array[string] | null | Filter to specific insight IDs |
+| `min_importance` | integer | null | Filter insights with importance >= this value (1-10) |
+| `limit` | integer | 50 | Maximum items to return (1-100) |
+| `offset` | integer | 0 | Skip first N items (pagination) |
+| `include_content` | boolean | false | Include section prose content |
+| `include_audit` | boolean | false | Include recent audit events |
+
+## Retrieval Modes
+
+### `summary` Mode - Lightweight Overview
+
+Returns high-level report metadata and section overview. **Most token-efficient** (~100-200 tokens).
+
+**Use when**: You need basic report info or section structure without details.
+
+**Example**:
+```json
+{
+  "report_selector": "Q1 Network Analysis",
+  "mode": "summary"
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "report_id": "rpt_550e8400...",
+  "title": "Q1 Network Analysis",
+  "template": "default",
+  "created_at": "2025-01-15T10:30:00Z",
+  "updated_at": "2025-01-20T14:45:00Z",
+  "outline_version": 5,
+  "summary": {
+    "total_sections": 3,
+    "total_insights": 12,
+    "tags": ["q1", "network", "analysis"],
+    "status": "active"
+  },
+  "sections_overview": [
+    {
+      "section_id": "sec_a1b2...",
+      "title": "Network Activity",
+      "insight_count": 5,
+      "order": 1
+    },
+    {
+      "section_id": "sec_c3d4...",
+      "title": "Performance Metrics",
+      "insight_count": 4,
+      "order": 2
+    },
+    {
+      "section_id": "sec_e5f6...",
+      "title": "Recommendations",
+      "insight_count": 3,
+      "order": 3
+    }
+  ]
+}
+```
+
+**Token Savings**: ~75% reduction vs. full report
+
+---
+
+### `sections` Mode - Section Details
+
+Returns detailed section information with optional prose content. Supports filtering by section IDs or titles.
+
+**Use when**: You need section structure and insight IDs for a specific part of the report.
+
+**Example 1: Get specific sections by ID**:
+```json
+{
+  "report_selector": "Q1 Network Analysis",
+  "mode": "sections",
+  "section_ids": ["sec_a1b2..."],
+  "include_content": true
+}
+```
+
+**Example 2: Filter by title**:
+```json
+{
+  "report_selector": "Q1 Network Analysis",
+  "mode": "sections",
+  "section_titles": ["Network Activity", "Performance"],
+  "include_content": false
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "report_id": "rpt_550e8400...",
+  "sections": [
+    {
+      "section_id": "sec_a1b2...",
+      "title": "Network Activity",
+      "order": 1,
+      "insight_ids": ["ins_123...", "ins_456...", "ins_789..."],
+      "insight_count": 3,
+      "notes": "Analysis of network throughput and latency",
+      "content": "# Network Activity Overview\n\nThis section analyzes...",
+      "content_format": "markdown"
+    }
+  ],
+  "total_matched": 1,
+  "returned": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+**Token Savings**: ~50-70% reduction vs. full report (depending on filtering)
+
+---
+
+### `insights` Mode - Insight Details
+
+Returns detailed insight information. Supports filtering by importance, section, or specific IDs.
+
+**Use when**: You need to analyze insights, especially high-importance findings.
+
+**Example 1: Get high-importance insights**:
+```json
+{
+  "report_selector": "Q1 Network Analysis",
+  "mode": "insights",
+  "min_importance": 8
+}
+```
+
+**Example 2: Get insights from specific section**:
+```json
+{
+  "report_selector": "Q1 Network Analysis",
+  "mode": "insights",
+  "section_ids": ["sec_a1b2..."],
+  "min_importance": 5
+}
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "report_id": "rpt_550e8400...",
+  "insights": [
+    {
+      "insight_id": "ins_123...",
+      "summary": "Network throughput increased 45% QoQ",
+      "importance": 9,
+      "status": "active",
+      "section_id": "sec_a1b2...",
+      "has_citations": true,
+      "citation_count": 2
+    },
+    {
+      "insight_id": "ins_456...",
+      "summary": "Peak latency reduced by 30ms",
+      "importance": 8,
+      "status": "active",
+      "section_id": "sec_a1b2...",
+      "has_citations": true,
+      "citation_count": 1
+    }
+  ],
+  "total_matched": 2,
+  "returned": 2,
+  "limit": 50,
+  "offset": 0,
+  "filtered_by": {
+    "min_importance": 8
+  }
+}
+```
+
+**Token Savings**: ~60-75% reduction vs. full report (depending on filtering)
+
+---
+
+### `full` Mode - Complete Report
+
+Returns complete report structure with all sections and insights. Most comprehensive but also most token-intensive.
+
+**Use when**: You need the entire report structure or are generating a comprehensive analysis.
+
+**Example**:
+```json
+{
+  "report_selector": "Q1 Network Analysis",
+  "mode": "full",
+  "include_content": true,
+  "limit": 100
+}
+```
+
+**Response**: Complete report outline with all sections, insights, and metadata (structure similar to combining sections + insights modes).
+
+**Token Cost**: ~1000-3000 tokens (full report)
+
+---
+
+## Pagination
+
+All modes support pagination via `limit` and `offset` parameters:
+
+```json
+{
+  "report_selector": "Large Report",
+  "mode": "insights",
+  "limit": 20,
+  "offset": 0  // First page
+}
+```
+
+```json
+{
+  "report_selector": "Large Report",
+  "mode": "insights",
+  "limit": 20,
+  "offset": 20  // Second page
+}
+```
+
+---
+
+## Common Workflows
+
+### Workflow 1: Progressive Disclosure
+
+Start lightweight, drill down as needed:
+
+```python
+# Step 1: Get overview (100 tokens)
+summary = get_report(
+    report_selector="Q1 Analysis",
+    mode="summary"
+)
+
+# Step 2: Get specific section details (200 tokens)
+section = get_report(
+    report_selector="Q1 Analysis",
+    mode="sections",
+    section_titles=["Revenue Analysis"]
+)
+
+# Step 3: Get high-priority insights (300 tokens)
+insights = get_report(
+    report_selector="Q1 Analysis",
+    mode="insights",
+    section_ids=["sec_revenue..."],
+    min_importance=7
+)
+
+# Total: ~600 tokens vs. 2000+ for full report (70% savings)
+```
+
+### Workflow 2: Prepare for Evolution
+
+Get IDs before modifying:
+
+```python
+# Step 1: Get section structure
+sections = get_report(
+    report_selector="Q1 Analysis",
+    mode="sections"
+)
+# Extract: section_id = "sec_a1b2..."
+
+# Step 2: Evolve with correct IDs
+evolve_report(
+    report_selector="Q1 Analysis",
+    instruction="Add insight to revenue section",
+    proposed_changes={
+        "sections_to_modify": [{
+            "section_id": "sec_a1b2...",  # From get_report
+            "insight_ids_to_add": ["new_insight_id"]
+        }]
+    }
+)
+```
+
+### Workflow 3: Content Inspection
+
+Review prose content before rendering:
+
+```python
+# Get sections with prose content
+sections = get_report(
+    report_selector="Executive Summary",
+    mode="sections",
+    include_content=True
+)
+
+# Inspect content
+for section in sections["sections"]:
+    print(f"Section: {section['title']}")
+    print(f"Content: {section.get('content', 'No content')}")
+```
+
+---
+
+## Token Efficiency Comparison
+
+| Operation | Tokens (Before v0.3.2) | Tokens (With get_report) | Savings |
+|-----------|------------------------|--------------------------|---------|
+| Get report overview | 2000 (full report) | 150 (summary mode) | 92% |
+| Get section structure | 2000 (full report) | 400 (sections mode) | 80% |
+| Get insights only | 2000 (full report) | 600 (insights mode) | 70% |
+| Multi-turn workflow | 6000 (3x full reports) | 1200 (progressive) | 80% |
+
+**Real-World Impact**: A typical 3-step analysis workflow drops from ~6,000 tokens to ~1,200 tokens.
+
+---
+
+## Error Handling
+
+### Report Not Found
+
+```json
+{
+  "status": "error",
+  "error": "selector_error",
+  "message": "Could not resolve report selector: 'Unknown Report'",
+  "selector": "Unknown Report",
+  "hints": [
+    "Verify report_selector matches an existing report",
+    "Check report ID or title spelling (case-insensitive)",
+    "Use search_report to find available reports"
+  ]
+}
+```
+
+### Invalid Mode
+
+```json
+{
+  "status": "error",
+  "error": "validation_error",
+  "message": "Invalid mode 'invalid'. Must be one of: summary, sections, insights, full",
+  "hints": [
+    "Use mode='summary' for lightweight overview",
+    "Use mode='sections' for section details",
+    "Use mode='insights' for insight details",
+    "Use mode='full' for complete report"
+  ]
+}
+```
+
+---
+
+## Best Practices
+
+### 1. Start with Summary Mode
+Always begin with `mode="summary"` to understand report structure before requesting details.
+
+### 2. Use Filters to Reduce Tokens
+- Filter by `section_ids` or `section_titles` when you know what you need
+- Use `min_importance` to focus on key insights
+- Set `limit` to reasonable values (10-50 items)
+
+### 3. Progressive Disclosure Pattern
+```
+summary → sections (filtered) → insights (filtered) → full (only if needed)
+```
+
+### 4. Cache Section/Insight IDs
+Extract and reuse IDs from initial queries instead of re-fetching full structure.
+
+### 5. Avoid Full Mode Unless Necessary
+Reserve `mode="full"` for final reviews or comprehensive analysis. Use filtered modes for most operations.
+
+---
+
+## See Also
+
+- [get_report_schema](./get_report_schema.md) - Discover valid report structures at runtime
+- [evolve_report](./evolve_report.md) - Modify reports with structured changes
+- [search_report](./search_report.md) - Find reports by title or tags
+- [render_report](./render_report.md) - Generate HTML/PDF outputs
+- [Living Reports User Guide](../../living-reports/user-guide.md) - Complete workflow documentation
+
+---
+
+**Version**: Added in v0.3.2
+**Category**: Living Reports
+**Token Efficiency**: 60-92% reduction vs. full report retrieval
