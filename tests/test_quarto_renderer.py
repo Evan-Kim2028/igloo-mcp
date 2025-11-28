@@ -170,7 +170,7 @@ class TestQuartoRenderer:
                 mock_run.assert_called_once()
                 args = mock_run.call_args[0][0]
                 assert args[0] == "/mock/quarto"
-                assert "quarto render report.qmd --to html --toc" == " ".join(args[1:])
+                assert "render report.qmd --to html --toc" == " ".join(args[1:])
 
     def test_render_quarto_failure(self):
         """Test rendering when Quarto fails."""
@@ -291,26 +291,35 @@ class TestQuartoRenderer:
             report_dir = Path(temp_dir)
             outline_file = report_dir / "outline.json"
 
+            import uuid as uuid_mod
+
             from igloo_mcp.living_reports.models import (
+                DatasetSource,
                 Insight,
-                QueryReference,
                 Section,
             )
 
+            report_id = str(uuid_mod.uuid4())
+            sec_id = str(uuid_mod.uuid4())
+            insight_id = str(uuid_mod.uuid4())
+
             outline = create_test_outline(
-                report_id="test-report",
+                report_id=report_id,
                 title="Test Report",
                 sections=[
                     Section(
-                        section_id="sec1", title="Section 1", insight_ids=["insight1"]
+                        section_id=sec_id,
+                        title="Section 1",
+                        order=0,
+                        insight_ids=[insight_id],
                     )
                 ],
                 insights=[
                     Insight(
-                        insight_id="insight1",
+                        insight_id=insight_id,
                         summary="Test insight",
                         importance=5,
-                        supporting_queries=[QueryReference(execution_id="exec1")],
+                        supporting_queries=[DatasetSource(execution_id="exec1")],
                     )
                 ],
                 metadata={},
@@ -382,14 +391,21 @@ class TestQuartoRenderer:
         with tempfile.TemporaryDirectory() as temp_dir:
             report_dir = Path(temp_dir)
 
+            import uuid as uuid_mod
+
             from igloo_mcp.living_reports.models import (
+                DatasetSource,
                 Insight,
-                QueryReference,
                 Section,
             )
 
+            report_id = str(uuid_mod.uuid4())
+            sec_id = str(uuid_mod.uuid4())
+            insight1_id = str(uuid_mod.uuid4())
+            insight2_id = str(uuid_mod.uuid4())
+
             outline = create_test_outline(
-                report_id="complex-report",
+                report_id=report_id,
                 title="Complex Test Report",
                 metadata={
                     "summary": "A comprehensive report",
@@ -397,34 +413,34 @@ class TestQuartoRenderer:
                 },
                 sections=[
                     Section(
-                        section_id="sec1",
+                        section_id=sec_id,
                         title="Revenue Analysis",
                         order=1,
                         notes="Key revenue metrics and trends",
-                        insight_ids=["insight1", "insight2"],
+                        insight_ids=[insight1_id, insight2_id],
                     )
                 ],
                 insights=[
                     Insight(
-                        insight_id="insight1",
+                        insight_id=insight1_id,
                         importance=9,
                         summary="Revenue increased 15%",
-                        supporting_queries=[QueryReference(execution_id="exec1")],
+                        supporting_queries=[DatasetSource(execution_id="exec1")],
                         draft_changes={"type": "chart"},
                     ),
                     Insight(
-                        insight_id="insight2",
+                        insight_id=insight2_id,
                         importance=7,
                         summary="Customer acquisition costs down",
-                        supporting_queries=[QueryReference(execution_id="exec2")],
+                        supporting_queries=[DatasetSource(execution_id="exec2")],
                         draft_changes={"type": "table"},
                     ),
                 ],
             )
 
             datasets = {
-                "insight1": {"data": "sample data"},
-                "insight2": {"data": "more data"},
+                insight1_id: {"data": "sample data"},
+                insight2_id: {"data": "more data"},
             }
 
             renderer._generate_qmd_file(

@@ -240,18 +240,22 @@ class TestGetReportTool:
         )
 
         # Search for sections with partial titles
+        # quarterly_review has: "Executive Summary", "Key Metrics", "Strategic Initiatives", "Next Quarter Goals"
         result = await tool.execute(
             report_selector=report_id,
             mode="sections",
-            section_titles=["executive", "financial"],  # Partial matches
+            section_titles=[
+                "executive",
+                "metrics",
+            ],  # Partial matches for actual template sections
         )
 
         assert result["status"] == "success"
-        # Should match "Executive Summary" and "Financial Highlights"
+        # Should match "Executive Summary" and "Key Metrics"
         assert result["total_matched"] >= 2
         titles = [s["title"] for s in result["sections"]]
         assert any("Executive" in t for t in titles)
-        assert any("Financial" in t for t in titles)
+        assert any("Metrics" in t for t in titles)
 
     async def test_get_report_sections_by_id(self, tmp_path: Path):
         """Test section retrieval by exact IDs."""
