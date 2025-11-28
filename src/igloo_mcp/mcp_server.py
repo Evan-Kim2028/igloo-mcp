@@ -56,6 +56,8 @@ from .mcp.tools import (  # QueryLineageTool,  # Removed - lineage functionality
     EvolveReportTool,
     ExecuteQueryTool,
     GetCatalogSummaryTool,
+    GetReportSchemaTool,
+    GetReportTool,
     HealthCheckTool,
     RenderReportTool,
     SearchCatalogTool,
@@ -102,6 +104,8 @@ NON_SQL_TOOLS = {
     "evolve_report",
     "render_report",
     "search_report",
+    "get_report",
+    "get_report_schema",
     "build_catalog",
     "build_dependency_graph",
     "get_catalog_summary",
@@ -179,25 +183,45 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
             original_middleware = middleware
 
             async def conditional_sql_validation_middleware(
-                context: Any,
-                call_next: Any,
+                *args: Any, **kwargs: Any
             ) -> Any:
-                """Middleware wrapper that only applies SQL validation to execute_query.
+                """Middleware wrapper that only applies SQL validation to execute_query."""
 
-                FastMCP 2.13+ passes (context, call_next) instead of the older
-                (call_next, name, arguments) signature. We extract the tool name from
-                the message context and only delegate to the original middleware for
-                execute_query. All other tools bypass SQL validation.
-                """
-                message = getattr(context, "message", None)
-                tool_name = getattr(message, "name", None)
+                # FastMCP 2.13+ passes (context, call_next); legacy path passes
+                # (call_next, name, arguments). Detect signature dynamically.
+                message = None
+                tool_name = None
+                arguments: Dict[str, Any] | None = None
+                call_next = None
+
+                # Prefer kwargs to avoid duplicate values when both are provided
+                if kwargs:
+                    call_next = kwargs.get("call_next")
+                    tool_name = kwargs.get("name")
+                    arguments = kwargs.get("arguments")
+
+                # If first arg looks like a Context, extract the tool name from message
+                if not tool_name and args and hasattr(args[0], "message"):
+                    context = args[0]
+                    message = getattr(context, "message", None)
+                    tool_name = getattr(message, "name", None)
+                    arguments = getattr(message, "arguments", {}) if message else {}
+                    if call_next is None and len(args) >= 2:
+                        call_next = args[1]
+                elif tool_name is None and len(args) >= 3:
+                    # Legacy signature (call_next, name, arguments)
+                    call_next, tool_name, arguments = args[0], args[1], args[2]
+
+                # If we still couldn't resolve, fall back to original middleware
+                if tool_name is None or call_next is None:
+                    return await original_middleware(*args, **kwargs)
 
                 if tool_name == "execute_query":
+                    # Let the original middleware handle execute_query
                     try:
-                        return await original_middleware(context, call_next=call_next)
+                        return await original_middleware(*args, **kwargs)
                     except TypeError:
-                        # Fall back to legacy (call_next, name, arguments) signature
-                        arguments = getattr(message, "arguments", {}) if message else {}
+                        # Legacy signature fallback
                         return await original_middleware(
                             call_next, tool_name, arguments
                         )
@@ -206,7 +230,13 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
                     "Skipping SQL validation for non-SQL tool: %s",
                     tool_name or "<unknown>",
                 )
-                return await call_next(context)
+                # Call next middleware in chain with the appropriate signature
+                if message is not None:
+                    # New-style middleware: call_next(context)
+                    return await call_next(args[0])
+                # Legacy middleware: call_next is the next handler, invoke with (name, arguments)
+                # Note: In legacy FastMCP, call_next expects just the tool execution args
+                return await call_next(tool_name, arguments)
 
             # Replace the middleware with our conditional wrapper
             middleware_stack[i] = conditional_sql_validation_middleware
@@ -324,6 +354,8 @@ def register_igloo_mcp(
     evolve_report_inst = EvolveReportTool(config, report_service)
     render_report_inst = RenderReportTool(config, report_service)
     search_report_inst = SearchReportTool(config, report_service)
+    get_report_inst = GetReportTool(config, report_service)
+    get_report_schema_inst = GetReportSchemaTool(config)
 
     @server.tool(
         name="execute_query", description="Execute a SQL query against Snowflake"
@@ -353,15 +385,15 @@ def register_igloo_mcp(
             Optional[str], Field(description="Role override", default=None)
         ] = None,
         timeout_seconds: Annotated[
-            Optional[int],
+            Optional[int | str],
             Field(
                 description=(
-                    f"Query timeout in seconds (default: 30s from config). "
-                    f"Integer between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS}. "
-                    f"Maximum timeout is configurable via IGLOO_MCP_MAX_QUERY_TIMEOUT_SECONDS environment variable."
+                    "Query timeout in seconds (default: 30s from config). "
+                    "Accepts either an integer or a numeric string. "
+                    f"Must resolve to a value between {MIN_QUERY_TIMEOUT_SECONDS} and "
+                    f"{MAX_QUERY_TIMEOUT_SECONDS}. Maximum timeout is configurable via "
+                    "IGLOO_MCP_MAX_QUERY_TIMEOUT_SECONDS environment variable."
                 ),
-                ge=MIN_QUERY_TIMEOUT_SECONDS,
-                le=MAX_QUERY_TIMEOUT_SECONDS,
                 default=None,
             ),
         ] = None,
@@ -385,6 +417,19 @@ def register_igloo_mcp(
         ctx: Context | None = None,
     ) -> Dict[str, Any]:
         """Execute a SQL query against Snowflake - delegates to ExecuteQueryTool."""
+        # Coerce timeout_seconds from string to int if needed
+        timeout_int: Optional[int] = None
+        if timeout_seconds is not None:
+            if isinstance(timeout_seconds, str):
+                try:
+                    timeout_int = int(timeout_seconds)
+                except ValueError:
+                    raise MCPValidationError(
+                        f"timeout_seconds must be a valid integer, got: {timeout_seconds}"
+                    )
+            else:
+                timeout_int = timeout_seconds
+
         try:
             return await execute_query_inst.execute(
                 statement=statement,
@@ -393,7 +438,7 @@ def register_igloo_mcp(
                 schema=schema,
                 role=role,
                 reason=reason,
-                timeout_seconds=timeout_seconds,
+                timeout_seconds=timeout_int,
                 verbose_errors=verbose_errors,
                 post_query_insight=post_query_insight,
                 ctx=ctx,
@@ -433,6 +478,22 @@ def register_igloo_mcp(
         dry_run: Annotated[
             bool, Field(description="Validate without applying changes", default=False)
         ] = False,
+        status_change: Annotated[
+            Optional[str],
+            Field(
+                description="Optional status change for the report",
+                default=None,
+                pattern="^(active|archived|deleted)$",
+            ),
+        ] = None,
+        response_detail: Annotated[
+            str,
+            Field(
+                description="Response verbosity level for token efficiency",
+                default="standard",
+                pattern="^(minimal|standard|full)$",
+            ),
+        ] = "standard",
     ) -> Dict[str, Any]:
         """Evolve report - delegates to EvolveReportTool."""
         return await evolve_report_inst.execute(
@@ -441,6 +502,8 @@ def register_igloo_mcp(
             proposed_changes=proposed_changes,
             constraints=constraints,
             dry_run=dry_run,
+            status_change=status_change,
+            response_detail=response_detail,
         )
 
     @server.tool(
@@ -467,6 +530,15 @@ def register_igloo_mcp(
             bool,
             Field(description="Include truncated preview in response", default=False),
         ] = False,
+        preview_max_chars: Annotated[
+            int,
+            Field(
+                description="Maximum characters for preview truncation (default 2000)",
+                default=2000,
+                ge=100,
+                le=10000,
+            ),
+        ] = 2000,
         dry_run: Annotated[
             bool,
             Field(
@@ -485,6 +557,7 @@ def register_igloo_mcp(
             format=format,
             regenerate_outline_view=regenerate_outline_view,
             include_preview=include_preview,
+            preview_max_chars=preview_max_chars,
             dry_run=dry_run,
             options=options,
         )
@@ -498,7 +571,12 @@ def register_igloo_mcp(
         template: Annotated[
             str,
             Field(
-                description="Report template to use. Defaults to 'default' if not specified. Available templates: default (empty report), monthly_sales, quarterly_review, deep_dive, analyst_v1 (blockchain analysis with citation enforcement).",
+                description=(
+                    "Report template to use. Defaults to 'default' if not specified. "
+                    "Available templates: default (empty report), monthly_sales, "
+                    "quarterly_review, deep_dive, analyst_v1 (blockchain analysis with "
+                    "citation enforcement)."
+                ),
                 default="default",
                 pattern="^(default|monthly_sales|quarterly_review|deep_dive|analyst_v1)$",
             ),
@@ -523,75 +601,15 @@ def register_igloo_mcp(
         Note: This is a non-SQL tool that operates on file system, not Snowflake.
         It should not be subject to SQL validation from upstream middleware.
         """
-        try:
-            return await create_report_inst.execute(
-                title=title,
-                template=template,
-                tags=tags,
-                description=description,
-            )
-        except Exception as e:
-            # Catch SQL validation errors from upstream middleware that incorrectly
-            # validates non-SQL tools. The error message typically contains "Statement type"
-            # and "not allowed" when upstream middleware tries to validate tool names as SQL.
-            error_msg = str(e).lower()
-            error_type = type(e).__name__
-
-            # Check if this is a SQL validation error that should be bypassed
-            is_sql_validation_error = (
-                (
-                    "statement type" in error_msg
-                    and (
-                        "not allowed" in error_msg
-                        or "create" in error_msg
-                        or "permission" in error_msg
-                    )
-                )
-                or ("sql" in error_msg and "permission" in error_msg)
-                or ("validation" in error_msg and "sql" in error_msg)
-            )
-
-            if is_sql_validation_error:
-                # This is a non-SQL tool - log the issue but proceed anyway
-                # The middleware patch should prevent this, but if it still happens,
-                # we'll log it and try to execute the tool directly
-                logger.warning(
-                    "Upstream SQL validation incorrectly applied to non-SQL tool 'create_report', bypassing",
-                    extra={
-                        "error": str(e),
-                        "error_type": error_type,
-                        "tool": "create_report",
-                    },
-                )
-                # Try to execute directly, bypassing middleware
-                try:
-                    return await create_report_inst.execute(
-                        title=title,
-                        template=template,
-                        tags=tags,
-                        description=description,
-                    )
-                except Exception as direct_error:
-                    # If direct execution also fails, raise the original error
-                    logger.error(
-                        "Direct execution of create_report also failed",
-                        extra={
-                            "original_error": str(e),
-                            "direct_error": str(direct_error),
-                        },
-                    )
-                    raise MCPExecutionError(
-                        f"Report creation failed: {str(direct_error)}",
-                        operation="create_report",
-                        original_error=direct_error,
-                        hints=[
-                            "Check file system permissions",
-                            "Verify reports directory is writable",
-                        ],
-                    ) from direct_error
-
-            # Re-raise other exceptions as-is
-            raise
+        # The middleware patch should prevent SQL validation on non-SQL tools.
+        # If SQL validation errors still occur, they indicate a middleware patching issue
+        # that should be fixed there, not worked around here with redundant retries.
+        return await create_report_inst.execute(
+            title=title,
+            template=template,
+            tags=tags,
+            description=description,
+        )
 
     @server.tool(
         name="search_report",
@@ -621,7 +639,7 @@ def register_igloo_mcp(
             Field(
                 description="Filter by report status",
                 default="active",
-                pattern="^(active|archived)$",
+                pattern="^(active|archived|deleted)$",
             ),
         ] = "active",
         limit: Annotated[
@@ -633,6 +651,17 @@ def register_igloo_mcp(
                 le=50,
             ),
         ] = 20,
+        fields: Annotated[
+            Optional[List[str]],
+            Field(
+                description=(
+                    "Optional list of fields to return (default: all fields). "
+                    "Valid fields: report_id, title, created_at, updated_at, "
+                    "tags, status, path"
+                ),
+                default=None,
+            ),
+        ] = None,
     ) -> Dict[str, Any]:
         """Search report - delegates to SearchReportTool."""
         return await search_report_inst.execute(
@@ -641,6 +670,127 @@ def register_igloo_mcp(
             report_id=report_id,
             status=status,
             limit=limit,
+            fields=fields,
+        )
+
+    @server.tool(
+        name="get_report",
+        description="Get the structure and content of a living report with selective retrieval",
+    )
+    async def get_report_tool(
+        report_selector: Annotated[
+            str, Field(description="Report ID or title to retrieve")
+        ],
+        mode: Annotated[
+            str,
+            Field(
+                description="Retrieval mode for token efficiency",
+                default="summary",
+                pattern="^(summary|sections|insights|full)$",
+            ),
+        ] = "summary",
+        section_ids: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Filter to specific section IDs (mode='sections' or mode='insights')",
+                default=None,
+            ),
+        ] = None,
+        section_titles: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Filter to sections matching titles (fuzzy, case-insensitive)",
+                default=None,
+            ),
+        ] = None,
+        insight_ids: Annotated[
+            Optional[List[str]],
+            Field(
+                description="Filter to specific insight IDs (mode='insights')",
+                default=None,
+            ),
+        ] = None,
+        min_importance: Annotated[
+            Optional[int],
+            Field(
+                description="Filter insights with importance >= this value (mode='insights')",
+                default=None,
+                ge=0,
+                le=10,
+            ),
+        ] = None,
+        limit: Annotated[
+            int,
+            Field(
+                description="Maximum items to return (default 50, max 100)",
+                default=50,
+                ge=1,
+                le=100,
+            ),
+        ] = 50,
+        offset: Annotated[
+            int,
+            Field(
+                description="Skip first N items (pagination, default 0)",
+                default=0,
+                ge=0,
+            ),
+        ] = 0,
+        include_content: Annotated[
+            bool,
+            Field(
+                description="Include section prose content (mode='sections' or mode='full')",
+                default=False,
+            ),
+        ] = False,
+        include_audit: Annotated[
+            bool,
+            Field(
+                description="Include recent audit events (mode='summary' or mode='full')",
+                default=False,
+            ),
+        ] = False,
+    ) -> Dict[str, Any]:
+        """Get report - delegates to GetReportTool."""
+        return await get_report_inst.execute(
+            report_selector=report_selector,
+            mode=mode,
+            section_ids=section_ids,
+            section_titles=section_titles,
+            insight_ids=insight_ids,
+            min_importance=min_importance,
+            limit=limit,
+            offset=offset,
+            include_content=include_content,
+            include_audit=include_audit,
+        )
+
+    @server.tool(
+        name="get_report_schema",
+        description="Get JSON schema for Living Reports operations - self-documenting API",
+    )
+    async def get_report_schema_tool(
+        schema_type: Annotated[
+            str,
+            Field(
+                description="What schema to return",
+                default="proposed_changes",
+                pattern="^(proposed_changes|insight|section|outline|all)$",
+            ),
+        ] = "proposed_changes",
+        format: Annotated[
+            str,
+            Field(
+                description="Output format for schema",
+                default="json_schema",
+                pattern="^(json_schema|examples|compact)$",
+            ),
+        ] = "json_schema",
+    ) -> Dict[str, Any]:
+        """Get report schema - delegates to GetReportSchemaTool."""
+        return await get_report_schema_inst.execute(
+            schema_type=schema_type,
+            format=format,
         )
 
     @server.tool(name="build_catalog", description="Build Snowflake catalog metadata")
@@ -682,7 +832,7 @@ def register_igloo_mcp(
         schema: Annotated[
             Optional[str], Field(description="Specific schema", default=None)
         ] = None,
-        account_scope: Annotated[
+        account: Annotated[
             bool, Field(description="Include account-level metadata", default=False)
         ] = False,
         format: Annotated[
@@ -693,14 +843,22 @@ def register_igloo_mcp(
         return await build_dependency_graph_inst.execute(
             database=database,
             schema=schema,
-            account_scope=account_scope,
+            account=account,
             format=format,
         )
 
     @server.tool(name="test_connection", description="Validate Snowflake connectivity")
-    async def test_connection_tool() -> Dict[str, Any]:
+    async def test_connection_tool(
+        request_id: Annotated[
+            Optional[str],
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
+    ) -> Dict[str, Any]:
         """Test Snowflake connection - delegates to TestConnectionTool."""
-        return await test_connection_inst.execute()
+        return await test_connection_inst.execute(request_id=request_id)
 
     @server.tool(name="health_check", description="Get comprehensive health status")
     async def health_check_tool() -> Dict[str, Any]:

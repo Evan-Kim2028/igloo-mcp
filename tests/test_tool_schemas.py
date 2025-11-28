@@ -57,9 +57,14 @@ def test_execute_query_schema(base_config: Config) -> None:
         assert re.fullmatch(IDENTIFIER_PATTERN, '"Analytics-WH"')
 
     timeout = props["timeout_seconds"]
-    assert timeout["minimum"] == 1
-    assert timeout["maximum"] == 3600
     assert timeout["default"] == 30
+    assert "anyOf" in timeout
+    numeric_schema, string_schema = timeout["anyOf"]
+    assert numeric_schema["type"] == "integer"
+    assert numeric_schema["minimum"] == 1
+    assert numeric_schema["maximum"] == 3600
+    assert string_schema["type"] == "string"
+    assert string_schema["pattern"] == r"^[0-9]+$"
 
     verbose = props["verbose_errors"]
     assert verbose["type"] == "boolean"
@@ -127,9 +132,9 @@ def test_build_dependency_graph_schema() -> None:
         assert identifier["pattern"] == IDENTIFIER_PATTERN
         assert re.fullmatch(IDENTIFIER_PATTERN, '"Sales Analytics"')
 
-    account_scope = props["account_scope"]
-    assert account_scope["type"] == "boolean"
-    assert account_scope["default"] is True
+    account = props["account"]
+    assert account["type"] == "boolean"
+    assert account["default"] is False
 
     fmt = props["format"]
     assert fmt["enum"] == ["json", "dot"]
@@ -187,7 +192,8 @@ def test_test_connection_schema(base_config: Config) -> None:
 
     schema = tool.get_parameter_schema()
     _validate_schema(schema)
-    assert schema["properties"] == {}
+    # Allow optional request_id passthrough
+    assert "request_id" in schema["properties"]
 
     assert tool.category == "diagnostics"
     assert {"connection", "health"}.issubset(set(tool.tags))

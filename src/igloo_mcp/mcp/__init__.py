@@ -5,4 +5,4 @@ This package contains MCP-specific utilities, exceptions, and tool implementatio
 
 from __future__ import annotations
 
-__all__ = []
+__all__: list[str] = []

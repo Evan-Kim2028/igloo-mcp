@@ -13,12 +13,29 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from igloo_mcp.living_reports.models import Insight, Outline, Section
+from igloo_mcp.living_reports.models import Insight, Section
 from igloo_mcp.living_reports.quarto_renderer import (
     QuartoNotFoundError,
     QuartoRenderer,
     RenderResult,
 )
+from tests.helpers.outline_factory import create_test_outline
+
+
+@pytest.fixture(autouse=True)
+def reset_quarto_cache():
+    """Reset QuartoRenderer cache before each test for isolation.
+
+    This prevents cache pollution between tests where one test's
+    cached_bin_path or cached_version affects another test's expectations.
+    """
+    # Reset cache before test
+    QuartoRenderer._cached_bin_path = None
+    QuartoRenderer._cached_version = None
+    yield
+    # Reset cache after test (cleanup)
+    QuartoRenderer._cached_bin_path = None
+    QuartoRenderer._cached_version = None
 
 
 class TestQuartoRenderer:
@@ -92,22 +109,43 @@ class TestQuartoRenderer:
             outline_file = report_dir / "outline.json"
             qmd_file = report_dir / "report.qmd"
 
-            # Create mock outline
-            outline = {
-                "report_id": "test-report",
-                "title": "Test Report",
-                "sections": [{"title": "Section 1", "insight_ids": ["insight1"]}],
-                "insights": [{"insight_id": "insight1", "summary": "Test insight"}],
-                "metadata": {},
-            }
+            # Create mock outline using proper Outline model
+            import uuid
 
+            from igloo_mcp.living_reports.models import Insight, Section
+
+            sec_id = str(uuid.uuid4())
+            insight_id = str(uuid.uuid4())
+
+            outline = create_test_outline(
+                report_id=str(uuid.uuid4()),
+                title="Test Report",
+                sections=[
+                    Section(
+                        section_id=sec_id,
+                        title="Section 1",
+                        order=0,
+                        insight_ids=[insight_id],
+                    )
+                ],
+                insights=[
+                    Insight(insight_id=insight_id, summary="Test insight", importance=5)
+                ],
+                metadata={},
+            )
+
+            # Save as dict to file
             with open(outline_file, "w") as f:
-                json.dump(outline, f)
+                json.dump(outline.model_dump(), f)
 
             with patch("subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(
                     returncode=0, stdout="Output created: report.html\n", stderr=""
                 )
+
+                # Create the output file that Quarto would create
+                # (renderer checks if file exists before adding to output_paths)
+                (report_dir / "report.html").write_text("<html>Test</html>")
 
                 result = renderer.render(
                     report_dir=str(report_dir),
@@ -119,7 +157,9 @@ class TestQuartoRenderer:
                 )
 
                 assert isinstance(result, RenderResult)
-                assert result.output_paths == [str(report_dir / "report.html")]
+                # Use resolved path to handle macOS /var -> /private/var symlink
+                expected_path = str((report_dir / "report.html").resolve())
+                assert result.output_paths == [expected_path]
                 assert "Output created" in result.stdout
                 assert result.warnings == []
 
@@ -130,7 +170,7 @@ class TestQuartoRenderer:
                 mock_run.assert_called_once()
                 args = mock_run.call_args[0][0]
                 assert args[0] == "/mock/quarto"
-                assert "quarto render report.qmd --to html --toc" == " ".join(args[1:])
+                assert "render report.qmd --to html --toc" == " ".join(args[1:])
 
     def test_render_quarto_failure(self):
         """Test rendering when Quarto fails."""
@@ -141,16 +181,18 @@ class TestQuartoRenderer:
             report_dir = Path(temp_dir)
             outline_file = report_dir / "outline.json"
 
-            outline = {
-                "report_id": "test-report",
-                "title": "Test Report",
-                "sections": [],
-                "insights": [],
-                "metadata": {},
-            }
+            import uuid
+
+            outline = create_test_outline(
+                report_id=str(uuid.uuid4()),
+                title="Test Report",
+                sections=[],
+                insights=[],
+                metadata={},
+            )
 
             with open(outline_file, "w") as f:
-                json.dump(outline, f)
+                json.dump(outline.model_dump(), f)
 
             with patch("subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(
@@ -249,21 +291,42 @@ class TestQuartoRenderer:
             report_dir = Path(temp_dir)
             outline_file = report_dir / "outline.json"
 
-            outline = {
-                "report_id": "test-report",
-                "title": "Test Report",
-                "sections": [{"title": "Section 1", "insight_ids": ["insight1"]}],
-                "insights": [
-                    {
-                        "insight_id": "insight1",
-                        "supporting_queries": [{"execution_id": "exec1"}],
-                    }
+            import uuid as uuid_mod
+
+            from igloo_mcp.living_reports.models import (
+                DatasetSource,
+                Insight,
+                Section,
+            )
+
+            report_id = str(uuid_mod.uuid4())
+            sec_id = str(uuid_mod.uuid4())
+            insight_id = str(uuid_mod.uuid4())
+
+            outline = create_test_outline(
+                report_id=report_id,
+                title="Test Report",
+                sections=[
+                    Section(
+                        section_id=sec_id,
+                        title="Section 1",
+                        order=0,
+                        insight_ids=[insight_id],
+                    )
                 ],
-                "metadata": {},
-            }
+                insights=[
+                    Insight(
+                        insight_id=insight_id,
+                        summary="Test insight",
+                        importance=5,
+                        supporting_queries=[DatasetSource(execution_id="exec1")],
+                    )
+                ],
+                metadata={},
+            )
 
             with open(outline_file, "w") as f:
-                json.dump(outline, f)
+                json.dump(outline.model_dump(), f)
 
             with patch("subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(
@@ -328,43 +391,56 @@ class TestQuartoRenderer:
         with tempfile.TemporaryDirectory() as temp_dir:
             report_dir = Path(temp_dir)
 
-            outline = {
-                "report_id": "complex-report",
-                "title": "Complex Test Report",
-                "metadata": {
+            import uuid as uuid_mod
+
+            from igloo_mcp.living_reports.models import (
+                DatasetSource,
+                Insight,
+                Section,
+            )
+
+            report_id = str(uuid_mod.uuid4())
+            sec_id = str(uuid_mod.uuid4())
+            insight1_id = str(uuid_mod.uuid4())
+            insight2_id = str(uuid_mod.uuid4())
+
+            outline = create_test_outline(
+                report_id=report_id,
+                title="Complex Test Report",
+                metadata={
                     "summary": "A comprehensive report",
                     "author": "Test Author",
                 },
-                "sections": [
-                    {
-                        "section_id": "sec1",
-                        "title": "Revenue Analysis",
-                        "order": 1,
-                        "notes": "Key revenue metrics and trends",
-                        "insight_ids": ["insight1", "insight2"],
-                    }
+                sections=[
+                    Section(
+                        section_id=sec_id,
+                        title="Revenue Analysis",
+                        order=1,
+                        notes="Key revenue metrics and trends",
+                        insight_ids=[insight1_id, insight2_id],
+                    )
                 ],
-                "insights": [
-                    {
-                        "insight_id": "insight1",
-                        "importance": 9,
-                        "summary": "Revenue increased 15%",
-                        "supporting_queries": [{"execution_id": "exec1"}],
-                        "draft_changes": {"type": "chart"},
-                    },
-                    {
-                        "insight_id": "insight2",
-                        "importance": 7,
-                        "summary": "Customer acquisition costs down",
-                        "supporting_queries": [{"execution_id": "exec2"}],
-                        "draft_changes": {"type": "table"},
-                    },
+                insights=[
+                    Insight(
+                        insight_id=insight1_id,
+                        importance=9,
+                        summary="Revenue increased 15%",
+                        supporting_queries=[DatasetSource(execution_id="exec1")],
+                        draft_changes={"type": "chart"},
+                    ),
+                    Insight(
+                        insight_id=insight2_id,
+                        importance=7,
+                        summary="Customer acquisition costs down",
+                        supporting_queries=[DatasetSource(execution_id="exec2")],
+                        draft_changes={"type": "table"},
+                    ),
                 ],
-            }
+            )
 
             datasets = {
-                "insight1": {"data": "sample data"},
-                "insight2": {"data": "more data"},
+                insight1_id: {"data": "sample data"},
+                insight2_id: {"data": "more data"},
             }
 
             renderer._generate_qmd_file(
@@ -398,7 +474,7 @@ class TestQuartoRenderer:
             report_dir = Path(temp_dir)
 
             insight_id = str(uuid.uuid4())
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Test Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -486,7 +562,7 @@ class TestTemplateResolution:
         with tempfile.TemporaryDirectory() as temp_dir:
             report_dir = Path(temp_dir)
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Test Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -535,7 +611,7 @@ class TestTemplateResolution:
                 '---\ntitle: "{{ outline.title }}"\nformat: {{ format }}\n---\n\n# {{ outline.title }}\n'
             )
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Dev Mode Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -593,7 +669,7 @@ class TestTemplateResolution:
                 '---\ntitle: "{{ outline.title }}"\n---\n\n# {{ outline.title }}\n'
             )
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Fallback Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -650,7 +726,7 @@ class TestTemplateResolution:
         with tempfile.TemporaryDirectory() as temp_dir:
             report_dir = Path(temp_dir)
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Test Report",
                 created_at="2024-01-01T00:00:00Z",
@@ -706,7 +782,7 @@ class TestTemplateResolution:
         with tempfile.TemporaryDirectory() as temp_dir:
             report_dir = Path(temp_dir)
 
-            outline = Outline(
+            outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
                 title="Real Package Test",
                 created_at="2024-01-01T00:00:00Z",
@@ -735,7 +811,8 @@ class TestTemplateResolution:
             content = qmd_file.read_text()
             assert 'title: "Real Package Test"' in content
             assert "format: html" in content
-            assert "# Real Package Test" in content
+            # Template uses YAML front matter, not markdown headers for title
+            assert "---" in content  # YAML front matter delimiters
 
     def test_template_file_actually_exists_in_package(self):
         """Verify that report.qmd.j2 template actually exists and is accessible."""

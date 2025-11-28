@@ -60,9 +60,15 @@ async def test_search_catalog_by_column(tmp_path: Path) -> None:
 
 @pytest.mark.anyio
 async def test_search_catalog_missing_dir(tmp_path: Path) -> None:
+    """Test that searching a missing catalog directory raises MCPSelectorError."""
+    from igloo_mcp.mcp.exceptions import MCPSelectorError
+
     tool = SearchCatalogTool()
     missing = tmp_path / "missing"
-    result = await tool.execute(catalog_dir=str(missing))
 
-    assert result["status"] == "error"
-    assert "build_catalog" in result["error"].lower()
+    # Should raise MCPSelectorError for non-existent catalog
+    with pytest.raises(MCPSelectorError) as exc_info:
+        await tool.execute(catalog_dir=str(missing))
+
+    assert "not found" in str(exc_info.value).lower()
+    assert "build_catalog" in str(exc_info.value).lower()

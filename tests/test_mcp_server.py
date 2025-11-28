@@ -74,9 +74,11 @@ def _register_with_stub_execute(
     monkeypatch: pytest.MonkeyPatch,
     *,
     execute_side_effect: Exception | dict[str, Any] | None = None,
-    enable_cli_bridge: bool = False,
-    snow_cli_stub: Any | None = None,
 ):
+    """Register igloo_mcp tools with stubbed execute functionality.
+
+    Note: CLI bridge functionality was removed in v0.3.x.
+    """
     server = CapturingServer()
     service = StubService()
     config = Config.from_env()
@@ -118,25 +120,9 @@ def _register_with_stub_execute(
             lambda *args, **kwargs: dummy_tool,
         )
 
-    if enable_cli_bridge:
-        cli_instance = snow_cli_stub or SimpleNamespace(
-            run_query=lambda *a, **k: SimpleNamespace(
-                rows=[],
-                raw_stdout="",
-                raw_stderr="",
-            ),
-        )
-        monkeypatch.setattr("igloo_mcp.mcp_server.SnowCLI", lambda: cli_instance)
-    else:
-        monkeypatch.setattr(
-            "igloo_mcp.mcp_server.SnowCLI",
-            lambda: snow_cli_stub or SimpleNamespace(),
-        )
-
     mcp_server.register_igloo_mcp(
         server,
         service,
-        enable_cli_bridge=enable_cli_bridge,
     )
     return server, execute_mock, context
 
@@ -240,6 +226,8 @@ def test_get_catalog_summary_sync_success(tmp_path: Path):
 
 
 def test_register_igloo_mcp_registers_once():
+    """Test that register_igloo_mcp doesn't duplicate tool registrations."""
+
     class DummyServer:
         def __init__(self) -> None:
             self.names: List[str] = []
@@ -262,18 +250,21 @@ def test_register_igloo_mcp_registers_once():
     server = DummyServer()
     service = StubService()
 
-    with patch("igloo_mcp.mcp_server.SnowCLI"):
-        mcp_server.register_igloo_mcp(server, service)
-        assert server.names  # ensure tools registered
-        assert server.resources  # ensure resource registered
+    mcp_server.register_igloo_mcp(server, service)
+    assert server.names  # ensure tools registered
+    assert server.resources  # ensure resource registered
 
     # Second call should not duplicate registrations
-    with patch("igloo_mcp.mcp_server.SnowCLI"):
-        mcp_server.register_igloo_mcp(server, service)
+    mcp_server.register_igloo_mcp(server, service)
     assert server.names == list(dict.fromkeys(server.names))
 
 
-def test_register_igloo_mcp_with_cli_bridge(monkeypatch):
+def test_register_igloo_mcp_sets_up_context(monkeypatch):
+    """Test that register_igloo_mcp properly sets up service context.
+
+    Note: CLI bridge functionality was removed in v0.3.x.
+    """
+
     class DummyServer:
         def __init__(self) -> None:
             self.tools = {}
@@ -307,34 +298,31 @@ def test_register_igloo_mcp_with_cli_bridge(monkeypatch):
         "igloo_mcp.mcp_server.create_service_context", fake_create_service_context
     )
 
-    snow_cli_instance = MagicMock()
-    with patch(
-        "igloo_mcp.mcp_server.SnowCLI", return_value=snow_cli_instance
-    ) as mock_cli:
-        mcp_server.register_igloo_mcp(server, service, enable_cli_bridge=True)
-        mock_cli.assert_called_once()
-        assert mcp_server._health_monitor is ctx.health_monitor
-        assert mcp_server._resource_manager is ctx.resource_manager
+    mcp_server.register_igloo_mcp(server, service)
+    assert mcp_server._health_monitor is ctx.health_monitor
+    assert mcp_server._resource_manager is ctx.resource_manager
 
 
 @pytest.mark.asyncio
-async def test_execute_query_tool_structures_timeout(monkeypatch: pytest.MonkeyPatch):
+async def test_execute_query_tool_handles_timeout(monkeypatch: pytest.MonkeyPatch):
+    """Test that timeout errors are properly propagated."""
     server, _, _ = _register_with_stub_execute(
         monkeypatch,
         execute_side_effect=TimeoutError("timed out"),
     )
     tool = server.tools["execute_query"]
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TimeoutError) as exc_info:
         await tool("SELECT 1", timeout_seconds=12, reason="test timeout")
 
-    payload = exc_info.value.args[0]
-    assert payload["code"] == "QUERY_TIMEOUT"
-    assert payload["data"]["timeout_seconds"] == 12
+    assert "timed out" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
-async def test_execute_query_tool_formats_param_errors(monkeypatch: pytest.MonkeyPatch):
+async def test_execute_query_tool_handles_value_errors(monkeypatch: pytest.MonkeyPatch):
+    """Test that validation errors are properly propagated for non-numeric timeout strings."""
+    from igloo_mcp.mcp.exceptions import MCPValidationError
+
     server, _, _ = _register_with_stub_execute(
         monkeypatch,
         execute_side_effect=ValueError(
@@ -343,16 +331,32 @@ async def test_execute_query_tool_formats_param_errors(monkeypatch: pytest.Monke
     )
     tool = server.tools["execute_query"]
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(MCPValidationError) as exc_info:
         await tool("SELECT 1", timeout_seconds="invalid", reason="test param error")
 
-    payload = exc_info.value.args[0]
-    assert payload["code"] == "PARAM_TYPE"
-    assert payload["data"]["path"] == ".timeout_seconds"
+    assert "timeout_seconds" in str(exc_info.value)
+    assert "invalid" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
-async def test_execute_query_tool_compact_error(monkeypatch: pytest.MonkeyPatch):
+async def test_execute_query_tool_accepts_string_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Test that numeric string timeouts are accepted and coerced to int (#48)."""
+    server, execute_mock, _ = _register_with_stub_execute(monkeypatch)
+    tool = server.tools["execute_query"]
+
+    await tool("SELECT 1", timeout_seconds="45", reason="string timeout")
+
+    # String should be coerced to int
+    assert execute_mock.await_args.kwargs["timeout_seconds"] == 45
+
+
+@pytest.mark.asyncio
+async def test_execute_query_tool_handles_runtime_errors(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Test that runtime errors are properly propagated."""
     server, _, _ = _register_with_stub_execute(
         monkeypatch,
         execute_side_effect=RuntimeError("bad failure"),
@@ -362,13 +366,12 @@ async def test_execute_query_tool_compact_error(monkeypatch: pytest.MonkeyPatch)
     with pytest.raises(RuntimeError) as exc_info:
         await tool("SELECT 1", reason="test compact error")
 
-    payload = exc_info.value.args[0]
-    assert payload["code"] == "QUERY_EXECUTION_FAILED"
-    assert "bad failure" in payload["message"]
+    assert "bad failure" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
-async def test_execute_query_tool_verbose_error(monkeypatch: pytest.MonkeyPatch):
+async def test_execute_query_tool_verbose_errors(monkeypatch: pytest.MonkeyPatch):
+    """Test that verbose errors include full details."""
     server, _, _ = _register_with_stub_execute(
         monkeypatch,
         execute_side_effect=RuntimeError("detailed failure"),

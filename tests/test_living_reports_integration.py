@@ -5,6 +5,7 @@ import uuid
 import pytest
 
 from igloo_mcp.config import get_config
+from igloo_mcp.living_reports.models import Insight
 from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
 from igloo_mcp.mcp.tools.render_report import RenderReportTool
@@ -26,6 +27,10 @@ async def test_full_lifecycle_create_evolve_render_revert(tmp_path, monkeypatch)
     # 2. Evolve - add insight
     evolve_tool = EvolveReportTool(get_config(), service)
 
+    # Get first section ID to reference the insight
+    outline = service.get_report_outline(report_id)
+    first_section_id = outline.sections[0].section_id
+
     insight_id = str(uuid.uuid4())
     result = await evolve_tool.execute(
         report_selector=report_id,
@@ -38,7 +43,14 @@ async def test_full_lifecycle_create_evolve_render_revert(tmp_path, monkeypatch)
                     "summary": "Revenue up 25% YoY",
                     "supporting_queries": [],
                 }
-            ]
+            ],
+            # Reference the insight in a section
+            "sections_to_modify": [
+                {
+                    "section_id": first_section_id,
+                    "insight_ids_to_add": [insight_id],
+                }
+            ],
         },
     )
     assert result["status"] == "success"
@@ -119,21 +131,22 @@ def test_fork_and_synthesize_workflow(tmp_path):
     """Test fork and synthesize operations."""
     service = ReportService(reports_root=tmp_path / "reports")
 
-    # Create base report
+    # Create base report with template (has sections)
     base_id = service.create_report("Base Report", template="monthly_sales")
 
-    # Add content to base
+    # Add content to base - reference insight in section
     outline = service.get_report_outline(base_id)
     insight_id = str(uuid.uuid4())
     outline.insights.append(
-        {
-            "insight_id": insight_id,
-            "importance": 8,
-            "summary": "Base insight",
-            "supporting_queries": [],
-            "status": "active",
-        }
+        Insight(
+            insight_id=insight_id,
+            importance=8,
+            summary="Base insight",
+            supporting_queries=[],
+            status="active",
+        )
     )
+    outline.sections[0].insight_ids = [insight_id]  # Reference insight in section
     service.update_report_outline(base_id, outline)
 
     # Fork the report
@@ -145,19 +158,20 @@ def test_fork_and_synthesize_workflow(tmp_path):
     assert len(forked_outline.insights) == 1
     assert forked_outline.metadata["forked_from"] == base_id
 
-    # Create another report for synthesis
-    other_id = service.create_report("Other Report")
+    # Create another report for synthesis with template
+    other_id = service.create_report("Other Report", template="deep_dive")
     other_outline = service.get_report_outline(other_id)
     other_insight_id = str(uuid.uuid4())
     other_outline.insights.append(
-        {
-            "insight_id": other_insight_id,
-            "importance": 7,
-            "summary": "Other insight",
-            "supporting_queries": [],
-            "status": "active",
-        }
+        Insight(
+            insight_id=other_insight_id,
+            importance=7,
+            summary="Other insight",
+            supporting_queries=[],
+            status="active",
+        )
     )
+    other_outline.sections[0].insight_ids = [other_insight_id]  # Reference insight
     service.update_report_outline(other_id, other_outline)
 
     # Synthesize reports
@@ -215,20 +229,20 @@ def test_template_to_advanced_workflow(tmp_path):
 
     outline.insights.extend(
         [
-            {
-                "insight_id": insight1_id,
-                "importance": 9,
-                "summary": "Key finding 1",
-                "supporting_queries": [],
-                "status": "active",
-            },
-            {
-                "insight_id": insight2_id,
-                "importance": 7,
-                "summary": "Key finding 2",
-                "supporting_queries": [],
-                "status": "active",
-            },
+            Insight(
+                insight_id=insight1_id,
+                importance=9,
+                summary="Key finding 1",
+                supporting_queries=[],
+                status="active",
+            ),
+            Insight(
+                insight_id=insight2_id,
+                importance=7,
+                summary="Key finding 2",
+                supporting_queries=[],
+                status="active",
+            ),
         ]
     )
 
@@ -267,22 +281,33 @@ async def test_mcp_tool_integration_workflow(tmp_path):
     evolve_tool = EvolveReportTool(get_config(), service)
     render_tool = RenderReportTool(get_config(), service)
 
-    # Create report via service
-    report_id = service.create_report("MCP Test Report")
+    # Create report via service with a template that has sections
+    report_id = service.create_report("MCP Test Report", template="monthly_sales")
 
-    # Evolve via MCP tool
+    # Get a section ID to reference the insight
+    outline = service.get_report_outline(report_id)
+    section_id = outline.sections[0].section_id
+
+    # Evolve via MCP tool - add insight and reference it in section
+    insight_id = str(uuid.uuid4())
     result = await evolve_tool.execute(
         report_selector=report_id,
         instruction="Add test insight",
         proposed_changes={
             "insights_to_add": [
                 {
-                    "insight_id": str(uuid.uuid4()),
+                    "insight_id": insight_id,
                     "importance": 8,
                     "summary": "MCP-generated insight",
                     "supporting_queries": [],
                 }
-            ]
+            ],
+            "sections_to_modify": [
+                {
+                    "section_id": section_id,
+                    "insight_ids_to_add": [insight_id],
+                }
+            ],
         },
     )
     assert result["status"] == "success"

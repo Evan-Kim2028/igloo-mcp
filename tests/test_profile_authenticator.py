@@ -59,4 +59,3 @@ def test_summary_includes_okta_url_authenticator():
     ):
         summary = get_profile_summary()
         assert summary.current_profile_authenticator == "https://acme.okta.com"
-

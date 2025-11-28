@@ -300,7 +300,7 @@ class QuartoRenderer:
             )
             template_file_ref = templates_ref / "report.qmd.j2"
             # Check if the template file exists in the package
-            if template_file_ref.exists():
+            if template_file_ref.is_file():
                 # Use as_file() to get a real filesystem Path
                 # For package files (not in zip), this returns a persistent Path
                 try:

@@ -1,6 +1,6 @@
 [project]
  name = "igloo_mcp"
-version = "0.3.1"
+version = "0.3.2"
 description = "Igloo MCP - Snowflake MCP Server for agentic native workflows"
 readme = "README.md"
 authors = [
@@ -52,6 +52,7 @@ dev-dependencies = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "pytest-mock>=3.10.0",
+    "pytest-xdist>=3.5.0",
     "ruff>=0.6.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
@@ -62,6 +63,7 @@ dev-dependencies = [
     "types-networkx>=3.2.0.20240731",
     "pytest-cov>=7.0.0",
     "trio>=0.26.0",
+    "hypothesis>=6.90.0",
 ]
 
 [tool.ruff]
@@ -82,3 +84,29 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 # Like Black, automatically detect the appropriate line ending
 line-ending = "auto"
+
+[tool.pytest.ini_options]
+# Pytest configuration
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# Markers for test categorization
+markers = [
+    "requires_snowflake: marks tests requiring live Snowflake connection (skipped unless --snowflake)",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests (cross-component)",
+    "system: marks system tests (end-to-end workflows)",
+    "unit: marks unit tests (fast, isolated)",
+    "performance: marks performance and scale tests",
+]
+# Default options (can override with CLI flags)
+addopts = [
+    "-ra",  # Show summary of all test outcomes
+    "--strict-markers",  # Raise error on unknown markers
+    "--strict-config",  # Raise error on config issues
+    "--showlocals",  # Show local variables in tracebacks
+]
+# Asyncio configuration
+asyncio_mode = "auto"

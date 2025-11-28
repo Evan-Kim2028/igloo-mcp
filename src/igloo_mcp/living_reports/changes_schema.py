@@ -40,6 +40,7 @@ class InsightChange(BaseModel):
     importance: Optional[int] = Field(None, ge=0, le=10)
     summary: Optional[str] = None
     supporting_queries: Optional[List[Dict[str, Any]]] = None
+    citations: Optional[List[Dict[str, Any]]] = None
     status: Optional[Literal["active", "archived", "killed"]] = None
 
     @model_validator(mode="before")
@@ -79,6 +80,8 @@ class SectionChange(BaseModel):
     title: Optional[str] = None
     order: Optional[int] = Field(None, ge=0)
     notes: Optional[str] = None
+    content: Optional[str] = None
+    content_format: Optional[Literal["markdown", "html", "plain"]] = "markdown"
     insight_ids_to_add: Optional[List[str]] = None
     insight_ids_to_remove: Optional[List[str]] = None
     insights: Optional[List[Dict[str, Any]]] = None
@@ -130,6 +133,10 @@ class ProposedChanges(BaseModel):
     sections_to_remove: List[str] = Field(default_factory=list)
     title_change: Optional[str] = None
     metadata_updates: Dict[str, Any] = Field(default_factory=dict)
+    status_change: Optional[Literal["active", "archived", "deleted"]] = Field(
+        default=None,
+        description="Optional status change for the report",
+    )
 
     def validate_against_outline(self, outline) -> List[ValidationErrorDetail]:
         """Validate changes against current outline state.

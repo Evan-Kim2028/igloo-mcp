@@ -95,6 +95,7 @@ class RenderReportTool(MCPTool):
         format: str = "html",
         regenerate_outline_view: bool = True,
         include_preview: bool = False,
+        preview_max_chars: int = 2000,
         dry_run: bool = False,
         options: Optional[Dict[str, Any]] = None,
         request_id: Optional[str] = None,
@@ -106,6 +107,7 @@ class RenderReportTool(MCPTool):
             format: Output format ('html', 'pdf', 'markdown', etc.)
             regenerate_outline_view: Whether to regenerate QMD from outline (currently ignored)
             include_preview: Whether to include truncated preview in response
+            preview_max_chars: Maximum characters for preview truncation (default 2000)
             dry_run: If True, only generate QMD file without running Quarto
             options: Additional Quarto rendering options (toc, theme, etc.)
             request_id: Optional request correlation ID for tracing (auto-generated if not provided)
@@ -186,6 +188,7 @@ class RenderReportTool(MCPTool):
             format=format,
             options=options,
             include_preview=include_preview,
+            preview_max_chars=preview_max_chars,
             dry_run=dry_run,
         )
         render_duration = (time.time() - render_start) * 1000

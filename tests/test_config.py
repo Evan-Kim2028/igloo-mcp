@@ -1,4 +1,5 @@
 """Tests for configuration management and profile validation."""
+
 # pylint: disable=redefined-outer-name
 
 import os
@@ -174,7 +175,9 @@ class TestSnowflakeConfig:
 class TestProfileValidation:
     """Test profile validation functionality."""
 
-    def test_profile_validation_with_valid_profile(self, mock_config_with_profiles):  # noqa: F811
+    def test_profile_validation_with_valid_profile(
+        self, mock_config_with_profiles
+    ):  # noqa: F811
         """Test validation succeeds with valid profile."""
         with mock_config_with_profiles(["dev", "prod"], default="dev"):
             result = validate_profile("dev")
