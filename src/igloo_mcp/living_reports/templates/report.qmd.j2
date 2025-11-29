@@ -121,7 +121,6 @@ format: {{ format }}
 {% if insight.draft_changes and insight.draft_changes.get('type') == 'chart' %}
 ```{python}
 # Chart visualization for {{ insight.insight_id }}
-# TODO: Implement chart generation based on dataset {{ insight.insight_id }}
 import matplotlib.pyplot as plt
 import pandas as pd
 

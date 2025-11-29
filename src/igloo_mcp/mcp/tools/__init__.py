@@ -26,9 +26,6 @@ from .health import HealthCheckTool
 from .render_report import RenderReportTool
 from .search_catalog import SearchCatalogTool
 from .search_report import SearchReportTool
-
-# QueryLineageTool removed - lineage functionality not part of igloo-mcp
-# RefreshReportsTool removed - refresh now integrated into evolve_report
 from .test_connection import ConnectionTestTool
 
 __all__ = [
@@ -46,7 +43,5 @@ __all__ = [
     "RenderReportTool",
     "SearchCatalogTool",
     "SearchReportTool",
-    # "QueryLineageTool",  # Removed - lineage functionality not part of igloo-mcp
-    # "RefreshReportsTool",  # Removed - refresh now integrated into evolve_report
     "ConnectionTestTool",
 ]
