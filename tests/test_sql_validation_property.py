@@ -26,30 +26,19 @@ class TestSQLValidationProperties:
 
         Property: For any string input, validation either succeeds or raises
         a well-defined validation error, never crashes with unexpected exceptions.
-
-        Note: This test found a bug - empty strings cause AttributeError.
-        Accepting AttributeError for now as a known issue to be fixed.
         """
         try:
             validate_sql_statement(sql_input, ["Select"], [])
-        except (ValueError, TypeError, AttributeError) as e:
-            # Expected validation errors (AttributeError is a bug but accepted for now)
-            if isinstance(e, AttributeError):
-                # Known bug: empty/malformed SQL causes AttributeError
-                # TODO: Fix in sql_validation.py to raise ValueError instead
-                pass
-            else:
-                error_msg = str(e).lower()
-                assert any(
-                    keyword in error_msg
-                    for keyword in ["sql", "statement", "query", "empty", "invalid"]
-                ), f"Error message should be informative: {e}"
+        except (ValueError, TypeError) as e:
+            # Expected validation errors - verify they have informative messages
+            error_msg = str(e).lower()
+            assert any(keyword in error_msg for keyword in ["sql", "statement", "query", "empty", "invalid"]), (
+                f"Error message should be informative: {e}"
+            )
         except Exception as e:
             pytest.fail(f"Unexpected exception type: {type(e).__name__}: {e}")
 
-    @pytest.mark.xfail(
-        reason="Hypothesis finds obscure sqlglot edge cases - upstream limitation"
-    )
+    @pytest.mark.xfail(reason="Hypothesis finds obscure sqlglot edge cases - upstream limitation")
     @given(
         st.one_of(
             st.just("SELECT"),
@@ -97,9 +86,7 @@ class TestSQLValidationProperties:
                 results.append(("error", type(e).__name__))
 
         # All results should be the same (case-insensitive)
-        assert (
-            len(set(str(r) for r in results)) == 1
-        ), "Case variations should validate consistently"
+        assert len(set(str(r) for r in results)) == 1, "Case variations should validate consistently"
 
     @given(st.integers(min_value=0, max_value=1000))
     def test_whitespace_handling(self, num_spaces: int):
@@ -129,12 +116,8 @@ class TestSQLValidationProperties:
         _, base_valid, _ = validate_sql_statement(base_sql, ["Select"], [])
         assert base_valid is True
 
-    @pytest.mark.xfail(
-        reason="Hypothesis generates patterns that crash sqlglot - upstream limitation"
-    )
-    @given(
-        st.lists(st.sampled_from([";", "--", "/*", "*/", "'"]), min_size=0, max_size=20)
-    )
+    @pytest.mark.xfail(reason="Hypothesis generates patterns that crash sqlglot - upstream limitation")
+    @given(st.lists(st.sampled_from([";", "--", "/*", "*/", "'"]), min_size=0, max_size=20))
     def test_sql_injection_patterns_detected(self, injection_chars: list[str]):
         """Common SQL injection patterns should be handled safely.
 
@@ -148,18 +131,14 @@ class TestSQLValidationProperties:
             # Expected - validation might reject malformed SQL
             pass
         except Exception as e:
-            pytest.fail(
-                f"Should not crash on injection patterns: {type(e).__name__}: {e}"
-            )
+            pytest.fail(f"Should not crash on injection patterns: {type(e).__name__}: {e}")
 
 
 class TestCacheKeyGeneration:
     """Property-based tests for cache key generation determinism."""
 
     @given(
-        st.text(
-            min_size=1, max_size=100, alphabet="abcdefghijklmnopqrstuvwxyz0123456789"
-        ),
+        st.text(min_size=1, max_size=100, alphabet="abcdefghijklmnopqrstuvwxyz0123456789"),
         st.text(min_size=1, max_size=50, alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ_"),
     )
     def test_cache_key_determinism(self, sql_hash: str, profile: str):
@@ -220,9 +199,7 @@ class TestCacheKeyGeneration:
                 assert isinstance(key, str), "Cache key should be a string"
                 assert len(key) > 0, "Cache key should not be empty"
             except Exception as e:
-                pytest.fail(
-                    f"Cache key generation should not crash: {type(e).__name__}: {e}"
-                )
+                pytest.fail(f"Cache key generation should not crash: {type(e).__name__}: {e}")
 
 
 class TestLivingReportsInvariants:

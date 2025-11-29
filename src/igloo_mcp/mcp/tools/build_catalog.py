@@ -5,6 +5,7 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -16,7 +17,7 @@ from igloo_mcp.constants import CATALOG_CONCURRENCY, MAX_DDL_CONCURRENCY
 from igloo_mcp.mcp.exceptions import MCPValidationError
 from igloo_mcp.path_utils import validate_safe_path
 
-from .base import MCPTool, tool_error_handler
+from .base import MCPTool, ensure_request_id, tool_error_handler
 from .schema_utils import (
     boolean_schema,
     enum_schema,
@@ -137,6 +138,13 @@ class BuildCatalogTool(MCPTool):
                 hints=["Use format='json' or format='jsonl'"],
             )
 
+        # Timing and request correlation
+        start_time = time.time()
+        request_id = ensure_request_id(request_id)
+
+        # Warnings collection
+        warnings: list[dict[str, Any]] = []
+
         # Determine if using unified storage (when output_dir is default)
         # Handle both relative and normalized paths, and check if it's the default
         default_paths = ["./data_catalogue", "data_catalogue"]
@@ -195,6 +203,8 @@ class BuildCatalogTool(MCPTool):
             },
         )
 
+        # Timing: Catalog build operation
+        catalog_start = time.time()
         result = await anyio.to_thread.run_sync(
             lambda: self.catalog_service.build(
                 output_dir=output_dir,
@@ -208,9 +218,13 @@ class BuildCatalogTool(MCPTool):
                 use_unified_storage=use_unified_storage,
             )
         )
+        catalog_duration = (time.time() - catalog_start) * 1000
 
         # Log the actual resolved path for unified storage
         resolved_output_dir = result.output_dir
+
+        # Calculate total duration
+        total_duration = (time.time() - start_time) * 1000
 
         logger.info(
             "build_catalog_completed",
@@ -219,6 +233,8 @@ class BuildCatalogTool(MCPTool):
                 "database": database or "current",
                 "account": account,
                 "request_id": request_id,
+                "catalog_duration_ms": catalog_duration,
+                "total_duration_ms": total_duration,
                 "totals": {
                     "databases": result.totals.databases,
                     "schemas": result.totals.schemas,
@@ -229,6 +245,12 @@ class BuildCatalogTool(MCPTool):
 
         return {
             "status": "success",
+            "request_id": request_id,
+            "warnings": warnings,
+            "timing": {
+                "catalog_fetch_ms": round(catalog_duration, 2),
+                "total_duration_ms": round(total_duration, 2),
+            },
             "output_dir": resolved_output_dir,
             "database": database or "current",
             "account_scope": account,

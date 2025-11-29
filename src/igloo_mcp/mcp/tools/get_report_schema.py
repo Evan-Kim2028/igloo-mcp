@@ -202,18 +202,31 @@ class GetReportSchemaTool(MCPTool):
         examples = {
             "proposed_changes": {
                 "add_insight": {
-                    "description": "Add a new insight to an existing section",
+                    "description": "Create an insight and link it to a section",
+                    "workflow": [
+                        "1. Create the insight with insights_to_add",
+                        "2. Link it to a section with sections_to_modify",
+                    ],
                     "proposed_changes": {
                         "insights_to_add": [
                             {
-                                "section_id": "550e8400-e29b-41d4-a716-446655440012",
-                                "insight": {
-                                    "summary": "Revenue grew 25% YoY to $2.4M",
-                                    "importance": 9,
-                                    "supporting_queries": [],
-                                },
+                                "insight_id": "550e8400-e29b-41d4-a716-446655440099",
+                                "summary": "Revenue grew 25% YoY to $2.4M",
+                                "importance": 9,
+                                "supporting_queries": [
+                                    {
+                                        "execution_id": "01234567-89ab-cdef-0123-456789abcdef",
+                                        "description": "Revenue YoY query",
+                                    }
+                                ],
                             }
-                        ]
+                        ],
+                        "sections_to_modify": [
+                            {
+                                "section_id": "550e8400-e29b-41d4-a716-446655440012",
+                                "insight_ids_to_add": ["550e8400-e29b-41d4-a716-446655440099"],
+                            }
+                        ],
                     },
                 },
                 "add_section_with_insights": {
@@ -289,9 +302,7 @@ class GetReportSchemaTool(MCPTool):
                     "summary": "Network processed 2.4M transactions in Q1",
                     "importance": 8,
                     "status": "active",
-                    "supporting_queries": [
-                        {"execution_id": "exec_abc123", "sql_sha256": "def456..."}
-                    ],
+                    "supporting_queries": [{"execution_id": "exec_abc123", "sql_sha256": "def456..."}],
                 },
             },
             "section": {
@@ -343,13 +354,9 @@ class GetReportSchemaTool(MCPTool):
                     "Array<{section_id: UUID, insight: "
                     "{summary: string, importance: 0-10, supporting_queries?: Array}}>"
                 ),
-                "sections_to_add": (
-                    "Array<{title: string, order?: int, content?: string, "
-                    "insights?: Array<insight>}>"
-                ),
+                "sections_to_add": ("Array<{title: string, order?: int, content?: string, insights?: Array<insight>}>"),
                 "insights_to_modify": (
-                    "Array<{insight_id: UUID, summary?: string, "
-                    "importance?: 0-10, status?: string}>"
+                    "Array<{insight_id: UUID, summary?: string, importance?: 0-10, status?: string}>"
                 ),
                 "sections_to_modify": (
                     "Array<{section_id: UUID, title?: string, order?: int, "
@@ -397,8 +404,7 @@ class GetReportSchemaTool(MCPTool):
                 "status": "success",
                 "schema_type": schema_type,
                 "quick_reference": {
-                    "note": f"Schema type '{schema_type}' is complex. "
-                    "Use format='json_schema' for complete definition."
+                    "note": f"Schema type '{schema_type}' is complex. Use format='json_schema' for complete definition."
                 },
             }
 

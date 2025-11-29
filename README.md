@@ -21,6 +21,7 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 - ⚡ **Token Efficiency**: 70% reduction in multi-turn workflows via progressive disclosure and configurable verbosity (v0.3.2+). Read only what you need, when you need it.
 - 📂 **Unified Storage**: All data (query history, artifacts, reports) stored together per instance for easy access across projects. Reports use `~/.igloo_mcp/reports/` by default in v0.3.0+.
 - 📋 **Living Reports**: JSON-backed, auditable business reports that evolve safely with LLM assistance (v0.3.0+). Three-layer architecture: Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs. **Complete tooling ecosystem in v0.3.2**.
+- 🔍 **API Completeness** ✨ v0.3.3: Distributed tracing with `request_id` (UUID4), performance monitoring with `timing` metrics, complete audit trails with symmetric CRUD tracking (`*_ids_added`/`*_ids_modified`/`*_ids_removed`), and structured `warnings` for graceful handling of partial results. Full observability for multi-step workflows.
 - ⚡ **Simple Backend**: SnowCLI integration for max performance; CLI/REST modes. Python 3.12+, MIT-licensed.
 
 Full API in [docs/api/README.md](./docs/api/README.md).
@@ -32,7 +33,7 @@ The official [Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp) is a po
 - **Simpler Setup**: SnowCLI-based – no YAML service configs. Just install, pick a profile, and go. Official requires detailed service listings and permission tuning.
 - **Dev Workflow Boosts**: Always-on query history (JSONL audits), result caching (instant replays, no re-hits on Snowflake), and auto-insights (row summaries for LLM reasoning – no extra SQL). Official emphasizes Cortex but lacks these for rapid iteration.
 - **Agent-Safe Defaults**: Blocks risky SQL (DDL/DML) out-of-box, with timeouts/cancellation. Official is flexible but needs config for guards.
-- **Lightweight Focus**: 11 focused MCP tools for querying, cataloging, lineage, and living reports – perfect for AI prototypes. Skip Cortex bloat if you don't need RAG/agents.
+- **Lightweight Focus**: 13 focused MCP tools for querying, cataloging, lineage, and living reports – perfect for AI prototypes. Skip Cortex bloat if you don't need RAG/agents.
 - **Performance Edge**: Optimized for local/dev (CLI mode default; REST fallback added in v0.2.3). Official is container-heavy for prod.
 - **Transparent Attribution**: v0.2.5+ logs `source_databases` + fully-qualified `tables` for every query result/history entry so cross-database access is always auditable.
 
@@ -122,7 +123,7 @@ See [docs/living-reports/user-guide.md](./docs/living-reports/user-guide.md) for
 ### Install (1 min)
 ```bash
 uv pip install igloo-mcp  # Or pip install igloo-mcp
-igloo --version  # Verify (v0.3.2+)
+igloo --version  # Verify (v0.3.3+)
 ```
 
 ### Connect Snowflake Profile (2 min)

@@ -52,6 +52,7 @@ async def test_full_lifecycle_create_evolve_render_revert(tmp_path, monkeypatch)
                 }
             ],
         },
+        constraints={"skip_citation_validation": True},
     )
     assert result["status"] == "success"
 
@@ -204,9 +205,7 @@ def test_concurrent_agents_version_conflict(tmp_path):
     outline1.title = "Modified by Agent 1"
 
     with pytest.raises(ValueError, match="Version mismatch"):
-        service.update_report_outline(
-            report_id, outline1, actor="agent", expected_version=initial_version
-        )
+        service.update_report_outline(report_id, outline1, actor="agent", expected_version=initial_version)
 
 
 def test_template_to_advanced_workflow(tmp_path):
@@ -214,9 +213,7 @@ def test_template_to_advanced_workflow(tmp_path):
     service = ReportService(reports_root=tmp_path / "reports")
 
     # Start with template
-    report_id = service.create_report(
-        "Template Report", template="deep_dive", tags=["template"]
-    )
+    report_id = service.create_report("Template Report", template="deep_dive", tags=["template"])
 
     # Verify template structure
     outline = service.get_report_outline(report_id)
@@ -309,6 +306,7 @@ async def test_mcp_tool_integration_workflow(tmp_path):
                 }
             ],
         },
+        constraints={"skip_citation_validation": True},
     )
     assert result["status"] == "success"
 

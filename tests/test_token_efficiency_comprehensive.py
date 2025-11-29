@@ -67,11 +67,10 @@ class TestTokenEfficiencyMeasurements:
         # Verify: minimal <= standard <= full (allow equal if validation failed)
         assert minimal_size <= standard_size <= full_size
 
-        # Verify: minimal is 40-60% of full (50-80% savings)
+        # Verify: minimal is 40-60% of full (50-85% savings)
+        # Updated upper bound: v0.3.3 optimizations achieve 80%+ savings
         savings_percent = (1 - minimal_size / full_size) * 100
-        assert (
-            40 <= savings_percent <= 80
-        ), f"Expected 40-80% savings, got {savings_percent}%"
+        assert 40 <= savings_percent <= 85, f"Expected 40-85% savings, got {savings_percent}%"
 
     async def test_search_fields_token_savings(self, tmp_path: Path):
         """Measure token savings with fields parameter."""
@@ -81,17 +80,13 @@ class TestTokenEfficiencyMeasurements:
 
         # Create 10 reports with full metadata
         for i in range(10):
-            report_service.create_report(
-                title=f"Test Report {i}", tags=["test", f"category{i % 3}"]
-            )
+            report_service.create_report(title=f"Test Report {i}", tags=["test", f"category{i % 3}"])
 
         # Search all fields (default)
         full_result = await tool.execute(tags=["test"])
 
         # Search minimal fields
-        minimal_result = await tool.execute(
-            tags=["test"], fields=["report_id", "title"]
-        )
+        minimal_result = await tool.execute(tags=["test"], fields=["report_id", "title"])
 
         # Measure sizes
         full_size = len(json.dumps(full_result))
@@ -102,9 +97,7 @@ class TestTokenEfficiencyMeasurements:
 
         # Verify: 30-70% savings (updated - our optimization is better than expected!)
         savings_percent = (1 - minimal_size / full_size) * 100
-        assert (
-            20 <= savings_percent <= 70
-        ), f"Expected 20-70% savings, got {savings_percent}%"
+        assert 20 <= savings_percent <= 70, f"Expected 20-70% savings, got {savings_percent}%"
 
     async def test_get_report_mode_token_efficiency(self, tmp_path: Path):
         """Verify progressive disclosure saves tokens vs full mode."""
@@ -113,9 +106,7 @@ class TestTokenEfficiencyMeasurements:
         tool = GetReportTool(config, report_service)
 
         # Create report with 10 sections, 20 insights
-        report_id = report_service.create_report(
-            title="Large Report", template="default"
-        )
+        report_id = report_service.create_report(title="Large Report", template="default")
         outline = report_service.get_report_outline(report_id)
 
         for i in range(10):

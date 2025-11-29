@@ -10,6 +10,7 @@ Retrieves summary information about a built catalog, including statistics and me
 |-----------|------|----------|---------|-------------|
 | `catalog_dir` | string | ❌ No | ./data_catalogue | Directory containing catalog artifacts. Default resolves to unified storage at `~/.igloo_mcp/catalogs/{database}/` when used with `build_catalog` default. |
 | `database` | string | ❌ No | — | Optional database name to resolve unified storage path. Only used when `catalog_dir` is default. |
+| `request_id` | string | ❌ No | auto-generated | Request correlation ID for distributed tracing (UUID4). Auto-generated if not provided. |
 
 > **Unified Storage**: When `catalog_dir` is the default (`./data_catalogue`), the tool attempts to resolve to unified storage location. Provide the full path to a specific catalog directory, or use the `database` parameter to resolve unified storage automatically.
 
@@ -44,6 +45,7 @@ Returns a dictionary containing:
 **Expected Output**:
 ```json
 {
+  "request_id": "750e8400-e29b-41d4-a716-446655440002",
   "catalog_info": {
     "database": "MY_DATABASE",
     "total_objects": 150,
@@ -70,6 +72,9 @@ Returns a dictionary containing:
       "STAGING": 20
     }
   },
+  "timing": {
+    "total_duration_ms": 5.23
+  },
   "last_updated": "2025-01-15T10:30:00Z",
   "status": {
     "health": "healthy",
@@ -78,6 +83,11 @@ Returns a dictionary containing:
   }
 }
 ```
+
+### Response Fields
+
+- **`request_id`**: UUID4 correlation ID for distributed tracing
+- **`timing`**: Performance metrics with `total_duration_ms` only (simple operation)
 
 ### Custom Catalog Directory
 ```json

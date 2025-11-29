@@ -9,6 +9,7 @@ Get comprehensive health status for the MCP server and Snowflake connection.
 | `include_cortex` | boolean | ❌ No | true | Check Cortex AI availability |
 | `include_profile` | boolean | ❌ No | true | Validate profile configuration |
 | `include_catalog` | boolean | ❌ No | false | Check catalog resource status |
+| `request_id` | string | ❌ No | auto-generated | Request correlation ID for distributed tracing (UUID4). Auto-generated if not provided. |
 
 ## Discovery Metadata
 
@@ -22,6 +23,7 @@ Get comprehensive health status for the MCP server and Snowflake connection.
 
 ```json
 {
+  "request_id": "850e8400-e29b-41d4-a716-446655440003",
   "overall_status": "healthy",
   "connection": {
     "status": "connected",
@@ -61,8 +63,17 @@ Get comprehensive health status for the MCP server and Snowflake connection.
       "uptime_seconds": 120
     },
     "recent_errors": []
+  },
+  "timing": {
+    "total_duration_ms": 125.45
   }
 }
+```
+
+### Response Fields
+
+- **`request_id`**: UUID4 correlation ID for distributed tracing
+- **`timing`**: Performance metrics with `total_duration_ms` only
 ```
 
 - `system` now reflects the consolidated `get_comprehensive_health` response (v0.2.5) with `healthy`, `error_count`, `metrics.uptime_seconds`, and recent errors populated. Older monitors that only expose `get_health_status()` are still supported.

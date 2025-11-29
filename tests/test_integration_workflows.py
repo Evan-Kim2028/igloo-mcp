@@ -30,13 +30,12 @@ class TestWorkflowIntegration:
         evolve_tool = EvolveReportTool(config, report_service)
 
         # Setup: Create report
-        report_id = report_service.create_report(
-            title="Q1 Analysis", tags=["Q1", "analysis"]
-        )
+        report_id = report_service.create_report(title="Q1 Analysis", tags=["Q1", "analysis"])
 
         # Step 1: search_report to find report
         search_result = await search_tool.execute(
-            title="Q1", fields=["report_id", "title"]  # Token efficient
+            title="Q1",
+            fields=["report_id", "title"],  # Token efficient
         )
 
         assert search_result["status"] == "success"
@@ -45,9 +44,7 @@ class TestWorkflowIntegration:
         assert found_id == report_id
 
         # Step 2: get_report (summary) to understand structure
-        summary_result = await get_tool.execute(
-            report_selector=found_id, mode="summary"
-        )
+        summary_result = await get_tool.execute(report_selector=found_id, mode="summary")
 
         assert summary_result["status"] == "success"
         assert summary_result["title"] == "Q1 Analysis"
@@ -76,16 +73,12 @@ class TestWorkflowIntegration:
         assert evolve_result["summary"]["insights_added"] == 1
 
         # Step 4: get_report (sections) to verify section was created
-        sections_result = await get_tool.execute(
-            report_selector=found_id, mode="sections", section_titles=["revenue"]
-        )
+        sections_result = await get_tool.execute(report_selector=found_id, mode="sections", section_titles=["revenue"])
 
         assert sections_result["total_matched"] == 1
 
         # Step 5: get_report to verify insight was added
-        verify_result = await get_tool.execute(
-            report_selector=found_id, mode="insights"
-        )
+        verify_result = await get_tool.execute(report_selector=found_id, mode="insights")
 
         assert verify_result["total_matched"] == 1
         assert "Revenue grew 25%" in verify_result["insights"][0]["summary"]
@@ -99,9 +92,7 @@ class TestWorkflowIntegration:
         evolve_tool = EvolveReportTool(config, report_service)
 
         # Step 1: get_report_schema (examples format)
-        schema_result = await schema_tool.execute(
-            schema_type="proposed_changes", format="examples"
-        )
+        schema_result = await schema_tool.execute(schema_type="proposed_changes", format="examples")
 
         assert schema_result["status"] == "success"
         assert "examples" in schema_result
@@ -128,9 +119,7 @@ class TestWorkflowIntegration:
         get_tool = GetReportTool(config, report_service)
 
         # Create report with varied content
-        report_id = report_service.create_report(
-            title="Complex Report", template="default"
-        )
+        report_id = report_service.create_report(title="Complex Report", template="default")
         outline = report_service.get_report_outline(report_id)
 
         # Add 5 sections
@@ -164,9 +153,7 @@ class TestWorkflowIntegration:
         assert summary["summary"]["total_insights"] == 15
 
         # Step 2: filter insights - get only important ones
-        important = await get_tool.execute(
-            report_selector=report_id, mode="insights", min_importance=8
-        )
+        important = await get_tool.execute(report_selector=report_id, mode="insights", min_importance=8)
 
         # Should return subset
         assert important["total_matched"] < 15
@@ -174,9 +161,7 @@ class TestWorkflowIntegration:
 
         # Step 3: get details for specific sections
         section_ids = [s["section_id"] for s in summary["sections_overview"][:2]]
-        details = await get_tool.execute(
-            report_selector=report_id, mode="sections", section_ids=section_ids
-        )
+        details = await get_tool.execute(report_selector=report_id, mode="sections", section_ids=section_ids)
 
         assert details["total_matched"] == 2
 
@@ -193,17 +178,13 @@ class TestWorkflowIntegration:
         evolve_tool = EvolveReportTool(config, report_service)
 
         # Step 1: create_report with template
-        create_result = await create_tool.execute(
-            title="New Report", template="deep_dive"
-        )
+        create_result = await create_tool.execute(title="New Report", template="deep_dive")
 
         assert create_result["status"] == "success"
         report_id = create_result["report_id"]
 
         # Step 2: get_report_schema to learn structure
-        schema_result = await schema_tool.execute(
-            schema_type="proposed_changes", format="compact"
-        )
+        schema_result = await schema_tool.execute(schema_type="proposed_changes", format="compact")
 
         assert "quick_reference" in schema_result
 
@@ -229,9 +210,7 @@ class TestWorkflowIntegration:
         assert evolve_result["summary"]["insights_added"] == 1
 
         # Step 4: get_report to verify structure
-        verify_result = await get_tool.execute(
-            report_selector=report_id, mode="summary"
-        )
+        verify_result = await get_tool.execute(report_selector=report_id, mode="summary")
 
         # deep_dive has 3 sections + 1 we added = 4
         assert verify_result["summary"]["total_sections"] == 4
@@ -262,16 +241,12 @@ class TestWorkflowIntegration:
         report_service.update_report_outline(report_id, outline, actor="test")
 
         # Step 1: search_report (fields=minimal)
-        search_result = await search_tool.execute(
-            tags=["test"], fields=["report_id", "title"]
-        )
+        search_result = await search_tool.execute(tags=["test"], fields=["report_id", "title"])
 
         assert len(search_result["reports"]) == 1
 
         # Step 2: get_report (insights, filtered)
-        get_result = await get_tool.execute(
-            report_selector=report_id, mode="insights", min_importance=5
-        )
+        get_result = await get_tool.execute(report_selector=report_id, mode="insights", min_importance=5)
 
         insight_id = get_result["insights"][0]["insight_id"]
 
@@ -280,10 +255,9 @@ class TestWorkflowIntegration:
             report_selector=report_id,
             instruction="Update insight",
             proposed_changes={
-                "insights_to_modify": [
-                    {"insight_id": insight_id, "summary": "Updated", "importance": 9}
-                ]
+                "insights_to_modify": [{"insight_id": insight_id, "summary": "Updated", "importance": 9}]
             },
+            constraints={"skip_citation_validation": True},
             response_detail="minimal",
         )
 
@@ -299,9 +273,7 @@ class TestWorkflowIntegration:
         evolve_tool = EvolveReportTool(config, report_service)
 
         # Setup: Create report with 3 sections
-        report_id = report_service.create_report(
-            title="Multi-Edit", template="deep_dive"
-        )
+        report_id = report_service.create_report(title="Multi-Edit", template="deep_dive")
 
         # Turn 1: get_report (summary) - overview
         summary = await get_tool.execute(report_selector=report_id, mode="summary")
@@ -346,9 +318,7 @@ class TestWorkflowIntegration:
         assert version2 > version1
 
         # Verify: get_report shows all sections
-        final_summary = await get_tool.execute(
-            report_selector=report_id, mode="summary"
-        )
+        final_summary = await get_tool.execute(report_selector=report_id, mode="summary")
         # 3 from template + 2 we added = 5
         assert final_summary["summary"]["total_sections"] == 5
         assert final_summary["summary"]["total_insights"] == 2
@@ -364,9 +334,7 @@ class TestWorkflowIntegration:
         render_tool = RenderReportTool(config, report_service)
 
         # Step 1: create_report
-        create_result = await create_tool.execute(
-            title="Render Test", template="default"
-        )
+        create_result = await create_tool.execute(title="Render Test", template="default")
         report_id = create_result["report_id"]
 
         # Step 2: evolve_report (build content) - use inline insights

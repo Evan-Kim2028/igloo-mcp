@@ -5,6 +5,7 @@ Part of v1.9.0 Phase 1 - consolidates health_check, check_profile_config, and ge
 
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, Optional
 
 import anyio
@@ -16,7 +17,7 @@ from igloo_mcp.profile_utils import (
     validate_and_resolve_profile,
 )
 
-from .base import MCPTool, tool_error_handler
+from .base import MCPTool, ensure_request_id, tool_error_handler
 from .schema_utils import boolean_schema
 
 try:
@@ -116,6 +117,10 @@ class HealthCheckTool(MCPTool):
         Returns:
             Comprehensive health status
         """
+        # Timing and request correlation
+        start_time = time.time()
+        request_id = ensure_request_id(request_id)
+
         logger.info(
             "health_check_started",
             extra={
@@ -154,11 +159,21 @@ class HealthCheckTool(MCPTool):
 
         results["overall_status"] = "unhealthy" if has_critical_failures else "healthy"
 
+        # Calculate total duration
+        total_duration = (time.time() - start_time) * 1000
+
+        # Add metadata
+        results["request_id"] = request_id
+        results["timing"] = {
+            "total_duration_ms": round(total_duration, 2),
+        }
+
         logger.info(
             "health_check_completed",
             extra={
                 "overall_status": results["overall_status"],
                 "request_id": request_id,
+                "total_duration_ms": total_duration,
             },
         )
 

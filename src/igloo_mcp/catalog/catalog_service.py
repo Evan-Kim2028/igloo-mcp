@@ -64,7 +64,7 @@ class CatalogService:
             context: Service context with profile information
         """
         self.context = context
-        if hasattr(context, "config") and hasattr(context.config, "snowflake"):
+        if context is not None and hasattr(context, "config") and hasattr(context.config, "snowflake"):
             self.profile = context.config.snowflake.profile
         else:
             self.profile = None
@@ -168,9 +168,7 @@ class CatalogService:
             # Check if this is a unified storage path (either resolved or explicitly provided)
             try:
                 catalog_root = resolve_catalog_root()
-                is_unified_storage_path = use_unified_storage or str(
-                    output_path
-                ).startswith(str(catalog_root))
+                is_unified_storage_path = use_unified_storage or str(output_path).startswith(str(catalog_root))
             except Exception:
                 # If path resolution fails, fall back to use_unified_storage flag
                 is_unified_storage_path = use_unified_storage
@@ -249,11 +247,7 @@ class CatalogService:
             if account_scope:
                 db_query = "SHOW DATABASES"
             else:
-                db_query = (
-                    f"SHOW DATABASES LIKE '{database}'"
-                    if database
-                    else "SHOW DATABASES"
-                )
+                db_query = f"SHOW DATABASES LIKE '{database}'" if database else "SHOW DATABASES"
 
             db_result = self.cli.run_query(db_query, output_format="json")
             if db_result.rows:
@@ -264,11 +258,7 @@ class CatalogService:
             if account_scope:
                 schema_query = "SHOW SCHEMAS"
             else:
-                schema_query = (
-                    f"SHOW SCHEMAS IN DATABASE {database}"
-                    if database
-                    else "SHOW SCHEMAS"
-                )
+                schema_query = f"SHOW SCHEMAS IN DATABASE {database}" if database else "SHOW SCHEMAS"
 
             schema_result = self.cli.run_query(schema_query, output_format="json")
             if schema_result.rows:
@@ -279,9 +269,7 @@ class CatalogService:
             if account_scope:
                 table_query = "SHOW TABLES"
             else:
-                table_query = (
-                    f"SHOW TABLES IN DATABASE {database}" if database else "SHOW TABLES"
-                )
+                table_query = f"SHOW TABLES IN DATABASE {database}" if database else "SHOW TABLES"
 
             table_result = self.cli.run_query(table_query, output_format="json")
             if table_result.rows:
@@ -292,9 +280,7 @@ class CatalogService:
             if account_scope:
                 view_query = "SHOW VIEWS"
             else:
-                view_query = (
-                    f"SHOW VIEWS IN DATABASE {database}" if database else "SHOW VIEWS"
-                )
+                view_query = f"SHOW VIEWS IN DATABASE {database}" if database else "SHOW VIEWS"
 
             view_result = self.cli.run_query(view_query, output_format="json")
             if view_result.rows:
@@ -305,11 +291,7 @@ class CatalogService:
             if account_scope:
                 mv_query = "SHOW MATERIALIZED VIEWS"
             else:
-                mv_query = (
-                    f"SHOW MATERIALIZED VIEWS IN DATABASE {database}"
-                    if database
-                    else "SHOW MATERIALIZED VIEWS"
-                )
+                mv_query = f"SHOW MATERIALIZED VIEWS IN DATABASE {database}" if database else "SHOW MATERIALIZED VIEWS"
 
             mv_result = self.cli.run_query(mv_query, output_format="json")
             if mv_result.rows:
@@ -320,11 +302,7 @@ class CatalogService:
             if account_scope:
                 dt_query = "SHOW DYNAMIC TABLES"
             else:
-                dt_query = (
-                    f"SHOW DYNAMIC TABLES IN DATABASE {database}"
-                    if database
-                    else "SHOW DYNAMIC TABLES"
-                )
+                dt_query = f"SHOW DYNAMIC TABLES IN DATABASE {database}" if database else "SHOW DYNAMIC TABLES"
 
             dt_result = self.cli.run_query(dt_query, output_format="json")
             if dt_result.rows:
@@ -335,9 +313,7 @@ class CatalogService:
             if account_scope:
                 task_query = "SHOW TASKS"
             else:
-                task_query = (
-                    f"SHOW TASKS IN DATABASE {database}" if database else "SHOW TASKS"
-                )
+                task_query = f"SHOW TASKS IN DATABASE {database}" if database else "SHOW TASKS"
 
             task_result = self.cli.run_query(task_query, output_format="json")
             if task_result.rows:
@@ -402,11 +378,7 @@ class CatalogService:
             if account_scope:
                 proc_query = "SHOW PROCEDURES"
             else:
-                proc_query = (
-                    f"SHOW PROCEDURES IN DATABASE {database}"
-                    if database
-                    else "SHOW PROCEDURES"
-                )
+                proc_query = f"SHOW PROCEDURES IN DATABASE {database}" if database else "SHOW PROCEDURES"
 
             proc_result = self.cli.run_query(proc_query, output_format="json")
             if proc_result.rows:
@@ -465,10 +437,7 @@ class CatalogService:
                 totals.columns = len(col_result.rows)
 
             logger.info(
-                (
-                    "Catalog built successfully: %s databases, %s schemas, %s tables, "
-                    "%s views, %s columns"
-                ),
+                ("Catalog built successfully: %s databases, %s schemas, %s tables, %s views, %s columns"),
                 totals.databases,
                 totals.schemas,
                 totals.tables,

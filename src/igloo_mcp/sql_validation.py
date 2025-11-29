@@ -235,6 +235,16 @@ def validate_sql_statement(
         - is_valid: True if allowed, False if blocked
         - error_message: Detailed error with alternatives if blocked, None if valid
     """
+    # Input validation (Fix #75)
+    if statement is None:
+        raise ValueError("SQL cannot be None")
+
+    if not isinstance(statement, str):
+        raise TypeError(f"SQL must be a string, got {type(statement).__name__}")
+
+    if not statement.strip():
+        raise ValueError("SQL cannot be empty or whitespace-only")
+
     # Build effective allow list: include SELECT-equivalent statements when SELECT is allowed
     allow_set = {item.lower() for item in allow_list}
     disallow_set = {item.lower() for item in disallow_list}
@@ -261,29 +271,24 @@ def validate_sql_statement(
 
     if parsed_expressions:
         primary_expression = parsed_expressions[0]
-        key = primary_expression.key or ""
-        fallback_stmt_type = key.upper() or None
+        # Guard against None expressions from malformed input like ';'
+        if primary_expression is not None:
+            key = primary_expression.key or ""
+            fallback_stmt_type = key.upper() or None
         multi_statement_detected = len(parsed_expressions) > 1
 
-        if not multi_statement_detected:
-            select_like_hint = _is_select_like_statement(
-                statement, parsed=primary_expression
-            )
+        if not multi_statement_detected and primary_expression is not None:
+            select_like_hint = _is_select_like_statement(statement, parsed=primary_expression)
 
             if not select_like_hint and fallback_stmt_type in {"SELECT", "WITH"}:
                 statement_upper = statement.upper()
-                if (
-                    "LATERAL FLATTEN" in statement_upper
-                    or "CROSS JOIN LATERAL" in statement_upper
-                ):
+                if "LATERAL FLATTEN" in statement_upper or "CROSS JOIN LATERAL" in statement_upper:
                     select_like_hint = True
 
     # CRITICAL FIX: Use lowercase lists for upstream validation (it's case-sensitive)
     lowercase_disallow_list = [item.lower() for item in disallow_list]
     try:
-        stmt_type, is_valid = validate_sql_type(
-            statement, effective_allow_list, lowercase_disallow_list
-        )
+        stmt_type, is_valid = validate_sql_type(statement, effective_allow_list, lowercase_disallow_list)
     except (ValueError, TypeError):
         # Re-raise expected validation errors as-is
         raise
@@ -308,13 +313,13 @@ def validate_sql_statement(
     if multi_statement_detected:
         detected: list[str] = []
         for expr in parsed_expressions:
-            name = (expr.key or "UNKNOWN").upper()
-            if name not in detected:
-                detected.append(name)
+            # Guard against None expressions in multi-statement detection
+            if expr is not None:
+                name = (expr.key or "UNKNOWN").upper()
+                if name not in detected:
+                    detected.append(name)
 
-        pretty_detected = (
-            ", ".join(t.title() for t in detected) if detected else "Unknown"
-        )
+        pretty_detected = ", ".join(t.title() for t in detected) if detected else "Unknown"
         error_msg = (
             "Multiple SQL statements detected in a single request. "
             "Only a single statement is permitted for execute_query. "
@@ -387,10 +392,7 @@ def validate_sql_statement(
 
     if alternatives:
         alt_text = "\n".join(alternatives)
-        error_msg = (
-            f"SQL statement type '{stmt_type}' is not permitted.\n\n"
-            f"Safe alternatives:\n{alt_text}"
-        )
+        error_msg = f"SQL statement type '{stmt_type}' is not permitted.\n\nSafe alternatives:\n{alt_text}"
         structured_error["suggestions"] = ["Use safe alternatives provided above"]
     else:
         # Capitalize allow_list for display (they're lowercase for validation)
@@ -411,28 +413,20 @@ def validate_sql_statement(
             # Special handling for Unknown type errors
             if "LATERAL" in statement.upper():
                 details.append("\n💡 This query contains LATERAL operations.")
-                details.append(
-                    "   If this is a SELECT query, LATERAL should be supported."
-                )
+                details.append("   If this is a SELECT query, LATERAL should be supported.")
                 structured_error["suggestions"].append(
                     "Check if this is actually a SELECT query with LATERAL operations"
                 )
             elif "WITH" in statement.upper():
                 details.append("\n💡 This query starts WITH (CTE pattern).")
-                details.append(
-                    "   If this is a SELECT with CTE, it should be supported."
-                )
-                structured_error["suggestions"].append(
-                    "Verify this is a SELECT statement with Common Table Expression"
-                )
+                details.append("   If this is a SELECT with CTE, it should be supported.")
+                structured_error["suggestions"].append("Verify this is a SELECT statement with Common Table Expression")
 
             # Add sqlglot fallback information if available
             if fallback_stmt_type and fallback_stmt_type != "UNKNOWN":
                 details.append(f"\n🔍 sqlglot detected this as: {fallback_stmt_type}")
                 if fallback_stmt_type in ["SELECT", "WITH"] and "select" in allow_set:
-                    details.append(
-                        "   This appears to be a SELECT query that should be allowed."
-                    )
+                    details.append("   This appears to be a SELECT query that should be allowed.")
                     structured_error["suggestions"].append(
                         "Consider enabling SELECT statements if this is a data query"
                     )
@@ -446,9 +440,7 @@ def validate_sql_statement(
     return stmt_type, False, error_msg
 
 
-def _is_select_like_statement(
-    statement: str, parsed: Optional[exp.Expression] = None
-) -> bool:
+def _is_select_like_statement(statement: str, parsed: Optional[exp.Expression] = None) -> bool:
     """Return True when the SQL behaves like a SELECT or set operation."""
 
     if not HAS_SQLGLOT:
@@ -552,18 +544,14 @@ def _is_select_like_statement(
 
     upper_without_line_comments = strip_comments(statement).upper()
     keyword_tokens = ("UNION", "INTERSECT", "EXCEPT", "MINUS")
-    contains_keywords = any(
-        token in upper_without_line_comments for token in keyword_tokens
-    )
+    contains_keywords = any(token in upper_without_line_comments for token in keyword_tokens)
 
     if not contains_keywords:
         return True
 
     has_set_operation = isinstance(parsed, exp.SetOperation)
     if not has_set_operation:
-        has_set_operation = any(
-            isinstance(node, exp.SetOperation) for node in parsed.walk()
-        )
+        has_set_operation = any(isinstance(node, exp.SetOperation) for node in parsed.walk())
 
     return bool(has_set_operation)
 

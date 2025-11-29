@@ -248,7 +248,11 @@ The `response_detail` parameter controls response verbosity for **50-80% token r
     "insights_added": 1,
     "insight_ids_added": ["ins_abc123..."],
     "sections_modified": 1,
-    "section_ids_modified": ["sec_def456..."]
+    "section_ids_modified": ["sec_def456..."],
+    "sections_removed": 0,
+    "section_ids_removed": [],
+    "insights_removed": 0,
+    "insight_ids_removed": []
   },
   "warnings": [
     "Section 'Revenue Analysis' has only 1 insight (recommended: 3+)"
@@ -279,7 +283,11 @@ The `response_detail` parameter controls response verbosity for **50-80% token r
     "insights_added": 1,
     "insight_ids_added": ["ins_abc123..."],
     "sections_modified": 1,
-    "section_ids_modified": ["sec_def456..."]
+    "section_ids_modified": ["sec_def456..."],
+    "sections_removed": 0,
+    "section_ids_removed": [],
+    "insights_removed": 0,
+    "insight_ids_removed": []
   },
   "warnings": [...],
   "changes_applied": {

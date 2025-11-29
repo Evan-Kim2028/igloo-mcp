@@ -255,9 +255,7 @@ class EvolveReportTool(MCPTool):
 
         if not proposed_changes:
             proposed_changes = self._generate_proposed_changes(
-                self.report_service.get_report_outline(
-                    self.report_service.resolve_report_selector(report_selector)
-                ),
+                self.report_service.get_report_outline(self.report_service.resolve_report_selector(report_selector)),
                 instruction,
                 constraints or {},
             )
@@ -290,9 +288,7 @@ class EvolveReportTool(MCPTool):
             try:
                 if hasattr(self.report_service, "resolve_report_selector"):
                     try:
-                        report_id = self.report_service.resolve_report_selector(
-                            report_selector
-                        )
+                        report_id = self.report_service.resolve_report_selector(report_selector)
                     except Exception:
                         report_id = report_selector
                 elif getattr(self.report_service, "index", None):
@@ -389,9 +385,7 @@ class EvolveReportTool(MCPTool):
 
             # Semantic validation
             # Legacy validation hook
-            validation_issues = self._validate_changes(
-                current_outline, proposed_changes
-            )
+            validation_issues = self._validate_changes(current_outline, proposed_changes, constraints or {})
             if validation_issues:
                 return {
                     "status": "validation_failed",
@@ -420,9 +414,7 @@ class EvolveReportTool(MCPTool):
                 ]
                 compatibility_errors = list(error_strings)
                 if any("already exists" in msg for msg in error_strings):
-                    compatibility_errors.append(
-                        "Cannot add - insight_id already exists"
-                    )
+                    compatibility_errors.append("Cannot add - insight_id already exists")
 
                 logger.warning(
                     "evolve_report_semantic_validation_failed",
@@ -448,9 +440,7 @@ class EvolveReportTool(MCPTool):
             changes_payload = changes_obj.model_dump()
             apply_start = time.time()
             try:
-                new_outline, apply_stats = self._apply_changes(
-                    current_outline, changes_payload
-                )
+                new_outline, apply_stats = self._apply_changes(current_outline, changes_payload)
 
                 # Persist status change on outline metadata for compatibility
                 if changes_obj.status_change:
@@ -519,9 +509,7 @@ class EvolveReportTool(MCPTool):
             # Step 6: Save with atomic write
             storage_start = time.time()
             try:
-                self.report_service.update_report_outline(
-                    report_id, new_outline, actor="agent", request_id=request_id
-                )
+                self.report_service.update_report_outline(report_id, new_outline, actor="agent", request_id=request_id)
 
                 if changes_obj.status_change:
                     self.report_service.update_report_status(
@@ -567,12 +555,10 @@ class EvolveReportTool(MCPTool):
                 "insights_removed": len(changes_obj.insights_to_remove),
                 "insight_ids_added": apply_stats.get("insight_ids_added", []),
                 "section_ids_added": apply_stats.get("section_ids_added", []),
-                "insight_ids_modified": [
-                    c.insight_id for c in changes_obj.insights_to_modify if c.insight_id
-                ],
-                "section_ids_modified": [
-                    c.section_id for c in changes_obj.sections_to_modify if c.section_id
-                ],
+                "insight_ids_modified": [c.insight_id for c in changes_obj.insights_to_modify if c.insight_id],
+                "section_ids_modified": [c.section_id for c in changes_obj.sections_to_modify if c.section_id],
+                "insight_ids_removed": [c for c in changes_obj.insights_to_remove],
+                "section_ids_removed": [c for c in changes_obj.sections_to_remove],
             }
             if changes_obj.status_change:
                 summary["status_change"] = changes_obj.status_change
@@ -619,6 +605,13 @@ class EvolveReportTool(MCPTool):
                     "outline_version": int(new_outline.outline_version),
                     "summary": summary,
                     "warnings": warnings,
+                    # Response symmetry: flatten ID tracking fields to top level
+                    "section_ids_added": summary["section_ids_added"],
+                    "insight_ids_added": summary["insight_ids_added"],
+                    "section_ids_modified": summary["section_ids_modified"],
+                    "insight_ids_modified": summary["insight_ids_modified"],
+                    "section_ids_removed": summary["section_ids_removed"],
+                    "insight_ids_removed": summary["insight_ids_removed"],
                 }
             else:  # response_detail == "full"
                 # Full response: complete details including changes_applied
@@ -642,6 +635,13 @@ class EvolveReportTool(MCPTool):
                         "storage_duration_ms": round(storage_duration, 2),
                         "total_duration_ms": round(total_duration, 2),
                     },
+                    # Response symmetry: flatten ID tracking fields to top level
+                    "section_ids_added": summary["section_ids_added"],
+                    "insight_ids_added": summary["insight_ids_added"],
+                    "section_ids_modified": summary["section_ids_modified"],
+                    "insight_ids_modified": summary["insight_ids_modified"],
+                    "section_ids_removed": summary["section_ids_removed"],
+                    "insight_ids_removed": summary["insight_ids_removed"],
                 }
 
             # Add request_id to all response levels
@@ -656,7 +656,10 @@ class EvolveReportTool(MCPTool):
         # and format them appropriately, so we don't need a catch-all here
 
     def _validate_changes(
-        self, current_outline: Outline, changes: Dict[str, Any]
+        self,
+        current_outline: Outline,
+        changes: Dict[str, Any],
+        constraints: Dict[str, Any],
     ) -> List[str]:
         """Validate proposed changes against safety constraints.
 
@@ -703,26 +706,29 @@ class EvolveReportTool(MCPTool):
             if section_id not in existing_section_ids:
                 issues.append(f"Section ID not found for removal: {section_id}")
 
-        # Citation enforcement for analyst reports
-        if current_outline.metadata.get("template") == "analyst_v1":
+        # Citation enforcement for ALL reports (universal requirement)
+        # Template should only control formatting, not data quality requirements
+        citation_validation_enabled = not (constraints or {}).get("skip_citation_validation", False)
+
+        if citation_validation_enabled:
             # Validate insights_to_add
             for insight_data in changes.get("insights_to_add", []):
                 insight_id = insight_data.get("insight_id", "unknown")
-                supporting_queries = insight_data.get("citations") or insight_data.get(
-                    "supporting_queries", []
-                )
+                supporting_queries = insight_data.get("citations") or insight_data.get("supporting_queries", [])
 
                 if not supporting_queries or len(supporting_queries) == 0:
                     issues.append(
-                        f"Analyst reports require citations. Insight '{insight_id}' "
+                        f"All insights require citations for reproducibility. Insight '{insight_id}' "
                         "missing supporting_queries[0] with execution_id. "
-                        "Use execute_query() first to get an execution_id, then include it in supporting_queries"
+                        "Use execute_query() first to get an execution_id, then include it in citations. "
+                        "To disable validation (not recommended): "
+                        "set skip_citation_validation=True in constraints"
                     )
                 elif not supporting_queries[0].get("execution_id"):
                     issues.append(
-                        f"Analyst reports require citations. Insight '{insight_id}' "
-                        "missing execution_id in supporting_queries[0]. "
-                        "Use execute_query() first to get an execution_id, then include it in supporting_queries"
+                        f"All insights require citations. Insight '{insight_id}' "
+                        "missing execution_id in citations[0]. "
+                        "Use execute_query() first to get an execution_id, then include it in citations"
                     )
 
             # Validate insights_to_modify
@@ -741,50 +747,42 @@ class EvolveReportTool(MCPTool):
                 if current_insight:
                     # Check if supporting_queries is being modified
                     if "supporting_queries" in modify_data:
-                        supporting_queries = modify_data.get(
-                            "citations"
-                        ) or modify_data.get("supporting_queries", [])
+                        supporting_queries = modify_data.get("citations") or modify_data.get("supporting_queries", [])
                         if not supporting_queries or len(supporting_queries) == 0:
                             issues.append(
-                                f"Analyst reports require citations. Insight '{insight_id}' "
+                                f"All insights require citations. Insight '{insight_id}' "
                                 "missing supporting_queries[0] with execution_id. "
                                 "Use execute_query() first to get an execution_id, "
-                                "then include it in supporting_queries"
+                                "then include it in citations. "
+                                "To disable validation (not recommended): "
+                                "set skip_citation_validation=True in constraints"
                             )
                         elif not supporting_queries[0].get("execution_id"):
                             issues.append(
-                                f"Analyst reports require citations. Insight '{insight_id}' "
-                                "missing execution_id in supporting_queries[0]. "
+                                f"All insights require citations. Insight '{insight_id}' "
+                                "missing execution_id in citations[0]. "
                                 "Use execute_query() first to get an execution_id, "
-                                "then include it in supporting_queries"
+                                "then include it in citations"
                             )
                     # If not modifying supporting_queries, check current value
-                    elif (
-                        not current_insight.supporting_queries
-                        and not current_insight.citations
-                    ):
+                    elif not current_insight.supporting_queries and not current_insight.citations:
                         issues.append(
-                            f"Analyst reports require citations. Insight '{insight_id}' "
+                            f"All insights require citations. Insight '{insight_id}' "
                             "missing supporting_queries[0] with execution_id. "
                             "Use execute_query() first to get an execution_id, "
-                            "then include it in supporting_queries"
+                            "then include it in citations. "
+                            "To disable validation (not recommended): set skip_citation_validation=True in constraints"
                         )
-                    elif (
-                        current_insight.supporting_queries
-                        and not current_insight.supporting_queries[0].execution_id
-                    ):
+                    elif current_insight.supporting_queries and not current_insight.supporting_queries[0].execution_id:
                         issues.append(
-                            f"Analyst reports require citations. Insight '{insight_id}' "
-                            "missing execution_id in supporting_queries[0]. "
+                            f"All insights require citations. Insight '{insight_id}' "
+                            "missing execution_id in citations[0]. "
                             "Use execute_query() first to get an execution_id, "
-                            "then include it in supporting_queries"
+                            "then include it in citations"
                         )
-                    elif (
-                        current_insight.citations
-                        and not current_insight.citations[0].execution_id
-                    ):
+                    elif current_insight.citations and not current_insight.citations[0].execution_id:
                         issues.append(
-                            f"Analyst reports require citations. Insight '{insight_id}' "
+                            f"All insights require citations. Insight '{insight_id}' "
                             "missing execution_id in citations[0]. "
                             "Use execute_query() first to get an execution_id, "
                             "then include it in citations"
@@ -812,9 +810,7 @@ class EvolveReportTool(MCPTool):
             "sections_to_remove": [],
         }
 
-    def _apply_changes(
-        self, current_outline: Outline, changes: Dict[str, Any]
-    ) -> tuple[Outline, Dict[str, Any]]:
+    def _apply_changes(self, current_outline: Outline, changes: Dict[str, Any]) -> tuple[Outline, Dict[str, Any]]:
         """Apply validated changes to create new outline.
 
         Args:
@@ -835,10 +831,7 @@ class EvolveReportTool(MCPTool):
         def _ensure_supporting_queries(payload: Dict[str, Any]) -> None:
             if payload.get("citations") is None:
                 payload["citations"] = []
-            if (
-                "supporting_queries" not in payload
-                or payload["supporting_queries"] is None
-            ):
+            if "supporting_queries" not in payload or payload["supporting_queries"] is None:
                 payload["supporting_queries"] = []
             # Keep citations aligned for backward compatibility
             if "citations" in payload and payload["citations"] is not None:
@@ -847,28 +840,16 @@ class EvolveReportTool(MCPTool):
             elif payload.get("supporting_queries"):
                 payload["citations"] = payload["supporting_queries"]
 
-        def _create_inline_insights(
-            raw_insights: List[Dict[str, Any]], section_context: str
-        ) -> List[str]:
+        def _create_inline_insights(raw_insights: List[Dict[str, Any]], section_context: str) -> List[str]:
             inline_ids: List[str] = []
             for idx, raw_insight in enumerate(raw_insights):
                 if not isinstance(raw_insight, dict):
-                    raise ValueError(
-                        f"Section {section_context}: insights[{idx}] must be a dictionary"
-                    )
+                    raise ValueError(f"Section {section_context}: insights[{idx}] must be a dictionary")
                 insight_payload = dict(raw_insight)
-                if (
-                    "insight_id" not in insight_payload
-                    or insight_payload["insight_id"] is None
-                ):
+                if "insight_id" not in insight_payload or insight_payload["insight_id"] is None:
                     insight_payload["insight_id"] = str(uuid.uuid4())
-                if (
-                    insight_payload.get("summary") is None
-                    or insight_payload.get("importance") is None
-                ):
-                    raise ValueError(
-                        f"Section {section_context}: insights[{idx}] must have summary and importance"
-                    )
+                if insight_payload.get("summary") is None or insight_payload.get("importance") is None:
+                    raise ValueError(f"Section {section_context}: insights[{idx}] must have summary and importance")
                 if "status" not in insight_payload or insight_payload["status"] is None:
                     insight_payload["status"] = "active"
                 _ensure_supporting_queries(insight_payload)
@@ -901,14 +882,8 @@ class EvolveReportTool(MCPTool):
                     for key, value in modify_data.items():
                         # Skip None values to support partial updates
                         # Only update fields that are explicitly provided (not None)
-                        if (
-                            key != "insight_id"
-                            and hasattr(insight, key)
-                            and value is not None
-                        ):
-                            if key == "citations" and not modify_data.get(
-                                "supporting_queries"
-                            ):
+                        if key != "insight_id" and hasattr(insight, key) and value is not None:
+                            if key == "citations" and not modify_data.get("supporting_queries"):
                                 # Keep supporting_queries in sync when only citations are provided
                                 setattr(insight, "supporting_queries", value)
                             setattr(insight, key, value)
@@ -916,16 +891,12 @@ class EvolveReportTool(MCPTool):
 
         # Apply insight removals
         insights_to_remove = set(changes.get("insights_to_remove", []))
-        new_outline.insights = [
-            i for i in new_outline.insights if i.insight_id not in insights_to_remove
-        ]
+        new_outline.insights = [i for i in new_outline.insights if i.insight_id not in insights_to_remove]
 
         if insights_to_remove:
             # Ensure removed insights are also dropped from section references
             for section in new_outline.sections:
-                section.insight_ids = [
-                    iid for iid in section.insight_ids if iid not in insights_to_remove
-                ]
+                section.insight_ids = [iid for iid in section.insight_ids if iid not in insights_to_remove]
 
         # Apply section additions
         for section_data in changes.get("sections_to_add", []):
@@ -941,52 +912,36 @@ class EvolveReportTool(MCPTool):
                 "content",
                 "content_format",
             }
-            filtered_data = {
-                k: v for k, v in section_data.items() if k in section_fields
-            }
+            filtered_data = {k: v for k, v in section_data.items() if k in section_fields}
 
             # Handle inline insights (atomic add-and-link)
             if "insights" in section_data and section_data["insights"] is not None:
                 if not isinstance(section_data["insights"], list):
                     raise wrap_validation_error(
                         f"Section {section_id}: insights must be a list",
-                        validation_errors=[
-                            f"Got {type(section_data['insights']).__name__} instead of list"
-                        ],
+                        validation_errors=[f"Got {type(section_data['insights']).__name__} instead of list"],
                         field="insights",
                     )
-                inline_ids = _create_inline_insights(
-                    section_data["insights"], section_id or "<auto>"
-                )
+                inline_ids = _create_inline_insights(section_data["insights"], section_id or "<auto>")
                 filtered_data["insight_ids"] = inline_ids
 
             # Handle insight_ids_to_add for new sections (preferred field name)
             # Also support direct insight_ids for backward compatibility
-            elif (
-                "insight_ids_to_add" in section_data
-                and section_data["insight_ids_to_add"] is not None
-            ):
+            elif "insight_ids_to_add" in section_data and section_data["insight_ids_to_add"] is not None:
                 # Validate that insight_ids_to_add is a list
                 if not isinstance(section_data["insight_ids_to_add"], list):
                     raise wrap_validation_error(
                         f"Section {section_id}: insight_ids_to_add must be a list",
-                        validation_errors=[
-                            f"Got {type(section_data['insight_ids_to_add']).__name__} instead of list"
-                        ],
+                        validation_errors=[f"Got {type(section_data['insight_ids_to_add']).__name__} instead of list"],
                         field="insight_ids_to_add",
                     )
                 filtered_data["insight_ids"] = section_data["insight_ids_to_add"]
-            elif (
-                "insight_ids" in section_data
-                and section_data["insight_ids"] is not None
-            ):
+            elif "insight_ids" in section_data and section_data["insight_ids"] is not None:
                 # Direct insight_ids provided
                 if not isinstance(section_data["insight_ids"], list):
                     raise wrap_validation_error(
                         f"Section {section_id}: insight_ids must be a list",
-                        validation_errors=[
-                            f"Got {type(section_data['insight_ids']).__name__} instead of list"
-                        ],
+                        validation_errors=[f"Got {type(section_data['insight_ids']).__name__} instead of list"],
                         field="insight_ids",
                     )
                 filtered_data["insight_ids"] = section_data["insight_ids"]
@@ -1006,8 +961,7 @@ class EvolveReportTool(MCPTool):
                 invalid_insights = [
                     iid
                     for iid in insight_ids_to_check
-                    if iid not in existing_insight_ids
-                    and iid not in insights_being_added
+                    if iid not in existing_insight_ids and iid not in insights_being_added
                 ]
                 if invalid_insights:
                     raise ValueError(
@@ -1022,8 +976,7 @@ class EvolveReportTool(MCPTool):
                     apply_stats["section_ids_added"].append(section.section_id)
             except Exception as e:
                 raise ValueError(
-                    f"Failed to create section {section_id}: {str(e)}. "
-                    f"Section data: {filtered_data}"
+                    f"Failed to create section {section_id}: {str(e)}. Section data: {filtered_data}"
                 ) from e
 
         # Apply section modifications
@@ -1057,9 +1010,7 @@ class EvolveReportTool(MCPTool):
                     if "title" in modify_data and modify_data["title"] is not None:
                         try:
                             if not isinstance(modify_data["title"], str):
-                                raise ValueError(
-                                    f"title must be a string, got {type(modify_data['title']).__name__}"
-                                )
+                                raise ValueError(f"title must be a string, got {type(modify_data['title']).__name__}")
                             if not modify_data["title"].strip():
                                 raise ValueError("title cannot be empty")
                             section.title = modify_data["title"]
@@ -1071,9 +1022,7 @@ class EvolveReportTool(MCPTool):
                     if "notes" in modify_data and modify_data["notes"] is not None:
                         try:
                             if not isinstance(modify_data["notes"], str):
-                                raise ValueError(
-                                    f"notes must be a string, got {type(modify_data['notes']).__name__}"
-                                )
+                                raise ValueError(f"notes must be a string, got {type(modify_data['notes']).__name__}")
                             section.notes = modify_data["notes"]
                             operations_performed.append("notes")
                         except Exception as e:
@@ -1092,19 +1041,14 @@ class EvolveReportTool(MCPTool):
                             errors.append(f"Failed to update content: {str(e)}")
 
                     # Modify content_format
-                    if (
-                        "content_format" in modify_data
-                        and modify_data["content_format"] is not None
-                    ):
+                    if "content_format" in modify_data and modify_data["content_format"] is not None:
                         try:
                             if modify_data["content_format"] not in (
                                 "markdown",
                                 "html",
                                 "plain",
                             ):
-                                raise ValueError(
-                                    "content_format must be one of markdown, html, plain"
-                                )
+                                raise ValueError("content_format must be one of markdown, html, plain")
                             section.content_format = modify_data["content_format"]
                             operations_performed.append("content_format")
                         except Exception as e:
@@ -1114,23 +1058,16 @@ class EvolveReportTool(MCPTool):
                     if "order" in modify_data and modify_data["order"] is not None:
                         try:
                             if not isinstance(modify_data["order"], int):
-                                raise ValueError(
-                                    f"order must be an integer, got {type(modify_data['order']).__name__}"
-                                )
+                                raise ValueError(f"order must be an integer, got {type(modify_data['order']).__name__}")
                             if modify_data["order"] < 0:
-                                raise ValueError(
-                                    f"order must be non-negative, got {modify_data['order']}"
-                                )
+                                raise ValueError(f"order must be non-negative, got {modify_data['order']}")
                             section.order = modify_data["order"]
                             operations_performed.append("order")
                         except Exception as e:
                             errors.append(f"Failed to update order: {str(e)}")
 
                     # Add insight_ids
-                    if (
-                        "insight_ids_to_add" in modify_data
-                        and modify_data["insight_ids_to_add"] is not None
-                    ):
+                    if "insight_ids_to_add" in modify_data and modify_data["insight_ids_to_add"] is not None:
                         try:
                             if not isinstance(modify_data["insight_ids_to_add"], list):
                                 raise ValueError(
@@ -1140,15 +1077,11 @@ class EvolveReportTool(MCPTool):
 
                             insight_ids_to_add = modify_data["insight_ids_to_add"]
                             if not insight_ids_to_add:  # Empty list is valid
-                                operations_performed.append(
-                                    "insight_ids_to_add (empty)"
-                                )
+                                operations_performed.append("insight_ids_to_add (empty)")
                             else:
                                 # Validate all insight IDs exist
                                 invalid_insights = [
-                                    iid
-                                    for iid in insight_ids_to_add
-                                    if iid not in all_valid_insight_ids
+                                    iid for iid in insight_ids_to_add if iid not in all_valid_insight_ids
                                 ]
                                 if invalid_insights:
                                     raise ValueError(
@@ -1173,36 +1106,24 @@ class EvolveReportTool(MCPTool):
                             errors.append(f"Failed to add insight_ids: {str(e)}")
 
                     # Inline insights for modifications
-                    if (
-                        "insights" in modify_data
-                        and modify_data["insights"] is not None
-                    ):
+                    if "insights" in modify_data and modify_data["insights"] is not None:
                         try:
                             if not isinstance(modify_data["insights"], list):
                                 raise ValueError(
                                     f"insights must be a list, got {type(modify_data['insights']).__name__}"
                                 )
-                            inline_ids = _create_inline_insights(
-                                modify_data["insights"], section_id
-                            )
+                            inline_ids = _create_inline_insights(modify_data["insights"], section_id)
                             for inline_id in inline_ids:
                                 if inline_id not in section.insight_ids:
                                     section.insight_ids.append(inline_id)
-                            operations_performed.append(
-                                f"inline_insights_added ({len(inline_ids)})"
-                            )
+                            operations_performed.append(f"inline_insights_added ({len(inline_ids)})")
                         except Exception as e:
                             errors.append(f"Failed to create inline insights: {str(e)}")
 
                     # Remove insight_ids
-                    if (
-                        "insight_ids_to_remove" in modify_data
-                        and modify_data["insight_ids_to_remove"] is not None
-                    ):
+                    if "insight_ids_to_remove" in modify_data and modify_data["insight_ids_to_remove"] is not None:
                         try:
-                            if not isinstance(
-                                modify_data["insight_ids_to_remove"], list
-                            ):
+                            if not isinstance(modify_data["insight_ids_to_remove"], list):
                                 raise ValueError(
                                     f"insight_ids_to_remove must be a list, got "
                                     f"{type(modify_data['insight_ids_to_remove']).__name__}"
@@ -1210,9 +1131,7 @@ class EvolveReportTool(MCPTool):
 
                             insight_ids_to_remove = modify_data["insight_ids_to_remove"]
                             if not insight_ids_to_remove:  # Empty list is valid
-                                operations_performed.append(
-                                    "insight_ids_to_remove (empty)"
-                                )
+                                operations_performed.append("insight_ids_to_remove (empty)")
                             else:
                                 # Remove insights (skip if not present silently)
                                 removed_count = 0
@@ -1249,9 +1168,28 @@ class EvolveReportTool(MCPTool):
 
         # Apply section removals
         sections_to_remove = set(changes.get("sections_to_remove", []))
-        new_outline.sections = [
-            s for s in new_outline.sections if s.section_id not in sections_to_remove
-        ]
+        new_outline.sections = [s for s in new_outline.sections if s.section_id not in sections_to_remove]
+
+        # Apply title change
+        if changes.get("title_change"):
+            logger.info(
+                "Applied title change",
+                extra={
+                    "old_title": current_outline.title,
+                    "new_title": changes["title_change"],
+                },
+            )
+            new_outline.title = changes["title_change"]
+
+        # Apply metadata updates
+        if changes.get("metadata_updates"):
+            logger.info(
+                "Applied metadata updates",
+                extra={"updated_keys": list(changes["metadata_updates"].keys())},
+            )
+            # Merge metadata updates (shallow merge)
+            new_outline.metadata.update(changes["metadata_updates"])
+
         return new_outline, apply_stats
 
     def _format_validation_errors(self, errors: List[Any]) -> Dict[str, Any]:
@@ -1308,9 +1246,7 @@ class EvolveReportTool(MCPTool):
                     hints.append("supporting_queries defaults to [] if omitted")
 
         # Add operation-specific schema examples
-        schema_examples = self._get_schema_examples_for_operations(
-            operations_with_errors
-        )
+        schema_examples = self._get_schema_examples_for_operations(operations_with_errors)
 
         return {
             "errors": formatted_errors,
@@ -1320,9 +1256,7 @@ class EvolveReportTool(MCPTool):
             "documentation": "https://github.com/Evan-Kim2028/igloo-mcp/blob/main/docs/living-reports/user-guide.md",
         }
 
-    def _get_schema_examples_for_operations(
-        self, operations: set[str]
-    ) -> Dict[str, Any]:
+    def _get_schema_examples_for_operations(self, operations: set[str]) -> Dict[str, Any]:
         """Get schema examples for specific operations that had errors.
 
         Args:
@@ -1378,30 +1312,20 @@ class EvolveReportTool(MCPTool):
     def _calculate_outline_warnings(self, outline: Outline) -> List[str]:
         """Calculate warnings based on the post-change outline state."""
         warnings: List[str] = []
-        referenced_insights = {
-            insight_id
-            for section in outline.sections
-            for insight_id in section.insight_ids
-        }
+        referenced_insights = {insight_id for section in outline.sections for insight_id in section.insight_ids}
         all_insight_ids = {insight.insight_id for insight in outline.insights}
 
         orphaned = sorted(all_insight_ids - referenced_insights)
         if orphaned:
-            warnings.append(
-                f"Orphaned insights (not referenced in any section): {orphaned}"
-            )
+            warnings.append(f"Orphaned insights (not referenced in any section): {orphaned}")
 
         for section in outline.sections:
             if not section.insight_ids:
-                warnings.append(
-                    f"Section '{section.title}' ({section.section_id}) has no insights"
-                )
+                warnings.append(f"Section '{section.title}' ({section.section_id}) has no insights")
 
         return warnings
 
-    def _calculate_preview(
-        self, changes: ProposedChanges, outline: Outline
-    ) -> Dict[str, Any]:
+    def _calculate_preview(self, changes: ProposedChanges, outline: Outline) -> Dict[str, Any]:
         """Calculate preview of changes that would be applied.
 
         Args:

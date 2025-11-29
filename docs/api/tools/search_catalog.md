@@ -23,12 +23,14 @@ object names or column names and returns at most `limit` matches.
 | `name_contains` | string | ❌ No | — | Case-insensitive substring match on object name. |
 | `column_contains` | string | ❌ No | — | Case-insensitive substring match on column name. |
 | `limit` | integer | ❌ No | 20 | Maximum number of results to return (1-500). |
+| `request_id` | string | ❌ No | auto-generated | Request correlation ID for distributed tracing (UUID4). Auto-generated if not provided. |
 
 ## Example
 
 ```json
 {
   "status": "success",
+  "request_id": "650e8400-e29b-41d4-a716-446655440001",
   "catalog_dir": "./artifacts/catalog",
   "total_matches": 3,
   "limit": 20,
@@ -43,9 +45,22 @@ object names or column names and returns at most `limit` matches.
         {"name": "REGION", "data_type": "VARCHAR"}
       ]
     }
-  ]
+  ],
+  "timing": {
+    "search_duration_ms": 12.34,
+    "total_duration_ms": 15.67
+  },
+  "warnings": []
 }
 ```
+
+### Response Fields
+
+- **`request_id`**: UUID4 correlation ID for distributed tracing
+- **`timing`**: Performance metrics in milliseconds
+  - `search_duration_ms`: Time spent searching catalog data
+  - `total_duration_ms`: Total execution time
+- **`warnings`**: Array of non-fatal issues (e.g., missing catalog files, empty if none)
 
 ## Notes
 

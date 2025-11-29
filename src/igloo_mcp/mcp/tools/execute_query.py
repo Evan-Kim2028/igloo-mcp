@@ -87,9 +87,7 @@ from .schema_utils import (
 logger = get_logger(__name__)
 
 
-def _write_sql_artifact(
-    artifact_root: Path, sql_sha256: str, sql: str
-) -> Optional[Path]:
+def _write_sql_artifact(artifact_root: Path, sql_sha256: str, sql: str) -> Optional[Path]:
     """Persist SQL text under the by-sha directory if missing."""
 
     try:
@@ -147,9 +145,7 @@ class ExecuteQueryTool(MCPTool):
         self._cache_mode = self.cache.mode
         self._static_audit_warnings.extend(self.cache.pop_warnings())
         # Avoid global cache bleed-through when no explicit cache settings are provided
-        if not os.environ.get("IGLOO_MCP_CACHE_MODE") and not os.environ.get(
-            "IGLOO_MCP_CACHE_ROOT"
-        ):
+        if not os.environ.get("IGLOO_MCP_CACHE_MODE") and not os.environ.get("IGLOO_MCP_CACHE_ROOT"):
             self._cache_enabled = False
             self._cache_mode = "disabled"
 
@@ -177,36 +173,24 @@ class ExecuteQueryTool(MCPTool):
             try:
                 candidate.mkdir(parents=True, exist_ok=True)
                 if index > 0:
-                    warnings.append(
-                        f"Artifact root unavailable; using fallback: {candidate}"
-                    )
+                    warnings.append(f"Artifact root unavailable; using fallback: {candidate}")
                 return candidate, warnings
             except Exception as exc:
-                warnings.append(
-                    f"Failed to initialise artifact root {candidate}: {exc}"
-                )
+                warnings.append(f"Failed to initialise artifact root {candidate}: {exc}")
 
-        warnings.append(
-            "Artifact root unavailable; SQL artifacts and cache will be disabled."
-        )
+        warnings.append("Artifact root unavailable; SQL artifacts and cache will be disabled.")
         return None, warnings
 
     def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Optional[Path]:
         if self._artifact_root is None:
-            self._transient_audit_warnings.append(
-                "SQL artifact root is unavailable; statement text was not persisted."
-            )
+            self._transient_audit_warnings.append("SQL artifact root is unavailable; statement text was not persisted.")
             return None
         artifact_path = _write_sql_artifact(self._artifact_root, sql_sha256, statement)
         if artifact_path is None:
-            self._transient_audit_warnings.append(
-                "Failed to persist SQL text for audit history."
-            )
+            self._transient_audit_warnings.append("Failed to persist SQL text for audit history.")
         return artifact_path
 
-    def _resolve_cache_context(
-        self, overrides: Dict[str, Optional[str]]
-    ) -> tuple[Dict[str, Optional[str]], bool]:
+    def _resolve_cache_context(self, overrides: Dict[str, Optional[str]]) -> tuple[Dict[str, Optional[str]], bool]:
         """Return effective session context for caching and a flag indicating success.
 
         When caching is enabled we snapshot the Snowflake session to capture the
@@ -271,11 +255,7 @@ class ExecuteQueryTool(MCPTool):
             return
 
         error_msg = profile_health.validation_error or "Profile validation failed"
-        available = (
-            ", ".join(profile_health.available_profiles)
-            if profile_health.available_profiles
-            else "none"
-        )
+        available = ", ".join(profile_health.available_profiles) if profile_health.available_profiles else "none"
         self.health_monitor.record_error(f"Profile validation failed: {error_msg}")
         raise MCPValidationError(
             f"Snowflake profile validation failed: {error_msg}",
@@ -294,9 +274,7 @@ class ExecuteQueryTool(MCPTool):
         allow_list = self.config.sql_permissions.get_allow_list()
         disallow_list = self.config.sql_permissions.get_disallow_list()
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            statement, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(statement, allow_list, disallow_list)
 
         if not is_valid and error_msg:
             if self.health_monitor:
@@ -312,9 +290,7 @@ class ExecuteQueryTool(MCPTool):
                 ],
             )
 
-    def _ensure_default_insights(
-        self, result: Dict[str, Any]
-    ) -> tuple[Optional[Dict[str, Any]], List[str]]:
+    def _ensure_default_insights(self, result: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], List[str]]:
         key_metrics = result.get("key_metrics")
         insights = result.get("insights")
         rows = result.get("rows")
@@ -398,9 +374,7 @@ class ExecuteQueryTool(MCPTool):
             {
                 "description": "Preview recent sales rows",
                 "parameters": {
-                    "statement": (
-                        "SELECT * FROM ANALYTICS.SALES.FACT_ORDERS ORDER BY ORDER_TS DESC LIMIT 20"
-                    ),
+                    "statement": ("SELECT * FROM ANALYTICS.SALES.FACT_ORDERS ORDER BY ORDER_TS DESC LIMIT 20"),
                     "warehouse": "ANALYTICS_WH",
                 },
             },
@@ -460,9 +434,7 @@ class ExecuteQueryTool(MCPTool):
             "tables": sorted(tables),
         }
 
-    def _enrich_payload_with_objects(
-        self, payload: Dict[str, Any], referenced_objects: List[Dict[str, Any]]
-    ) -> None:
+    def _enrich_payload_with_objects(self, payload: Dict[str, Any], referenced_objects: List[Dict[str, Any]]) -> None:
         """Enrich payload with objects and extracted source info."""
         if referenced_objects:
             payload["objects"] = referenced_objects
@@ -497,9 +469,7 @@ class ExecuteQueryTool(MCPTool):
             if len(statement) > MAX_SQL_STATEMENT_LENGTH:
                 raise MCPValidationError(
                     f"SQL statement exceeds maximum length of {MAX_SQL_STATEMENT_LENGTH} characters",
-                    validation_errors=[
-                        f"Statement length: {len(statement)} characters"
-                    ],
+                    validation_errors=[f"Statement length: {len(statement)} characters"],
                     hints=[
                         "Break the query into smaller parts",
                         "Use CTEs or views to simplify complex queries",
@@ -517,9 +487,7 @@ class ExecuteQueryTool(MCPTool):
         overrides = {k: v for k, v in overrides_input.items() if v is not None}
         cache_context_ready = False
         if self._cache_enabled:
-            effective_context, cache_context_ready = self._resolve_cache_context(
-                overrides_input
-            )
+            effective_context, cache_context_ready = self._resolve_cache_context(overrides_input)
         else:
             effective_context = {
                 "warehouse": overrides_input.get("warehouse"),
@@ -530,9 +498,7 @@ class ExecuteQueryTool(MCPTool):
 
         execution_id = execution_id_override or uuid.uuid4().hex
         requested_ts = time.time()
-        sql_sha256 = (
-            sql_sha_override or hashlib.sha256(statement.encode("utf-8")).hexdigest()
-        )
+        sql_sha256 = sql_sha_override or hashlib.sha256(statement.encode("utf-8")).hexdigest()
         referenced_objects = extract_query_objects(statement)
         history_artifacts: Dict[str, str] = {}
         artifact_path = self._persist_sql_artifact(sql_sha256, statement)
@@ -557,9 +523,7 @@ class ExecuteQueryTool(MCPTool):
             except Exception:
                 cache_hit = None
                 logger.debug("Query cache lookup failed", exc_info=True)
-                self._transient_audit_warnings.append(
-                    "Query cache lookup failed; continuing with live execution."
-                )
+                self._transient_audit_warnings.append("Query cache lookup failed; continuing with live execution.")
 
             if cache_hit:
                 cache_rows = cache_hit.rows
@@ -568,14 +532,10 @@ class ExecuteQueryTool(MCPTool):
                 cache_hit_metadata["result_json_path"] = cache_hit.result_json_path
                 if cache_hit.result_csv_path:
                     cache_hit_metadata["result_csv_path"] = cache_hit.result_csv_path
-                manifest_rel = _relative_sql_path(
-                    self._repo_root, cache_hit.manifest_path
-                )
+                manifest_rel = _relative_sql_path(self._repo_root, cache_hit.manifest_path)
                 if manifest_rel:
                     history_artifacts["cache_manifest"] = manifest_rel
-                rows_rel = _relative_sql_path(
-                    self._repo_root, cache_hit.result_json_path
-                )
+                rows_rel = _relative_sql_path(self._repo_root, cache_hit.result_json_path)
                 if rows_rel:
                     history_artifacts["cache_rows"] = rows_rel
 
@@ -597,20 +557,14 @@ class ExecuteQueryTool(MCPTool):
                 },
             }
             if cache_hit_metadata.get("result_csv_path"):
-                result["cache"]["result_csv_path"] = str(
-                    cache_hit_metadata["result_csv_path"]
-                )
+                result["cache"]["result_csv_path"] = str(cache_hit_metadata["result_csv_path"])
             if cache_hit_metadata.get("truncated"):
                 result["truncated"] = cache_hit_metadata.get("truncated")
             session_context = effective_context.copy()
             if cache_hit_metadata.get("context"):
                 ctx = cache_hit_metadata["context"]
                 session_context.update(
-                    {
-                        k: ctx.get(k)
-                        for k in ["warehouse", "database", "schema", "role"]
-                        if ctx.get(k)
-                    }
+                    {k: ctx.get(k) for k in ["warehouse", "database", "schema", "role"] if ctx.get(k)}
                 )
             result["session_context"] = session_context
             if cache_hit_metadata.get("columns"):
@@ -678,9 +632,7 @@ class ExecuteQueryTool(MCPTool):
                     if isinstance(stored_insight_raw, (str, dict))
                     else stored_insight_raw
                 )
-                payload["post_query_insight"] = truncate_insight_for_storage(
-                    stored_insight_for_storage
-                )
+                payload["post_query_insight"] = truncate_insight_for_storage(stored_insight_for_storage)
             if key_metrics:
                 payload["key_metrics"] = key_metrics
             if derived_insights:
@@ -715,9 +667,7 @@ class ExecuteQueryTool(MCPTool):
 
             key_metrics, derived_insights = self._ensure_default_insights(result)
 
-            if self.health_monitor and hasattr(
-                self.health_monitor, "record_query_success"
-            ):
+            if self.health_monitor and hasattr(self.health_monitor, "record_query_success"):
                 self.health_monitor.record_query_success(statement[:STATEMENT_PREVIEW_LENGTH])  # type: ignore[attr-defined]
 
             # Persist success history (lightweight JSONL)
@@ -751,9 +701,7 @@ class ExecuteQueryTool(MCPTool):
                     )
                 except Exception:
                     logger.debug("Failed to persist query cache", exc_info=True)
-                    self._transient_audit_warnings.append(
-                        "Failed to persist query cache entry."
-                    )
+                    self._transient_audit_warnings.append("Failed to persist query cache entry.")
 
             if manifest_path is not None:
                 manifest_rel = _relative_sql_path(self._repo_root, manifest_path)
@@ -788,9 +736,7 @@ class ExecuteQueryTool(MCPTool):
                     payload["reason"] = reason
                 # Include truncated insight in history (for storage)
                 if normalized_insight:
-                    payload["post_query_insight"] = truncate_insight_for_storage(
-                        normalized_insight
-                    )
+                    payload["post_query_insight"] = truncate_insight_for_storage(normalized_insight)
                 if cache_key:
                     payload["cache_key"] = cache_key
                 if manifest_path is not None:
@@ -859,9 +805,7 @@ class ExecuteQueryTool(MCPTool):
                     payload["reason"] = reason
                 # Include truncated insight in history (for storage)
                 if normalized_insight:
-                    payload["post_query_insight"] = truncate_insight_for_storage(
-                        normalized_insight
-                    )
+                    payload["post_query_insight"] = truncate_insight_for_storage(normalized_insight)
                 if cache_key:
                     payload["cache_key"] = cache_key
                 self._enrich_payload_with_objects(payload, referenced_objects)
@@ -891,9 +835,7 @@ class ExecuteQueryTool(MCPTool):
             error_message = str(e)
 
             if self.health_monitor:
-                self.health_monitor.record_error(
-                    f"Query execution failed: {error_message[:200]}"
-                )
+                self.health_monitor.record_error(f"Query execution failed: {error_message[:200]}")
 
             # Persist failure history
             try:
@@ -917,9 +859,7 @@ class ExecuteQueryTool(MCPTool):
                     payload["reason"] = reason
                 # Include truncated insight in history (for storage)
                 if normalized_insight:
-                    payload["post_query_insight"] = truncate_insight_for_storage(
-                        normalized_insight
-                    )
+                    payload["post_query_insight"] = truncate_insight_for_storage(normalized_insight)
                 if cache_key:
                     payload["cache_key"] = cache_key
                 self._enrich_payload_with_objects(payload, referenced_objects)
@@ -942,9 +882,12 @@ class ExecuteQueryTool(MCPTool):
                 "Check permissions for the objects referenced",
             ]
             if verbose_errors:
+                query_preview = statement[:STATEMENT_PREVIEW_LENGTH]
+                if len(statement) > STATEMENT_PREVIEW_LENGTH:
+                    query_preview += "..."
                 hints.extend(
                     [
-                        f"Query: {statement[:STATEMENT_PREVIEW_LENGTH]}{'...' if len(statement) > STATEMENT_PREVIEW_LENGTH else ''}",
+                        f"Query: {query_preview}",
                         f"Timeout: {timeout}s",
                     ]
                 )
@@ -980,9 +923,7 @@ class ExecuteQueryTool(MCPTool):
         """Public entry point for execute_query."""
 
         if "metric_insight" in kwargs:
-            raise TypeError(
-                "execute_query no longer accepts 'metric_insight'; use 'post_query_insight' instead"
-            )
+            raise TypeError("execute_query no longer accepts 'metric_insight'; use 'post_query_insight' instead")
 
         normalized_insight: Optional[Insight] = None
         if post_query_insight is not None:
@@ -996,21 +937,16 @@ class ExecuteQueryTool(MCPTool):
             try:
                 numeric = float(timeout_seconds)
             except (TypeError, ValueError):
-                raise TypeError(
-                    "timeout_seconds must be an integer value in seconds."
-                ) from None
+                raise TypeError("timeout_seconds must be an integer value in seconds.") from None
 
             if not numeric.is_integer():
                 raise TypeError("timeout_seconds must be an integer value in seconds.")
 
             coerced_timeout = int(numeric)
-            if (
-                not MIN_QUERY_TIMEOUT_SECONDS
-                <= coerced_timeout
-                <= MAX_QUERY_TIMEOUT_SECONDS
-            ):
+            if not MIN_QUERY_TIMEOUT_SECONDS <= coerced_timeout <= MAX_QUERY_TIMEOUT_SECONDS:
                 raise MCPValidationError(
-                    f"timeout_seconds must be between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS} seconds",
+                    f"timeout_seconds must be between {MIN_QUERY_TIMEOUT_SECONDS} "
+                    f"and {MAX_QUERY_TIMEOUT_SECONDS} seconds",
                     validation_errors=[f"Invalid timeout: {coerced_timeout}"],
                     hints=[
                         f"Use a timeout between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS} seconds",
@@ -1036,9 +972,7 @@ class ExecuteQueryTool(MCPTool):
         if mode not in {"auto", "sync"}:
             raise MCPValidationError(
                 "Invalid response_mode",
-                validation_errors=[
-                    f"response_mode must be one of: auto, sync (got: {mode})"
-                ],
+                validation_errors=[f"response_mode must be one of: auto, sync (got: {mode})"],
                 hints=["Use response_mode='auto' or response_mode='sync'"],
             )
 
@@ -1090,9 +1024,7 @@ class ExecuteQueryTool(MCPTool):
                     try:
                         obj = json.loads(existing)
                         if isinstance(obj, dict):
-                            obj.update(
-                                {"tool": "execute_query", "reason": reason_clean}
-                            )
+                            obj.update({"tool": "execute_query", "reason": reason_clean})
                             merged = json.dumps(obj, ensure_ascii=False)
                     except Exception:
                         merged = None
@@ -1173,15 +1105,11 @@ class ExecuteQueryTool(MCPTool):
                     try:
                         # Validate parameter name
                         if not _validate_session_parameter_name(name):
-                            logger.warning(
-                                f"Attempted to access invalid session parameter: {name}"
-                            )
+                            logger.warning(f"Attempted to access invalid session parameter: {name}")
                             return None
                         # Escape the name for LIKE clause
                         escaped_name = _escape_sql_identifier(name)
-                        cursor.execute(
-                            f"SHOW PARAMETERS LIKE '{escaped_name}' IN SESSION"
-                        )
+                        cursor.execute(f"SHOW PARAMETERS LIKE '{escaped_name}' IN SESSION")
                         rows = cursor.fetchall() or []
                         if not rows:
                             return None
@@ -1200,9 +1128,7 @@ class ExecuteQueryTool(MCPTool):
                             return None
                         return str(value)
                     except Exception:
-                        logger.debug(
-                            f"Failed to get session parameter {name}", exc_info=True
-                        )
+                        logger.debug(f"Failed to get session parameter {name}", exc_info=True)
                         return None
 
                 def _set_session_parameter(name: str, value: Any) -> None:
@@ -1210,42 +1136,30 @@ class ExecuteQueryTool(MCPTool):
                     try:
                         # Validate parameter name against whitelist
                         if not _validate_session_parameter_name(name):
-                            logger.warning(
-                                f"Attempted to set invalid session parameter: {name}"
-                            )
+                            logger.warning(f"Attempted to set invalid session parameter: {name}")
                             return
 
                         name_upper = name.upper()
                         if name_upper == "QUERY_TAG":
                             if value:
                                 escaped = _escape_tag(str(value))
-                                cursor.execute(
-                                    f"ALTER SESSION SET QUERY_TAG = '{escaped}'"
-                                )
+                                cursor.execute(f"ALTER SESSION SET QUERY_TAG = '{escaped}'")
                             else:
                                 cursor.execute("ALTER SESSION UNSET QUERY_TAG")
                         elif name_upper == "STATEMENT_TIMEOUT_IN_SECONDS":
                             # Validate value is numeric
                             try:
                                 timeout_value = int(value)
-                                cursor.execute(
-                                    f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {timeout_value}"
-                                )
+                                cursor.execute(f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {timeout_value}")
                             except (ValueError, TypeError):
-                                logger.warning(
-                                    f"Invalid timeout value for STATEMENT_TIMEOUT_IN_SECONDS: {value}"
-                                )
+                                logger.warning(f"Invalid timeout value for STATEMENT_TIMEOUT_IN_SECONDS: {value}")
                         else:
                             # For other parameters, escape both name and value
                             escaped_value = _escape_sql_value(value)
-                            cursor.execute(
-                                f"ALTER SESSION SET {name_upper} = {escaped_value}"
-                            )
+                            cursor.execute(f"ALTER SESSION SET {name_upper} = {escaped_value}")
                     except Exception:
                         # Session parameter adjustments are best-effort; ignore failures.
-                        logger.debug(
-                            f"Failed to set session parameter {name}", exc_info=True
-                        )
+                        logger.debug(f"Failed to set session parameter {name}", exc_info=True)
                         pass
 
                 def _restore_session_parameters(
@@ -1257,9 +1171,7 @@ class ExecuteQueryTool(MCPTool):
                         if "QUERY_TAG" in params:
                             if prev_tag:
                                 escaped = _escape_tag(prev_tag)
-                                cursor.execute(
-                                    f"ALTER SESSION SET QUERY_TAG = '{escaped}'"
-                                )
+                                cursor.execute(f"ALTER SESSION SET QUERY_TAG = '{escaped}'")
                             else:
                                 cursor.execute("ALTER SESSION UNSET QUERY_TAG")
                     except Exception:
@@ -1274,14 +1186,10 @@ class ExecuteQueryTool(MCPTool):
                         if "STATEMENT_TIMEOUT_IN_SECONDS" in params:
                             if prev_timeout and prev_timeout.isdigit():
                                 cursor.execute(
-                                    "ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {}".format(
-                                        int(prev_timeout)
-                                    )
+                                    "ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {}".format(int(prev_timeout))
                                 )
                             else:
-                                cursor.execute(
-                                    "ALTER SESSION UNSET STATEMENT_TIMEOUT_IN_SECONDS"
-                                )
+                                cursor.execute("ALTER SESSION UNSET STATEMENT_TIMEOUT_IN_SECONDS")
                     except Exception:
                         pass
 
@@ -1292,13 +1200,11 @@ class ExecuteQueryTool(MCPTool):
                             apply_session_context(cursor, overrides)
                         previous_parameters: Dict[str, Optional[str]] = {}
                         if "QUERY_TAG" in params:
-                            previous_parameters["QUERY_TAG"] = _get_session_parameter(
-                                "QUERY_TAG"
-                            )
+                            previous_parameters["QUERY_TAG"] = _get_session_parameter("QUERY_TAG")
                             _set_session_parameter("QUERY_TAG", params["QUERY_TAG"])
                         if "STATEMENT_TIMEOUT_IN_SECONDS" in params:
-                            previous_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] = (
-                                _get_session_parameter("STATEMENT_TIMEOUT_IN_SECONDS")
+                            previous_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] = _get_session_parameter(
+                                "STATEMENT_TIMEOUT_IN_SECONDS"
                             )
                             _set_session_parameter(
                                 "STATEMENT_TIMEOUT_IN_SECONDS",
@@ -1312,9 +1218,7 @@ class ExecuteQueryTool(MCPTool):
                             qid = None
                         query_id_box["id"] = qid
                         # Only fetch rows if a result set is present
-                        has_result_set = (
-                            getattr(cursor, "description", None) is not None
-                        )
+                        has_result_set = getattr(cursor, "description", None) is not None
                         if has_result_set:
                             raw_rows = cursor.fetchall()
                             description = getattr(cursor, "description", None) or []
@@ -1324,9 +1228,7 @@ class ExecuteQueryTool(MCPTool):
                                 if isinstance(col, (list, tuple)) and col:
                                     name = col[0]
                                 else:
-                                    name = getattr(col, "name", None) or getattr(
-                                        col, "column_name", None
-                                    )
+                                    name = getattr(col, "name", None) or getattr(col, "column_name", None)
                                 if not name:
                                     name = f"column_{idx}"
                                 column_names.append(str(name))
@@ -1340,11 +1242,7 @@ class ExecuteQueryTool(MCPTool):
                                 elif isinstance(raw, (list, tuple)):
                                     record = {}
                                     for idx, value in enumerate(raw):
-                                        key = (
-                                            column_names[idx]
-                                            if idx < len(column_names)
-                                            else f"column_{idx}"
-                                        )
+                                        key = column_names[idx] if idx < len(column_names) else f"column_{idx}"
                                         record[key] = value
                                 else:
                                     # Fallback for scalar rows or mismatched metadata
@@ -1362,17 +1260,13 @@ class ExecuteQueryTool(MCPTool):
 
                                 # Sample data size estimation
                                 sample_size = len(json.dumps(processed_rows[:100]))
-                                estimated_total_size = sample_size * (
-                                    len(processed_rows) / 100
-                                )
+                                estimated_total_size = sample_size * (len(processed_rows) / 100)
 
                                 # If estimated output is too large, truncate with metadata
                                 size_limit_bytes = RESULT_SIZE_LIMIT_MB * 1024 * 1024
                                 if estimated_total_size > size_limit_bytes:
                                     original_count = len(processed_rows)
-                                    truncated_rows = processed_rows[
-                                        :RESULT_KEEP_FIRST_ROWS
-                                    ]
+                                    truncated_rows = processed_rows[:RESULT_KEEP_FIRST_ROWS]
                                     last_rows = processed_rows[-RESULT_KEEP_LAST_ROWS:]
 
                                     result_box["rows"] = (
@@ -1387,13 +1281,9 @@ class ExecuteQueryTool(MCPTool):
                                     )
                                     result_box["truncated"] = True
                                     result_box["original_rowcount"] = original_count
-                                    result_box["returned_rowcount"] = len(
-                                        result_box["rows"]
-                                    )
+                                    result_box["returned_rowcount"] = len(result_box["rows"])
                                     result_box["truncation_info"] = {
-                                        "original_size_mb": round(
-                                            estimated_total_size / (1024 * 1024), 2
-                                        ),
+                                        "original_size_mb": round(estimated_total_size / (1024 * 1024), 2),
                                         "truncated_for_context_window": True,
                                         "export_suggestions": [
                                             "Consider using LIMIT clause in your query",
@@ -1444,9 +1334,7 @@ class ExecuteQueryTool(MCPTool):
                     # Give a short grace period for cancellation to propagate
                     done.wait(5)
                     # Signal timeout to caller (will be caught and wrapped above)
-                    raise TimeoutError(
-                        f"Query execution exceeded timeout ({timeout}s) and was cancelled"
-                    )
+                    raise TimeoutError(f"Query execution exceeded timeout ({timeout}s) and was cancelled")
 
                 # Worker finished: process result
                 if result_box["error"] is not None:

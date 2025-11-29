@@ -78,9 +78,23 @@ result = await create_report(
   "title": "Q1 Revenue Analysis",
   "template": "default",
   "tags": ["q1", "revenue"],
+  "section_ids_added": [],
+  "insight_ids_added": [],
+  "timing": {
+    "outline_duration_ms": 2.34,
+    "create_duration_ms": 5.67
+  },
   "message": "Created report 'Q1 Revenue Analysis' with ID: rpt_550e8400e29b11d4a716446655440000"
 }
 ```
+
+### Response Fields (v0.3.3+)
+
+- **`section_ids_added`**: Array of section IDs created from template (empty for default template)
+- **`insight_ids_added`**: Array of insight IDs created from template (empty for default template)
+- **`timing`**: Performance metrics
+  - `outline_duration_ms`: Time to fetch/create outline
+  - `create_duration_ms`: Total creation time
 
 ### Error Responses
 
