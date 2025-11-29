@@ -161,6 +161,7 @@ local_sf_test/
 .claude/*
 .cursor/*
 .github/*
+!.github/workflows/
 CLIProxyAPI/
 .mcp.json
 artifacts/
