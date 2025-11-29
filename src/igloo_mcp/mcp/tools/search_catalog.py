@@ -148,7 +148,7 @@ class SearchCatalogTool(MCPTool):
                 ) from e
 
         # Support searching across multiple databases in unified storage
-        if search_all_databases and catalog_dir == "./data_catalogue":
+        if search_all_databases and Path(catalog_dir).name == "data_catalogue":
             catalog_root = resolve_catalog_root()
             all_results = []
             total_matches = 0

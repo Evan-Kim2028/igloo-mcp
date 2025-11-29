@@ -194,7 +194,7 @@ class HealthCheckTool(MCPTool):
             }
         except Exception as e:
             return {
-                "status": "failed",
+                "status": "error",
                 "connected": False,
                 "profile": self.config.snowflake.profile,
                 "error": str(e),
@@ -237,9 +237,7 @@ class HealthCheckTool(MCPTool):
 
         try:
             # Validate profile
-            resolved_profile = await anyio.to_thread.run_sync(
-                validate_and_resolve_profile
-            )
+            resolved_profile = await anyio.to_thread.run_sync(validate_and_resolve_profile)
 
             # Get profile summary (includes authenticator when available)
             summary = await anyio.to_thread.run_sync(get_profile_summary)
@@ -357,15 +355,9 @@ class HealthCheckTool(MCPTool):
 
         try:
             if hasattr(self.health_monitor, "get_comprehensive_health"):
-                status = self.health_monitor.get_comprehensive_health(
-                    snowflake_service=self.snowflake_service
-                )
-                overall_status = getattr(
-                    status.overall_status, "value", str(status.overall_status)
-                )
-                recent_errors = (
-                    [status.last_error] if getattr(status, "last_error", None) else []
-                )
+                status = self.health_monitor.get_comprehensive_health(snowflake_service=self.snowflake_service)
+                overall_status = getattr(status.overall_status, "value", str(status.overall_status))
+                recent_errors = [status.last_error] if getattr(status, "last_error", None) else []
                 return {
                     "status": overall_status,
                     "healthy": overall_status == "healthy",
@@ -378,9 +370,7 @@ class HealthCheckTool(MCPTool):
                 }
 
             legacy_status = (
-                self.health_monitor.get_health_status()
-                if hasattr(self.health_monitor, "get_health_status")
-                else None
+                self.health_monitor.get_health_status() if hasattr(self.health_monitor, "get_health_status") else None
             )
             if legacy_status is not None:
                 return {

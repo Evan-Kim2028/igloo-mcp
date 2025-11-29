@@ -34,6 +34,11 @@ except ImportError:
             return logging.getLogger(name)
 
 
+from igloo_mcp.mcp.error_utils import (
+    handle_generic_exception_decorator,
+    handle_mcp_exception_decorator,
+    handle_validation_error_decorator,
+)
 from igloo_mcp.mcp.exceptions import (
     MCPExecutionError,
     MCPToolError,
@@ -192,159 +197,34 @@ def tool_error_handler(
         @functools.wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
             logger = get_logger(f"igloo_mcp.mcp.tools.{tool_name}")
+            request_id = kwargs.get("request_id")
 
             try:
                 return await cast(Callable[P, Awaitable[T]], func)(*args, **kwargs)
             except (MCPValidationError, MCPExecutionError, MCPToolError) as mcp_error:
-                # Add request_id to MCP exceptions if available in kwargs
-                request_id = kwargs.get("request_id")
-                if request_id and hasattr(mcp_error, "context"):
-                    if mcp_error.context is None:
-                        mcp_error.context = {}
-                    mcp_error.context["request_id"] = request_id
-                # Re-raise MCP exceptions as-is - they're already properly formatted
-                raise
+                handle_mcp_exception_decorator(mcp_error, request_id, kwargs)
             except TypeError:
                 # Bubble TypeError so tests and callers get the original signature issue
                 raise
             except ValidationError as e:
-                # Convert Pydantic validation errors to MCPValidationError
-                errors = e.errors()
-                validation_errors = []
-                for err in errors:
-                    field_path = ".".join(str(loc) for loc in err.get("loc", []))
-                    error_msg = err.get("msg", "Validation error")
-                    validation_errors.append(f"{field_path}: {error_msg}")
-
-                logger.warning(
-                    f"Validation error in {tool_name}",
-                    extra={
-                        "tool": tool_name,
-                        "validation_errors": validation_errors,
-                        "input": str(kwargs)[:200],  # Truncate for logging
-                    },
-                )
-
-                # Extract request_id from kwargs if available
-                request_id = kwargs.get("request_id")
-                error_context = {"request_id": request_id} if request_id else {}
-
-                raise MCPValidationError(
-                    f"Parameter validation failed for {tool_name}",
-                    validation_errors=validation_errors,
-                    hints=[
-                        f"Check parameter types and required fields for {tool_name}",
-                        f"Review {tool_name} parameter schema for valid values",
-                        "Common issues: missing required fields, wrong data types, out-of-range values",
-                    ],
-                    context=error_context,
-                ) from e
+                handle_validation_error_decorator(e, request_id, tool_name, logger, kwargs)
             except Exception as e:
-                # Convert unexpected exceptions to MCPExecutionError
-                error_msg = str(e)
-                request_id = kwargs.get("request_id")
-                error_context = {"request_id": request_id} if request_id else {}
-
-                logger.error(
-                    f"Unexpected error in {tool_name}",
-                    extra={
-                        "tool": tool_name,
-                        "error_type": type(e).__name__,
-                        "error_message": error_msg[:500],  # Truncate for logging
-                        "request_id": request_id,
-                    },
-                    exc_info=True,
-                )
-
-                raise MCPExecutionError(
-                    f"Tool execution failed: {error_msg}",
-                    operation=tool_name,
-                    original_error=e,
-                    hints=[
-                        f"Check {tool_name} logs for detailed error information",
-                        f"Verify input parameters match {tool_name} schema requirements",
-                        "Check system resources (disk space, memory, network connectivity)",
-                        f"Review recent changes to {tool_name} configuration if applicable",
-                    ],
-                    context=error_context,
-                ) from e
+                handle_generic_exception_decorator(e, request_id, tool_name, logger, kwargs)
 
         @functools.wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
             # Handle synchronous functions (though most tools are async)
             logger = get_logger(f"igloo_mcp.mcp.tools.{tool_name}")
+            request_id = kwargs.get("request_id")
 
             try:
                 return func(*args, **kwargs)
             except (MCPValidationError, MCPExecutionError, MCPToolError) as mcp_error:
-                # Add request_id to MCP exceptions if available in kwargs
-                request_id = kwargs.get("request_id")
-                if request_id and hasattr(mcp_error, "context"):
-                    if mcp_error.context is None:
-                        mcp_error.context = {}
-                    mcp_error.context["request_id"] = request_id
-                # Re-raise MCP exceptions as-is
-                raise
+                handle_mcp_exception_decorator(mcp_error, request_id, kwargs)
             except ValidationError as e:
-                # Convert Pydantic validation errors to MCPValidationError
-                errors = e.errors()
-                validation_errors = []
-                for err in errors:
-                    field_path = ".".join(str(loc) for loc in err.get("loc", []))
-                    error_msg = err.get("msg", "Validation error")
-                    validation_errors.append(f"{field_path}: {error_msg}")
-
-                request_id = kwargs.get("request_id")
-                error_context = {"request_id": request_id} if request_id else {}
-
-                logger.warning(
-                    f"Validation error in {tool_name}",
-                    extra={
-                        "tool": tool_name,
-                        "validation_errors": validation_errors,
-                        "request_id": request_id,
-                    },
-                )
-
-                raise MCPValidationError(
-                    f"Parameter validation failed for {tool_name}",
-                    validation_errors=validation_errors,
-                    hints=[
-                        f"Check parameter types and required fields for {tool_name}",
-                        f"Review {tool_name} parameter schema for valid values",
-                        "Common issues: missing required fields, wrong data types, out-of-range values",
-                    ],
-                    context=error_context,
-                ) from e
+                handle_validation_error_decorator(e, request_id, tool_name, logger, kwargs)
             except Exception as e:
-                # Convert unexpected exceptions to MCPExecutionError
-                error_msg = str(e)
-                request_id = kwargs.get("request_id")
-                error_context = {"request_id": request_id} if request_id else {}
-
-                logger.error(
-                    f"Unexpected error in {tool_name}",
-                    extra={
-                        "tool": tool_name,
-                        "error_type": type(e).__name__,
-                        "error_message": error_msg[:500],
-                        "request_id": request_id,
-                    },
-                    exc_info=True,
-                )
-
-                raise MCPExecutionError(
-                    f"Tool execution failed: {error_msg}",
-                    operation=tool_name,
-                    original_error=e,
-                    hints=[
-                        f"Check {tool_name} logs for detailed error information",
-                        f"Verify input parameters match {tool_name} schema requirements",
-                        "Check system resources (disk space, memory, network connectivity)",
-                        f"Review recent changes to {tool_name} configuration if applicable",
-                    ],
-                    context=error_context,
-                ) from e
+                handle_generic_exception_decorator(e, request_id, tool_name, logger, kwargs)
 
         # Return appropriate wrapper based on whether function is async
         import inspect
