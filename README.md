@@ -33,7 +33,7 @@ The official [Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp) is a po
 - **Simpler Setup**: SnowCLI-based – no YAML service configs. Just install, pick a profile, and go. Official requires detailed service listings and permission tuning.
 - **Dev Workflow Boosts**: Always-on query history (JSONL audits), result caching (instant replays, no re-hits on Snowflake), and auto-insights (row summaries for LLM reasoning – no extra SQL). Official emphasizes Cortex but lacks these for rapid iteration.
 - **Agent-Safe Defaults**: Blocks risky SQL (DDL/DML) out-of-box, with timeouts/cancellation. Official is flexible but needs config for guards.
-- **Lightweight Focus**: 11 focused MCP tools for querying, cataloging, lineage, and living reports – perfect for AI prototypes. Skip Cortex bloat if you don't need RAG/agents.
+- **Lightweight Focus**: 13 focused MCP tools for querying, cataloging, lineage, and living reports – perfect for AI prototypes. Skip Cortex bloat if you don't need RAG/agents.
 - **Performance Edge**: Optimized for local/dev (CLI mode default; REST fallback added in v0.2.3). Official is container-heavy for prod.
 - **Transparent Attribution**: v0.2.5+ logs `source_databases` + fully-qualified `tables` for every query result/history entry so cross-database access is always auditable.
 
@@ -123,7 +123,7 @@ See [docs/living-reports/user-guide.md](./docs/living-reports/user-guide.md) for
 ### Install (1 min)
 ```bash
 uv pip install igloo-mcp  # Or pip install igloo-mcp
-igloo --version  # Verify (v0.3.2+)
+igloo --version  # Verify (v0.3.3+)
 ```
 
 ### Connect Snowflake Profile (2 min)

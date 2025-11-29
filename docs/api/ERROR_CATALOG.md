@@ -466,4 +466,4 @@ All MCP tools use the `@tool_error_handler` decorator which automatically:
 Tools can raise MCP exceptions directly for fine-grained control, or rely on the decorator for automatic conversion.
 
 **Last Updated:** January 2025
-**Version:** 0.3.0+
+**Version:** 0.3.3

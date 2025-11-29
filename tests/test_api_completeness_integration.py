@@ -146,7 +146,7 @@ class TestRequestIdCorrelation:
         """Test request_id correlation in build → search → summary workflow."""
         build_tool = BuildCatalogTool(config, mock_catalog_service)
         search_tool = SearchCatalogTool()
-        summary_tool = GetCatalogSummaryTool()
+        summary_tool = GetCatalogSummaryTool(mock_catalog_service)
 
         correlation_id = "workflow-catalog-001"
 
@@ -224,7 +224,6 @@ class TestTimingMetricsIntegration:
         changes = {
             "sections_to_add": [
                 {
-                    "section_id": "new_section",
                     "title": "New Section",
                     "order": 99,
                     "content": "Content",
@@ -236,12 +235,13 @@ class TestTimingMetricsIntegration:
             report_selector=report_id,
             instruction="Update report",
             proposed_changes=changes,
+            response_detail="full",
         )
 
         evolve_timing = evolve_result["timing"]
         assert "total_duration_ms" in evolve_timing
-        assert "evolution_duration_ms" in evolve_timing
-        assert "outline_fetch_ms" in evolve_timing
+        assert "apply_duration_ms" in evolve_timing
+        assert "storage_duration_ms" in evolve_timing
 
         # Both operations have timing
         assert create_timing["total_duration_ms"] > 0
@@ -293,13 +293,12 @@ class TestIdTrackingLifecycle:
         changes = {
             "sections_to_add": [
                 {
-                    "section_id": "new_sec",
                     "title": "New",
                     "order": 99,
                     "content": "New",
                 }
             ],
-            "sections_to_update": [
+            "sections_to_modify": [
                 {
                     "section_id": initial_sections[0],
                     "title": "Updated Title",
@@ -315,7 +314,7 @@ class TestIdTrackingLifecycle:
         )
 
         # Verify ID tracking
-        assert "new_sec" in evolve_result["section_ids_added"]
+        assert len(evolve_result["section_ids_added"]) == 1
         assert initial_sections[0] in evolve_result["section_ids_modified"]
 
         if changes["sections_to_remove"]:
@@ -338,13 +337,11 @@ class TestIdTrackingLifecycle:
         changes1 = {
             "sections_to_add": [
                 {
-                    "section_id": "sec1",
                     "title": "Section 1",
                     "order": 0,
                     "content": "C1",
                 },
                 {
-                    "section_id": "sec2",
                     "title": "Section 2",
                     "order": 1,
                     "content": "C2",
@@ -358,15 +355,17 @@ class TestIdTrackingLifecycle:
             proposed_changes=changes1,
         )
 
-        assert "sec1" in evolve1["section_ids_added"]
-        assert "sec2" in evolve1["section_ids_added"]
+        assert len(evolve1["section_ids_added"]) == 2
+        # Capture auto-generated section IDs
+        sec1_id = evolve1["section_ids_added"][0]
+        sec2_id = evolve1["section_ids_added"][1]
 
         # Evolution 2: Modify one, remove one
         changes2 = {
-            "sections_to_update": [
-                {"section_id": "sec1", "title": "Updated Section 1"},
+            "sections_to_modify": [
+                {"section_id": sec1_id, "title": "Updated Section 1"},
             ],
-            "sections_to_remove": ["sec2"],
+            "sections_to_remove": [sec2_id],
         }
 
         evolve2 = await evolve_tool.execute(
@@ -375,14 +374,13 @@ class TestIdTrackingLifecycle:
             proposed_changes=changes2,
         )
 
-        assert "sec1" in evolve2["section_ids_modified"]
-        assert "sec2" in evolve2["section_ids_removed"]
+        assert sec1_id in evolve2["section_ids_modified"]
+        assert sec2_id in evolve2["section_ids_removed"]
 
         # Evolution 3: Add new section
         changes3 = {
             "sections_to_add": [
                 {
-                    "section_id": "sec3",
                     "title": "Section 3",
                     "order": 2,
                     "content": "C3",
@@ -396,15 +394,16 @@ class TestIdTrackingLifecycle:
             proposed_changes=changes3,
         )
 
-        assert "sec3" in evolve3["section_ids_added"]
+        assert len(evolve3["section_ids_added"]) == 1
+        sec3_id = evolve3["section_ids_added"][0]
 
         # Final state: should have sec1 and sec3 (sec2 was removed)
         final_outline = report_service.get_report_outline(report_id)
         final_section_ids = [s.section_id for s in final_outline.sections]
 
-        assert "sec1" in final_section_ids
-        assert "sec3" in final_section_ids
-        assert "sec2" not in final_section_ids
+        assert sec1_id in final_section_ids
+        assert sec3_id in final_section_ids
+        assert sec2_id not in final_section_ids
 
 
 class TestWarningsInWorkflows:
@@ -475,10 +474,8 @@ class TestEndToEndWorkflows:
         changes1 = {
             "insights_to_add": [
                 {
-                    "insight_id": "key_finding_1",
-                    "title": "Key Finding 1",
                     "summary": "Important discovery",
-                    "level": "top",
+                    "importance": 8,
                 }
             ],
         }
@@ -487,28 +484,34 @@ class TestEndToEndWorkflows:
             report_selector=report_id,
             instruction="Update report",
             proposed_changes=changes1,
+            constraints={"skip_citation_validation": True},
+            response_detail="full",
             request_id=workflow_id,
         )
 
         assert evolve1["status"] == "success"
         assert evolve1["request_id"] == workflow_id
-        assert "key_finding_1" in evolve1["insight_ids_added"]
+        assert len(evolve1["insight_ids_added"]) == 1
         assert "timing" in evolve1
+
+        # Capture the auto-generated insight_id
+        added_insight_id = evolve1["insight_ids_added"][0]
 
         # Step 3: Second evolution - modify and remove
         if initial_sections:
             changes2 = {
-                "sections_to_update": [
+                "sections_to_modify": [
                     {
                         "section_id": initial_sections[0],
                         "content": "Updated content",
                     }
                 ],
-                "insights_to_remove": ["key_finding_1"],
+                "insights_to_remove": [added_insight_id],
             }
 
             evolve2 = await evolve_tool.execute(
                 report_selector=report_id,
+                instruction="Modify section content and remove insight",
                 proposed_changes=changes2,
                 request_id=workflow_id,
             )
@@ -516,7 +519,7 @@ class TestEndToEndWorkflows:
             assert evolve2["status"] == "success"
             assert evolve2["request_id"] == workflow_id
             assert initial_sections[0] in evolve2["section_ids_modified"]
-            assert "key_finding_1" in evolve2["insight_ids_removed"]
+            assert added_insight_id in evolve2["insight_ids_removed"]
 
         # Verify final state
         final_outline = report_service.get_report_outline(report_id)
@@ -530,7 +533,7 @@ class TestEndToEndWorkflows:
         """Test complete workflow: build → search → summary."""
         build_tool = BuildCatalogTool(config, mock_catalog_service)
         search_tool = SearchCatalogTool()
-        summary_tool = GetCatalogSummaryTool()
+        summary_tool = GetCatalogSummaryTool(mock_catalog_service)
 
         workflow_id = "e2e-catalog-workflow"
 
@@ -597,16 +600,12 @@ class TestProductionScenarios:
         changes = {
             "insights_to_add": [
                 {
-                    "insight_id": "finding_1",
-                    "title": "Transaction Volume Increase",
                     "summary": "30% increase in transaction volume",
-                    "level": "top",
+                    "importance": 9,
                 },
                 {
-                    "insight_id": "finding_2",
-                    "title": "Network Latency Improvement",
                     "summary": "15% reduction in average latency",
-                    "level": "supporting",
+                    "importance": 6,
                 },
             ],
         }
@@ -615,18 +614,15 @@ class TestProductionScenarios:
             report_selector=report_id,
             instruction="Update report",
             proposed_changes=changes,
+            constraints={"skip_citation_validation": True},
         )
 
         assert evolve_result["status"] == "success"
-        assert "finding_1" in evolve_result["insight_ids_added"]
-        assert "finding_2" in evolve_result["insight_ids_added"]
+        assert len(evolve_result["insight_ids_added"]) == 2
 
         # Verify report state
         outline = report_service.get_report_outline(report_id)
-        insight_ids = [i.insight_id for i in outline.insights]
-
-        assert "finding_1" in insight_ids
-        assert "finding_2" in insight_ids
+        assert len(outline.insights) == 2
 
     @pytest.mark.asyncio
     async def test_parallel_report_creation(self, config, report_service):

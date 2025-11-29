@@ -271,11 +271,13 @@ def validate_sql_statement(
 
     if parsed_expressions:
         primary_expression = parsed_expressions[0]
-        key = primary_expression.key or ""
-        fallback_stmt_type = key.upper() or None
+        # Guard against None expressions from malformed input like ';'
+        if primary_expression is not None:
+            key = primary_expression.key or ""
+            fallback_stmt_type = key.upper() or None
         multi_statement_detected = len(parsed_expressions) > 1
 
-        if not multi_statement_detected:
+        if not multi_statement_detected and primary_expression is not None:
             select_like_hint = _is_select_like_statement(statement, parsed=primary_expression)
 
             if not select_like_hint and fallback_stmt_type in {"SELECT", "WITH"}:
@@ -311,9 +313,11 @@ def validate_sql_statement(
     if multi_statement_detected:
         detected: list[str] = []
         for expr in parsed_expressions:
-            name = (expr.key or "UNKNOWN").upper()
-            if name not in detected:
-                detected.append(name)
+            # Guard against None expressions in multi-statement detection
+            if expr is not None:
+                name = (expr.key or "UNKNOWN").upper()
+                if name not in detected:
+                    detected.append(name)
 
         pretty_detected = ", ".join(t.title() for t in detected) if detected else "Unknown"
         error_msg = (

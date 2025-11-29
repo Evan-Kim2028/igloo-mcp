@@ -255,6 +255,7 @@ class TestBug59StaleWarnings:
                 "sections_to_add": [{"title": "Test Section", "order": 1}],
                 "insights_to_add": [{"summary": "Test insight", "importance": 5}],
             },
+            constraints={"skip_citation_validation": True},
         )
 
         section_id = result1["summary"]["section_ids_added"][0]

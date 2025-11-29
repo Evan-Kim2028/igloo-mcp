@@ -33,8 +33,10 @@ Igloo MCP provides a focused set of MCP tools for Snowflake data operations, bui
 
 8. **[create_report](tools/create_report.md)** *(MCP-only)* - Create a new living report with optional template and tags
 9. **[evolve_report](tools/evolve_report.md)** *(MCP-only)* - Evolve a living report with LLM assistance and audit logging
-10. **render_report** *(MCP-only)* - Render reports to various formats (see [create_report](tools/create_report.md) for details)
-11. **search_report** *(MCP-only)* - Search for living reports with intelligent fallback behavior (see [create_report](tools/create_report.md) for details)
+10. **[render_report](tools/render_report.md)** *(MCP-only)* - Render reports to various formats
+11. **[search_report](tools/search_report.md)** *(MCP-only)* - Search for living reports with intelligent fallback behavior
+12. **[get_report](tools/get_report.md)** *(MCP-only)* - Read reports with progressive disclosure (v0.3.2)
+13. **[get_report_schema](tools/get_report_schema.md)** *(MCP-only)* - API schema introspection (v0.3.2)
 
 ## Getting Started
 
@@ -172,5 +174,5 @@ test_connection()
 
 ---
 
-**Version:** 0.3.0
+**Version:** 0.3.3
 **Last Updated:** November 2025
