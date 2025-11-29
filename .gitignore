@@ -174,3 +174,4 @@ building_a_mcp.md
 .factory/
 PR_63_*.md
 .worktrees
+grok-cli/
