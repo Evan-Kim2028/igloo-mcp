@@ -605,6 +605,13 @@ class EvolveReportTool(MCPTool):
                     "outline_version": int(new_outline.outline_version),
                     "summary": summary,
                     "warnings": warnings,
+                    # Response symmetry: flatten ID tracking fields to top level
+                    "section_ids_added": summary["section_ids_added"],
+                    "insight_ids_added": summary["insight_ids_added"],
+                    "section_ids_modified": summary["section_ids_modified"],
+                    "insight_ids_modified": summary["insight_ids_modified"],
+                    "section_ids_removed": summary["section_ids_removed"],
+                    "insight_ids_removed": summary["insight_ids_removed"],
                 }
             else:  # response_detail == "full"
                 # Full response: complete details including changes_applied
@@ -628,6 +635,13 @@ class EvolveReportTool(MCPTool):
                         "storage_duration_ms": round(storage_duration, 2),
                         "total_duration_ms": round(total_duration, 2),
                     },
+                    # Response symmetry: flatten ID tracking fields to top level
+                    "section_ids_added": summary["section_ids_added"],
+                    "insight_ids_added": summary["insight_ids_added"],
+                    "section_ids_modified": summary["section_ids_modified"],
+                    "insight_ids_modified": summary["insight_ids_modified"],
+                    "section_ids_removed": summary["section_ids_removed"],
+                    "insight_ids_removed": summary["insight_ids_removed"],
                 }
 
             # Add request_id to all response levels
