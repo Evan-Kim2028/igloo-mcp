@@ -27,8 +27,8 @@ try:  # Prefer the standalone fastmcp package when available
     from fastmcp.utilities.logging import configure_logging, get_logger
 except ImportError:  # Fall back to the implementation bundled with python-sdk
     from mcp.server.fastmcp import Context, FastMCP  # type: ignore[import-untyped,assignment]
-    from mcp.server.fastmcp.exceptions import (
-        NotFoundError,  # type: ignore[import-untyped,assignment,attr-defined,no-redef]
+    from mcp.server.fastmcp.exceptions import (  # type: ignore[import-untyped,assignment,attr-defined,no-redef]
+        NotFoundError,
     )
     from mcp.server.fastmcp.utilities.logging import (  # type: ignore[import-untyped,assignment]
         configure_logging,
