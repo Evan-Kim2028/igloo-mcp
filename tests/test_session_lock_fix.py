@@ -60,7 +60,8 @@ class TestSessionLockFixes:
 
         lock = ensure_session_lock(service)
 
-        assert isinstance(lock, threading.Lock)
+        # Use type comparison instead of isinstance for Python 3.12/3.13 compatibility
+        assert isinstance(lock, type(threading.Lock()))
         assert hasattr(service, "_snowcli_session_lock")
         assert service._snowcli_session_lock is lock
 
@@ -161,7 +162,8 @@ class TestSessionLockFixes:
 
         # First attempt should succeed
         lock1 = ensure_session_lock(service)
-        assert isinstance(lock1, threading.Lock)
+        # Use type comparison instead of isinstance for Python 3.12/3.13 compatibility
+        assert isinstance(lock1, type(threading.Lock()))
 
         # Second attempt should return same lock
         lock2 = ensure_session_lock(service)
