@@ -23,13 +23,13 @@ def test_revert_to_previous_state(tmp_path):
     # Get initial action_id
     storage = service.global_storage.get_report_storage(report_id)
     events = storage.load_audit_events()
-    first_action_id = events[0].action_id
+    _first_action_id = events[0].action_id
 
     # Make first change
     outline.title = "Changed Title 1"
     service.update_report_outline(report_id, outline, actor="cli")
     action1_events = storage.load_audit_events()
-    action1_id = action1_events[-1].action_id
+    _action1_id = action1_events[-1].action_id
 
     # Make second change
     outline = service.get_report_outline(report_id)
@@ -251,7 +251,7 @@ def test_revert_creates_current_backup(tmp_path):
     change_action_id = events[-1].action_id
 
     # Get initial backup filenames
-    initial_backups = set(storage.backups_dir.glob("*.bak"))
+    _initial_backups = set(storage.backups_dir.glob("*.bak"))
 
     # Small delay to ensure different timestamps for backup filenames
     time.sleep(0.1)

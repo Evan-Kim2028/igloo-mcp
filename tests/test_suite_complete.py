@@ -251,9 +251,6 @@ def test_all_imports_work():
     try:
         # Core modules
         # CLI
-        from igloo_mcp.cli import build_parser
-        from igloo_mcp.living_reports.changes_schema import ProposedChanges
-        from igloo_mcp.living_reports.index import ReportIndex
         from igloo_mcp.living_reports.models import (
             AuditEvent,
             Insight,

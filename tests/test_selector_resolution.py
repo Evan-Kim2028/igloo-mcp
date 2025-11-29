@@ -18,7 +18,7 @@ def selector(report_service):
 
 def test_resolve_by_exact_id(report_service, selector):
     """Test resolution by exact UUID match."""
-    report_id = report_service.create_report("Test Report")
+    _ = report_service.create_report("Test Report")
 
     resolved = selector.resolve(report_id)
     assert resolved == report_id
@@ -27,7 +27,7 @@ def test_resolve_by_exact_id(report_service, selector):
 def test_resolve_by_exact_title(report_service, selector):
     """Test resolution by exact title match."""
     title = "My Exact Report Title"
-    report_id = report_service.create_report(title)
+    _ = report_service.create_report(title)
 
     resolved = selector.resolve(title)
     assert resolved == report_id
@@ -35,7 +35,7 @@ def test_resolve_by_exact_title(report_service, selector):
 
 def test_resolve_by_partial_title(report_service, selector):
     """Test resolution by partial title match."""
-    report_id = report_service.create_report("Sales Report Q1")
+    _ = report_service.create_report("Sales Report Q1")
 
     # Partial match should work
     resolved = selector.resolve("Sales Report")
@@ -48,7 +48,7 @@ def test_resolve_by_partial_title(report_service, selector):
 
 def test_resolve_by_tag(report_service, selector):
     """Test resolution by tag-based selector."""
-    report_id = report_service.create_report("Test Report", tags=["q1", "sales"])
+    _ = report_service.create_report("Test Report", tags=["q1", "sales"])
 
     resolved = selector.resolve("tag:sales")
     assert resolved == report_id
@@ -77,7 +77,7 @@ def test_not_found_error(selector):
 
 def test_strict_mode(report_service, selector):
     """Test strict mode only allows exact matches."""
-    report_id = report_service.create_report("Sales Report Q1")
+    _ = report_service.create_report("Sales Report Q1")
 
     # Partial match should fail in strict mode
     with pytest.raises(SelectorResolutionError) as exc_info:

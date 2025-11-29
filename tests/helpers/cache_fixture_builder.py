@@ -113,7 +113,7 @@ def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
             health_monitor=None,
         )
 
-        first = await tool.execute(
+        _ = await tool.execute(
             statement="SELECT month, total_revenue FROM fixture_source",
             warehouse="FIXTURE_WH",
             timeout_seconds=120,
@@ -128,7 +128,7 @@ def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
         )
 
         # Second execution should hit the cache immediately.
-        second = await tool.execute(
+        _ = await tool.execute(
             statement="SELECT month, total_revenue FROM fixture_source",
             warehouse="FIXTURE_WH",
             timeout_seconds=120,
