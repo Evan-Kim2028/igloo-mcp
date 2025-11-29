@@ -169,7 +169,7 @@ uv.lock
 research/
 new_user_test/
 external_ruff.py
-conftest.py
+# conftest.py  # Removed - conftest.py should be tracked for pytest fixtures
 building_a_mcp.md
 .factory/
 PR_63_*.md
