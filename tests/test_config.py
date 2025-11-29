@@ -411,13 +411,23 @@ class TestPerformanceOptimizations:
         # Should return cached result
         assert config1 is config2
 
-        # Modify file and reload - should invalidate cache
+        # Modify file with different content and ensure mtime changes
+        # Add small delay to ensure mtime is different on fast filesystems
+        import time
+
+        time.sleep(0.01)
         config_file.write_text("[connections]\ndev = {}\nprod = {}\n")
+
+        # Verify mtime actually changed
         mtime2 = config_file.stat().st_mtime
+        assert mtime2 != mtime1, "mtime should change after file modification"
+
         config3 = _load_snowflake_config(config_file, mtime2)
 
         # Should be different object due to mtime change
         assert config1 is not config3
+        # Content should also be different
+        assert config3.get("connections", {}).get("prod") is not None
 
 
 # Fixtures

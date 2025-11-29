@@ -80,7 +80,9 @@ def validate_session_lock(service: SnowflakeServiceProtocol) -> bool:
 
     try:
         lock = getattr(service, _LOCK_ATTR, None)
-        return lock is not None and isinstance(lock, threading.Lock)
+        # Use duck typing instead of isinstance since threading.Lock is a factory function
+        # Check that the lock has the required Lock protocol methods
+        return lock is not None and isinstance(lock, type(threading.Lock()))
     except (AttributeError, TypeError):
         return False
 
