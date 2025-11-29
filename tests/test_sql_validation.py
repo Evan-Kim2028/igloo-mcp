@@ -146,9 +146,7 @@ class TestValidateSQLStatement:
         allow_list = ["select"]
         disallow_list = []
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Select"
         assert is_valid is True
@@ -161,9 +159,7 @@ class TestValidateSQLStatement:
         allow_list = ["select", "insert", "update"]
         disallow_list = ["delete", "drop", "truncate"]
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Delete"
         assert is_valid is False
@@ -179,9 +175,7 @@ class TestValidateSQLStatement:
         allow_list = ["select", "insert"]
         disallow_list = ["delete", "drop", "truncate"]
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Drop"
         assert is_valid is False
@@ -197,9 +191,7 @@ class TestValidateSQLStatement:
         allow_list = ["select"]
         disallow_list = ["delete", "drop", "truncate", "truncatetable"]
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         # Upstream may return "Truncate" or "TruncateTable"
         assert stmt_type in ["Truncate", "TruncateTable"]
@@ -222,9 +214,7 @@ class TestValidateSQLStatement:
             "command",
         ]
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Command"
         assert is_valid is False
@@ -239,9 +229,7 @@ class TestValidateSQLStatement:
         allow_list = ["insert"]
         disallow_list = []
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Insert"
         assert is_valid is True
@@ -254,9 +242,7 @@ class TestValidateSQLStatement:
         allow_list = perms.get_allow_list()
         disallow_list = perms.get_disallow_list()
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Select"
         assert is_valid is True
@@ -269,9 +255,7 @@ class TestValidateSQLStatement:
         allow_list = perms.get_allow_list()
         disallow_list = perms.get_disallow_list()
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Select"
         assert is_valid is True
@@ -284,9 +268,7 @@ class TestValidateSQLStatement:
         allow_list = perms.get_allow_list()
         disallow_list = perms.get_disallow_list()
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Select"
         assert is_valid is True
@@ -299,9 +281,7 @@ class TestValidateSQLStatement:
         allow_list = perms.get_allow_list()
         disallow_list = perms.get_disallow_list()
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Select"
         assert is_valid is True
@@ -314,9 +294,7 @@ class TestValidateSQLStatement:
         allow_list = perms.get_allow_list()
         disallow_list = perms.get_disallow_list()
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            sql, allow_list, disallow_list
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(sql, allow_list, disallow_list)
 
         assert stmt_type == "Delete"
         assert is_valid is False

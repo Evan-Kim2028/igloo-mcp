@@ -68,13 +68,9 @@ class SnowRestClient:
         *,
         default_context: Optional[Dict[str, Optional[str]]] = None,
     ) -> "SnowRestClient":
-        account = os.environ.get("SNOWFLAKE_REST_ACCOUNT") or os.environ.get(
-            "SNOWFLAKE_ACCOUNT"
-        )
+        account = os.environ.get("SNOWFLAKE_REST_ACCOUNT") or os.environ.get("SNOWFLAKE_ACCOUNT")
         user = os.environ.get("SNOWFLAKE_REST_USER") or os.environ.get("SNOWFLAKE_USER")
-        key_path = os.environ.get("SNOWFLAKE_REST_PRIVATE_KEY") or os.environ.get(
-            "SNOWFLAKE_PRIVATE_KEY"
-        )
+        key_path = os.environ.get("SNOWFLAKE_REST_PRIVATE_KEY") or os.environ.get("SNOWFLAKE_PRIVATE_KEY")
         if not account or not user or not key_path:
             raise SnowRestError(
                 "SNOWFLAKE_REST_ACCOUNT, SNOWFLAKE_REST_USER, and SNOWFLAKE_REST_PRIVATE_KEY must be set"
@@ -146,22 +142,16 @@ class SnowRestClient:
             metadata=profile,
         )
 
-    def _merge_context(
-        self, overrides: Optional[Dict[str, Optional[str]]]
-    ) -> Dict[str, Optional[str]]:
+    def _merge_context(self, overrides: Optional[Dict[str, Optional[str]]]) -> Dict[str, Optional[str]]:
         combined = dict(self.default_context)
         if overrides:
             combined.update(overrides)
         return combined
 
-    def _collect_rows(
-        self, response: Dict[str, Any]
-    ) -> tuple[List[Dict[str, Any]], List[str]]:
+    def _collect_rows(self, response: Dict[str, Any]) -> tuple[List[Dict[str, Any]], List[str]]:
         meta = response.get("resultSetMetaData") or {}
         row_types: Iterable[Dict[str, Any]] = meta.get("rowType") or []
-        columns = [
-            rt.get("name") or f"column_{idx}" for idx, rt in enumerate(row_types)
-        ]
+        columns = [rt.get("name") or f"column_{idx}" for idx, rt in enumerate(row_types)]
         rows = list(self._rows_from_response(response, columns))
 
         for url in response.get("resultSetUrls") or []:
@@ -175,9 +165,7 @@ class SnowRestClient:
 
         return rows, columns
 
-    def _rows_from_response(
-        self, response: Dict[str, Any], columns: List[str]
-    ) -> Iterable[Dict[str, Any]]:
+    def _rows_from_response(self, response: Dict[str, Any], columns: List[str]) -> Iterable[Dict[str, Any]]:
         data_blocks: List[List[Any]] = []
         if isinstance(response.get("data"), list):
             data_blocks.append(response["data"])

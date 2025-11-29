@@ -63,9 +63,7 @@ class TestGettingStartedProcess:
                                 main()
                                 assert True  # If we get here, startup succeeded
                             except SystemExit:
-                                pytest.fail(
-                                    "MCP server should start with valid profile"
-                                )
+                                pytest.fail("MCP server should start with valid profile")
 
     def test_mcp_server_startup_fails_without_profile(self, mock_empty_config):
         """Test that MCP server fails gracefully without profiles."""
@@ -163,8 +161,7 @@ class TestDocumentationAccuracy:
                     error_msg = str(exc_info.value)
                     # Should mention available profiles or setup instructions
                     assert any(
-                        keyword in error_msg.lower()
-                        for keyword in ["profile", "snowflake", "connection", "setup"]
+                        keyword in error_msg.lower() for keyword in ["profile", "snowflake", "connection", "setup"]
                     )
 
 
@@ -182,10 +179,7 @@ class TestNewUserExperience:
 
                 error_msg = str(exc_info.value)
                 # Should provide guidance on setting up Snowflake CLI
-                assert any(
-                    keyword in error_msg.lower()
-                    for keyword in ["snowflake", "profile", "connection", "add"]
-                )
+                assert any(keyword in error_msg.lower() for keyword in ["snowflake", "profile", "connection", "add"])
 
     def test_new_user_with_invalid_profile(self, mock_config_with_profiles):
         """Test experience when user specifies invalid profile."""
@@ -220,9 +214,7 @@ def mock_config_with_profiles():
     """Mock configuration with specified profiles."""
 
     def _mock(profiles: list[str], default: str | None = None):
-        config_data: dict[str, dict[str, dict] | str] = {
-            "connections": {profile: {} for profile in profiles}
-        }
+        config_data: dict[str, dict[str, dict] | str] = {"connections": {profile: {} for profile in profiles}}
         if default:
             config_data["default_connection_name"] = default
 

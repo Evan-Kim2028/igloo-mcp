@@ -85,9 +85,7 @@ class StubSystemStatus:
 
 
 class StubHealthMonitor:
-    def __init__(
-        self, profile_health: StubProfileHealth, system_status: StubSystemStatus
-    ):
+    def __init__(self, profile_health: StubProfileHealth, system_status: StubSystemStatus):
         self._profile_health = profile_health
         self._system_status = system_status
         self.connection_status = HealthStatus.HEALTHY

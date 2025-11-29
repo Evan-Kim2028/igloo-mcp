@@ -68,9 +68,7 @@ class ParallelQueryConfig:
             retry_count: Alias for retry_attempts
         """
         # Use aliases if provided, otherwise use direct parameters
-        self.max_concurrent_queries = (
-            max_workers if max_workers is not None else max_concurrent_queries
-        )
+        self.max_concurrent_queries = max_workers if max_workers is not None else max_concurrent_queries
         self.retry_attempts = retry_count if retry_count is not None else retry_attempts
         self.retry_delay = retry_delay
         self.timeout_seconds = timeout_seconds
@@ -179,9 +177,7 @@ class ParallelQueryExecutor:
                     execution_time=execution_time,
                 )
 
-        fallback_error_msg = (
-            "Query execution ended without producing a result after exhausting retries."
-        )
+        fallback_error_msg = "Query execution ended without producing a result after exhausting retries."
         execution_time = time.time() - start_time
         return QueryResult(
             object_name=object_name,
@@ -290,30 +286,22 @@ class ParallelQueryExecutor:
 
         total_rows = sum(r.row_count for r in results.values() if r.success)
         total_execution_time = sum(r.execution_time for r in results.values())
-        avg_execution_time = (
-            total_execution_time / total_queries if total_queries > 0 else 0
-        )
+        avg_execution_time = total_execution_time / total_queries if total_queries > 0 else 0
 
         # Calculate parallelization efficiency
         sequential_time = sum(r.execution_time for r in results.values())
-        parallel_efficiency = (
-            sequential_time / total_execution_time if total_execution_time > 0 else 1.0
-        )
+        parallel_efficiency = sequential_time / total_execution_time if total_execution_time > 0 else 1.0
 
         return {
             "total_queries": total_queries,
             "successful_queries": successful_queries,
             "failed_queries": failed_queries,
-            "success_rate": (
-                successful_queries / total_queries * 100 if total_queries > 0 else 0
-            ),
+            "success_rate": (successful_queries / total_queries * 100 if total_queries > 0 else 0),
             "total_rows_retrieved": total_rows,
             "total_execution_time": total_execution_time,
             "avg_execution_time_per_query": avg_execution_time,
             "parallel_efficiency": parallel_efficiency,
-            "failed_objects": [
-                name for name, result in results.items() if not result.success
-            ],
+            "failed_objects": [name for name, result in results.items() if not result.success],
         }
 
 

@@ -75,9 +75,7 @@ def truncate_insight_for_storage(insight: Insight, max_bytes: int = 16384) -> In
         summary_bytes = summary.encode("utf-8")
         if len(summary_bytes) > max_bytes - 100:  # Reserve space for other fields
             max_summary_bytes = max_bytes - 100
-            truncated_summary = summary_bytes[:max_summary_bytes].decode(
-                "utf-8", errors="ignore"
-            )
+            truncated_summary = summary_bytes[:max_summary_bytes].decode("utf-8", errors="ignore")
             # Try to avoid cutting in the middle of a multi-byte character
             while len(truncated_summary.encode("utf-8")) > max_summary_bytes - 3:
                 truncated_summary = truncated_summary[:-1]
@@ -124,10 +122,7 @@ class QueryHistory:
                 self._path = candidate
                 self._enabled = True
                 if index > 0:
-                    warning = (
-                        "Query history path unavailable; using fallback: "
-                        f"{candidate}"
-                    )
+                    warning = f"Query history path unavailable; using fallback: {candidate}"
                     self._warnings.append(warning)
                     logger.warning(warning)
                 break
@@ -141,9 +136,7 @@ class QueryHistory:
 
         if not self._enabled:
             if candidates:
-                warning = (
-                    "Query history disabled because no writable path was available."
-                )
+                warning = "Query history disabled because no writable path was available."
                 self._warnings.append(warning)
                 logger.warning(warning)
             else:
@@ -170,17 +163,13 @@ class QueryHistory:
         def _fallback_candidates() -> list[Path]:
             candidates: list[Path] = []
             try:
-                global_path = (
-                    get_global_base() / apply_namespacing(DEFAULT_HISTORY_PATH)
-                ).resolve()
+                global_path = (get_global_base() / apply_namespacing(DEFAULT_HISTORY_PATH)).resolve()
                 candidates.append(global_path)
             except Exception:
                 pass
             try:
                 repo_root = find_repo_root()
-                repo_path = (
-                    repo_root / apply_namespacing(DEFAULT_HISTORY_PATH)
-                ).resolve()
+                repo_path = (repo_root / apply_namespacing(DEFAULT_HISTORY_PATH)).resolve()
                 if repo_path not in candidates:
                     candidates.append(repo_path)
             except Exception:
@@ -199,15 +188,11 @@ class QueryHistory:
                 logger.warning(warning)
                 return cls(None, disabled=False)
             primary = fallbacks[0]
-            remaining = [
-                candidate for candidate in fallbacks[1:] if candidate != primary
-            ]
+            remaining = [candidate for candidate in fallbacks[1:] if candidate != primary]
             return cls(primary, fallbacks=remaining or None)
 
         path = path.resolve()
-        remaining_fallbacks = [
-            candidate for candidate in fallbacks if candidate != path
-        ]
+        remaining_fallbacks = [candidate for candidate in fallbacks if candidate != path]
         return cls(path, fallbacks=remaining_fallbacks or None)
 
     @property
@@ -240,9 +225,7 @@ class QueryHistory:
         if "ts" in payload and isinstance(payload["ts"], (int, float)):
             import datetime
 
-            payload["timestamp"] = datetime.datetime.fromtimestamp(
-                payload["ts"]
-            ).isoformat()
+            payload["timestamp"] = datetime.datetime.fromtimestamp(payload["ts"]).isoformat()
 
         try:
             line = json.dumps(payload, ensure_ascii=False)
@@ -365,9 +348,7 @@ class QueryHistory:
         }
 
 
-def update_cache_manifest_insight(
-    manifest_path: Path, post_query_insight: str | dict[str, Any]
-) -> bool:
+def update_cache_manifest_insight(manifest_path: Path, post_query_insight: str | dict[str, Any]) -> bool:
     """Atomically update cache manifest with post_query_insight.
 
     Args:

@@ -175,9 +175,7 @@ class TestSnowflakeConfig:
 class TestProfileValidation:
     """Test profile validation functionality."""
 
-    def test_profile_validation_with_valid_profile(
-        self, mock_config_with_profiles
-    ):  # noqa: F811
+    def test_profile_validation_with_valid_profile(self, mock_config_with_profiles):  # noqa: F811
         """Test validation succeeds with valid profile."""
         with mock_config_with_profiles(["dev", "prod"], default="dev"):
             result = validate_profile("dev")
@@ -205,17 +203,13 @@ class TestProfileValidation:
             assert "No Snowflake profiles found" in str(error)
             assert error.available_profiles == []
 
-    def test_profile_validation_uses_default_when_none_specified(
-        self, mock_config_with_profiles
-    ):
+    def test_profile_validation_uses_default_when_none_specified(self, mock_config_with_profiles):
         """Test validation uses default profile when none specified."""
         with mock_config_with_profiles(["dev", "prod"], default="prod"):
             result = validate_profile(None)
             assert result == "prod"
 
-    def test_profile_validation_fails_when_no_default_and_none_specified(
-        self, mock_config_with_profiles
-    ):
+    def test_profile_validation_fails_when_no_default_and_none_specified(self, mock_config_with_profiles):
         """Test validation fails when no profile specified and no default."""
         with mock_config_with_profiles(["dev", "prod"], default=None):
             with pytest.raises(ProfileValidationError) as exc_info:
@@ -243,9 +237,7 @@ class TestProfileResolution:
                 result = validate_and_resolve_profile()
                 assert result == "prod"
 
-    def test_resolve_profile_strips_whitespace_from_env(
-        self, mock_config_with_profiles
-    ):
+    def test_resolve_profile_strips_whitespace_from_env(self, mock_config_with_profiles):
         """Test that whitespace is stripped from environment variable."""
         with mock_config_with_profiles(["dev", "prod"], default="prod"):
             with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "  dev  "}):
@@ -336,13 +328,7 @@ class TestConfigPathDetection:
         get_snowflake_config_path.cache_clear()
 
         path = get_snowflake_config_path()
-        expected = (
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "snowflake"
-            / "config.toml"
-        )
+        expected = Path.home() / "Library" / "Application Support" / "snowflake" / "config.toml"
         assert path == expected
 
     @patch("platform.system")
@@ -440,9 +426,7 @@ def mock_config_with_profiles():
     """Mock configuration with specified profiles."""
 
     def _mock(profiles: list[str], default: str | None = None):
-        config_data: dict[str, dict[str, dict] | str] = {
-            "connections": {profile: {} for profile in profiles}
-        }
+        config_data: dict[str, dict[str, dict] | str] = {"connections": {profile: {} for profile in profiles}}
         if default:
             config_data["default_connection_name"] = default
 

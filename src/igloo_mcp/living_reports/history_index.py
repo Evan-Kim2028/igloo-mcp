@@ -64,9 +64,7 @@ class HistoryIndex:
     def records(self) -> List[Dict[str, Any]]:
         return list(self._records)
 
-    def _resolve_history_record(
-        self, source: DatasetSource
-    ) -> Optional[Dict[str, Any]]:
+    def _resolve_history_record(self, source: DatasetSource) -> Optional[Dict[str, Any]]:
         if source.execution_id and source.execution_id in self._by_execution_id:
             return self._by_execution_id[source.execution_id]
         if source.sql_sha256 and source.sql_sha256 in self._by_sql_sha:
@@ -90,19 +88,13 @@ class HistoryIndex:
         raw = manifest_path.read_text(encoding="utf-8")
         data = json.loads(raw)
         if not isinstance(data, dict):
-            raise DatasetResolutionError(
-                f"Expected mapping in cache manifest {manifest_path}, got {type(data)!r}"
-            )
+            raise DatasetResolutionError(f"Expected mapping in cache manifest {manifest_path}, got {type(data)!r}")
         result_json = data.get("result_json")
         if not result_json:
-            raise DatasetResolutionError(
-                f"Cache manifest missing result_json field: {manifest_path}"
-            )
+            raise DatasetResolutionError(f"Cache manifest missing result_json field: {manifest_path}")
         rows_path = manifest_path.parent / result_json
         if not rows_path.exists():
-            raise DatasetResolutionError(
-                f"Cache rows file declared in manifest not found: {rows_path}"
-            )
+            raise DatasetResolutionError(f"Cache rows file declared in manifest not found: {rows_path}")
         result_csv_rel = data.get("result_csv")
         result_csv_path: Optional[Path] = None
         if isinstance(result_csv_rel, str) and result_csv_rel:
@@ -139,23 +131,15 @@ class HistoryIndex:
         history_record: Optional[Dict[str, Any]] = None
 
         if source.cache_manifest:
-            manifest_path = self._resolve_manifest_path(
-                source.cache_manifest, repo_root
-            )
+            manifest_path = self._resolve_manifest_path(source.cache_manifest, repo_root)
         else:
             history_record = self._resolve_history_record(source)
             if history_record is None:
-                raise DatasetResolutionError(
-                    f"No history entry found for dataset {dataset_name!r}"
-                )
+                raise DatasetResolutionError(f"No history entry found for dataset {dataset_name!r}")
             artifacts = history_record.get("artifacts") or {}
-            cache_manifest = artifacts.get("cache_manifest") or history_record.get(
-                "cache_manifest"
-            )
+            cache_manifest = artifacts.get("cache_manifest") or history_record.get("cache_manifest")
             if not cache_manifest:
-                raise DatasetResolutionError(
-                    f"History entry for dataset {dataset_name!r} lacks cache_manifest"
-                )
+                raise DatasetResolutionError(f"History entry for dataset {dataset_name!r} lacks cache_manifest")
             manifest_path = self._resolve_manifest_path(str(cache_manifest), repo_root)
 
         assert manifest_path is not None
@@ -171,9 +155,7 @@ class HistoryIndex:
         if key_metrics is not None and not isinstance(key_metrics, dict):
             key_metrics = None
         insights_raw = manifest_data.get("insights") or []
-        insights: List[Any] = (
-            list(insights_raw) if isinstance(insights_raw, list) else []
-        )
+        insights: List[Any] = list(insights_raw) if isinstance(insights_raw, list) else []
 
         provenance: Dict[str, Any] = {
             "dataset": dataset_name,

@@ -11,9 +11,7 @@ def test_extract_query_objects_returns_unique_tables() -> None:
 
     objects = extract_query_objects(sql)
 
-    names = {
-        (obj.get("database"), obj.get("schema"), obj.get("name")) for obj in objects
-    }
+    names = {(obj.get("database"), obj.get("schema"), obj.get("name")) for obj in objects}
 
     assert ("CORE", "PUBLIC", "TRADES") in names
     assert ("ANALYTICS", "MART", "POSITIONS") in names

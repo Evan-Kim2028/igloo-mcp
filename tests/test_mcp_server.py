@@ -154,9 +154,7 @@ def test_execute_query_sync_applies_overrides():
             "igloo_mcp.mcp_server.ensure_session_lock",
             return_value=threading.Lock(),
         ),
-        patch(
-            "igloo_mcp.mcp_server.snapshot_session", return_value=original_state
-        ) as snapshot,
+        patch("igloo_mcp.mcp_server.snapshot_session", return_value=original_state) as snapshot,
         patch("igloo_mcp.mcp_server.apply_session_context") as apply_ctx,
         patch("igloo_mcp.mcp_server.restore_session_context") as restore_ctx,
     ):
@@ -294,9 +292,7 @@ def test_register_igloo_mcp_sets_up_context(monkeypatch):
     def fake_create_service_context(*, existing_config=None):
         return ctx
 
-    monkeypatch.setattr(
-        "igloo_mcp.mcp_server.create_service_context", fake_create_service_context
-    )
+    monkeypatch.setattr("igloo_mcp.mcp_server.create_service_context", fake_create_service_context)
 
     mcp_server.register_igloo_mcp(server, service)
     assert mcp_server._health_monitor is ctx.health_monitor
@@ -325,9 +321,7 @@ async def test_execute_query_tool_handles_value_errors(monkeypatch: pytest.Monke
 
     server, _, _ = _register_with_stub_execute(
         monkeypatch,
-        execute_side_effect=ValueError(
-            "timeout_seconds must be an integer value in seconds."
-        ),
+        execute_side_effect=ValueError("timeout_seconds must be an integer value in seconds."),
     )
     tool = server.tools["execute_query"]
 
@@ -379,9 +373,7 @@ async def test_execute_query_tool_verbose_errors(monkeypatch: pytest.MonkeyPatch
     tool = server.tools["execute_query"]
 
     with pytest.raises(RuntimeError) as exc_info:
-        await tool(
-            "SELECT 1", verbose_errors=True, reason="test verbose error"
-        )  # noqa: FBT003
+        await tool("SELECT 1", verbose_errors=True, reason="test verbose error")  # noqa: FBT003
 
     assert "detailed failure" in str(exc_info.value)
 

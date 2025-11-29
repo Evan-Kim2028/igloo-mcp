@@ -33,9 +33,7 @@ class TestSmokeIntegration:
             , LATERAL FLATTEN(input => fees.rewards_info) rewards
             WHERE fees.rewards_info IS NOT NULL AND rewards.seq < 10"""
 
-        stmt_type, is_valid, error_msg = validate_sql_statement(
-            lateral_query, ["Select"], []
-        )
+        stmt_type, is_valid, error_msg = validate_sql_statement(lateral_query, ["Select"], [])
 
         assert is_valid is True, "LATERAL query validation failed in smoke test"
         assert error_msg is None, f"LATERAL query had error message: {error_msg}"
@@ -53,9 +51,7 @@ class TestSmokeIntegration:
                 mock_find.return_value = Path(temp_dir)
 
                 history = QueryHistory.from_env()
-                assert (
-                    history.enabled
-                ), "Query history should be enabled in git repo smoke test"
+                assert history.enabled, "Query history should be enabled in git repo smoke test"
 
                 # Simulate recording query with post_query_insight
                 payload = {
@@ -65,17 +61,14 @@ class TestSmokeIntegration:
                     "statement_preview": "SELECT revenue_growth FROM quarterly_metrics",
                     "rowcount": 4,
                     "post_query_insight": {
-                        "summary": (
-                            "Q4 revenue grew 23% YoY exceeding forecast by 8 points"
-                        ),
+                        "summary": ("Q4 revenue grew 23% YoY exceeding forecast by 8 points"),
                         "key_metrics": [
                             "revenue:+23%",
                             "forecast_deviation:+8pp",
                             "market_share:+2.1%",
                         ],
                         "business_impact": (
-                            "Strong performance driven by new product launches and "
-                            "expanded enterprise contracts"
+                            "Strong performance driven by new product launches and expanded enterprise contracts"
                         ),
                         "follow_up_needed": True,
                     },
@@ -85,28 +78,16 @@ class TestSmokeIntegration:
 
                 # Verify JSONL file was created and contains correct data
                 history_file = history._path
-                assert (
-                    history_file.exists()
-                ), "History file should be created in smoke test"
+                assert history_file.exists(), "History file should be created in smoke test"
 
-                lines = [
-                    line
-                    for line in history_file.read_text().splitlines()
-                    if line.strip()
-                ]
+                lines = [line for line in history_file.read_text().splitlines() if line.strip()]
                 assert lines, "History file should contain at least one entry"
                 recorded = json.loads(lines[-1])
 
                 # Verify post_query_insight was properly structured
                 assert "post_query_insight" in recorded
-                assert (
-                    recorded["post_query_insight"]["summary"]
-                    == payload["post_query_insight"]["summary"]
-                )
-                assert (
-                    recorded["post_query_insight"]["key_metrics"]
-                    == payload["post_query_insight"]["key_metrics"]
-                )
+                assert recorded["post_query_insight"]["summary"] == payload["post_query_insight"]["summary"]
+                assert recorded["post_query_insight"]["key_metrics"] == payload["post_query_insight"]["key_metrics"]
                 assert (
                     recorded["post_query_insight"]["business_impact"]
                     == payload["post_query_insight"]["business_impact"]
@@ -175,8 +156,7 @@ class TestSmokeIntegration:
                     reason="Q4 2023 revenue analysis with customer cohort breakdown",
                     post_query_insight={
                         "summary": (
-                            "Q4 showed record performance with 23% revenue growth "
-                            "and improved customer acquisition"
+                            "Q4 showed record performance with 23% revenue growth and improved customer acquisition"
                         ),
                         "key_metrics": [
                             "revenue:+23%",
@@ -215,9 +195,7 @@ class TestSmokeIntegration:
                     reason="Q4 2023 revenue analysis with customer cohort breakdown",
                 )
 
-                executed_cursors = [
-                    cursor for cursor in service.cursors if cursor._main_executed
-                ]
+                executed_cursors = [cursor for cursor in service.cursors if cursor._main_executed]
                 assert len(executed_cursors) == 1
                 assert service.cursors[-1]._main_executed is False
                 assert cached_result["cache"]["hit"] is True
@@ -241,17 +219,11 @@ class TestSmokeIntegration:
         ]
 
         for query, expected_type in blocked_queries:
-            stmt_type, is_valid, error_msg = validate_sql_statement(
-                query, ["Select"], ["Delete", "Drop", "Truncate"]
-            )
+            stmt_type, is_valid, error_msg = validate_sql_statement(query, ["Select"], ["Delete", "Drop", "Truncate"])
 
             assert is_valid is False, f"Blocked query should fail: {query}"
-            assert (
-                expected_type in stmt_type
-            ), f"Should detect correct type: {stmt_type}"
-            assert (
-                "Safe alternatives:" in error_msg
-            ), f"Should provide alternatives: {error_msg}"
+            assert expected_type in stmt_type, f"Should detect correct type: {stmt_type}"
+            assert "Safe alternatives:" in error_msg, f"Should provide alternatives: {error_msg}"
 
     def test_repository_detection_workflow(self):
         """Test repository detection and logging workflow."""
@@ -266,13 +238,9 @@ class TestSmokeIntegration:
 
                 with patch.dict("os.environ", {}, clear=True):
                     history = QueryHistory.from_env()
-                    assert (
-                        history.enabled is True
-                    ), "Should default to workspace history"
+                    assert history.enabled is True, "Should default to workspace history"
                     assert history.path is not None
-                    expected = (
-                        Path(temp_dir) / ".igloo_mcp" / "logs" / "doc.jsonl"
-                    ).resolve()
+                    expected = (Path(temp_dir) / ".igloo_mcp" / "logs" / "doc.jsonl").resolve()
                     assert history.path.resolve() == expected
 
             # Test git directory (logging should be enabled)
@@ -294,9 +262,7 @@ class TestSmokeIntegration:
                     assert history.path is not None
                     resolved = history.path.resolve()
                     assert resolved.is_relative_to(Path(temp_dir).resolve())
-                    assert (
-                        "logs" in resolved.as_posix()
-                    ), "Should use repository-specific path"
+                    assert "logs" in resolved.as_posix(), "Should use repository-specific path"
 
     def test_complex_snowflake_patterns_validation(self):
         """Test validation of complex Snowflake-specific patterns."""
@@ -338,16 +304,10 @@ class TestSmokeIntegration:
         ]
 
         for pattern in snowflake_patterns:
-            stmt_type, is_valid, error_msg = validate_sql_statement(
-                pattern, ["Select"], []
-            )
+            stmt_type, is_valid, error_msg = validate_sql_statement(pattern, ["Select"], [])
 
-            assert (
-                is_valid is True
-            ), f"Complex Snowflake pattern should be valid: {pattern[:100]}..."
-            assert (
-                error_msg is None
-            ), f"Complex pattern should not have error: {error_msg}"
+            assert is_valid is True, f"Complex Snowflake pattern should be valid: {pattern[:100]}..."
+            assert error_msg is None, f"Complex pattern should not have error: {error_msg}"
 
     def test_parameter_schema_completeness(self):
         """Test that parameter schemas are complete and include all new features."""
@@ -376,9 +336,7 @@ class TestSmokeIntegration:
         ]
 
         for param in expected_params:
-            assert (
-                param in schema["properties"]
-            ), f"Missing parameter in schema: {param}"
+            assert param in schema["properties"], f"Missing parameter in schema: {param}"
 
         # Verify post_query_insight schema details
         metric_schema = schema["properties"]["post_query_insight"]
@@ -427,9 +385,7 @@ class TestSmokeIntegration:
             LIMIT 100"""
 
             # Test validation (should work)
-            stmt_type, is_valid, error_msg = validate_sql_statement(
-                complex_lateral_query, ["Select"], []
-            )
+            stmt_type, is_valid, error_msg = validate_sql_statement(complex_lateral_query, ["Select"], [])
 
             assert is_valid is True, "Complex integration query should validate"
             assert stmt_type == "Select"
@@ -445,18 +401,14 @@ class TestSmokeIntegration:
                 "rowcount": 50,
                 "reason": "User behavior pattern analysis for product recommendation improvements",
                 "post_query_insight": {
-                    "summary": (
-                        "Users show distinct navigation patterns with 60% following "
-                        "predictable paths"
-                    ),
+                    "summary": ("Users show distinct navigation patterns with 60% following predictable paths"),
                     "key_metrics": [
                         "pattern_recognition:60%",
                         "unique_flows:25%",
                         "bounce_rate_reduction:15%",
                     ],
                     "business_impact": (
-                        "Opportunity to implement intelligent navigation suggestions "
-                        "and improve user journey flow"
+                        "Opportunity to implement intelligent navigation suggestions and improve user journey flow"
                     ),
                 },
             }
@@ -473,8 +425,5 @@ class TestSmokeIntegration:
             assert "timestamp" in recorded
             assert "reason" in recorded
             assert "post_query_insight" in recorded
-            assert (
-                recorded["post_query_insight"]["summary"]
-                == integration_payload["post_query_insight"]["summary"]
-            )
+            assert recorded["post_query_insight"]["summary"] == integration_payload["post_query_insight"]["summary"]
             assert recorded["statement_preview"] == complex_lateral_query[:200]

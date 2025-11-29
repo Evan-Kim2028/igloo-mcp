@@ -83,9 +83,7 @@ class ProfileHealthStatus:
         default_profile = profile_summary.default_profile
 
         # Determine effective profile name
-        effective_profile = (
-            profile_name or profile_summary.current_profile or default_profile
-        )
+        effective_profile = profile_name or profile_summary.current_profile or default_profile
 
         # Validate profile if force_validation is True
         validation_error = None
@@ -104,11 +102,7 @@ class ProfileHealthStatus:
             is_valid = (
                 config_exists
                 and bool(available_profiles)
-                and (
-                    effective_profile in available_profiles
-                    if effective_profile
-                    else bool(default_profile)
-                )
+                and (effective_profile in available_profiles if effective_profile else bool(default_profile))
             )
 
         # Determine overall status
@@ -164,18 +158,10 @@ class MCPServerHealth:
                     "validation_error": self.profile_health.validation_error,
                 },
                 "connection": {
-                    "status": (
-                        self.connection_status.value
-                        if self.connection_status
-                        else "unknown"
-                    ),
+                    "status": (self.connection_status.value if self.connection_status else "unknown"),
                 },
                 "resources": {
-                    "status": (
-                        "healthy"
-                        if all(self.resource_availability.values())
-                        else "degraded"
-                    ),
+                    "status": ("healthy" if all(self.resource_availability.values()) else "degraded"),
                     "available": self.resource_availability,
                 },
             },
@@ -258,9 +244,7 @@ class MCPHealthMonitor:
             self.record_error(f"Connection health check failed: {e}")
             return HealthStatus.UNHEALTHY
 
-    def check_resource_availability(
-        self, server_resources: List[str]
-    ) -> Dict[str, bool]:
+    def check_resource_availability(self, server_resources: List[str]) -> Dict[str, bool]:
         """Check availability of MCP server resources."""
         # In a real implementation, this would check each resource
         # For now, we'll assume resources are available if profile is valid
@@ -353,9 +337,7 @@ def create_profile_validation_error_response(
     )
 
 
-def create_configuration_error_response(
-    monitor: MCPHealthMonitor, config_issue: str, **context: Any
-) -> Dict[str, Any]:
+def create_configuration_error_response(monitor: MCPHealthMonitor, config_issue: str, **context: Any) -> Dict[str, Any]:
     """Create a standardized MCP error response for configuration issues."""
     return monitor.create_mcp_error_response(
         error_code=MCPErrorCode.CONFIGURATION_ERROR,

@@ -33,9 +33,7 @@ def _read_history_entries(history_path: Path) -> List[Dict[str, Any]]:
     return entries
 
 
-def _select_entry(
-    entries: List[Dict[str, Any]], execution_id: Optional[str]
-) -> Dict[str, Any]:
+def _select_entry(entries: List[Dict[str, Any]], execution_id: Optional[str]) -> Dict[str, Any]:
     if execution_id:
         for entry in reversed(entries):
             if str(entry.get("execution_id")) == execution_id:
@@ -142,8 +140,7 @@ def _detect_findings(
                 level="info",
                 message="No obvious issues detected",
                 detail=(
-                    "Query metadata looks healthy. Review warehouse size or "
-                    "predicate selectivity if latency persists."
+                    "Query metadata looks healthy. Review warehouse size or predicate selectivity if latency persists."
                 ),
             )
         )

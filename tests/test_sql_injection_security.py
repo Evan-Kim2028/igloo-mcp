@@ -90,9 +90,7 @@ class TestSessionParameterSQLInjection:
         for input_val, expected in injection_patterns:
             result = escape_sql_identifier(input_val)
             # Escaped value should match expected
-            assert (
-                result == expected
-            ), f"Input: {input_val}, Expected: {expected}, Got: {result}"
+            assert result == expected, f"Input: {input_val}, Expected: {expected}, Got: {result}"
             # Escaped value should not contain unescaped single quotes
             assert "''" in result or "'" not in result or result.count("'") % 2 == 0
 
@@ -219,9 +217,7 @@ class TestSessionParameterSQLInjection:
         # The whitelist check should prevent these
         name_upper = malicious_name.upper()
         is_allowed = name_upper in ALLOWED_SESSION_PARAMETERS
-        assert (
-            not is_allowed
-        ), f"Malicious parameter name should be rejected: {malicious_name}"
+        assert not is_allowed, f"Malicious parameter name should be rejected: {malicious_name}"
 
     def test_unicode_and_special_characters_in_values(self):
         """Test that Unicode and special characters are handled safely."""
@@ -259,11 +255,7 @@ class TestSessionParameterSQLInjection:
         for timeout in valid_timeouts:
             try:
                 timeout_int = int(timeout)
-                assert (
-                    MIN_QUERY_TIMEOUT_SECONDS
-                    <= timeout_int
-                    <= MAX_QUERY_TIMEOUT_SECONDS
-                )
+                assert MIN_QUERY_TIMEOUT_SECONDS <= timeout_int <= MAX_QUERY_TIMEOUT_SECONDS
             except (ValueError, TypeError):
                 # String values that can't be converted should fail validation
                 pass
@@ -279,11 +271,7 @@ class TestSessionParameterSQLInjection:
             try:
                 timeout_int = int(timeout)
                 # If conversion succeeds, it should be a valid range
-                assert (
-                    MIN_QUERY_TIMEOUT_SECONDS
-                    <= timeout_int
-                    <= MAX_QUERY_TIMEOUT_SECONDS
-                )
+                assert MIN_QUERY_TIMEOUT_SECONDS <= timeout_int <= MAX_QUERY_TIMEOUT_SECONDS
             except ValueError:
                 # Expected - these should fail int() conversion
                 pass

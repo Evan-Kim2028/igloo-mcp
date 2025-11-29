@@ -20,9 +20,7 @@ def test_parse_arguments_with_login_params(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SNOWCLI_MCP_TRANSPORT", "http")
     monkeypatch.setenv("SERVICE_CONFIG_FILE", "/tmp/config.yml")
 
-    args = __import__("igloo_mcp.mcp_server", fromlist=[""]).parse_arguments(
-        ["--profile", "DEV", "--foo", "value"]
-    )
+    args = __import__("igloo_mcp.mcp_server", fromlist=[""]).parse_arguments(["--profile", "DEV", "--foo", "value"])
 
     assert args.profile == "DEV"
     assert args.transport == "http"
@@ -32,9 +30,7 @@ def test_parse_arguments_with_login_params(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.mark.anyio
-async def test_create_combined_lifespan_handles_health(
-    monkeypatch: pytest.MonkeyPatch, tmp_path
-):
+async def test_create_combined_lifespan_handles_health(monkeypatch: pytest.MonkeyPatch, tmp_path):
     module = __import__("igloo_mcp.mcp_server", fromlist=[""])
     args = SimpleNamespace(
         service_config_file=None,
@@ -76,9 +72,7 @@ async def test_create_combined_lifespan_handles_health(
     async def run_sync(func, *args, **kwargs):
         return func(*args, **kwargs)
 
-    monkeypatch.setattr(
-        "igloo_mcp.mcp_server.create_snowflake_lifespan", make_fake_lifespan
-    )
+    monkeypatch.setattr("igloo_mcp.mcp_server.create_snowflake_lifespan", make_fake_lifespan)
     monkeypatch.setattr("igloo_mcp.mcp_server.MCPHealthMonitor", StubMonitor)
     monkeypatch.setattr("igloo_mcp.mcp_server.MCPResourceManager", StubResourceManager)
     monkeypatch.setattr(
@@ -117,26 +111,16 @@ def test_main_happy_path(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("igloo_mcp.mcp_server.parse_arguments", lambda argv=None: args)
     monkeypatch.setattr("igloo_mcp.mcp_server.warn_deprecated_params", lambda: None)
     monkeypatch.setattr("igloo_mcp.mcp_server.configure_logging", lambda level: None)
-    monkeypatch.setattr(
-        "igloo_mcp.mcp_server._apply_config_overrides", lambda args: None
-    )
-    monkeypatch.setattr(
-        "igloo_mcp.mcp_server.validate_and_resolve_profile", lambda: "DEV"
-    )
-    monkeypatch.setattr(
-        "igloo_mcp.mcp_server.apply_config_overrides", lambda **kwargs: None
-    )
-    monkeypatch.setattr(
-        "igloo_mcp.mcp_server.get_profile_summary", lambda: {"profiles": []}
-    )
+    monkeypatch.setattr("igloo_mcp.mcp_server._apply_config_overrides", lambda args: None)
+    monkeypatch.setattr("igloo_mcp.mcp_server.validate_and_resolve_profile", lambda: "DEV")
+    monkeypatch.setattr("igloo_mcp.mcp_server.apply_config_overrides", lambda **kwargs: None)
+    monkeypatch.setattr("igloo_mcp.mcp_server.get_profile_summary", lambda: {"profiles": []})
 
     @asynccontextmanager
     async def fake_lifespan(server):  # noqa: ARG001
         yield "service"
 
-    monkeypatch.setattr(
-        "igloo_mcp.mcp_server.create_combined_lifespan", lambda args: fake_lifespan
-    )
+    monkeypatch.setattr("igloo_mcp.mcp_server.create_combined_lifespan", lambda args: fake_lifespan)
 
     run_calls = []
 
@@ -160,9 +144,7 @@ def test_main_profile_validation_failure(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("igloo_mcp.mcp_server.parse_arguments", lambda argv=None: args)
     monkeypatch.setattr("igloo_mcp.mcp_server.warn_deprecated_params", lambda: None)
     monkeypatch.setattr("igloo_mcp.mcp_server.configure_logging", lambda level: None)
-    monkeypatch.setattr(
-        "igloo_mcp.mcp_server._apply_config_overrides", lambda args: None
-    )
+    monkeypatch.setattr("igloo_mcp.mcp_server._apply_config_overrides", lambda args: None)
 
     error = ProfileValidationError(
         "bad profile",

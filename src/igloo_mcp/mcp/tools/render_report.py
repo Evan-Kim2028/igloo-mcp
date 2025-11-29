@@ -167,9 +167,7 @@ class RenderReportTool(MCPTool):
                 },
             )
             raise MCPSelectorError(
-                error_dict.get(
-                    "message", f"Could not resolve report selector: {report_selector}"
-                ),
+                error_dict.get("message", f"Could not resolve report selector: {report_selector}"),
                 selector=report_selector,
                 error=error_dict.get("error", "not_found"),
                 candidates=error_dict.get("candidates", []),

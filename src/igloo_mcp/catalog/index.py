@@ -50,9 +50,7 @@ class CatalogIndex:
         raw_columns = cast(Iterable[Dict[str, Any]], catalog.get("columns") or [])
         column_index = self._build_column_index(raw_columns)
 
-        normalized_object_types = (
-            {obj.lower() for obj in object_types} if object_types else None
-        )
+        normalized_object_types = {obj.lower() for obj in object_types} if object_types else None
 
         db_filter = database.lower() if database else None
         schema_filter = schema.lower() if schema else None
@@ -66,9 +64,7 @@ class CatalogIndex:
             if normalized_object_types and object_type not in normalized_object_types:
                 continue
 
-            raw_entries = cast(
-                Iterable[Dict[str, Any]], catalog.get(source_key, []) or []
-            )
+            raw_entries = cast(Iterable[Dict[str, Any]], catalog.get(source_key, []) or [])
             for raw in raw_entries:
                 entry = self._normalize_object(object_type, raw)
                 if entry is None:
@@ -83,15 +79,10 @@ class CatalogIndex:
                 if name_filter and name_filter not in entry.name.lower():
                     continue
 
-                columns = column_index.get(
-                    (entry.database or "", entry.schema or "", entry.name)
-                )
+                columns = column_index.get((entry.database or "", entry.schema or "", entry.name))
 
                 if column_filter:
-                    if not columns or not any(
-                        column_filter in (col.get("name") or "").lower()
-                        for col in columns
-                    ):
+                    if not columns or not any(column_filter in (col.get("name") or "").lower() for col in columns):
                         continue
 
                 total_matches += 1
@@ -124,9 +115,7 @@ class CatalogIndex:
             with catalog_jsonl.open("r", encoding="utf-8") as handle:
                 return cast(Dict[str, Any], json.loads(handle.read()))
 
-        raise FileNotFoundError(
-            f"Catalog not found in {self.catalog_dir}. Run build_catalog first."
-        )
+        raise FileNotFoundError(f"Catalog not found in {self.catalog_dir}. Run build_catalog first.")
 
     @staticmethod
     def _object_sources() -> Dict[str, str]:
@@ -143,9 +132,7 @@ class CatalogIndex:
         }
 
     @staticmethod
-    def _normalize_object(
-        object_type: str, raw: Dict[str, Any]
-    ) -> Optional[CatalogObject]:
+    def _normalize_object(object_type: str, raw: Dict[str, Any]) -> Optional[CatalogObject]:
         name_keys: Iterable[str] = (
             "name",
             "table_name",

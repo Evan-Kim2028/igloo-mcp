@@ -26,9 +26,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(
-            title="Prose Content Test", template="default"
-        )
+        report_id = report_service.create_report(title="Prose Content Test", template="default")
 
         tool = EvolveReportTool(config, report_service)
 
@@ -100,11 +98,7 @@ class TestSectionProseContentSmoke:
         result1 = await tool.execute(
             report_selector=report_id,
             instruction="Add section",
-            proposed_changes={
-                "sections_to_add": [
-                    {"title": "Summary", "order": 1, "content": "Initial content"}
-                ]
-            },
+            proposed_changes={"sections_to_add": [{"title": "Summary", "order": 1, "content": "Initial content"}]},
         )
         section_id = result1["summary"]["section_ids_added"][0]
 
@@ -203,9 +197,7 @@ class TestSectionProseContentSmoke:
 
         # Render and check QMD contains prose
         render_tool = RenderReportTool(config, report_service)
-        result = await render_tool.execute(
-            report_selector=report_id, format="html", dry_run=True, include_preview=True
-        )
+        result = await render_tool.execute(report_selector=report_id, format="html", dry_run=True, include_preview=True)
 
         assert result["status"] == "success"
         assert "preview" in result

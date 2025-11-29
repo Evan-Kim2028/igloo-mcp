@@ -22,9 +22,7 @@ class TestGetReportModesCoverage:
         tool = GetReportTool(config, report_service)
 
         # Create report with sections and insights
-        report_id = report_service.create_report(
-            title="Full Test", template="quarterly_review"
-        )
+        report_id = report_service.create_report(title="Full Test", template="quarterly_review")
 
         # Add an insight
         outline = report_service.get_report_outline(report_id)
@@ -60,9 +58,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(
-            title="Test", template="quarterly_review"
-        )
+        report_id = report_service.create_report(title="Test", template="quarterly_review")
 
         # Search for sections with partial titles
         result = await tool.execute(
@@ -84,9 +80,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(
-            title="Test", template="quarterly_review"
-        )
+        report_id = report_service.create_report(title="Test", template="quarterly_review")
         outline = report_service.get_report_outline(report_id)
 
         # Get specific sections by ID
@@ -118,12 +112,8 @@ class TestGetReportModesCoverage:
         section1_id = str(uuid.uuid4())
         section2_id = str(uuid.uuid4())
 
-        section1 = Section(
-            section_id=section1_id, title="Section 1", order=0, insight_ids=[]
-        )
-        section2 = Section(
-            section_id=section2_id, title="Section 2", order=1, insight_ids=[]
-        )
+        section1 = Section(section_id=section1_id, title="Section 1", order=0, insight_ids=[])
+        section2 = Section(section_id=section2_id, title="Section 2", order=1, insight_ids=[])
 
         insights = [
             Insight(
@@ -192,9 +182,7 @@ class TestGetReportModesCoverage:
         report_service.update_report_outline(report_id, outline, actor="test")
 
         # Get with content
-        result_with = await tool.execute(
-            report_selector=report_id, mode="sections", include_content=True
-        )
+        result_with = await tool.execute(report_selector=report_id, mode="sections", include_content=True)
 
         assert result_with["status"] == "success"
         assert "content" in result_with["sections"][0]
@@ -205,10 +193,7 @@ class TestGetReportModesCoverage:
 
         assert result_without["status"] == "success"
         # Verify content is not included (token savings)
-        assert (
-            "content" not in result_without["sections"][0]
-            or result_without["sections"][0].get("content") is None
-        )
+        assert "content" not in result_without["sections"][0] or result_without["sections"][0].get("content") is None
 
     async def test_get_report_mode_insights_with_citations(self, tmp_path: Path):
         """Test citation information in insights mode."""
@@ -223,9 +208,7 @@ class TestGetReportModesCoverage:
         section_id = str(uuid.uuid4())
         insight_id = str(uuid.uuid4())
 
-        section = Section(
-            section_id=section_id, title="Test", order=0, insight_ids=[insight_id]
-        )
+        section = Section(section_id=section_id, title="Test", order=0, insight_ids=[insight_id])
 
         insight = Insight(
             insight_id=insight_id,
@@ -274,9 +257,7 @@ class TestGetReportModesCoverage:
         report_service.update_report_outline(report_id, outline, actor="test")
 
         # Get first page
-        result1 = await tool.execute(
-            report_selector=report_id, mode="sections", limit=10, offset=0
-        )
+        result1 = await tool.execute(report_selector=report_id, mode="sections", limit=10, offset=0)
 
         assert result1["status"] == "success"
         assert result1["total_matched"] == 25
@@ -285,9 +266,7 @@ class TestGetReportModesCoverage:
         assert result1["offset"] == 0
 
         # Get second page
-        result2 = await tool.execute(
-            report_selector=report_id, mode="sections", limit=10, offset=10
-        )
+        result2 = await tool.execute(report_selector=report_id, mode="sections", limit=10, offset=10)
 
         assert result2["returned"] == 10
         assert result2["offset"] == 10
@@ -321,9 +300,7 @@ class TestGetReportModesCoverage:
         # Paginate through all
         all_insights = []
         for offset in [0, 15]:
-            result = await tool.execute(
-                report_selector=report_id, mode="insights", limit=15, offset=offset
-            )
+            result = await tool.execute(report_selector=report_id, mode="insights", limit=15, offset=offset)
             all_insights.extend(result["insights"])
 
         assert len(all_insights) == 30
@@ -342,9 +319,7 @@ class TestGetReportModesCoverage:
 
         # Request non-existent section IDs
         non_existent_id = str(uuid.uuid4())
-        result = await tool.execute(
-            report_selector=report_id, mode="sections", section_ids=[non_existent_id]
-        )
+        result = await tool.execute(report_selector=report_id, mode="sections", section_ids=[non_existent_id])
 
         assert result["status"] == "success"
         assert result["total_matched"] == 0

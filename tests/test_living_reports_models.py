@@ -96,18 +96,14 @@ class TestInsight:
     def test_status_validation(self) -> None:
         """Test status field validation."""
         # Valid statuses
-        Insight(
-            insight_id=str(uuid.uuid4()), importance=5, summary="Test", status="active"
-        )
+        Insight(insight_id=str(uuid.uuid4()), importance=5, summary="Test", status="active")
         Insight(
             insight_id=str(uuid.uuid4()),
             importance=5,
             summary="Test",
             status="archived",
         )
-        Insight(
-            insight_id=str(uuid.uuid4()), importance=5, summary="Test", status="killed"
-        )
+        Insight(insight_id=str(uuid.uuid4()), importance=5, summary="Test", status="killed")
 
         # Invalid status
         with pytest.raises(ValueError):

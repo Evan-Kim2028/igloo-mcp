@@ -36,9 +36,7 @@ def test_circuit_breaker_config():
 
 def test_circuit_breaker_closed_state():
     """Test circuit breaker in closed state."""
-    config = CircuitBreakerConfig(
-        failure_threshold=2, expected_exception=CircuitBreakerTestException
-    )
+    config = CircuitBreakerConfig(failure_threshold=2, expected_exception=CircuitBreakerTestException)
     breaker = CircuitBreaker(config)
 
     # Should start in closed state
@@ -57,9 +55,7 @@ def test_circuit_breaker_closed_state():
 
 def test_circuit_breaker_failure_counting():
     """Test that circuit breaker counts failures correctly."""
-    config = CircuitBreakerConfig(
-        failure_threshold=2, expected_exception=CircuitBreakerTestException
-    )
+    config = CircuitBreakerConfig(failure_threshold=2, expected_exception=CircuitBreakerTestException)
     breaker = CircuitBreaker(config)
 
     def failing_func():
@@ -80,9 +76,7 @@ def test_circuit_breaker_failure_counting():
 
 def test_circuit_breaker_open_state():
     """Test circuit breaker in open state."""
-    config = CircuitBreakerConfig(
-        failure_threshold=1, expected_exception=CircuitBreakerTestException
-    )
+    config = CircuitBreakerConfig(failure_threshold=1, expected_exception=CircuitBreakerTestException)
     breaker = CircuitBreaker(config)
 
     def failing_func():
@@ -135,9 +129,7 @@ def test_circuit_breaker_decorator():
     """Test circuit breaker decorator functionality."""
     call_count = 0
 
-    @circuit_breaker(
-        failure_threshold=2, expected_exception=CircuitBreakerTestException
-    )
+    @circuit_breaker(failure_threshold=2, expected_exception=CircuitBreakerTestException)
     def decorated_func(should_fail=False):
         nonlocal call_count
         call_count += 1
@@ -163,9 +155,7 @@ def test_circuit_breaker_decorator():
 
 def test_circuit_breaker_ignores_unexpected_exceptions():
     """Test that circuit breaker ignores unexpected exception types."""
-    config = CircuitBreakerConfig(
-        failure_threshold=2, expected_exception=CircuitBreakerTestException
-    )
+    config = CircuitBreakerConfig(failure_threshold=2, expected_exception=CircuitBreakerTestException)
     breaker = CircuitBreaker(config)
 
     def func_with_unexpected_error():
@@ -262,9 +252,7 @@ class TestCircuitBreakerConcurrentAccess:
                         try:
 
                             def failing_func():
-                                raise CircuitBreakerTestException(
-                                    f"fail_{worker_id}_{i}"
-                                )
+                                raise CircuitBreakerTestException(f"fail_{worker_id}_{i}")
 
                             breaker.call(failing_func)
                             results.append(f"unexpected_success_{worker_id}_{i}")
@@ -294,9 +282,7 @@ class TestCircuitBreakerConcurrentAccess:
 
         # With successes resetting failure count, circuit should not open under intermittent failures
         circuit_open_results = [r for r in results if r.startswith("circuit_open")]
-        assert (
-            len(circuit_open_results) == 0
-        ), "Circuit should not open when successes reset failure count"
+        assert len(circuit_open_results) == 0, "Circuit should not open when successes reset failure count"
 
         # Check that some calls succeeded
         success_results = [r for r in results if r.startswith("success")]
@@ -376,9 +362,7 @@ class TestCircuitBreakerConcurrentAccess:
         # Make 100 concurrent calls
         with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
             futures = [executor.submit(make_call, i) for i in range(100)]
-            results = [
-                future.result() for future in concurrent.futures.as_completed(futures)
-            ]
+            results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
         # Analyze results
         circuit_open_results = [r for r in results if r.startswith("circuit_open")]
@@ -386,9 +370,7 @@ class TestCircuitBreakerConcurrentAccess:
         successes = [r for r in results if r.startswith("success")]
 
         # Circuit should remain closed when all calls succeed
-        assert (
-            len(circuit_open_results) == 0
-        ), "Circuit should not open when all calls succeed"
+        assert len(circuit_open_results) == 0, "Circuit should not open when all calls succeed"
 
         # Should have no expected failures
         assert len(expected_failures) == 0, "Should have no failures"
@@ -509,7 +491,7 @@ class TestCircuitBreakerTimingEdgeCases:
             with pytest.raises(CircuitBreakerError):
 
                 def failing_func():
-                    raise CircuitBreakerTestException(f"fail_{i+3}")
+                    raise CircuitBreakerTestException(f"fail_{i + 3}")
 
                 breaker.call(failing_func)
 
@@ -572,9 +554,7 @@ class TestCircuitBreakerTimingEdgeCases:
         recovery_successes = [r for r in all_results if r == "recovery_success"]
 
         # Should have some circuit open results
-        assert (
-            len(circuit_open_results) > 0
-        ), "Should have circuit open results under concurrent timing load"
+        assert len(circuit_open_results) > 0, "Should have circuit open results under concurrent timing load"
 
         # Should have some expected failures
         assert len(expected_failures) > 0, "Should have expected failures"
@@ -622,15 +602,11 @@ class TestCircuitBreakerTimingEdgeCases:
         assert len(errors) == 0, f"Should not have errors: {errors}"
 
         # Circuit should have opened due to rapid failures
-        assert (
-            breaker.state == CircuitState.OPEN
-        ), "Circuit should be open after rapid failures"
+        assert breaker.state == CircuitState.OPEN, "Circuit should be open after rapid failures"
 
         # Should have some expected failures and circuit open results
         expected_failures = [r for r in results if r.startswith("expected_failure")]
         circuit_open_results = [r for r in results if r.startswith("circuit_open")]
 
         assert len(expected_failures) > 0, "Should have expected failures"
-        assert (
-            len(circuit_open_results) > 0
-        ), "Should have circuit open results under rapid calling"
+        assert len(circuit_open_results) > 0, "Should have circuit open results under rapid calling"

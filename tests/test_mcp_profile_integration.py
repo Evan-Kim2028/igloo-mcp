@@ -48,9 +48,7 @@ class TestMCPServerProfileIntegration:
                                 # If we get here, validation passed
                                 assert True
                             except SystemExit:
-                                pytest.fail(
-                                    "Server startup should not fail with valid profile"
-                                )
+                                pytest.fail("Server startup should not fail with valid profile")
 
     def test_server_startup_fails_with_invalid_profile(self, mock_config_with_profiles):
         """Test server startup fails gracefully with invalid profile."""
@@ -191,17 +189,9 @@ class TestErrorLogging:
                             main()
 
                         # Verify helpful error messages were logged
-                        logged_calls = [
-                            call.args[0] for call in mock_logger.error.call_args_list
-                        ]
-                        assert any(
-                            "profile validation failed" in call.lower()
-                            for call in logged_calls
-                        )
-                        assert any(
-                            "available profiles" in call.lower()
-                            for call in logged_calls
-                        )
+                        logged_calls = [call.args[0] for call in mock_logger.error.call_args_list]
+                        assert any("profile validation failed" in call.lower() for call in logged_calls)
+                        assert any("available profiles" in call.lower() for call in logged_calls)
 
     @patch("igloo_mcp.mcp_server.logger")
     def test_no_profiles_error_logging(self, mock_logger, mock_empty_config):
@@ -224,16 +214,9 @@ class TestErrorLogging:
                         main()
 
                     # Verify helpful error messages for no profiles scenario
-                    logged_calls = [
-                        call.args[0] for call in mock_logger.error.call_args_list
-                    ]
-                    assert any(
-                        "no snowflake profiles found" in call.lower()
-                        for call in logged_calls
-                    )
-                    assert any(
-                        "snow connection add" in call.lower() for call in logged_calls
-                    )
+                    logged_calls = [call.args[0] for call in mock_logger.error.call_args_list]
+                    assert any("no snowflake profiles found" in call.lower() for call in logged_calls)
+                    assert any("snow connection add" in call.lower() for call in logged_calls)
 
 
 # Fixtures (reuse from test_profile_utils.py)
@@ -242,9 +225,7 @@ def mock_config_with_profiles():
     """Mock configuration with specified profiles."""
 
     def _mock(profiles: list[str], default: str | None = None):
-        config_data: dict[str, dict[str, dict] | str] = {
-            "connections": {profile: {} for profile in profiles}
-        }
+        config_data: dict[str, dict[str, dict] | str] = {"connections": {profile: {} for profile in profiles}}
         if default:
             config_data["default_connection_name"] = default
 

@@ -57,9 +57,7 @@ class SnowCLI:
             "role": cfg.snowflake.role,
         }
 
-    def _base_args(
-        self, ctx_overrides: Optional[Dict[str, Optional[str]]] = None
-    ) -> List[str]:
+    def _base_args(self, ctx_overrides: Optional[Dict[str, Optional[str]]] = None) -> List[str]:
         # Use --connection/-c to select the configured connection name
         args = ["snow", "sql", "--connection", self.profile]
         ctx = {**self.default_ctx}
@@ -214,9 +212,7 @@ class SnowCLI:
     def connection_exists(self, name: str) -> bool:
         try:
             conns = self.list_connections()
-            return any(
-                (c.get("name") or c.get("connection_name")) == name for c in conns
-            )
+            return any((c.get("name") or c.get("connection_name")) == name for c in conns)
         except SnowCLIError:
             return False
 
@@ -272,9 +268,7 @@ class SnowCLI:
             check=False,
         )
         if proc.returncode != 0:
-            raise SnowCLIError(
-                proc.stderr.strip() or "Failed to set default connection"
-            )
+            raise SnowCLIError(proc.stderr.strip() or "Failed to set default connection")
 
     def __enter__(self):
         """Context manager entry."""

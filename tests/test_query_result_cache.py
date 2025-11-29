@@ -121,9 +121,7 @@ def test_store_disabled_and_read_only(tmp_path: Path) -> None:
     assert read_only.store("key", rows=[{}], metadata={}) is None
 
 
-def test_store_directory_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_store_directory_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cache = QueryResultCache(mode="enabled", root=tmp_path)
     key = cache.compute_cache_key(
         sql_sha256="abc",
@@ -144,9 +142,7 @@ def test_store_directory_failure(
     assert any("Failed to create cache directory" in msg for msg in warnings)
 
 
-def test_store_rows_write_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_store_rows_write_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cache = QueryResultCache(mode="enabled", root=tmp_path)
     key = cache.compute_cache_key(
         sql_sha256="def",
@@ -227,9 +223,7 @@ def test_lookup_with_missing_manifest_fields(tmp_path: Path) -> None:
     cache = QueryResultCache(mode="enabled", root=tmp_path)
     key_dir = tmp_path / "key2"
     key_dir.mkdir()
-    (key_dir / "manifest.json").write_text(
-        json.dumps({"cache_key": "key2"}), encoding="utf-8"
-    )
+    (key_dir / "manifest.json").write_text(json.dumps({"cache_key": "key2"}), encoding="utf-8")
     assert cache.lookup("key2") is None
 
 
@@ -244,18 +238,14 @@ def test_from_env_handles_resolution_failure(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "enabled")
     monkeypatch.setattr(
         "igloo_mcp.cache.query_result_cache.resolve_cache_root",
-        lambda raw=None, artifact_root=None: (_ for _ in ()).throw(
-            RuntimeError("boom")
-        ),
+        lambda raw=None, artifact_root=None: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     cache = QueryResultCache.from_env(artifact_root=None)
     expected = Path.home() / ".igloo_mcp" / DEFAULT_ARTIFACT_ROOT / DEFAULT_CACHE_SUBDIR
     assert cache.root == expected
 
 
-def test_cache_uses_fallback_root_when_primary_fails(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_cache_uses_fallback_root_when_primary_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     primary = tmp_path / "primary"
     fallback = tmp_path / "fallback"
     original_mkdir = Path.mkdir
@@ -273,9 +263,7 @@ def test_cache_uses_fallback_root_when_primary_fails(
     assert any("using fallback" in msg for msg in warnings)
 
 
-def test_cache_disables_when_all_roots_fail(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_cache_disables_when_all_roots_fail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     primary = tmp_path / "primary"
     fallback = tmp_path / "fallback"
     original_mkdir = Path.mkdir
@@ -293,18 +281,14 @@ def test_cache_disables_when_all_roots_fail(
     assert any("disabled" in msg for msg in warnings)
 
 
-def test_from_env_blank_mode_uses_default(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_from_env_blank_mode_uses_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "   ")
     monkeypatch.setenv("IGLOO_MCP_CACHE_ROOT", str(tmp_path))
     cache = QueryResultCache.from_env(artifact_root=None)
     assert cache.mode == QueryResultCache.DEFAULT_MODE
 
 
-def test_from_env_fallback_mkdir_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_from_env_fallback_mkdir_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     fallback = Path.home() / ".igloo_mcp" / DEFAULT_ARTIFACT_ROOT / DEFAULT_CACHE_SUBDIR
     original_mkdir = Path.mkdir
 
@@ -341,9 +325,7 @@ def test_lookup_skips_blank_lines(tmp_path: Path) -> None:
     assert len(hit.rows) == 2
 
 
-def test_store_manifest_write_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_store_manifest_write_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     cache = QueryResultCache(mode="enabled", root=tmp_path)
     key = cache.compute_cache_key(
         sql_sha256="xyz",

@@ -48,9 +48,7 @@ class RobustSnowflakeService:
         self.cli = SnowCLI(profile)
         self._last_error: Optional[str] = None
 
-    @circuit_breaker(
-        failure_threshold=5, recovery_timeout=60.0, expected_exception=SnowCLIError
-    )
+    @circuit_breaker(failure_threshold=5, recovery_timeout=60.0, expected_exception=SnowCLIError)
     def execute_query(
         self,
         query: str,
@@ -74,9 +72,7 @@ class RobustSnowflakeService:
             logger.error(f"Snowflake query failed: {e}")
             raise
 
-    @circuit_breaker(
-        failure_threshold=3, recovery_timeout=30.0, expected_exception=SnowCLIError
-    )
+    @circuit_breaker(failure_threshold=3, recovery_timeout=30.0, expected_exception=SnowCLIError)
     def test_connection(self) -> bool:
         """Test connection with circuit breaker protection."""
         try:
@@ -113,14 +109,10 @@ class RobustSnowflakeService:
                 circuit_breaker_state="open",
             )
         except Exception as e:
-            return HealthStatus(
-                healthy=False, snowflake_connection=False, last_error=str(e)
-            )
+            return HealthStatus(healthy=False, snowflake_connection=False, last_error=str(e))
 
 
-def execute_query_safe(
-    service: SnowflakeService, query: str, **kwargs: Any
-) -> List[Dict[str, Any]]:
+def execute_query_safe(service: SnowflakeService, query: str, **kwargs: Any) -> List[Dict[str, Any]]:
     """Execute a query safely, returning empty list on failure."""
     try:
         result = service.execute_query(query, **kwargs)

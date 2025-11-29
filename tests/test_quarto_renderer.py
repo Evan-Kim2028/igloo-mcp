@@ -47,9 +47,7 @@ class TestQuartoRenderer:
             with patch("os.path.isfile", return_value=True):
                 with patch("os.access", return_value=True):
                     with patch("subprocess.run") as mock_run:
-                        mock_run.return_value = MagicMock(
-                            stdout="1.4.0\n", returncode=0
-                        )
+                        mock_run.return_value = MagicMock(stdout="1.4.0\n", returncode=0)
 
                         renderer = QuartoRenderer.detect()
 
@@ -128,9 +126,7 @@ class TestQuartoRenderer:
                         insight_ids=[insight_id],
                     )
                 ],
-                insights=[
-                    Insight(insight_id=insight_id, summary="Test insight", importance=5)
-                ],
+                insights=[Insight(insight_id=insight_id, summary="Test insight", importance=5)],
                 metadata={},
             )
 
@@ -139,9 +135,7 @@ class TestQuartoRenderer:
                 json.dump(outline.model_dump(), f)
 
             with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(
-                    returncode=0, stdout="Output created: report.html\n", stderr=""
-                )
+                mock_run.return_value = MagicMock(returncode=0, stdout="Output created: report.html\n", stderr="")
 
                 # Create the output file that Quarto would create
                 # (renderer checks if file exists before adding to output_paths)
@@ -195,9 +189,7 @@ class TestQuartoRenderer:
                 json.dump(outline.model_dump(), f)
 
             with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(
-                    returncode=1, stdout="", stderr="Error: failed to render"
-                )
+                mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error: failed to render")
 
                 with pytest.raises(RuntimeError) as exc_info:
                     renderer.render(
@@ -267,9 +259,7 @@ class TestQuartoRenderer:
                 json.dump(outline, f)
 
             with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(
-                    returncode=0, stdout="Output created: report.html\n", stderr=""
-                )
+                mock_run.return_value = MagicMock(returncode=0, stdout="Output created: report.html\n", stderr="")
 
                 result = renderer.render(
                     report_dir=str(report_dir),
@@ -329,9 +319,7 @@ class TestQuartoRenderer:
                 json.dump(outline.model_dump(), f)
 
             with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(
-                    returncode=1, stdout="", stderr="Error: dataset not found"
-                )
+                mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error: dataset not found")
 
                 with pytest.raises(RuntimeError):
                     renderer.render(
@@ -600,9 +588,7 @@ class TestTemplateResolution:
             report_dir = Path(temp_dir)
             # Create a mock repo structure
             repo_root = Path(temp_dir) / "repo"
-            templates_dir = (
-                repo_root / "src" / "igloo_mcp" / "living_reports" / "templates"
-            )
+            templates_dir = repo_root / "src" / "igloo_mcp" / "living_reports" / "templates"
             templates_dir.mkdir(parents=True, exist_ok=True)
 
             # Create a mock template file
@@ -622,15 +608,11 @@ class TestTemplateResolution:
             )
 
             # Mock importlib.resources to fail (simulating not installed)
-            with patch(
-                "igloo_mcp.living_reports.quarto_renderer.importlib.resources.files"
-            ) as mock_resources:
+            with patch("igloo_mcp.living_reports.quarto_renderer.importlib.resources.files") as mock_resources:
                 mock_resources.side_effect = ImportError("Package not installed")
 
                 # Mock find_repo_root to return our test repo
-                with patch(
-                    "igloo_mcp.living_reports.quarto_renderer.find_repo_root"
-                ) as mock_repo_root:
+                with patch("igloo_mcp.living_reports.quarto_renderer.find_repo_root") as mock_repo_root:
                     mock_repo_root.return_value = repo_root
 
                     renderer._generate_qmd_file(
@@ -665,9 +647,7 @@ class TestTemplateResolution:
 
             # Create a mock template file
             template_file = templates_dir / "report.qmd.j2"
-            template_file.write_text(
-                '---\ntitle: "{{ outline.title }}"\n---\n\n# {{ outline.title }}\n'
-            )
+            template_file.write_text('---\ntitle: "{{ outline.title }}"\n---\n\n# {{ outline.title }}\n')
 
             outline = create_test_outline(
                 report_id=str(uuid.uuid4()),
@@ -680,15 +660,11 @@ class TestTemplateResolution:
             )
 
             # Mock importlib.resources to fail
-            with patch(
-                "igloo_mcp.living_reports.quarto_renderer.importlib.resources.files"
-            ) as mock_resources:
+            with patch("igloo_mcp.living_reports.quarto_renderer.importlib.resources.files") as mock_resources:
                 mock_resources.side_effect = ImportError("Package not installed")
 
                 # Mock find_repo_root to return non-existent path
-                with patch(
-                    "igloo_mcp.living_reports.quarto_renderer.find_repo_root"
-                ) as mock_repo_root:
+                with patch("igloo_mcp.living_reports.quarto_renderer.find_repo_root") as mock_repo_root:
                     mock_repo_root.return_value = Path("/nonexistent/repo")
 
                     # Mock __file__ to point to our test structure
@@ -696,9 +672,7 @@ class TestTemplateResolution:
 
                     original_file_attr = getattr(qr_module, "__file__", None)
                     try:
-                        qr_module.__file__ = str(
-                            mock_renderer_dir / "quarto_renderer.py"
-                        )
+                        qr_module.__file__ = str(mock_renderer_dir / "quarto_renderer.py")
 
                         renderer._generate_qmd_file(
                             report_dir=report_dir,
@@ -737,14 +711,10 @@ class TestTemplateResolution:
             )
 
             # Mock all strategies to fail
-            with patch(
-                "igloo_mcp.living_reports.quarto_renderer.importlib.resources.files"
-            ) as mock_resources:
+            with patch("igloo_mcp.living_reports.quarto_renderer.importlib.resources.files") as mock_resources:
                 mock_resources.side_effect = ImportError("Package not installed")
 
-                with patch(
-                    "igloo_mcp.living_reports.quarto_renderer.find_repo_root"
-                ) as mock_repo_root:
+                with patch("igloo_mcp.living_reports.quarto_renderer.find_repo_root") as mock_repo_root:
                     mock_repo_root.return_value = Path("/nonexistent/repo")
 
                     # Mock __file__ to point to non-existent location
@@ -767,10 +737,7 @@ class TestTemplateResolution:
                         # Verify error message includes all attempted paths
                         error_msg = str(exc_info.value)
                         assert "Template directory not found" in error_msg
-                        assert (
-                            "Attempted paths" in error_msg
-                            or "Package location" in error_msg
-                        )
+                        assert "Attempted paths" in error_msg or "Package location" in error_msg
                     finally:
                         if original_file_attr:
                             qr_module.__file__ = original_file_attr
@@ -818,29 +785,18 @@ class TestTemplateResolution:
         """Verify that report.qmd.j2 template actually exists and is accessible."""
         # Test that we can access the template via importlib.resources
         try:
-            templates_ref = importlib.resources.files(
-                "igloo_mcp.living_reports.templates"
-            )
+            templates_ref = importlib.resources.files("igloo_mcp.living_reports.templates")
             template_file_ref = templates_ref / "report.qmd.j2"
             assert template_file_ref.exists(), "Template file should exist in package"
 
             # Verify we can read it
             template_content = template_file_ref.read_text(encoding="utf-8")
             assert len(template_content) > 0, "Template should have content"
-            assert (
-                "outline.title" in template_content
-            ), "Template should contain outline.title"
+            assert "outline.title" in template_content, "Template should contain outline.title"
         except (ImportError, ModuleNotFoundError):
             # If package isn't installed, check repo structure instead
             repo_root = Path(__file__).parent.parent
-            template_path = (
-                repo_root
-                / "src"
-                / "igloo_mcp"
-                / "living_reports"
-                / "templates"
-                / "report.qmd.j2"
-            )
+            template_path = repo_root / "src" / "igloo_mcp" / "living_reports" / "templates" / "report.qmd.j2"
             assert template_path.exists(), f"Template should exist at {template_path}"
             template_content = template_path.read_text(encoding="utf-8")
             assert len(template_content) > 0, "Template should have content"

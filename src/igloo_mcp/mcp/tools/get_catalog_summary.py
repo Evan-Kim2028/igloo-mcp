@@ -145,9 +145,7 @@ class GetCatalogSummaryTool(MCPTool):
                 ) from e
 
         try:
-            summary = await anyio.to_thread.run_sync(
-                self.catalog_service.load_summary, catalog_dir
-            )
+            summary = await anyio.to_thread.run_sync(self.catalog_service.load_summary, catalog_dir)
 
             # Calculate total duration
             total_duration = (time.time() - start_time) * 1000

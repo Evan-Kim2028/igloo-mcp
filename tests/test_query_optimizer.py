@@ -40,7 +40,4 @@ def test_optimize_execution_reads_history(tmp_path: Path, monkeypatch) -> None:
     report = optimize_execution("abc123", history_path=str(history_path))
 
     assert report["execution_id"] == "abc123"
-    assert any(
-        finding["message"].startswith("Replace SELECT *")
-        for finding in report["findings"]
-    )
+    assert any(finding["message"].startswith("Replace SELECT *") for finding in report["findings"])

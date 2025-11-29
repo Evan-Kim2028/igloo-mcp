@@ -105,10 +105,7 @@ def test_build_catalog_schema(base_config: Config) -> None:
     assert fmt["default"] == "json"
 
     assert "allOf" in schema
-    assert any(
-        "account" in cond.get("if", {}).get("properties", {})
-        for cond in schema["allOf"]
-    )
+    assert any("account" in cond.get("if", {}).get("properties", {}) for cond in schema["allOf"])
 
     # Discovery metadata
     assert tool.category == "metadata"

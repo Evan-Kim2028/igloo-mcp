@@ -98,8 +98,7 @@ class MCPResourceManager:
                 return ResourceAvailability(
                     name="profile",
                     state=ResourceState.UNAVAILABLE,
-                    reason=profile_health.validation_error
-                    or "Profile validation failed",
+                    reason=profile_health.validation_error or "Profile validation failed",
                     metadata={
                         "profile_name": profile_health.profile_name,
                         "available_profiles": profile_health.available_profiles,
@@ -116,9 +115,7 @@ class MCPResourceManager:
                 last_checked=time.time(),
             )
 
-    def check_connection_dependency(
-        self, snowflake_service=None
-    ) -> ResourceAvailability:
+    def check_connection_dependency(self, snowflake_service=None) -> ResourceAvailability:
         """Check if Snowflake connection is available."""
         if not self.health_monitor:
             return ResourceAvailability(
@@ -129,9 +126,7 @@ class MCPResourceManager:
             )
 
         try:
-            connection_health = self.health_monitor.check_connection_health(
-                snowflake_service
-            )
+            connection_health = self.health_monitor.check_connection_health(snowflake_service)
 
             if connection_health == HealthStatus.HEALTHY:
                 return ResourceAvailability(
@@ -162,9 +157,7 @@ class MCPResourceManager:
                 last_checked=time.time(),
             )
 
-    def check_catalog_dependency(
-        self, catalog_dir: str = "./data_catalogue"
-    ) -> ResourceAvailability:
+    def check_catalog_dependency(self, catalog_dir: str = "./data_catalogue") -> ResourceAvailability:
         """Check if catalog data is available."""
         try:
             from pathlib import Path
@@ -273,27 +266,14 @@ class MCPResourceManager:
         self, resource_names: List[str], snowflake_service=None, **kwargs: Any
     ) -> Dict[str, ResourceAvailability]:
         """Get availability for multiple resources."""
-        return {
-            name: self.get_resource_availability(name, snowflake_service, **kwargs)
-            for name in resource_names
-        }
+        return {name: self.get_resource_availability(name, snowflake_service, **kwargs) for name in resource_names}
 
-    def filter_available_resources(
-        self, resource_names: List[str], snowflake_service=None, **kwargs: Any
-    ) -> List[str]:
+    def filter_available_resources(self, resource_names: List[str], snowflake_service=None, **kwargs: Any) -> List[str]:
         """Filter resource list to only include available resources."""
-        availability = self.get_all_resource_availability(
-            resource_names, snowflake_service, **kwargs
-        )
-        return [
-            name
-            for name, avail in availability.items()
-            if avail.state == ResourceState.AVAILABLE
-        ]
+        availability = self.get_all_resource_availability(resource_names, snowflake_service, **kwargs)
+        return [name for name, avail in availability.items() if avail.state == ResourceState.AVAILABLE]
 
-    def get_resource_recommendations(
-        self, resource_name: str, availability: ResourceAvailability
-    ) -> List[str]:
+    def get_resource_recommendations(self, resource_name: str, availability: ResourceAvailability) -> List[str]:
         """Get recommendations for making a resource available."""
         recommendations = []
 
@@ -302,26 +282,18 @@ class MCPResourceManager:
                 recommendations.append(
                     "Check Snowflake profile configuration with 'health_check' tool (include_profile=True)"
                 )
-                recommendations.append(
-                    "Ensure SNOWFLAKE_PROFILE environment variable is set correctly"
-                )
+                recommendations.append("Ensure SNOWFLAKE_PROFILE environment variable is set correctly")
 
             if "connection" in self.dependencies.get(resource_name, []):
-                recommendations.append(
-                    "Test Snowflake connectivity with 'test_connection' tool"
-                )
+                recommendations.append("Test Snowflake connectivity with 'test_connection' tool")
                 recommendations.append("Verify network connectivity and credentials")
 
             if "catalog" in self.dependencies.get(resource_name, []):
                 recommendations.append("Build catalog data with 'build_catalog' tool")
-                recommendations.append(
-                    "Check catalog directory permissions and disk space"
-                )
+                recommendations.append("Check catalog directory permissions and disk space")
 
         elif availability.state == ResourceState.DEGRADED:
-            recommendations.append(
-                "Check server health with 'health_check' tool for detailed diagnostics"
-            )
+            recommendations.append("Check server health with 'health_check' tool for detailed diagnostics")
 
         return recommendations
 
@@ -329,27 +301,13 @@ class MCPResourceManager:
         self, resource_names: List[str], snowflake_service=None, **kwargs: Any
     ) -> Dict[str, Any]:
         """Create a comprehensive resource status response."""
-        availability = self.get_all_resource_availability(
-            resource_names, snowflake_service, **kwargs
-        )
+        availability = self.get_all_resource_availability(resource_names, snowflake_service, **kwargs)
 
-        available_count = sum(
-            1
-            for avail in availability.values()
-            if avail.state == ResourceState.AVAILABLE
-        )
+        available_count = sum(1 for avail in availability.values() if avail.state == ResourceState.AVAILABLE)
 
-        degraded_count = sum(
-            1
-            for avail in availability.values()
-            if avail.state == ResourceState.DEGRADED
-        )
+        degraded_count = sum(1 for avail in availability.values() if avail.state == ResourceState.DEGRADED)
 
-        unavailable_count = sum(
-            1
-            for avail in availability.values()
-            if avail.state == ResourceState.UNAVAILABLE
-        )
+        unavailable_count = sum(1 for avail in availability.values() if avail.state == ResourceState.UNAVAILABLE)
 
         overall_status = "healthy"
         if unavailable_count > 0:

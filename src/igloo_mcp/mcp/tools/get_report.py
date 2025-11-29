@@ -190,9 +190,7 @@ class GetReportTool(MCPTool):
                 },
             )
             raise MCPSelectorError(
-                error_dict.get(
-                    "message", f"Could not resolve report selector: {report_selector}"
-                ),
+                error_dict.get("message", f"Could not resolve report selector: {report_selector}"),
                 selector=report_selector,
                 error=error_dict.get("error", "not_found"),
                 candidates=error_dict.get("candidates", []),
@@ -239,9 +237,7 @@ class GetReportTool(MCPTool):
                 offset,
             )
         elif mode == "full":
-            response = self._build_full_response(
-                outline, include_content, include_audit, limit, offset
-            )
+            response = self._build_full_response(outline, include_content, include_audit, limit, offset)
 
         retrieval_duration = (time.time() - retrieval_start) * 1000
         total_duration = (time.time() - start_time) * 1000
@@ -267,9 +263,7 @@ class GetReportTool(MCPTool):
 
         return response
 
-    def _build_summary_response(
-        self, outline: Any, include_audit: bool, report_id: str
-    ) -> Dict[str, Any]:
+    def _build_summary_response(self, outline: Any, include_audit: bool, report_id: str) -> Dict[str, Any]:
         """Build summary mode response (lightweight overview)."""
         return {
             "status": "success",
@@ -316,11 +310,7 @@ class GetReportTool(MCPTool):
         if section_titles:
             # Fuzzy match on titles (case-insensitive substring)
             title_lowers = [t.lower() for t in section_titles]
-            sections = [
-                s
-                for s in sections
-                if any(title in s.title.lower() for title in title_lowers)
-            ]
+            sections = [s for s in sections if any(title in s.title.lower() for title in title_lowers)]
 
         # Apply pagination
         total_matched = len(sections)
@@ -381,9 +371,7 @@ class GetReportTool(MCPTool):
 
         if section_ids:
             section_id_set = set(section_ids)
-            insights = [
-                i for i in insights if section_map.get(i.insight_id) in section_id_set
-            ]
+            insights = [i for i in insights if section_map.get(i.insight_id) in section_id_set]
 
         # Apply pagination
         total_matched = len(insights)
@@ -399,9 +387,7 @@ class GetReportTool(MCPTool):
                 "status": insight.status,
                 "section_id": section_map.get(insight.insight_id),
                 "has_citations": bool(insight.supporting_queries or insight.citations),
-                "citation_count": len(
-                    insight.supporting_queries or insight.citations or []
-                ),
+                "citation_count": len(insight.supporting_queries or insight.citations or []),
             }
             insights_data.append(insight_dict)
 

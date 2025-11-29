@@ -125,9 +125,7 @@ def test_handle_snowflake_errors_decorator_with_snowcli_error():
 def test_handle_snowflake_errors_decorator_no_reraise():
     """Test error handling decorator with reraise=False."""
 
-    @handle_snowflake_errors(
-        operation="test_operation", reraise=False, fallback_value="fallback"
-    )
+    @handle_snowflake_errors(operation="test_operation", reraise=False, fallback_value="fallback")
     def failing_function():
         raise SnowCLIError("connection failed")
 
@@ -149,9 +147,7 @@ def test_handle_snowflake_errors_decorator_unexpected_error():
 def test_handle_snowflake_errors_decorator_unexpected_error_no_reraise():
     """Test error handling decorator with unexpected error and reraise=False."""
 
-    @handle_snowflake_errors(
-        operation="test_operation", reraise=False, fallback_value="fallback"
-    )
+    @handle_snowflake_errors(operation="test_operation", reraise=False, fallback_value="fallback")
     def failing_function():
         raise ValueError("unexpected error")
 

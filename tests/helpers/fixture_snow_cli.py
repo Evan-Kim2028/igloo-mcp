@@ -84,15 +84,11 @@ class FixtureSnowCLI:
     def _load_fixture(self, key: str) -> Dict[str, object]:
         path = self.fixture_dir / f"{key}.json"
         if not path.exists():
-            raise SnowCLIError(
-                f"No fixture found for query key '{key}'. " f"Expected file at {path}."
-            )
+            raise SnowCLIError(f"No fixture found for query key '{key}'. Expected file at {path}.")
         with path.open("r", encoding="utf-8") as handle:
             data = json.load(handle)
             if not isinstance(data, dict):
-                raise SnowCLIError(
-                    f"Fixture for '{key}' must be a JSON object with a 'rows' key."
-                )
+                raise SnowCLIError(f"Fixture for '{key}' must be a JSON object with a 'rows' key.")
             return data
 
     def _key_for_query(self, query: str) -> str:

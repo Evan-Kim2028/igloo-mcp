@@ -30,9 +30,7 @@ class _StubSummary:
         self.current_profile_authenticator = "externalbrowser"
 
 
-def _patch_profile_utils(
-    monkeypatch: pytest.MonkeyPatch, *, valid: bool, error: str = ""
-) -> None:
+def _patch_profile_utils(monkeypatch: pytest.MonkeyPatch, *, valid: bool, error: str = "") -> None:
     monkeypatch.setattr(
         "igloo_mcp.mcp_health.get_profile_summary",
         lambda: _StubSummary(),
@@ -153,14 +151,10 @@ def test_health_monitor_comprehensive(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_health_monitor_error_responses(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_profile_utils(monkeypatch, valid=False, error="bad-profile")
     monitor = MCPHealthMonitor()
-    profile_resp = create_profile_validation_error_response(
-        monitor, profile_name="DEV", validation_error="bad-profile"
-    )
+    profile_resp = create_profile_validation_error_response(monitor, profile_name="DEV", validation_error="bad-profile")
     assert profile_resp["code"] == MCPErrorCode.PROFILE_ERROR.value
     assert profile_resp["data"]["validation_error"] == "bad-profile"
 
-    config_resp = create_configuration_error_response(
-        monitor, config_issue="missing key", detail="info"
-    )
+    config_resp = create_configuration_error_response(monitor, config_issue="missing key", detail="info")
     assert config_resp["code"] == MCPErrorCode.CONFIGURATION_ERROR.value
     assert config_resp["data"]["configuration_issue"] == "missing key"

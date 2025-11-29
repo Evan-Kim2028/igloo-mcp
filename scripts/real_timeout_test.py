@@ -11,9 +11,7 @@ from igloo_mcp.mcp_server import create_combined_lifespan, parse_arguments
 from igloo_mcp.service_layer.query_service import QueryService
 
 
-async def run_real_timeout_test(
-    profile: str, statement: str, timeout_seconds: int
-) -> None:
+async def run_real_timeout_test(profile: str, statement: str, timeout_seconds: int) -> None:
     # Ensure config uses the requested profile
     apply_config_overrides(snowflake={"profile": profile})
     cfg = get_config()
@@ -59,9 +57,7 @@ async def run_real_timeout_test(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Real-world timeout test for igloo-mcp execute_query"
-    )
+    parser = argparse.ArgumentParser(description="Real-world timeout test for igloo-mcp execute_query")
     parser.add_argument(
         "--profile",
         default=os.getenv("SNOWFLAKE_PROFILE"),

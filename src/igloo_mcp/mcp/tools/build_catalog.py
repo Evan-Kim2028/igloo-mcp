@@ -291,8 +291,7 @@ class BuildCatalogTool(MCPTool):
                     examples=["PIPELINE_V2_GROOT_DB", "ANALYTICS"],
                 ),
                 "account": boolean_schema(
-                    "Include entire account metadata (ACCOUNT_USAGE). "
-                    "Must be false if database is provided.",
+                    "Include entire account metadata (ACCOUNT_USAGE). Must be false if database is provided.",
                     default=False,
                     examples=[True, False],
                 ),

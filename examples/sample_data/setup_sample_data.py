@@ -21,9 +21,7 @@ from igloo_mcp.snow_cli import SnowCLI, SnowCLIError
 
 def setup_logging():
     """Configure logging for setup script."""
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     return logging.getLogger(__name__)
 
 
@@ -79,9 +77,7 @@ def create_database_structure(snow_cli: SnowCLI, logger: logging.Logger) -> bool
         return False
 
 
-def create_sample_tables(
-    snow_cli: SnowCLI, ddl_files: Dict[str, str], logger: logging.Logger
-) -> bool:
+def create_sample_tables(snow_cli: SnowCLI, ddl_files: Dict[str, str], logger: logging.Logger) -> bool:
     """Create sample tables using the DDL files."""
     try:
         logger.info("Creating sample tables...")
@@ -106,9 +102,7 @@ def create_sample_tables(
                     logger.info(f"✅ Successfully processed {filename}")
 
             except SnowCLIError as e:
-                logger.warning(
-                    f"Expected error for {filename} (missing source data): {e}"
-                )
+                logger.warning(f"Expected error for {filename} (missing source data): {e}")
                 # This is expected since we don't have the raw data
                 continue
 
@@ -169,13 +163,9 @@ def create_lineage_example(snow_cli: SnowCLI, logger: logging.Logger) -> bool:
         # Try to build lineage graph
         try:
             # This might fail if we don't have enough data, but that's okay
-            result = service.object_subgraph(
-                "DEFI_SAMPLE_DB.PROCESSED.DEX_TRADES_STABLE", direction="both", depth=2
-            )
+            result = service.object_subgraph("DEFI_SAMPLE_DB.PROCESSED.DEX_TRADES_STABLE", direction="both", depth=2)
 
-            logger.info(
-                f"✅ Lineage example created with {len(result.graph.nodes)} nodes"
-            )
+            logger.info(f"✅ Lineage example created with {len(result.graph.nodes)} nodes")
 
         except KeyError as e:
             logger.info(f"Lineage generation skipped (expected): {e}")
@@ -255,9 +245,7 @@ def main():
 
         # Test connection
         if not snow_cli.test_connection():
-            logger.error(
-                "❌ Failed to connect to Snowflake. Please check your configuration."
-            )
+            logger.error("❌ Failed to connect to Snowflake. Please check your configuration.")
             return 1
 
         logger.info("✅ Snowflake connection successful")
@@ -288,9 +276,7 @@ def main():
 
         # Create lineage examples
         if not create_lineage_example(snow_cli, logger):
-            logger.warning(
-                "⚠️  Lineage example creation had issues (this might be expected)"
-            )
+            logger.warning("⚠️  Lineage example creation had issues (this might be expected)")
 
         # Print usage instructions
         print_usage_instructions(logger)

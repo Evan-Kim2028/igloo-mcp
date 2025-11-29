@@ -117,9 +117,7 @@ def apply_session_context(
     overrides: SessionContext | Mapping[str, Optional[str]],
 ) -> None:
     context = (
-        overrides.to_mapping()
-        if isinstance(overrides, SessionContext)
-        else {k: v for k, v in overrides.items() if v}
+        overrides.to_mapping() if isinstance(overrides, SessionContext) else {k: v for k, v in overrides.items() if v}
     )
     if role := context.get("role"):
         cursor.execute(f"USE ROLE {quote_identifier(role)}")

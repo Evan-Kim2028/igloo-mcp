@@ -12,9 +12,7 @@ TOP_VALUES_LIMIT = 5
 TIME_HINT_KEYWORDS = ("timestamp", "_ts", "_time", "time", "date", "_dt", "at_ts")
 
 
-def _normalize_row(
-    row: Any, existing_columns: Sequence[str] | None
-) -> Tuple[Dict[str, Any], List[str] | None]:
+def _normalize_row(row: Any, existing_columns: Sequence[str] | None) -> Tuple[Dict[str, Any], List[str] | None]:
     """Return a mapping representation of a row and inferred column names."""
 
     if isinstance(row, dict):
@@ -30,10 +28,7 @@ def _normalize_row(
             names = list(existing_columns)
         else:
             names = [f"column_{idx}" for idx in range(len(row))]
-        mapping = {
-            names[idx] if idx < len(names) else f"column_{idx}": value
-            for idx, value in enumerate(row)
-        }
+        mapping = {names[idx] if idx < len(names) else f"column_{idx}": value for idx, value in enumerate(row)}
         inferred = None if existing_columns else list(mapping.keys())
         return mapping, inferred
 
@@ -125,17 +120,11 @@ def _summarize_column(
         preferred_kind = "numeric"
         kind_score = numeric_count
 
-    if (_is_time_hint(column) and time_count > 0) or (
-        time_count >= max(numeric_count, kind_score) and time_count >= 2
-    ):
+    if (_is_time_hint(column) and time_count > 0) or (time_count >= max(numeric_count, kind_score) and time_count >= 2):
         preferred_kind = "time"
         kind_score = time_count
 
-    if (
-        preferred_kind == "numeric"
-        and numeric_min is not None
-        and numeric_max is not None
-    ):
+    if preferred_kind == "numeric" and numeric_min is not None and numeric_max is not None:
         avg = numeric_sum / max(numeric_count, 1)
         return {
             "name": column,
@@ -188,33 +177,21 @@ def _compose_insights(key_metrics: Dict[str, Any]) -> List[str]:
 
     if isinstance(total_rows, int) and isinstance(num_columns, int):
         if isinstance(sampled_rows, int) and truncated and sampled_rows < total_rows:
-            insights.append(
-                f"Analyzed first {sampled_rows:,} of {total_rows:,} rows across {num_columns} columns."
-            )
+            insights.append(f"Analyzed first {sampled_rows:,} of {total_rows:,} rows across {num_columns} columns.")
         else:
-            insights.append(
-                f"Returned {total_rows:,} rows across {num_columns} columns."
-            )
+            insights.append(f"Returned {total_rows:,} rows across {num_columns} columns.")
 
     for column in key_metrics.get("columns", []):
         if len(insights) >= 5:
             break
         kind = column.get("kind")
         name = column.get("name", "column")
-        if (
-            kind == "numeric"
-            and column.get("min") is not None
-            and column.get("max") is not None
-        ):
-            insights.append(
-                f"{name} spans {column['min']} → {column['max']} (avg {column.get('avg')})."
-            )
+        if kind == "numeric" and column.get("min") is not None and column.get("max") is not None:
+            insights.append(f"{name} spans {column['min']} → {column['max']} (avg {column.get('avg')}).")
         elif kind == "categorical" and column.get("top_values"):
             top = column["top_values"][0]
             pct = round(top.get("ratio", 0) * 100, 1)
-            insights.append(
-                f"{name} most frequent value '{top.get('value')}' (~{pct}% of sampled rows)."
-            )
+            insights.append(f"{name} most frequent value '{top.get('value')}' (~{pct}% of sampled rows).")
         elif kind == "time" and column.get("min_ts") and column.get("max_ts"):
             span_ms = column.get("span_ms") or 0
             if span_ms >= 3_600_000:
@@ -223,9 +200,7 @@ def _compose_insights(key_metrics: Dict[str, Any]) -> List[str]:
                 span_text = f"{round(span_ms / 60_000, 2)}m"
             else:
                 span_text = f"{round(span_ms / 1000, 2)}s"
-            insights.append(
-                f"{name} covers {column['min_ts']} → {column['max_ts']} ({span_text})."
-            )
+            insights.append(f"{name} covers {column['min_ts']} → {column['max_ts']} ({span_text}).")
 
     return insights
 

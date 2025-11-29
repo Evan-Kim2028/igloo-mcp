@@ -28,9 +28,7 @@ class TestEvolveReportResponseDetail:
         result = await tool.execute(
             report_selector=report_id,
             instruction="Add test section",
-            proposed_changes={
-                "sections_to_add": [{"title": "Test Section", "order": 0}]
-            },
+            proposed_changes={"sections_to_add": [{"title": "Test Section", "order": 0}]},
             response_detail="minimal",
         )
 
@@ -60,9 +58,7 @@ class TestEvolveReportResponseDetail:
         result = await tool.execute(
             report_selector=report_id,
             instruction="Add test section",
-            proposed_changes={
-                "sections_to_add": [{"title": "Test Section", "order": 0}]
-            },
+            proposed_changes={"sections_to_add": [{"title": "Test Section", "order": 0}]},
             response_detail="standard",
         )
 
@@ -90,9 +86,7 @@ class TestEvolveReportResponseDetail:
         result = await tool.execute(
             report_selector=report_id,
             instruction="Add test section",
-            proposed_changes={
-                "sections_to_add": [{"title": "Test Section", "order": 0}]
-            },
+            proposed_changes={"sections_to_add": [{"title": "Test Section", "order": 0}]},
             response_detail="full",
         )
 
@@ -216,9 +210,7 @@ class TestRenderReportPreviewMaxChars:
         tool = RenderReportTool(config, report_service)
 
         # Create a report
-        report_id = report_service.create_report(
-            title="Test Report", template="default"
-        )
+        report_id = report_service.create_report(title="Test Report", template="default")
 
         # Render with small preview (dry run to avoid Quarto dependency)
         result = await tool.execute(

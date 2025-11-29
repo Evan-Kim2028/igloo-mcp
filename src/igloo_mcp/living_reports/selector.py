@@ -16,9 +16,7 @@ class SelectorResolutionError(ValueError):
     error_type: str  # "not_found", "ambiguous", "invalid_format"
     candidates: Optional[List[str]] = None
     message: Optional[str] = None
-    candidate_details: Optional[List[Dict[str, str]]] = (
-        None  # List of {title, id} dicts
-    )
+    candidate_details: Optional[List[Dict[str, str]]] = None  # List of {title, id} dicts
 
     def to_dict(self):
         result = {
@@ -111,9 +109,7 @@ class ReportSelector:
                     message=f"No reports found with tag: {tag}",
                 )
             if len(entries) > 1:
-                candidate_details = [
-                    {"title": e.current_title, "id": e.report_id} for e in entries
-                ]
+                candidate_details = [{"title": e.current_title, "id": e.report_id} for e in entries]
                 raise SelectorResolutionError(
                     selector=selector,
                     error_type="ambiguous",
@@ -148,6 +144,5 @@ class ReportSelector:
             error_type="not_found",
             candidates=candidates if candidates else None,
             candidate_details=candidate_details if candidate_details else None,
-            message=f"Report not found: {selector}"
-            + (". Did you mean one of these?" if candidate_details else ""),
+            message=f"Report not found: {selector}" + (". Did you mean one of these?" if candidate_details else ""),
         )

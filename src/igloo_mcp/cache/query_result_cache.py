@@ -78,9 +78,7 @@ class QueryResultCache:
                 logger.warning(warning)
 
         if self._root is None:
-            warning = (
-                "Query result cache disabled because no writable root was available."
-            )
+            warning = "Query result cache disabled because no writable root was available."
             self._warnings.append(warning)
             logger.warning(warning)
             self._mode = "disabled"
@@ -104,9 +102,7 @@ class QueryResultCache:
             mode = cls.DEFAULT_MODE
 
         root_raw = os.environ.get("IGLOO_MCP_CACHE_ROOT")
-        disable_via_root = bool(
-            root_raw and root_raw.strip().lower() in cls.DISABLE_SENTINELS
-        )
+        disable_via_root = bool(root_raw and root_raw.strip().lower() in cls.DISABLE_SENTINELS)
         if disable_via_root:
             return cls(mode="disabled", root=None)
 
@@ -124,9 +120,7 @@ class QueryResultCache:
             )
             resolved_root = None
 
-        fallback_root = (
-            Path.home() / ".igloo_mcp" / DEFAULT_ARTIFACT_ROOT / DEFAULT_CACHE_SUBDIR
-        )
+        fallback_root = Path.home() / ".igloo_mcp" / DEFAULT_ARTIFACT_ROOT / DEFAULT_CACHE_SUBDIR
 
         try:
             fallback_root.mkdir(parents=True, exist_ok=True)
@@ -353,9 +347,7 @@ class QueryResultCache:
                     writer = csv.DictWriter(csvfile, fieldnames=metadata["columns"])
                     writer.writeheader()
                     for row in rows:
-                        writer.writerow(
-                            {col: row.get(col) for col in metadata["columns"]}
-                        )
+                        writer.writerow({col: row.get(col) for col in metadata["columns"]})
         except Exception as exc:
             warning = "Failed to persist cached CSV for %s: %s" % (cache_key, exc)
             # CSV is optional; keep going but record warning.

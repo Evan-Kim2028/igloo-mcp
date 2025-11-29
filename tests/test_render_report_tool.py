@@ -72,9 +72,7 @@ class TestRenderReportTool:
         assert examples[0]["parameters"]["include_preview"] is True
 
         # Second example - PDF with options
-        assert (
-            examples[1]["description"] == "Generate PDF report with table of contents"
-        )
+        assert examples[1]["description"] == "Generate PDF report with table of contents"
         assert examples[1]["parameters"]["format"] == "pdf"
         assert "toc" in examples[1]["parameters"]["options"]
 
@@ -288,9 +286,7 @@ async def test_render_report_quarto_missing(report_service, render_tool, monkeyp
 
         raise QuartoNotFoundError("Quarto not found in PATH")
 
-    monkeypatch.setattr(
-        "igloo_mcp.living_reports.quarto_renderer.QuartoRenderer.detect", mock_detect
-    )
+    monkeypatch.setattr("igloo_mcp.living_reports.quarto_renderer.QuartoRenderer.detect", mock_detect)
 
     with pytest.raises(MCPExecutionError) as exc_info:
         await render_tool.execute(report_selector=report_id)

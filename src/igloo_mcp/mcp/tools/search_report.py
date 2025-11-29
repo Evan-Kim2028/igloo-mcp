@@ -190,11 +190,7 @@ class SearchReportTool(MCPTool):
                     reverse=True,
                 )
                 # Filter by title substring match
-                results = [
-                    entry
-                    for entry in all_entries
-                    if title_lower in entry.current_title.lower()
-                ]
+                results = [entry for entry in all_entries if title_lower in entry.current_title.lower()]
             # Otherwise, use list_entries with filters
             else:
                 results = index.list_entries(
@@ -240,9 +236,7 @@ class SearchReportTool(MCPTool):
                 if invalid_fields:
                     raise MCPValidationError(
                         f"Invalid fields: {', '.join(invalid_fields)}",
-                        validation_errors=[
-                            f"Unknown field: {f}" for f in invalid_fields
-                        ],
+                        validation_errors=[f"Unknown field: {f}" for f in invalid_fields],
                         hints=[
                             f"Valid fields are: {', '.join(all_fields)}",
                             "Use fields=['report_id', 'title'] for minimal responses",
@@ -290,8 +284,7 @@ class SearchReportTool(MCPTool):
                 "reports": reports_data,
                 "search_criteria": search_criteria,
                 "message": (
-                    f"No reports matched your search criteria. "
-                    f"Showing {len(results)} most recently modified reports."
+                    f"No reports matched your search criteria. Showing {len(results)} most recently modified reports."
                     if fallback
                     else f"Found {len(results)} matching report(s)."
                 ),

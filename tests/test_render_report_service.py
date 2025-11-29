@@ -12,9 +12,7 @@ def test_render_service_dry_run_includes_qmd_path(tmp_path):
     service = ReportService(reports_root=tmp_path / "reports")
     report_id = service.create_report("Render Dry Run Test")
 
-    result = service.render_report(
-        report_id=report_id, dry_run=True, include_preview=True
-    )
+    result = service.render_report(report_id=report_id, dry_run=True, include_preview=True)
 
     assert result["status"] == "success"
     qmd_path = result["output"].get("qmd_path")

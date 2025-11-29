@@ -23,9 +23,7 @@ class SnowflakeConfig:
     schema: Optional[str] = None
     role: Optional[str] = None
 
-    def apply_overrides(
-        self, overrides: Mapping[str, Optional[str]]
-    ) -> "SnowflakeConfig":
+    def apply_overrides(self, overrides: Mapping[str, Optional[str]]) -> "SnowflakeConfig":
         if not overrides:
             return self
         data = asdict(self)
@@ -125,9 +123,7 @@ class Config:
             return self
         cfg = self
         if overrides.snowflake:
-            cfg = replace(
-                cfg, snowflake=cfg.snowflake.apply_overrides(overrides.snowflake)
-            )
+            cfg = replace(cfg, snowflake=cfg.snowflake.apply_overrides(overrides.snowflake))
         for key, value in overrides.values.items():
             if value is not None:
                 cfg = replace(cfg, **{key: value})
@@ -229,9 +225,7 @@ class ConfigLoader:
         config = self._default_config(env_map)
 
         if config_path:
-            config = config.apply_overrides(
-                self._overrides_from_file(Path(config_path))
-            )
+            config = config.apply_overrides(self._overrides_from_file(Path(config_path)))
 
         env_overrides = self._overrides_from_env(env_map)
         if not env_overrides.is_empty():
@@ -262,9 +256,7 @@ class ConfigLoader:
             try:
                 runtime[field_name] = caster(raw_value)
             except (TypeError, ValueError) as exc:
-                raise ConfigError(
-                    f"Invalid value for {env_key}: {raw_value!r}"
-                ) from exc
+                raise ConfigError(f"Invalid value for {env_key}: {raw_value!r}") from exc
 
         return ConfigOverrides(snowflake=snowflake, values=runtime)
 
@@ -287,18 +279,12 @@ class ConfigLoader:
                 if key in snowflake_data:
                     snowflake[key] = snowflake_data.get(key)
 
-        runtime_candidates = {
-            key: data[key] for key in self._RUNTIME_CASTERS.keys() if key in data
-        }
-        runtime = self.normalize_runtime_values(
-            runtime_candidates, source=f"file {path}"
-        )
+        runtime_candidates = {key: data[key] for key in self._RUNTIME_CASTERS.keys() if key in data}
+        runtime = self.normalize_runtime_values(runtime_candidates, source=f"file {path}")
 
         return ConfigOverrides(snowflake=snowflake, values=runtime)
 
-    def _overrides_from_cli(
-        self, overrides: Mapping[str, Optional[str]]
-    ) -> ConfigOverrides:
+    def _overrides_from_cli(self, overrides: Mapping[str, Optional[str]]) -> ConfigOverrides:
         snowflake: Dict[str, Optional[str]] = {}
         runtime_candidates: Dict[str, Any] = {}
 
@@ -310,9 +296,7 @@ class ConfigLoader:
             elif key in self._RUNTIME_CASTERS:
                 runtime_candidates[key] = value
 
-        runtime = self.normalize_runtime_values(
-            runtime_candidates, source="CLI overrides"
-        )
+        runtime = self.normalize_runtime_values(runtime_candidates, source="CLI overrides")
         return ConfigOverrides(snowflake=snowflake, values=runtime)
 
     def normalize_runtime_values(
@@ -329,9 +313,7 @@ class ConfigLoader:
             try:
                 normalized[field_name] = caster(raw)
             except (TypeError, ValueError) as exc:
-                raise ConfigError(
-                    f"Invalid value for {field_name} from {source}: {raw!r}"
-                ) from exc
+                raise ConfigError(f"Invalid value for {field_name} from {source}: {raw!r}") from exc
         return normalized
 
 
@@ -376,9 +358,7 @@ class ConfigManager:
             self._config = updated
             return updated
 
-    def normalize_runtime_values(
-        self, values: Mapping[str, Any], *, source: str
-    ) -> Dict[str, Any]:
+    def normalize_runtime_values(self, values: Mapping[str, Any], *, source: str) -> Dict[str, Any]:
         return self._loader.normalize_runtime_values(values, source=source)
 
 

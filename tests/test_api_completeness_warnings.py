@@ -80,9 +80,7 @@ class TestBuildCatalogWarnings:
     """Test warnings infrastructure for build_catalog tool."""
 
     @pytest.mark.asyncio
-    async def test_warnings_field_always_present(
-        self, mock_config, mock_catalog_service
-    ):
+    async def test_warnings_field_always_present(self, mock_config, mock_catalog_service):
         """Test that warnings field is always present in response."""
         tool = BuildCatalogTool(mock_config, mock_catalog_service)
 
@@ -223,9 +221,7 @@ class TestWarningsConsistencyAcrossTools:
     """Test warnings consistency across different tools."""
 
     @pytest.mark.asyncio
-    async def test_all_tools_have_warnings_field(
-        self, mock_config, mock_catalog_service, temp_catalog_dir
-    ):
+    async def test_all_tools_have_warnings_field(self, mock_config, mock_catalog_service, temp_catalog_dir):
         """Test that all modified tools have warnings field."""
         tools_and_params = [
             (
@@ -242,14 +238,10 @@ class TestWarningsConsistencyAcrossTools:
             result = await tool.execute(**params)
 
             assert "warnings" in result, f"{tool.name} must have warnings field"
-            assert isinstance(
-                result["warnings"], list
-            ), f"{tool.name} warnings must be a list"
+            assert isinstance(result["warnings"], list), f"{tool.name} warnings must be a list"
 
     @pytest.mark.asyncio
-    async def test_warnings_type_consistency(
-        self, mock_config, mock_catalog_service, temp_catalog_dir
-    ):
+    async def test_warnings_type_consistency(self, mock_config, mock_catalog_service, temp_catalog_dir):
         """Test that warnings field type is consistent across tools."""
         tools_and_params = [
             (
@@ -268,18 +260,14 @@ class TestWarningsConsistencyAcrossTools:
             warning_types.append(type(result["warnings"]))
 
         # All should be list type
-        assert all(
-            wt is list for wt in warning_types
-        ), "All tools should return warnings as list type"
+        assert all(wt is list for wt in warning_types), "All tools should return warnings as list type"
 
 
 class TestWarningsFutureExtensibility:
     """Test that warnings infrastructure is ready for future use."""
 
     @pytest.mark.asyncio
-    async def test_warnings_can_hold_structured_data(
-        self, mock_config, mock_catalog_service
-    ):
+    async def test_warnings_can_hold_structured_data(self, mock_config, mock_catalog_service):
         """Test that warnings array can hold structured warning objects."""
         # This test verifies the infrastructure is ready for future warnings
         tool = BuildCatalogTool(mock_config, mock_catalog_service)
@@ -330,9 +318,7 @@ class TestWarningsFutureExtensibility:
 class TestWarningsDocumentation:
     """Test that warnings are properly documented in schemas."""
 
-    def test_build_catalog_schema_documents_warnings(
-        self, mock_config, mock_catalog_service
-    ):
+    def test_build_catalog_schema_documents_warnings(self, mock_config, mock_catalog_service):
         """Test that build_catalog schema includes warnings documentation."""
         tool = BuildCatalogTool(mock_config, mock_catalog_service)
         # Schema is checked implicitly through tool initialization

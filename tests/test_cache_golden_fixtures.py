@@ -54,9 +54,7 @@ def _compare_csv(expected_path: Path, actual_path: Path) -> None:
 
 def test_cache_history_golden_fixture(tmp_path):
     if not BASELINE_DIR.exists():
-        pytest.skip(
-            "Golden fixtures not present; run fixture generator to create baseline"
-        )
+        pytest.skip("Golden fixtures not present; run fixture generator to create baseline")
 
     generated = generate_cache_fixture(tmp_path)
 
@@ -65,9 +63,7 @@ def test_cache_history_golden_fixture(tmp_path):
 
     expected_manifest = next(BASELINE_DIR.glob("artifacts/cache/*/manifest.json"), None)
     if expected_manifest is None:
-        pytest.skip(
-            "Cache artifact baseline not present; run fixture generator to create baseline"
-        )
+        pytest.skip("Cache artifact baseline not present; run fixture generator to create baseline")
     _compare_json(expected_manifest, generated["manifest"])
 
     expected_rows_jsonl = expected_manifest.parent / "rows.jsonl"
@@ -78,9 +74,5 @@ def test_cache_history_golden_fixture(tmp_path):
 
     expected_sql = next(BASELINE_DIR.glob("artifacts/queries/by_sha/*.sql"), None)
     if expected_sql is None:
-        pytest.skip(
-            "Query artifact baseline not present; run fixture generator to create baseline"
-        )
-    assert generated["sql"].read_text(encoding="utf-8") == expected_sql.read_text(
-        encoding="utf-8"
-    )
+        pytest.skip("Query artifact baseline not present; run fixture generator to create baseline")
+    assert generated["sql"].read_text(encoding="utf-8") == expected_sql.read_text(encoding="utf-8")

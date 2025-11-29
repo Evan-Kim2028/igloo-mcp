@@ -159,9 +159,7 @@ def _select_entries(
     return selected
 
 
-def _read_sql_text(
-    artifact_root: Path, sha: str, artifacts: Dict[str, Any]
-) -> Optional[str]:
+def _read_sql_text(artifact_root: Path, sha: str, artifacts: Dict[str, Any]) -> Optional[str]:
     if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
         raise ValueError(f"Invalid sql_sha256 '{sha}'")
     if artifacts:

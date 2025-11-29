@@ -45,15 +45,11 @@ class TestBug89CitationEnforcement:
         }
 
         # Should return validation_failed
-        result = await tool.execute(
-            report_selector="Test Report", instruction="", proposed_changes=changes
-        )
+        result = await tool.execute(report_selector="Test Report", instruction="", proposed_changes=changes)
 
         assert result["status"] == "validation_failed"
         assert "validation_issues" in result or "validation_errors" in result
-        validation_errors = result.get("validation_issues") or result.get(
-            "validation_errors", []
-        )
+        validation_errors = result.get("validation_issues") or result.get("validation_errors", [])
         error_text = " ".join(str(e).lower() for e in validation_errors)
         assert "citation" in error_text
         assert "execution_id" in error_text
@@ -83,15 +79,11 @@ class TestBug89CitationEnforcement:
         }
 
         # Should return validation_failed
-        result = await tool.execute(
-            report_selector="Analyst Report", instruction="", proposed_changes=changes
-        )
+        result = await tool.execute(report_selector="Analyst Report", instruction="", proposed_changes=changes)
 
         assert result["status"] == "validation_failed"
         assert "validation_issues" in result or "validation_errors" in result
-        validation_errors = result.get("validation_issues") or result.get(
-            "validation_errors", []
-        )
+        validation_errors = result.get("validation_issues") or result.get("validation_errors", [])
         error_text = " ".join(str(e).lower() for e in validation_errors)
         assert "citation" in error_text
 
@@ -134,9 +126,7 @@ class TestBug89CitationEnforcement:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(
-            title="Test Report", template="default"
-        )
+        report_id = report_service.create_report(title="Test Report", template="default")
 
         changes = {
             "insights_to_add": [
@@ -152,9 +142,7 @@ class TestBug89CitationEnforcement:
         }
 
         # Should succeed with citations
-        result = await tool.execute(
-            report_selector="Test Report", instruction="", proposed_changes=changes
-        )
+        result = await tool.execute(report_selector="Test Report", instruction="", proposed_changes=changes)
 
         assert result["status"] == "success"
         # Check that insight was added
@@ -199,9 +187,7 @@ class TestBug88MetadataUpdates:
         tool = EvolveReportTool(config, report_service)
 
         # Create report with initial metadata
-        report_id = report_service.create_report(
-            title="Test Report", template="default"
-        )
+        report_id = report_service.create_report(title="Test Report", template="default")
 
         # Add some initial metadata
         await tool.execute(
@@ -263,9 +249,7 @@ class TestBug88MetadataUpdates:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(
-            title="Test Report", template="default"
-        )
+        report_id = report_service.create_report(title="Test Report", template="default")
         original_outline = report_service.get_report_outline(report_id)
         original_version = original_outline.outline_version
 
@@ -285,13 +269,9 @@ class TestBug88MetadataUpdates:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(
-            title="Test Report", template="default"
-        )
+        report_id = report_service.create_report(title="Test Report", template="default")
 
-        result = await tool.execute(
-            report_selector="Test Report", instruction="", status_change="archived"
-        )
+        result = await tool.execute(report_selector="Test Report", instruction="", status_change="archived")
 
         assert result["status"] == "success"
         updated_outline = report_service.get_report_outline(report_id)

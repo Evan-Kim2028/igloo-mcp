@@ -100,9 +100,7 @@ async def test_success_returns_query_id_and_logs(tmp_path, monkeypatch):
 @pytest.mark.parametrize("bad_value", ["30s", 12.5, True])
 async def test_timeout_seconds_requires_integer(bad_value):
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    service = FakeSnowflakeService(
-        [FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}])]
-    )
+    service = FakeSnowflakeService([FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}])])
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     with pytest.raises((TypeError, ValueError)):
@@ -115,9 +113,7 @@ async def test_timeout_seconds_accepts_numeric_string(tmp_path, monkeypatch):
     monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    service = FakeSnowflakeService(
-        [FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}])]
-    )
+    service = FakeSnowflakeService([FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}])])
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     res = await tool.execute(statement="SELECT QUICK", timeout_seconds="45")
@@ -134,17 +130,13 @@ async def test_timeout_seconds_accepts_floatish_values(tmp_path, monkeypatch):
     monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    service = FakeSnowflakeService(
-        [FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}])]
-    )
+    service = FakeSnowflakeService([FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}])])
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     res = await tool.execute(statement="SELECT QUICK", timeout_seconds=30.0)
     assert res["rowcount"] == 1
 
-    event = json.loads(
-        history_path.read_text(encoding="utf-8").strip().splitlines()[-1]
-    )
+    event = json.loads(history_path.read_text(encoding="utf-8").strip().splitlines()[-1])
     assert event["timeout_seconds"] == 30
 
 
@@ -155,9 +147,7 @@ async def test_disabling_history_skips_sql_artifact(tmp_path, monkeypatch):
     monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
 
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
-    service = FakeSnowflakeService(
-        [FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}])]
-    )
+    service = FakeSnowflakeService([FakeQueryPlan(statement="SELECT QUICK", rows=[{"A": 1}, {"A": 2}])])
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     assert tool.history.enabled is False
@@ -187,19 +177,12 @@ async def test_reason_query_tag_applied_per_request_and_restored(tmp_path, monke
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
     await tool.execute(statement="SELECT QUICK", timeout_seconds=2, reason="First pass")
-    await tool.execute(
-        statement="SELECT QUICK", timeout_seconds=2, reason="Second pass"
-    )
+    await tool.execute(statement="SELECT QUICK", timeout_seconds=2, reason="Second pass")
 
     executed_cursors = [cursor for cursor in service.cursors if cursor._main_executed]
     assert len(executed_cursors) == 2
 
-    tags = [
-        tag
-        for cursor in executed_cursors
-        for tag in cursor.query_tags_seen
-        if tag is not None
-    ]
+    tags = [tag for cursor in executed_cursors for tag in cursor.query_tags_seen if tag is not None]
     assert tags == [
         "tool:execute_query; reason:First pass",
         "tool:execute_query; reason:Second pass",
@@ -257,9 +240,7 @@ async def test_large_result_triggers_truncation(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_timeout_error_message_prioritizes_catalog_filtering(
-    tmp_path, monkeypatch
-):
+async def test_timeout_error_message_prioritizes_catalog_filtering(tmp_path, monkeypatch):
     """Test that timeout error messages prioritize catalog-based filtering before timeout increases."""
     history_path = tmp_path / "history.jsonl"
     monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
@@ -292,6 +273,4 @@ async def test_timeout_error_message_prioritizes_catalog_filtering(
     clustering_mention = error_msg.find("clustering keys")
 
     if timeout_mention != -1 and clustering_mention != -1:
-        assert (
-            clustering_mention < timeout_mention
-        ), "Clustering guidance should come before timeout increase"
+        assert clustering_mention < timeout_mention, "Clustering guidance should come before timeout increase"

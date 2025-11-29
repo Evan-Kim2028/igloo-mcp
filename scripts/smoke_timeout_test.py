@@ -94,9 +94,7 @@ async def run_smoke():
     print("Case 1: Timeout + cancel path...")
     tool = ExecuteQueryTool(cfg, FakeService(work_seconds=5.0), query_service)
     try:
-        await tool.execute(
-            statement="SELECT LONG_RUNNING", timeout_seconds=1, verbose_errors=False
-        )
+        await tool.execute(statement="SELECT LONG_RUNNING", timeout_seconds=1, verbose_errors=False)
     except RuntimeError as e:
         print("  -> Caught RuntimeError (expected timeout):", str(e)[:120])
     else:
@@ -104,9 +102,7 @@ async def run_smoke():
 
     print("Case 2: Success within timeout...")
     tool2 = ExecuteQueryTool(cfg, FakeService(work_seconds=0.2), query_service)
-    res = await tool2.execute(
-        statement="SELECT QUICK", timeout_seconds=3, verbose_errors=True
-    )
+    res = await tool2.execute(statement="SELECT QUICK", timeout_seconds=3, verbose_errors=True)
     print("  -> Success rowcount:", res.get("rowcount"))
     print("  -> Query ID:", res.get("query_id"))
     print("  -> Duration ms:", res.get("duration_ms"))

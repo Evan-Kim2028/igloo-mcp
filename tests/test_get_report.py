@@ -199,9 +199,7 @@ class TestGetReportTool:
         tool = GetReportTool(config, report_service)
 
         # Create report with sections and insights
-        report_id = report_service.create_report(
-            title="Full Test", template="quarterly_review"
-        )
+        report_id = report_service.create_report(title="Full Test", template="quarterly_review")
 
         # Add an insight
         from igloo_mcp.living_reports.models import Insight
@@ -235,9 +233,7 @@ class TestGetReportTool:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(
-            title="Test", template="quarterly_review"
-        )
+        report_id = report_service.create_report(title="Test", template="quarterly_review")
 
         # Search for sections with partial titles
         # quarterly_review has: "Executive Summary", "Key Metrics", "Strategic Initiatives", "Next Quarter Goals"
@@ -263,9 +259,7 @@ class TestGetReportTool:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(
-            title="Test", template="quarterly_review"
-        )
+        report_id = report_service.create_report(title="Test", template="quarterly_review")
         outline = report_service.get_report_outline(report_id)
 
         # Get specific sections by ID
@@ -299,12 +293,8 @@ class TestGetReportTool:
         section1_id = str(uuid.uuid4())
         section2_id = str(uuid.uuid4())
 
-        section1 = Section(
-            section_id=section1_id, title="Section 1", order=0, insight_ids=[]
-        )
-        section2 = Section(
-            section_id=section2_id, title="Section 2", order=1, insight_ids=[]
-        )
+        section1 = Section(section_id=section1_id, title="Section 1", order=0, insight_ids=[])
+        section2 = Section(section_id=section2_id, title="Section 2", order=1, insight_ids=[])
 
         insights = [
             Insight(
@@ -375,9 +365,7 @@ class TestGetReportTool:
         report_service.update_report_outline(report_id, outline, actor="test")
 
         # Get with content
-        result_with = await tool.execute(
-            report_selector=report_id, mode="sections", include_content=True
-        )
+        result_with = await tool.execute(report_selector=report_id, mode="sections", include_content=True)
 
         assert result_with["status"] == "success"
         assert "content" in result_with["sections"][0]
@@ -388,10 +376,7 @@ class TestGetReportTool:
 
         assert result_without["status"] == "success"
         # Content should be omitted for token efficiency
-        assert (
-            "content" not in result_without["sections"][0]
-            or result_without["sections"][0].get("content") is None
-        )
+        assert "content" not in result_without["sections"][0] or result_without["sections"][0].get("content") is None
 
     async def test_get_report_mode_insights_with_citations(self, tmp_path: Path):
         """Test citation information in insights mode."""
@@ -408,9 +393,7 @@ class TestGetReportTool:
         section_id = str(uuid.uuid4())
         insight_id = str(uuid.uuid4())
 
-        section = Section(
-            section_id=section_id, title="Test", order=0, insight_ids=[insight_id]
-        )
+        section = Section(section_id=section_id, title="Test", order=0, insight_ids=[insight_id])
 
         insight = Insight(
             insight_id=insight_id,

@@ -233,9 +233,7 @@ class FakeSnowflakeCursor:
         self._main_executed = True
         expected = " ".join(self.plan.statement.strip().split()).upper()
         if expected and normalized_query.upper() != expected:
-            raise AssertionError(
-                f"Expected query '{self.plan.statement}' but received '{normalized_query}'"
-            )
+            raise AssertionError(f"Expected query '{self.plan.statement}' but received '{normalized_query}'")
 
         if self.plan.error:
             raise self.plan.error
@@ -252,9 +250,7 @@ class FakeSnowflakeCursor:
 
         self.sfqid = self.plan.sfqid
         self.query_tags_seen.append(self._session_parameters.get("QUERY_TAG"))
-        self.statement_timeouts_seen.append(
-            self._session_parameters.get("STATEMENT_TIMEOUT_IN_SECONDS")
-        )
+        self.statement_timeouts_seen.append(self._session_parameters.get("STATEMENT_TIMEOUT_IN_SECONDS"))
 
         if self.plan.rows is not None:
             column_names = self._infer_column_names(self.plan.rows)

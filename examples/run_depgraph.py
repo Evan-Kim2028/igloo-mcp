@@ -107,9 +107,7 @@ def main() -> None:
             f"[lineage-example] Catalog directory {args.catalog_dir} not found. Run the following commands first:",
         )
         print("  uv run python examples/sample_data/setup_sample_data.py")
-        print(
-            f"  # Use MCP client to build catalog for DEFI_SAMPLE_DB to {args.catalog_dir}"
-        )
+        print(f"  # Use MCP client to build catalog for DEFI_SAMPLE_DB to {args.catalog_dir}")
         sys.exit(1)
 
     service = LineageQueryService(args.catalog_dir, args.cache_dir)

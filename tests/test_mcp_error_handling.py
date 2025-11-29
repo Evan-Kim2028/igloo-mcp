@@ -349,10 +349,7 @@ class TestErrorHintsActionability:
         # Should mention template parameter specifically
         assert any("template" in hint.lower() for hint in hints)
         # Should include example values
-        assert any(
-            "default" in hint.lower() or "monthly_sales" in hint.lower()
-            for hint in hints
-        )
+        assert any("default" in hint.lower() or "monthly_sales" in hint.lower() for hint in hints)
 
     @pytest.mark.asyncio
     async def test_selector_error_hints_include_suggestions(self, tmp_path):
@@ -368,9 +365,7 @@ class TestErrorHintsActionability:
         # Should suggest using search_report
         assert any("search_report" in hint.lower() for hint in hints)
         # Should mention checking spelling
-        assert any(
-            "spelling" in hint.lower() or "spell" in hint.lower() for hint in hints
-        )
+        assert any("spelling" in hint.lower() or "spell" in hint.lower() for hint in hints)
 
     @pytest.mark.asyncio
     async def test_execution_error_hints_include_troubleshooting(self, tmp_path):
@@ -390,11 +385,6 @@ class TestErrorHintsActionability:
 
             hints = exc_info.value.hints
             # Should mention file system permissions
-            assert any(
-                "permission" in hint.lower() or "writable" in hint.lower()
-                for hint in hints
-            )
+            assert any("permission" in hint.lower() or "writable" in hint.lower() for hint in hints)
             # Should mention disk space
-            assert any(
-                "disk" in hint.lower() or "space" in hint.lower() for hint in hints
-            )
+            assert any("disk" in hint.lower() or "space" in hint.lower() for hint in hints)

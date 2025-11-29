@@ -73,9 +73,7 @@ class ConnectionTestTool(MCPTool):
         ]
 
     @tool_error_handler("test_connection")
-    async def execute(
-        self, request_id: Optional[str] = None, **kwargs: Any
-    ) -> Dict[str, Any]:
+    async def execute(self, request_id: Optional[str] = None, **kwargs: Any) -> Dict[str, Any]:
         """Test Snowflake connection.
 
         Args:

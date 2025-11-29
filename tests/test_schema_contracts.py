@@ -77,9 +77,7 @@ class TestPydanticValidationContracts:
         from igloo_mcp.living_reports.models import Insight
 
         # Valid importance
-        valid_insight = Insight(
-            insight_id=str(uuid.uuid4()), importance=8, summary="Test insight summary"
-        )
+        valid_insight = Insight(insight_id=str(uuid.uuid4()), importance=8, summary="Test insight summary")
         assert valid_insight.importance == 8
 
     def test_section_validates_required_fields(self):

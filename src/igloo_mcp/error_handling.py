@@ -40,10 +40,7 @@ class ErrorContext:
         sanitized = {}
         for key, value in self.parameters.items():
             # Skip sensitive fields
-            if any(
-                sensitive in key.lower()
-                for sensitive in ["password", "secret", "token", "key", "credential"]
-            ):
+            if any(sensitive in key.lower() for sensitive in ["password", "secret", "token", "key", "credential"]):
                 sanitized[key] = "***REDACTED***"
             elif isinstance(value, str) and len(value) > 200:
                 sanitized[key] = value[:200] + "..."
@@ -113,20 +110,12 @@ def categorize_snowflake_error(error: SnowCLIError, context: ErrorContext) -> Ex
     error_msg = str(error).lower()
 
     # Timeout errors (check first since timeout can be in connection errors)
-    if any(
-        keyword in error_msg
-        for keyword in ["timed out", "timeout occurred", "request timeout"]
-    ):
+    if any(keyword in error_msg for keyword in ["timed out", "timeout occurred", "request timeout"]):
         return SnowflakeTimeoutError(f"Timeout during {context.operation}: {error}")
 
     # Connection-related errors
-    if any(
-        keyword in error_msg
-        for keyword in ["connection", "network", "timeout", "unreachable", "refused"]
-    ):
-        return SnowflakeConnectionError(
-            f"Connection failed for {context.operation}: {error}"
-        )
+    if any(keyword in error_msg for keyword in ["connection", "network", "timeout", "unreachable", "refused"]):
+        return SnowflakeConnectionError(f"Connection failed for {context.operation}: {error}")
 
     # Permission-related errors
     if any(
@@ -139,9 +128,7 @@ def categorize_snowflake_error(error: SnowCLIError, context: ErrorContext) -> Ex
             "forbidden",
         ]
     ):
-        return SnowflakePermissionError(
-            f"Permission denied for {context.operation}: {error}"
-        )
+        return SnowflakePermissionError(f"Permission denied for {context.operation}: {error}")
 
     # Return original error if not categorized
     return error

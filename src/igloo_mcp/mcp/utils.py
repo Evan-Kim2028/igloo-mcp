@@ -20,17 +20,13 @@ def get_profile_recommendations(profile: Optional[str] = None) -> List[str]:
     recommendations = []
 
     if not profile:
-        recommendations.append(
-            "No profile specified. Use --profile flag or set SNOWFLAKE_PROFILE env var"
-        )
+        recommendations.append("No profile specified. Use --profile flag or set SNOWFLAKE_PROFILE env var")
         recommendations.append("Run 'snow connection list' to see available profiles")
         recommendations.append("Create a profile with 'snow connection add'")
     else:
         recommendations.append(f"Profile '{profile}' specified")
         recommendations.append("Verify profile exists with 'snow connection list'")
-        recommendations.append(
-            "Test profile with 'snow sql -q \"SELECT 1\" --connection {profile}'"
-        )
+        recommendations.append("Test profile with 'snow sql -q \"SELECT 1\" --connection {profile}'")
 
     return recommendations
 

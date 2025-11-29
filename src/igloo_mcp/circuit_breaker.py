@@ -54,9 +54,7 @@ class CircuitBreaker:
                 if self._should_attempt_reset():
                     self.state = CircuitState.HALF_OPEN
                 else:
-                    raise CircuitBreakerError(
-                        f"Circuit breaker is open. Last failure: {self.last_failure_time}"
-                    )
+                    raise CircuitBreakerError(f"Circuit breaker is open. Last failure: {self.last_failure_time}")
 
             try:
                 result = func(*args, **kwargs)

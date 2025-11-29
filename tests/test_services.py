@@ -58,9 +58,7 @@ def test_execute_query_success(mock_cli_class):
 
     assert result == mock_result
     assert service._last_error is None
-    mock_cli.run_query.assert_called_once_with(
-        "SELECT 1", output_format=None, ctx_overrides=None, timeout=None
-    )
+    mock_cli.run_query.assert_called_once_with("SELECT 1", output_format=None, ctx_overrides=None, timeout=None)
 
 
 @patch("igloo_mcp.services.SnowCLI")
@@ -153,9 +151,7 @@ def test_get_health_status_circuit_breaker_open(mock_cli_class):
     service = RobustSnowflakeService()
 
     # Mock circuit breaker to be open
-    with patch.object(
-        service, "test_connection", side_effect=CircuitBreakerError("Circuit open")
-    ):
+    with patch.object(service, "test_connection", side_effect=CircuitBreakerError("Circuit open")):
         status = service.get_health_status()
 
     assert status.healthy is False
@@ -213,11 +209,7 @@ def test_execute_query_safe_with_kwargs():
     mock_result = QueryOutput("output", "", 0, rows=[{"col1": "value1"}])
     mock_service.execute_query.return_value = mock_result
 
-    result = execute_query_safe(
-        mock_service, "SELECT 1", output_format="json", timeout=30
-    )
+    result = execute_query_safe(mock_service, "SELECT 1", output_format="json", timeout=30)
 
     assert result == [{"col1": "value1"}]
-    mock_service.execute_query.assert_called_once_with(
-        "SELECT 1", output_format="json", timeout=30
-    )
+    mock_service.execute_query.assert_called_once_with("SELECT 1", output_format="json", timeout=30)

@@ -97,9 +97,7 @@ class TestCreateReportTool:
     @pytest.mark.asyncio
     async def test_create_report_with_tags(self, tool):
         """Test report creation with tags."""
-        result = await tool.execute(
-            title="Tagged Report", tags=["q1", "revenue", "sales"]
-        )
+        result = await tool.execute(title="Tagged Report", tags=["q1", "revenue", "sales"])
 
         assert result["status"] == "success"
         assert result["tags"] == ["q1", "revenue", "sales"]
@@ -107,17 +105,13 @@ class TestCreateReportTool:
     @pytest.mark.asyncio
     async def test_create_report_with_description(self, tool, report_service):
         """Test report creation with description."""
-        result = await tool.execute(
-            title="Described Report", description="This is a test report description"
-        )
+        result = await tool.execute(title="Described Report", description="This is a test report description")
 
         assert result["status"] == "success"
 
         # Verify description is in metadata
         outline = report_service.get_report_outline(result["report_id"])
-        assert (
-            outline.metadata.get("description") == "This is a test report description"
-        )
+        assert outline.metadata.get("description") == "This is a test report description"
 
     @pytest.mark.asyncio
     async def test_create_report_full_metadata(self, tool, report_service):
@@ -135,9 +129,7 @@ class TestCreateReportTool:
 
         # Verify all metadata
         outline = report_service.get_report_outline(result["report_id"])
-        assert (
-            outline.metadata.get("description") == "Complete quarterly business review"
-        )
+        assert outline.metadata.get("description") == "Complete quarterly business review"
         assert outline.metadata.get("template") == "quarterly_review"
         assert outline.metadata.get("tags") == ["q1", "business"]
 
@@ -147,9 +139,7 @@ class TestCreateReportTool:
         from igloo_mcp.mcp.exceptions import MCPValidationError
 
         with pytest.raises(MCPValidationError) as exc_info:
-            await tool.execute(
-                title="Invalid Template Report", template="nonexistent_template"
-            )
+            await tool.execute(title="Invalid Template Report", template="nonexistent_template")
 
         assert "Invalid template" in str(exc_info.value)
         assert "nonexistent_template" in str(exc_info.value)

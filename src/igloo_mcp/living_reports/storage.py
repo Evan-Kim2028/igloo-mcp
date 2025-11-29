@@ -101,9 +101,7 @@ class ReportLock:
                 timeout=self.timeout_seconds,
             )
         except portalocker.LockException as e:
-            raise LockTimeoutError(
-                f"Failed to acquire lock within {self.timeout_seconds}s: {e}"
-            ) from e
+            raise LockTimeoutError(f"Failed to acquire lock within {self.timeout_seconds}s: {e}") from e
         except Exception as e:
             if self._lock_file:
                 self._lock_file.close()

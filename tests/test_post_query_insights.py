@@ -314,9 +314,7 @@ class TestComposeInsights:
         }
         insights = _compose_insights(key_metrics)
         assert len(insights) > 0
-        assert any(
-            "Analyzed first" in insight and "rows" in insight for insight in insights
-        )
+        assert any("Analyzed first" in insight and "rows" in insight for insight in insights)
 
     def test_compose_insights_empty(self):
         """Test insight composition with empty metrics."""
@@ -335,17 +333,13 @@ class TestBuildDefaultInsights:
 
     def test_build_insights_empty_data(self):
         """Test insight building with empty data."""
-        metrics, insights = build_default_insights(
-            None, columns=None, total_rows=0, truncated=False
-        )
+        metrics, insights = build_default_insights(None, columns=None, total_rows=0, truncated=False)
         assert metrics is None
         assert insights == []
 
     def test_build_insights_empty_rows(self):
         """Test insight building with empty rows."""
-        metrics, insights = build_default_insights(
-            [], columns=None, total_rows=0, truncated=False
-        )
+        metrics, insights = build_default_insights([], columns=None, total_rows=0, truncated=False)
         assert metrics is None
         assert insights == []
 
@@ -369,9 +363,7 @@ class TestBuildDefaultInsights:
         for i in range(total_rows_count):
             rows.append({"id": i, "value": i * 2.0})
 
-        metrics, insights = build_default_insights(
-            rows, columns=None, total_rows=total_rows_count, truncated=True
-        )
+        metrics, insights = build_default_insights(rows, columns=None, total_rows=total_rows_count, truncated=True)
         assert metrics is not None
         assert metrics["total_rows"] == total_rows_count
         assert metrics["sampled_rows"] == MAX_SAMPLE_ROWS
@@ -403,9 +395,7 @@ class TestBuildDefaultInsights:
                 "created": datetime(2023, 1, 3),
             },
         ]
-        metrics, insights = build_default_insights(
-            rows, columns=None, total_rows=3, truncated=False
-        )
+        metrics, insights = build_default_insights(rows, columns=None, total_rows=3, truncated=False)
         assert metrics is not None
         assert len(metrics["columns"]) == 5
 
@@ -423,16 +413,12 @@ class TestBuildDefaultInsights:
             {"country": "🇺🇸", "city": "Los Angeles", "temperature": 30.0},
             {"country": "🇩🇪", "city": "Berlin", "temperature": 18.0},
         ]
-        metrics, insights = build_default_insights(
-            rows, columns=None, total_rows=4, truncated=False
-        )
+        metrics, insights = build_default_insights(rows, columns=None, total_rows=4, truncated=False)
         assert metrics is not None
         assert len(metrics["columns"]) == 3
 
         # Check Unicode handling in categorical columns
-        country_col = next(
-            col for col in metrics["columns"] if col["name"] == "country"
-        )
+        country_col = next(col for col in metrics["columns"] if col["name"] == "country")
         assert country_col["kind"] == "categorical"
         assert country_col["distinct_values"] == 3
 
@@ -450,9 +436,7 @@ class TestBuildDefaultInsights:
             {"a": 3, "c": 4},  # Missing b, has c
             {"b": 5, "c": 6},  # Missing a
         ]
-        metrics, insights = build_default_insights(
-            rows, columns=None, total_rows=3, truncated=False
-        )
+        metrics, insights = build_default_insights(rows, columns=None, total_rows=3, truncated=False)
         assert metrics is not None
         # Should handle missing columns gracefully - only includes columns from first row
         assert metrics["num_columns"] == 2  # a, b (c is missing from first row)
@@ -461,16 +445,10 @@ class TestBuildDefaultInsights:
         """Test insight building with decimal overflow scenarios."""
         rows = [
             {"value": Decimal("1" + "0" * 50)},  # Very large decimal
-            {
-                "value": Decimal("0.0000000000000000000000000000001")
-            },  # Very small decimal
+            {"value": Decimal("0.0000000000000000000000000000001")},  # Very small decimal
         ]
-        metrics, insights = build_default_insights(
-            rows, columns=None, total_rows=2, truncated=False
-        )
+        metrics, insights = build_default_insights(rows, columns=None, total_rows=2, truncated=False)
         assert metrics is not None
         # Should handle decimal conversion gracefully
         value_col = next(col for col in metrics["columns"] if col["name"] == "value")
-        assert (
-            value_col["kind"] == "numeric"
-        )  # Successfully converts decimals to numeric
+        assert value_col["kind"] == "numeric"  # Successfully converts decimals to numeric

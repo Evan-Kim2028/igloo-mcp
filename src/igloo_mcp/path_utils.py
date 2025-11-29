@@ -81,9 +81,7 @@ def _resolve_with_repo_root(raw: str, repo_root: Path) -> Path:
     return (repo_root / path).resolve()
 
 
-def resolve_history_path(
-    raw: Optional[str] = None, *, start: Optional[Path] = None
-) -> Path:
+def resolve_history_path(raw: Optional[str] = None, *, start: Optional[Path] = None) -> Path:
     """Return the desired path to the JSONL history file.
 
     Precedence:
@@ -117,9 +115,7 @@ def resolve_history_path(
         return (repo_root / subpath).resolve()
 
 
-def resolve_artifact_root(
-    raw: Optional[str] = None, *, start: Optional[Path] = None
-) -> Path:
+def resolve_artifact_root(raw: Optional[str] = None, *, start: Optional[Path] = None) -> Path:
     """Return the root directory for artifacts (queries/results/meta).
 
     Precedence:
@@ -237,13 +233,9 @@ def resolve_reports_root(
                                 base_parts = parts[:i]
                                 if base_parts:
                                     base_name = base_parts[-1]
-                                    if base_name.startswith(
-                                        ".igloo-mcp"
-                                    ) or base_name.startswith(".igloo_mcp"):
+                                    if base_name.startswith(".igloo-mcp") or base_name.startswith(".igloo_mcp"):
                                         base_path = Path(*base_parts)
-                                        return (
-                                            base_path / DEFAULT_REPORTS_SUBDIR
-                                        ).resolve()
+                                        return (base_path / DEFAULT_REPORTS_SUBDIR).resolve()
             except (ValueError, OSError):
                 pass  # Invalid path, continue to fallback
 
@@ -305,13 +297,9 @@ def resolve_catalog_root(
                                 base_parts = parts[:i]
                                 if base_parts:
                                     base_name = base_parts[-1]
-                                    if base_name.startswith(
-                                        ".igloo-mcp"
-                                    ) or base_name.startswith(".igloo_mcp"):
+                                    if base_name.startswith(".igloo-mcp") or base_name.startswith(".igloo_mcp"):
                                         base_path = Path(*base_parts)
-                                        return (
-                                            base_path / DEFAULT_CATALOG_SUBDIR
-                                        ).resolve()
+                                        return (base_path / DEFAULT_CATALOG_SUBDIR).resolve()
             except (ValueError, OSError):
                 pass  # Invalid path, continue to fallback
 
