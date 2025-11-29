@@ -3,6 +3,54 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.3.5] - 2025-11-29
+
+## Fixed
+
+### CI/CD & Test Compatibility
+
+- **Python 3.12/3.13 Compatibility**: Fixed threading.Lock type checking issues
+  - Fixed `isinstance(lock, threading.Lock)` errors in `session_utils.py`
+  - Updated test assertions to use proper type comparison
+  - `threading.Lock` is a factory function, not a direct type in Python 3.12
+  - All 715 tests now pass on both Python 3.12 and 3.13
+
+- **Config Caching Test**: Fixed `test_config_loading_is_cached_by_mtime`
+  - Added delay to ensure mtime changes on fast filesystems
+  - Added mtime change verification
+  - Enhanced test reliability across different platforms
+
+## Changed
+
+### CI/CD Infrastructure
+
+- **Python Version Support**: Added Python 3.13 to CI test matrix
+  - CI now tests both Python 3.12 and 3.13 in parallel
+  - Updated `requires-python` to `>=3.12,<3.14`
+  - Ensures compatibility across both versions on every commit
+
+- **Multi-version Testing**: All CI jobs now run for both Python versions
+  - `lint` job: Runs on Python 3.12 and 3.13
+  - `type-check` job: Runs on Python 3.12 and 3.13
+  - `test` job: Runs on Python 3.12 and 3.13
+
+## Infrastructure
+
+- **Testing**: All 715 tests passing on both Python 3.12 and 3.13
+- **CI Duration**: ~1 minute total (parallel execution)
+- **Coverage**: Maintained 68%+ coverage across both Python versions
+
+## Summary
+
+**v0.3.5 ensures robust multi-version Python support** with comprehensive CI testing.
+
+**Key Improvements**:
+1. **Cross-version Compatibility**: Full Python 3.12 and 3.13 support verified in CI
+2. **Reliable Testing**: Fixed flaky mtime-based cache invalidation test
+3. **Future-proof**: Matrix testing catches version-specific issues early
+
+All changes are **backward compatible** with no breaking changes.
+
 # [0.3.4] - 2025-11-29
 
 ## Added
