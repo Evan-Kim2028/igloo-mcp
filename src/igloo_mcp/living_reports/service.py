@@ -84,6 +84,8 @@ class ReportService:
             templates_file,
             submodule_search_locations=[str(Path(__file__).parent)],
         )
+        if spec is None or spec.loader is None:
+            raise ValueError(f"Could not load templates module from {templates_file}")
         templates_mod = importlib.util.module_from_spec(spec)
         templates_mod.__package__ = "igloo_mcp.living_reports"
         templates_mod.__name__ = "igloo_mcp.living_reports.templates"
@@ -1074,6 +1076,9 @@ class ReportService:
         else:
             # Normal render
             try:
+                # Ensure renderer exists (should be set by detect() above)
+                assert renderer is not None, "Renderer should be set by detect() for normal render"
+
                 # Prepare render hints with query provenance and citations
                 render_hints = outline.metadata.get("render_hints", {})
                 if not isinstance(render_hints, dict):

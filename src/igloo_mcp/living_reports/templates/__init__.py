@@ -19,6 +19,8 @@ _spec = importlib.util.spec_from_file_location(
     _templates_file,
     submodule_search_locations=[],
 )
+if _spec is None or _spec.loader is None:
+    raise ValueError(f"Could not load templates module from {_templates_file}")
 _templates_mod = importlib.util.module_from_spec(_spec)
 
 # Set up the __package__ attribute to enable relative imports

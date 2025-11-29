@@ -265,7 +265,7 @@ def validate_sql_statement(
 
     if HAS_SQLGLOT:
         try:
-            parsed_expressions = sqlglot.parse(statement, dialect="snowflake")
+            parsed_expressions = [e for e in sqlglot.parse(statement, dialect="snowflake") if e is not None]
         except Exception:
             parsed_expressions = []
 

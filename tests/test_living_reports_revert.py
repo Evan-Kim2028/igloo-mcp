@@ -257,7 +257,7 @@ def test_revert_creates_current_backup(tmp_path):
     time.sleep(0.1)
 
     # Revert
-    result = service.revert_report(report_id, change_action_id)
+    _ = service.revert_report(report_id, change_action_id)
 
     # Check that revert event mentions the current state backup
     revert_event = storage.load_audit_events()[-1]
@@ -267,6 +267,4 @@ def test_revert_creates_current_backup(tmp_path):
     # Verify the mentioned backup file exists
     current_state_backup = revert_event.payload["current_state_backup"]
     expected_backup_path = storage.backups_dir / current_state_backup
-    assert (
-        expected_backup_path.exists()
-    ), f"Backup file {current_state_backup} should exist"
+    assert expected_backup_path.exists(), f"Backup file {current_state_backup} should exist"

@@ -22,9 +22,7 @@ try:  # pragma: no cover - imported for typing/runtime compatibility only
     from fastmcp.utilities.logging import get_logger
 except ImportError:  # pragma: no cover
     try:
-        from mcp.server.fastmcp import (
-            Context,  # type: ignore[import-untyped,assignment]
-        )
+        from mcp.server.fastmcp import Context  # type: ignore[import-untyped,assignment]
         from mcp.server.fastmcp.utilities.logging import (
             get_logger,  # type: ignore[import-untyped]
         )
@@ -507,7 +505,7 @@ class ExecuteQueryTool(MCPTool):
             if sql_rel:
                 history_artifacts["sql_path"] = sql_rel
 
-        timeout = timeout_seconds or getattr(self.config, "timeout_seconds", 120)
+        timeout = int(timeout_seconds or getattr(self.config, "timeout_seconds", 120))  # type: ignore[arg-type]
 
         cache_key: Optional[str] = None
         cache_hit_metadata: Optional[Dict[str, Any]] = None
@@ -562,9 +560,9 @@ class ExecuteQueryTool(MCPTool):
                 result["truncated"] = cache_hit_metadata.get("truncated")
             session_context = effective_context.copy()
             if cache_hit_metadata.get("context"):
-                ctx = cache_hit_metadata["context"]
+                context_data: dict[str, Any] = cache_hit_metadata["context"]
                 session_context.update(
-                    {k: ctx.get(k) for k in ["warehouse", "database", "schema", "role"] if ctx.get(k)}
+                    {k: context_data.get(k) for k in ["warehouse", "database", "schema", "role"] if context_data.get(k)}
                 )
             result["session_context"] = session_context
             if cache_hit_metadata.get("columns"):
@@ -619,8 +617,8 @@ class ExecuteQueryTool(MCPTool):
                 }
             )
             payload["session_context"] = full_session
-            if sql_sha256:
-                payload["sql_sha256"] = sql_sha256
+            if cache_hit_metadata.get("sql_sha256"):
+                payload["sql_sha256"] = cache_hit_metadata["sql_sha256"]
             if history_artifacts:
                 payload["artifacts"] = dict(history_artifacts)
             if reason:
@@ -657,7 +655,7 @@ class ExecuteQueryTool(MCPTool):
         # Execute query with session context management
 
         try:
-            result = await anyio.to_thread.run_sync(
+            result = await anyio.to_thread.run_sync(  # type: ignore[arg-type]
                 self._execute_query_sync,
                 statement,
                 overrides,

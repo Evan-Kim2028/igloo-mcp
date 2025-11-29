@@ -215,9 +215,7 @@ def test_error_responses_structured():
     """Verify error responses follow structured format."""
     from igloo_mcp.living_reports.selector import SelectorResolutionError
 
-    error = SelectorResolutionError(
-        selector="test", error_type="not_found", candidates=None
-    )
+    error = SelectorResolutionError(selector="test", error_type="not_found", candidates=None)
 
     response = error.to_dict()
     assert "error" in response
@@ -266,8 +264,18 @@ def test_all_imports_work():
         from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
         from igloo_mcp.mcp.tools.render_report import RenderReportTool
 
-        # All imports successful
-        assert True
+        # All imports successful - verify classes exist
+        assert AuditEvent is not None
+        assert Insight is not None
+        assert Outline is not None
+        assert Section is not None
+        assert ReportSelector is not None
+        assert ReportService is not None
+        assert GlobalStorage is not None
+        assert ReportStorage is not None
+        assert get_template is not None
+        assert EvolveReportTool is not None
+        assert RenderReportTool is not None
 
     except ImportError as e:
         pytest.fail(f"Import failed: {e}")

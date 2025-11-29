@@ -21,15 +21,13 @@ from jinja2 import Environment, FileSystemLoader
 from ..path_utils import find_repo_root
 
 # Define the RenderResult namedtuple
-RenderResult = namedtuple(
-    "RenderResult", ["output_paths", "stdout", "stderr", "warnings"]
-)
+RenderResult = namedtuple("RenderResult", ["output_paths", "stdout", "stderr", "warnings"])
 
 
 class QuartoNotFoundError(Exception):
     """Raised when Quarto binary cannot be found or is not installed."""
 
-    def __init__(self, message: str = None) -> None:
+    def __init__(self, message: str | None = None) -> None:
         """Initialize the error with a helpful message.
 
         Args:
@@ -74,13 +72,9 @@ class QuartoRenderer:
         if bin_path:
             # Verify the specified path exists and is executable
             if not os.path.isfile(bin_path):
-                raise QuartoNotFoundError(
-                    f"IGLOO_QUARTO_BIN path does not exist: {bin_path}"
-                )
+                raise QuartoNotFoundError(f"IGLOO_QUARTO_BIN path does not exist: {bin_path}")
             if not os.access(bin_path, os.X_OK):
-                raise QuartoNotFoundError(
-                    f"IGLOO_QUARTO_BIN path is not executable: {bin_path}"
-                )
+                raise QuartoNotFoundError(f"IGLOO_QUARTO_BIN path is not executable: {bin_path}")
         else:
             # Check PATH
             bin_path = shutil.which("quarto")
@@ -93,9 +87,7 @@ class QuartoRenderer:
         # Get and cache version (only once)
         if cls._cached_version is None:
             try:
-                result = subprocess.run(
-                    [bin_path, "--version"], capture_output=True, text=True, timeout=10
-                )
+                result = subprocess.run([bin_path, "--version"], capture_output=True, text=True, timeout=10)
                 if result.returncode == 0:
                     cls._cached_version = result.stdout.strip()
                 else:
@@ -184,16 +176,10 @@ class QuartoRenderer:
                 datasets = {}
 
         if hints is None:
-            hints = (
-                outline.metadata.get("render_hints", {})
-                if hasattr(outline, "metadata")
-                else {}
-            )
+            hints = outline.metadata.get("render_hints", {}) if hasattr(outline, "metadata") else {}
 
         # Generate the QMD file
-        self._generate_qmd_file(
-            report_dir, format, options or {}, outline, datasets, hints
-        )
+        self._generate_qmd_file(report_dir, format, options or {}, outline, datasets, hints)
 
         # Build Quarto command
         cmd = [self.bin_path, "render", "report.qmd", "--to", format]
@@ -229,18 +215,11 @@ class QuartoRenderer:
             if version_tuple is not None:
                 major, minor = version_tuple
                 if major < 1 or (major == 1 and minor < 4):
-                    warnings.append(
-                        "Quarto version < 1.4 detected; upgrade for better Python chunk support."
-                    )
+                    warnings.append("Quarto version < 1.4 detected; upgrade for better Python chunk support.")
 
             # Check for missing datasets
-            if datasets and any(
-                not datasets.get(insight_id)
-                for insight_id in getattr(outline, "insights", [])
-            ):
-                warnings.append(
-                    "Some datasets are missing; charts/tables may not render properly."
-                )
+            if datasets and any(not datasets.get(insight_id) for insight_id in getattr(outline, "insights", [])):
+                warnings.append("Some datasets are missing; charts/tables may not render properly.")
 
             raise RuntimeError(f"Quarto render failed: {result.stderr}")
 
@@ -258,9 +237,7 @@ class QuartoRenderer:
         if version_tuple is not None:
             major, minor = version_tuple
             if major < 1 or (major == 1 and minor < 4):
-                warnings.append(
-                    "Upgrade to Quarto 1.4+ for improved Python execution support."
-                )
+                warnings.append("Upgrade to Quarto 1.4+ for improved Python execution support.")
 
         return RenderResult(
             output_paths=output_paths,
@@ -295,9 +272,7 @@ class QuartoRenderer:
 
         # Strategy 1: Use importlib.resources (works when installed as package)
         try:
-            templates_ref = importlib.resources.files(
-                "igloo_mcp.living_reports.templates"
-            )
+            templates_ref = importlib.resources.files("igloo_mcp.living_reports.templates")
             template_file_ref = templates_ref / "report.qmd.j2"
             # Check if the template file exists in the package
             if template_file_ref.is_file():
@@ -310,23 +285,14 @@ class QuartoRenderer:
                     with template_file_path as template_file:
                         candidate_dir = template_file.parent.resolve()
                         # Resolve to absolute path and verify it exists
-                        if (
-                            candidate_dir.exists()
-                            and (candidate_dir / "report.qmd.j2").exists()
-                        ):
+                        if candidate_dir.exists() and (candidate_dir / "report.qmd.j2").exists():
                             # Store absolute path outside context (works for package files)
                             template_dir = candidate_dir
-                            attempted_paths.append(
-                                f"Package location (importlib.resources): {template_dir}"
-                            )
+                            attempted_paths.append(f"Package location (importlib.resources): {template_dir}")
                 except (OSError, ValueError, TypeError) as e:
-                    attempted_paths.append(
-                        f"Package location (importlib.resources): Failed - {e}"
-                    )
+                    attempted_paths.append(f"Package location (importlib.resources): Failed - {e}")
         except (ImportError, ModuleNotFoundError, AttributeError) as e:
-            attempted_paths.append(
-                f"Package location (importlib.resources): Not available - {e}"
-            )
+            attempted_paths.append(f"Package location (importlib.resources): Not available - {e}")
 
         # Strategy 2: Use repo root (works in development)
         if template_dir is None or not template_dir.exists():
@@ -358,9 +324,7 @@ class QuartoRenderer:
 
         # Prepare template context
         # Extract query_provenance from hints if provided
-        query_provenance = (
-            hints.get("query_provenance", {}) if isinstance(hints, dict) else {}
-        )
+        query_provenance = hints.get("query_provenance", {}) if isinstance(hints, dict) else {}
 
         context = {
             "outline": outline,
