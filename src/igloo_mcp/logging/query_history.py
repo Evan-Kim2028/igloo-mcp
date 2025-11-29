@@ -225,7 +225,8 @@ class QueryHistory:
         if "ts" in payload and isinstance(payload["ts"], (int, float)):
             import datetime
 
-            payload["timestamp"] = datetime.datetime.fromtimestamp(payload["ts"]).isoformat()
+            # Use UTC timezone to ensure consistent timestamps across environments
+            payload["timestamp"] = datetime.datetime.fromtimestamp(payload["ts"], tz=datetime.timezone.utc).isoformat()
 
         try:
             line = json.dumps(payload, ensure_ascii=False)
