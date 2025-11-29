@@ -617,8 +617,8 @@ class ExecuteQueryTool(MCPTool):
                 }
             )
             payload["session_context"] = full_session
-            if cache_hit_metadata.get("sql_sha256"):
-                payload["sql_sha256"] = cache_hit_metadata["sql_sha256"]
+            # Always include sql_sha256 in history payload (computed at line 499)
+            payload["sql_sha256"] = sql_sha256
             if history_artifacts:
                 payload["artifacts"] = dict(history_artifacts)
             if reason:
