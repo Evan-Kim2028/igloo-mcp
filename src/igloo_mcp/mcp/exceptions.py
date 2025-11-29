@@ -19,9 +19,12 @@ class MCPToolError(Exception):
     Attributes:
         message: Human-readable error message
         error_code: Optional error code for programmatic handling
-        hints: Optional list of actionable suggestions
+        hints: List of actionable suggestions (truncated if not verbose)
         context: Optional additional context data
+        verbose: Whether to include all hints or truncate to DEFAULT_MAX_HINTS
     """
+
+    DEFAULT_MAX_HINTS = 2  # Compact mode default
 
     def __init__(
         self,
@@ -30,6 +33,7 @@ class MCPToolError(Exception):
         error_code: Optional[str] = None,
         hints: Optional[List[str]] = None,
         context: Optional[Dict[str, Any]] = None,
+        verbose: bool = True,  # Default True for backward compatibility
     ):
         """Initialize MCP tool error.
 
@@ -38,12 +42,25 @@ class MCPToolError(Exception):
             error_code: Optional error code for programmatic handling
             hints: Optional list of actionable suggestions
             context: Optional additional context data
+            verbose: If False, truncate hints to DEFAULT_MAX_HINTS (default: True)
         """
         super().__init__(message)
         self.message = message
         self.error_code = error_code
-        self.hints = hints or []
+        self._all_hints = hints or []
         self.context = context or {}
+        self.verbose = verbose
+
+    @property
+    def hints(self) -> List[str]:
+        """Return hints based on verbosity setting.
+
+        Returns:
+            All hints if verbose=True, otherwise first DEFAULT_MAX_HINTS hints
+        """
+        if self.verbose:
+            return self._all_hints
+        return self._all_hints[: self.DEFAULT_MAX_HINTS]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert exception to dictionary for JSON serialization.
@@ -59,6 +76,10 @@ class MCPToolError(Exception):
             result["error_code"] = self.error_code
         if self.hints:
             result["hints"] = self.hints
+        # Add truncation notice in compact mode
+        if not self.verbose and len(self._all_hints) > self.DEFAULT_MAX_HINTS:
+            result["hints_truncated"] = True
+            result["hints_available"] = len(self._all_hints)
         if self.context:
             result["context"] = self.context
         return result
@@ -81,6 +102,7 @@ class MCPValidationError(MCPToolError):
         validation_errors: Optional[List[str]] = None,
         hints: Optional[List[str]] = None,
         context: Optional[Dict[str, Any]] = None,
+        verbose: bool = True,  # Default True for backward compatibility
     ):
         """Initialize validation error.
 
@@ -89,12 +111,14 @@ class MCPValidationError(MCPToolError):
             validation_errors: List of specific validation error messages
             hints: Optional list of actionable suggestions
             context: Optional additional context data
+            verbose: If False, truncate hints to DEFAULT_MAX_HINTS (default: True)
         """
         super().__init__(
             message,
             error_code="VALIDATION_ERROR",
             hints=hints,
             context=context,
+            verbose=verbose,
         )
         self.validation_errors = validation_errors or []
 
@@ -130,6 +154,7 @@ class MCPExecutionError(MCPToolError):
         original_error: Optional[Exception] = None,
         hints: Optional[List[str]] = None,
         context: Optional[Dict[str, Any]] = None,
+        verbose: bool = True,  # Default True for backward compatibility
     ):
         """Initialize execution error.
 
@@ -139,12 +164,14 @@ class MCPExecutionError(MCPToolError):
             original_error: Optional original exception that caused this error
             hints: Optional list of actionable suggestions
             context: Optional additional context data
+            verbose: If False, truncate hints to DEFAULT_MAX_HINTS (default: True)
         """
         super().__init__(
             message,
             error_code="EXECUTION_ERROR",
             hints=hints,
             context=context,
+            verbose=verbose,
         )
         self.operation = operation
         self.original_error = original_error
@@ -184,6 +211,7 @@ class MCPSelectorError(MCPToolError):
         candidates: Optional[List[str]] = None,
         hints: Optional[List[str]] = None,
         context: Optional[Dict[str, Any]] = None,
+        verbose: bool = True,  # Default True for backward compatibility
     ):
         """Initialize selector error.
 
@@ -194,12 +222,14 @@ class MCPSelectorError(MCPToolError):
             candidates: Optional list of candidate matches (for ambiguous errors)
             hints: Optional list of actionable suggestions
             context: Optional additional context data
+            verbose: If False, truncate hints to DEFAULT_MAX_HINTS (default: True)
         """
         super().__init__(
             message,
             error_code="SELECTOR_ERROR",
             hints=hints,
             context=context,
+            verbose=verbose,
         )
         self.selector = selector
         self.error = error or "not_found"

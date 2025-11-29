@@ -6,8 +6,11 @@ management for all MCP tool implementations.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Dict, List, Optional
+
+from pydantic import ValidationError
 
 from igloo_mcp.error_handling import ErrorContext
 from igloo_mcp.mcp.exceptions import (
@@ -148,6 +151,7 @@ def wrap_execution_error(
     original_error: Optional[Exception] = None,
     hints: Optional[List[str]] = None,
     context: Optional[Dict[str, Any]] = None,
+    verbose: bool = True,  # Default True for backward compatibility with tests
 ) -> MCPExecutionError:
     """Create a standardized execution error.
 
@@ -157,6 +161,7 @@ def wrap_execution_error(
         original_error: Optional original exception
         hints: Optional actionable suggestions
         context: Optional additional context
+        verbose: If False, truncate hints to DEFAULT_MAX_HINTS (default: True)
 
     Returns:
         MCPExecutionError instance
@@ -174,6 +179,7 @@ def wrap_execution_error(
         original_error=original_error,
         hints=hints,
         context=context or {},
+        verbose=verbose,
     )
 
 
@@ -183,6 +189,7 @@ def wrap_selector_error(
     error_type: str = "not_found",
     candidates: Optional[List[str]] = None,
     hints: Optional[List[str]] = None,
+    verbose: bool = True,  # Default True for backward compatibility with tests
 ) -> MCPSelectorError:
     """Create a standardized selector error.
 
@@ -192,6 +199,7 @@ def wrap_selector_error(
         error_type: Type of error ("not_found", "ambiguous", "invalid_format")
         candidates: Optional list of candidate matches
         hints: Optional actionable suggestions
+        verbose: If False, truncate hints to DEFAULT_MAX_HINTS (default: True)
 
     Returns:
         MCPSelectorError instance
@@ -220,6 +228,7 @@ def wrap_selector_error(
         error=error_type,
         candidates=candidates or [],
         hints=hints,
+        verbose=verbose,
     )
 
 
@@ -248,9 +257,7 @@ def format_error_response(
     if include_traceback and hasattr(error, "__traceback__"):
         import traceback
 
-        response["traceback"] = "".join(
-            traceback.format_exception(type(error), error, error.__traceback__)
-        )
+        response["traceback"] = "".join(traceback.format_exception(type(error), error, error.__traceback__))
 
     return response
 
@@ -284,3 +291,139 @@ def format_success_response(
     response["timestamp"] = time.time()
 
     return response
+
+
+# Error handler helpers for tool_error_handler decorator
+
+
+def handle_mcp_exception_decorator(
+    e: MCPToolError,
+    request_id: Optional[str],
+    kwargs: Dict[str, Any],
+) -> None:
+    """Handle MCP exceptions in decorator - adds request_id and re-raises.
+
+    Args:
+        e: MCP exception instance
+        request_id: Request correlation ID
+        kwargs: Keyword arguments from tool call
+
+    Raises:
+        MCPToolError: Re-raises the original exception
+    """
+    # Add request_id to MCP exceptions if available
+    if request_id and hasattr(e, "context"):
+        if e.context is None:
+            e.context = {}
+        e.context["request_id"] = request_id
+    # Re-raise MCP exceptions as-is - they're already properly formatted
+    raise
+
+
+def handle_validation_error_decorator(
+    e: ValidationError,
+    request_id: Optional[str],
+    tool_name: str,
+    logger: logging.Logger,
+    kwargs: Dict[str, Any],
+) -> MCPValidationError:
+    """Convert Pydantic ValidationError to MCPValidationError.
+
+    Args:
+        e: Pydantic ValidationError
+        request_id: Request correlation ID
+        tool_name: Name of the tool
+        logger: Logger instance
+        kwargs: Keyword arguments from tool call
+
+    Returns:
+        MCPValidationError with formatted validation messages
+
+    Raises:
+        MCPValidationError: Converted validation error
+    """
+    # Convert Pydantic validation errors to MCPValidationError
+    errors = e.errors()
+    validation_errors = []
+    for err in errors:
+        field_path = ".".join(str(loc) for loc in err.get("loc", []))
+        error_msg = err.get("msg", "Validation error")
+        validation_errors.append(f"{field_path}: {error_msg}")
+
+    logger.warning(
+        f"Validation error in {tool_name}",
+        extra={
+            "tool": tool_name,
+            "validation_errors": validation_errors,
+            "input": str(kwargs)[:200],  # Truncate for logging
+        },
+    )
+
+    # Extract request_id and verbose_errors from kwargs
+    error_context = {"request_id": request_id} if request_id else {}
+    verbose = kwargs.get("verbose_errors", False)
+
+    raise MCPValidationError(
+        f"Parameter validation failed for {tool_name}",
+        validation_errors=validation_errors,
+        hints=[
+            f"Check parameter types and required fields for {tool_name}",
+            f"Review {tool_name} parameter schema for valid values",
+            "Common issues: missing required fields, wrong data types, out-of-range values",
+        ],
+        context=error_context,
+        verbose=verbose,
+    ) from e
+
+
+def handle_generic_exception_decorator(
+    e: Exception,
+    request_id: Optional[str],
+    tool_name: str,
+    logger: logging.Logger,
+    kwargs: Dict[str, Any],
+) -> MCPExecutionError:
+    """Convert generic exception to MCPExecutionError.
+
+    Args:
+        e: Generic exception
+        request_id: Request correlation ID
+        tool_name: Name of the tool
+        logger: Logger instance
+        kwargs: Keyword arguments from tool call
+
+    Returns:
+        MCPExecutionError with formatted error details
+
+    Raises:
+        MCPExecutionError: Converted execution error
+    """
+    # Convert unexpected exceptions to MCPExecutionError
+    error_msg = str(e)
+    error_context = {"request_id": request_id} if request_id else {}
+    verbose = kwargs.get("verbose_errors", False)
+
+    logger.error(
+        f"Unexpected error in {tool_name}",
+        extra={
+            "tool": tool_name,
+            "error_type": type(e).__name__,
+            "error_message": error_msg[:500],  # Truncate for logging
+            "request_id": request_id,
+        },
+        exc_info=True,
+    )
+
+    raise MCPExecutionError(
+        f"Tool execution failed: {error_msg}",
+        operation=tool_name,
+        original_error=e,
+        hints=[
+            f"Check {tool_name} logs for detailed error information",
+            f"Verify input parameters match {tool_name} schema requirements",
+            "Check system resources (disk space, memory, network connectivity)",
+            f"Review recent changes to {tool_name} configuration if applicable",
+        ],
+        context=error_context,
+        verbose=verbose,
+    ) from e

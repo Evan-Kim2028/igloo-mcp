@@ -3,6 +3,137 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.3.4] - 2025-11-29
+
+## Added
+
+### CI/CD & Automation (#76)
+
+- **GitHub Actions CI**: Automated testing, linting, and type-checking
+  - Parallel jobs: `lint` (ruff), `type-check` (mypy), `test` (pytest with coverage)
+  - Skips Snowflake integration tests (`-m "not requires_snowflake"`)
+  - Codecov integration for coverage reporting
+  - Uses `uv` package manager for fast, reproducible builds
+
+- **GitHub Actions Release**: Automated PyPI publishing
+  - Triggered on version tags (`v*`)
+  - Uses trusted publishing (no API token needed)
+  - Runs `uv build` and `uv publish`
+
+### Error Handling Enhancements (#95, #97)
+
+- **Compact Error Messages**: Token-efficient error responses (#97)
+  - Default: Show first 2 hints + truncation notice
+  - Add `verbose_errors=True` parameter to `execute_query` for full hints
+  - Reduces token usage by 60%+ for common errors
+  - Truncation notice: `{"hints_truncated": true, "hints_available": N}`
+
+- **Error Handler Helpers**: Extracted common error handling logic (#95)
+  - New functions: `handle_mcp_exception_decorator`, `handle_validation_error_decorator`, `handle_generic_exception_decorator`
+  - Reduced `tool_error_handler` from ~200 lines to ~100 lines (50% reduction)
+  - Eliminates ~100 lines of duplicated code
+  - Improved maintainability and consistency
+
+### Validation Helpers (#96)
+
+- **Standardized Validation Functions**: Reusable parameter validation
+  - `validate_required_string()`: String validation with min/max length
+  - `validate_numeric_range()`: Numeric validation with range checks
+  - `validate_enum_value()`: Enum validation with allowed values
+  - Consistent MCPValidationError handling across all validators
+
+## Fixed
+
+### Error Handling & Consistency
+
+- **#72**: Standardized error status values
+  - Changed `"failed"` to `"error"` in health check responses
+  - Consistent with other error status values across codebase
+
+- **#95**: Error handler refactoring
+  - Eliminated code duplication in exception handling
+  - Improved error propagation with request_id context
+  - Better verbose parameter handling through decorator helpers
+
+### Bug Fixes
+
+- **Path Comparison Bug**: Fixed `search_all_databases` mode in `search_catalog`
+  - Path validation was stripping `./` prefix, breaking the feature
+  - Now uses `Path(catalog_dir).name == "data_catalogue"` for normalization
+  - Resolves test failures in `test_warnings_in_search_all_databases_mode`
+
+## Changed
+
+### Breaking Changes
+
+**⚠️ BREAKING CHANGE: Compact Error Messages (#97)**
+
+Error messages now show only the first 2 hints by default (previously showed all hints).
+
+**Impact**:
+- Clients expecting all hints in error responses will see truncated hints
+- Error token usage reduced by 60%+ for common errors
+
+**Migration**:
+- **Option 1** (Recommended): Use first 2 hints (most actionable)
+- **Option 2**: Pass `verbose_errors=True` to `execute_query` for full hints
+- **Option 3**: Check `hints_truncated` and `hints_available` fields in error responses
+
+**Example**:
+```python
+# Compact mode (default) - 2 hints
+result = await execute_query(
+    statement="SELECT * FROM table",
+    reason="Analysis"
+)
+
+# Verbose mode - all hints
+result = await execute_query(
+    statement="SELECT * FROM table",
+    reason="Analysis",
+    verbose_errors=True
+)
+```
+
+**⚠️ BREAKING CHANGE: Status Value Consistency (#72)**
+
+The `status` field in health check error responses changed from `"failed"` to `"error"`.
+
+**Impact**:
+- Clients checking `status == "failed"` in health check responses will need updates
+- Affects `health_check` tool connection failures
+
+**Migration**:
+- Update health check parsing to handle `status == "error"`
+- Backward-compatible check: `status in ("failed", "error")`
+
+### API Enhancements (Non-Breaking)
+
+- `wrap_selector_error()` and `wrap_execution_error()` now accept `verbose` parameter
+- Default `verbose=True` maintains backward compatibility with existing error creation
+- Error decorators extract `verbose_errors` from kwargs for client control
+
+## Infrastructure
+
+- **Testing**: 708 tests passing (7 skipped, 1 xfailed, 1 xpassed)
+- **Coverage**: 68.06% overall coverage maintained
+- **CI/CD**: Automated workflows ensure quality on every commit
+- **Code Quality**: Reduced error handling duplication by 50%
+
+## Summary
+
+**v0.3.4 focuses on production hardening** with CI/CD, error handling improvements, and code debt cleanup.
+
+**Issues Closed**: #76, #95, #97, #96, #72
+
+**Key Improvements**:
+1. **CI/CD Automation**: GitHub Actions for testing, linting, and PyPI releases
+2. **Token Efficiency**: 60%+ reduction in error message tokens with compact mode
+3. **Code Quality**: 50% reduction in error handling duplication
+4. **Validation**: Standardized parameter validation helpers
+
+**Breaking Changes**: 2 (compact errors, status value consistency) - both with clear migration paths.
+
 # [0.3.3] - 2025-11-28
 
 ## Added

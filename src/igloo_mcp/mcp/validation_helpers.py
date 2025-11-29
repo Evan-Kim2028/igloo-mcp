@@ -6,11 +6,13 @@ parameter validation scenarios, extracted from mcp_server.py.
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, List, Optional, TypeVar
 
 from pydantic import ValidationError
 
 from igloo_mcp.mcp.exceptions import MCPValidationError
+
+T = TypeVar("T")
 
 
 def format_pydantic_validation_error(
@@ -50,9 +52,7 @@ def format_pydantic_validation_error(
                 )
             elif error_type == "string_too_short":
                 provided = err.get("input", "")
-                validation_errors.append(
-                    f"Parameter 'reason' is too short: '{provided}' ({len(str(provided))} chars)"
-                )
+                validation_errors.append(f"Parameter 'reason' is too short: '{provided}' ({len(str(provided))} chars)")
                 hints.extend(
                     [
                         f"Minimum length: 5 characters (you provided {len(str(provided))})",
@@ -61,16 +61,12 @@ def format_pydantic_validation_error(
                     ]
                 )
             else:
-                validation_errors.append(
-                    f"Field 'reason': {err.get('msg', 'Validation error')}"
-                )
+                validation_errors.append(f"Field 'reason': {err.get('msg', 'Validation error')}")
 
         # Handle timeout_seconds validation
         elif field == "timeout_seconds":
             if "must be an integer" in str(err.get("msg", "")):
-                validation_errors.append(
-                    "Invalid parameter type: timeout_seconds must be an integer"
-                )
+                validation_errors.append("Invalid parameter type: timeout_seconds must be an integer")
                 hints.extend(
                     [
                         "Use a number without quotes: timeout_seconds=480",
@@ -78,9 +74,7 @@ def format_pydantic_validation_error(
                     ]
                 )
             elif "must be between" in str(err.get("msg", "")):
-                validation_errors.append(
-                    "Invalid parameter value: timeout_seconds out of range"
-                )
+                validation_errors.append("Invalid parameter value: timeout_seconds out of range")
                 hints.extend(
                     [
                         "Use a timeout between 1 and 3600 seconds",
@@ -88,16 +82,12 @@ def format_pydantic_validation_error(
                     ]
                 )
             else:
-                validation_errors.append(
-                    f"Field 'timeout_seconds': {err.get('msg', 'Validation error')}"
-                )
+                validation_errors.append(f"Field 'timeout_seconds': {err.get('msg', 'Validation error')}")
 
         # Generic field validation
         else:
             field_path = ".".join(str(loc) for loc in err.get("loc", []))
-            validation_errors.append(
-                f"{field_path}: {err.get('msg', 'Validation error')}"
-            )
+            validation_errors.append(f"{field_path}: {err.get('msg', 'Validation error')}")
 
     # Default hints if none provided
     if not hints:
@@ -177,3 +167,154 @@ def format_parameter_type_error(
         validation_errors=validation_errors,
         hints=hints,
     )
+
+
+# New validation helper functions for v0.3.4
+
+
+def validate_required_string(
+    value: Any,
+    field_name: str,
+    min_length: int = 1,
+    max_length: Optional[int] = None,
+) -> str:
+    """Validate required string parameter.
+
+    Args:
+        value: Value to validate
+        field_name: Name of the field
+        min_length: Minimum string length (default: 1)
+        max_length: Optional maximum string length
+
+    Returns:
+        Validated string value
+
+    Raises:
+        MCPValidationError: If validation fails
+    """
+    if value is None:
+        raise MCPValidationError(
+            f"{field_name} is required",
+            validation_errors=[f"{field_name} cannot be None"],
+            hints=[f"Provide a valid {field_name}"],
+        )
+
+    if not isinstance(value, str):
+        raise MCPValidationError(
+            f"{field_name} must be a string",
+            validation_errors=[f"Expected string, got {type(value).__name__}"],
+            hints=[f"Provide {field_name} as a string"],
+        )
+
+    value = value.strip()
+    if len(value) < min_length:
+        raise MCPValidationError(
+            f"{field_name} cannot be empty",
+            validation_errors=[f"{field_name} must be at least {min_length} characters"],
+            hints=[f"Provide a non-empty {field_name}"],
+        )
+
+    if max_length and len(value) > max_length:
+        raise MCPValidationError(
+            f"{field_name} exceeds maximum length",
+            validation_errors=[f"{field_name} must be at most {max_length} characters"],
+            hints=[f"Reduce {field_name} length to {max_length} or less"],
+        )
+
+    return value
+
+
+def validate_numeric_range(
+    value: Any,
+    field_name: str,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    allow_none: bool = False,
+) -> Optional[float]:
+    """Validate numeric parameter within range.
+
+    Args:
+        value: Value to validate
+        field_name: Name of the field
+        min_value: Optional minimum value
+        max_value: Optional maximum value
+        allow_none: Whether None is acceptable (default: False)
+
+    Returns:
+        Validated numeric value or None if allow_none=True
+
+    Raises:
+        MCPValidationError: If validation fails
+    """
+    if value is None:
+        if allow_none:
+            return None
+        raise MCPValidationError(
+            f"{field_name} is required",
+            validation_errors=[f"{field_name} cannot be None"],
+            hints=[f"Provide a valid {field_name}"],
+        )
+
+    try:
+        numeric_value = float(value)
+    except (TypeError, ValueError):
+        raise MCPValidationError(
+            f"{field_name} must be a number",
+            validation_errors=[f"Cannot convert {value!r} to number"],
+            hints=[f"Provide {field_name} as a number (e.g., 480.0)"],
+        )
+
+    if min_value is not None and numeric_value < min_value:
+        raise MCPValidationError(
+            f"{field_name} below minimum",
+            validation_errors=[f"{field_name}={numeric_value} is below minimum {min_value}"],
+            hints=[f"Increase {field_name} to at least {min_value}"],
+        )
+
+    if max_value is not None and numeric_value > max_value:
+        raise MCPValidationError(
+            f"{field_name} exceeds maximum",
+            validation_errors=[f"{field_name}={numeric_value} exceeds maximum {max_value}"],
+            hints=[f"Reduce {field_name} to at most {max_value}"],
+        )
+
+    return numeric_value
+
+
+def validate_enum_value(
+    value: Any,
+    field_name: str,
+    allowed_values: List[str],
+    allow_none: bool = False,
+) -> Optional[str]:
+    """Validate string is one of allowed values.
+
+    Args:
+        value: Value to validate
+        field_name: Name of the field
+        allowed_values: List of allowed string values
+        allow_none: Whether None is acceptable (default: False)
+
+    Returns:
+        Validated value or None if allow_none=True
+
+    Raises:
+        MCPValidationError: If validation fails
+    """
+    if value is None:
+        if allow_none:
+            return None
+        raise MCPValidationError(
+            f"{field_name} is required",
+            validation_errors=[f"{field_name} cannot be None"],
+            hints=[f"Choose one of: {', '.join(allowed_values)}"],
+        )
+
+    if value not in allowed_values:
+        raise MCPValidationError(
+            f"Invalid {field_name}",
+            validation_errors=[f"{value!r} is not a valid {field_name}"],
+            hints=[f"Choose one of: {', '.join(allowed_values)}"],
+        )
+
+    return value
