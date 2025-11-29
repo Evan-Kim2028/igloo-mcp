@@ -27,7 +27,9 @@ try:  # Prefer the standalone fastmcp package when available
     from fastmcp.utilities.logging import configure_logging, get_logger
 except ImportError:  # Fall back to the implementation bundled with python-sdk
     from mcp.server.fastmcp import Context, FastMCP  # type: ignore[import-untyped,assignment]
-    from mcp.server.fastmcp.exceptions import NotFoundError  # type: ignore[import-untyped,assignment]
+    from mcp.server.fastmcp.exceptions import (
+        NotFoundError,  # type: ignore[import-untyped,assignment,attr-defined,no-redef]
+    )
     from mcp.server.fastmcp.utilities.logging import (  # type: ignore[import-untyped,assignment]
         configure_logging,
         get_logger,
@@ -51,7 +53,7 @@ from .context import create_service_context
 # Lineage functionality removed - not part of igloo-mcp
 from .living_reports.service import ReportService
 from .mcp.exceptions import MCPExecutionError, MCPToolError, MCPValidationError
-from .mcp.tools import (  # QueryLineageTool,  # Removed - lineage functionality not part of igloo-mcp
+from .mcp.tools import (
     BuildCatalogTool,
     BuildDependencyGraphTool,
     ConnectionTestTool,
@@ -67,8 +69,6 @@ from .mcp.tools import (  # QueryLineageTool,  # Removed - lineage functionality
     SearchReportTool,
 )
 from .mcp.validation_helpers import format_pydantic_validation_error
-
-# get_profile_recommendations no longer used
 from .mcp_health import (
     MCPHealthMonitor,
 )
@@ -87,11 +87,6 @@ from .session_utils import (
     restore_session_context,
     snapshot_session,
 )
-
-# QueryHistory and update_cache_manifest_insight no longer used in mcp_server
-
-
-# SnowCLI no longer used - CLI bridge removed
 
 logger = get_logger(__name__)
 
@@ -232,7 +227,7 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
                 return await call_next(tool_name, arguments)
 
             # Replace the middleware with our conditional wrapper
-            middleware_stack[i] = conditional_sql_validation_middleware
+            middleware_stack[i] = conditional_sql_validation_middleware  # type: ignore[call-overload]
             logger.info("Patched SQL validation middleware to only apply to execute_query")
             patched = True
             break
@@ -765,6 +760,13 @@ def register_igloo_mcp(
         account: Annotated[bool, Field(description="Include entire account", default=False)] = False,
         format: Annotated[str, Field(description="Output format (json/jsonl)", default="json")] = "json",
         include_ddl: Annotated[bool, Field(description="Include object DDL", default=True)] = True,
+        request_id: Annotated[
+            Optional[str],
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
     ) -> Dict[str, Any]:
         """Build catalog metadata - delegates to BuildCatalogTool."""
         return await build_catalog_inst.execute(
@@ -773,6 +775,7 @@ def register_igloo_mcp(
             account=account,
             format=format,
             include_ddl=include_ddl,
+            request_id=request_id,
         )
 
     @server.tool(name="build_dependency_graph", description="Build object dependency graph")
@@ -804,9 +807,17 @@ def register_igloo_mcp(
         return await test_connection_inst.execute(request_id=request_id)
 
     @server.tool(name="health_check", description="Get comprehensive health status")
-    async def health_check_tool() -> Dict[str, Any]:
+    async def health_check_tool(
+        request_id: Annotated[
+            Optional[str],
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
+    ) -> Dict[str, Any]:
         """Get health status - delegates to HealthCheckTool."""
-        return await health_check_inst.execute()
+        return await health_check_inst.execute(request_id=request_id)
 
     @server.tool(name="get_catalog_summary", description="Read catalog summary JSON")
     async def get_catalog_summary_tool(
@@ -814,9 +825,16 @@ def register_igloo_mcp(
             str,
             Field(description="Catalog directory", default="./data_catalogue"),
         ] = "./data_catalogue",
+        request_id: Annotated[
+            Optional[str],
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
     ) -> Dict[str, Any]:
         """Get catalog summary - delegates to GetCatalogSummaryTool."""
-        return await get_catalog_summary_inst.execute(catalog_dir=catalog_dir)
+        return await get_catalog_summary_inst.execute(catalog_dir=catalog_dir, request_id=request_id)
 
     @server.tool(name="search_catalog", description="Search locally built catalog artifacts")
     async def search_catalog_tool(
@@ -862,6 +880,13 @@ def register_igloo_mcp(
                 default=20,
             ),
         ] = 20,
+        request_id: Annotated[
+            Optional[str],
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
     ) -> Dict[str, Any]:
         return await search_catalog_inst.execute(
             catalog_dir=catalog_dir,
@@ -871,6 +896,7 @@ def register_igloo_mcp(
             name_contains=name_contains,
             column_contains=column_contains,
             limit=limit,
+            request_id=request_id,
         )
 
     @server.resource(
