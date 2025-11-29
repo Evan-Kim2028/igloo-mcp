@@ -23,9 +23,7 @@ from igloo_mcp.mcp.tools.health import HealthCheckTool
 from igloo_mcp.mcp.tools.search_catalog import SearchCatalogTool
 
 # UUID4 pattern for validation
-UUID4_PATTERN = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-)
+UUID4_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 
 
 @pytest.fixture
@@ -34,6 +32,12 @@ def mock_config():
     config = Mock(spec=Config)
     config.snowflake_profile = "test_profile"
     config.reports_dir = Path(tempfile.mkdtemp())
+
+    # Mock nested snowflake config for health tool
+    mock_snowflake = Mock()
+    mock_snowflake.profile = "test_profile"
+    config.snowflake = mock_snowflake
+
     return config
 
 
@@ -114,9 +118,7 @@ class TestBuildCatalogRequestIdTiming:
         assert UUID4_PATTERN.match(result["request_id"])
 
     @pytest.mark.asyncio
-    async def test_custom_request_id_passthrough(
-        self, mock_config, mock_catalog_service
-    ):
+    async def test_custom_request_id_passthrough(self, mock_config, mock_catalog_service):
         """Test that custom request_id is preserved."""
         tool = BuildCatalogTool(mock_config, mock_catalog_service)
         custom_id = "custom-request-123"
@@ -167,9 +169,7 @@ class TestGetCatalogSummaryRequestIdTiming:
     """Test request_id and timing for get_catalog_summary tool."""
 
     @pytest.mark.asyncio
-    async def test_auto_generated_request_id(
-        self, catalog_service_for_summary, temp_catalog_dir
-    ):
+    async def test_auto_generated_request_id(self, catalog_service_for_summary, temp_catalog_dir):
         """Test that request_id is auto-generated when not provided."""
         tool = GetCatalogSummaryTool(catalog_service_for_summary)
 
@@ -179,9 +179,7 @@ class TestGetCatalogSummaryRequestIdTiming:
         assert UUID4_PATTERN.match(result["request_id"])
 
     @pytest.mark.asyncio
-    async def test_custom_request_id_passthrough(
-        self, catalog_service_for_summary, temp_catalog_dir
-    ):
+    async def test_custom_request_id_passthrough(self, catalog_service_for_summary, temp_catalog_dir):
         """Test that custom request_id is preserved."""
         tool = GetCatalogSummaryTool(catalog_service_for_summary)
         custom_id = "summary-request-456"
@@ -191,9 +189,7 @@ class TestGetCatalogSummaryRequestIdTiming:
         assert result["request_id"] == custom_id
 
     @pytest.mark.asyncio
-    async def test_timing_structure_simple(
-        self, catalog_service_for_summary, temp_catalog_dir
-    ):
+    async def test_timing_structure_simple(self, catalog_service_for_summary, temp_catalog_dir):
         """Test timing metrics for simple operation (total only)."""
         tool = GetCatalogSummaryTool(catalog_service_for_summary)
 
@@ -288,7 +284,8 @@ class TestHealthRequestIdTiming:
 
         tool._test_connection = mock_test_connection
 
-        result = await tool.execute()
+        # Disable optional checks that require additional mocking
+        result = await tool.execute(include_profile=False, include_cortex=False, include_catalog=False)
 
         assert "request_id" in result
         assert UUID4_PATTERN.match(result["request_id"])
@@ -309,7 +306,12 @@ class TestHealthRequestIdTiming:
         tool._test_connection = mock_test_connection
 
         custom_id = "health-request-999"
-        result = await tool.execute(request_id=custom_id)
+        result = await tool.execute(
+            request_id=custom_id,
+            include_profile=False,
+            include_cortex=False,
+            include_catalog=False,
+        )
 
         assert result["request_id"] == custom_id
 
@@ -329,7 +331,7 @@ class TestHealthRequestIdTiming:
         tool._test_connection = mock_test_connection
 
         start = time.time()
-        result = await tool.execute()
+        result = await tool.execute(include_profile=False, include_cortex=False, include_catalog=False)
         elapsed = (time.time() - start) * 1000
 
         assert "timing" in result
@@ -346,12 +348,12 @@ class TestRequestIdFormat:
 
     @pytest.mark.asyncio
     async def test_request_id_is_valid_uuid4(
-        self, mock_config, mock_catalog_service, temp_catalog_dir
+        self, mock_config, mock_catalog_service, temp_catalog_dir, catalog_service_for_summary
     ):
         """Test that auto-generated request_id follows UUID4 format."""
         tools = [
             BuildCatalogTool(mock_config, mock_catalog_service),
-            GetCatalogSummaryTool(),
+            GetCatalogSummaryTool(catalog_service_for_summary),
             SearchCatalogTool(),
         ]
 
@@ -364,16 +366,10 @@ class TestRequestIdFormat:
             request_id = result["request_id"]
 
             # Check UUID4 format
-            assert UUID4_PATTERN.match(
-                request_id
-            ), f"{tool.name} request_id {request_id} is not valid UUID4"
+            assert UUID4_PATTERN.match(request_id), f"{tool.name} request_id {request_id} is not valid UUID4"
 
             # Check version field (9th group should start with 4)
-            assert (
-                request_id[14] == "4"
-            ), f"{tool.name} request_id is not UUID version 4"
+            assert request_id[14] == "4", f"{tool.name} request_id is not UUID version 4"
 
             # Check variant (17th char should be 8, 9, a, or b)
-            assert (
-                request_id[19] in "89ab"
-            ), f"{tool.name} request_id is not RFC 4122 variant"
+            assert request_id[19] in "89ab", f"{tool.name} request_id is not RFC 4122 variant"

@@ -383,8 +383,9 @@ class TestAuditTrailIdTracking:
         }
 
         await evolve_tool.execute(
-            report_id=report_id,
-            changes=changes,
+            report_selector=report_id,
+            instruction="Update report",
+            proposed_changes=changes,
         )
 
         # Read audit trail

@@ -22,9 +22,7 @@ from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
 from igloo_mcp.mcp.tools.get_catalog_summary import GetCatalogSummaryTool
 from igloo_mcp.mcp.tools.search_catalog import SearchCatalogTool
 
-UUID4_PATTERN = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-)
+UUID4_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 
 
 @pytest.fixture
@@ -132,8 +130,9 @@ class TestRequestIdCorrelation:
         }
 
         evolve_result = await evolve_tool.execute(
-            report_id=report_id,
-            changes=changes,
+            report_selector=report_id,
+            instruction="Add introduction section",
+            proposed_changes=changes,
             request_id=correlation_id,
         )
 
@@ -143,9 +142,7 @@ class TestRequestIdCorrelation:
         assert create_result["request_id"] == evolve_result["request_id"]
 
     @pytest.mark.asyncio
-    async def test_catalog_workflow_correlation(
-        self, config, mock_catalog_service, temp_catalog_dir
-    ):
+    async def test_catalog_workflow_correlation(self, config, mock_catalog_service, temp_catalog_dir):
         """Test request_id correlation in build → search → summary workflow."""
         build_tool = BuildCatalogTool(config, mock_catalog_service)
         search_tool = SearchCatalogTool()
@@ -176,11 +173,7 @@ class TestRequestIdCorrelation:
         assert summary_result["request_id"] == correlation_id
 
         # All operations share same correlation ID
-        assert (
-            build_result["request_id"]
-            == search_result["request_id"]
-            == summary_result["request_id"]
-        )
+        assert build_result["request_id"] == search_result["request_id"] == summary_result["request_id"]
 
     @pytest.mark.asyncio
     async def test_different_workflows_different_ids(self, config, report_service):
@@ -240,8 +233,9 @@ class TestTimingMetricsIntegration:
         }
 
         evolve_result = await evolve_tool.execute(
-            report_id=report_id,
-            changes=changes,
+            report_selector=report_id,
+            instruction="Update report",
+            proposed_changes=changes,
         )
 
         evolve_timing = evolve_result["timing"]
@@ -254,9 +248,7 @@ class TestTimingMetricsIntegration:
         assert evolve_timing["total_duration_ms"] > 0
 
     @pytest.mark.asyncio
-    async def test_catalog_workflow_timing(
-        self, config, mock_catalog_service, temp_catalog_dir
-    ):
+    async def test_catalog_workflow_timing(self, config, mock_catalog_service, temp_catalog_dir):
         """Test timing metrics in catalog workflow."""
         build_tool = BuildCatalogTool(config, mock_catalog_service)
         search_tool = SearchCatalogTool()
@@ -313,14 +305,13 @@ class TestIdTrackingLifecycle:
                     "title": "Updated Title",
                 }
             ],
-            "sections_to_remove": (
-                initial_sections[1:2] if len(initial_sections) > 1 else []
-            ),
+            "sections_to_remove": (initial_sections[1:2] if len(initial_sections) > 1 else []),
         }
 
         evolve_result = await evolve_tool.execute(
-            report_id=report_id,
-            changes=changes,
+            report_selector=report_id,
+            instruction="Update report",
+            proposed_changes=changes,
         )
 
         # Verify ID tracking
@@ -362,8 +353,9 @@ class TestIdTrackingLifecycle:
         }
 
         evolve1 = await evolve_tool.execute(
-            report_id=report_id,
-            changes=changes1,
+            report_selector=report_id,
+            instruction="Update report",
+            proposed_changes=changes1,
         )
 
         assert "sec1" in evolve1["section_ids_added"]
@@ -378,8 +370,9 @@ class TestIdTrackingLifecycle:
         }
 
         evolve2 = await evolve_tool.execute(
-            report_id=report_id,
-            changes=changes2,
+            report_selector=report_id,
+            instruction="Update report",
+            proposed_changes=changes2,
         )
 
         assert "sec1" in evolve2["section_ids_modified"]
@@ -398,8 +391,9 @@ class TestIdTrackingLifecycle:
         }
 
         evolve3 = await evolve_tool.execute(
-            report_id=report_id,
-            changes=changes3,
+            report_selector=report_id,
+            instruction="Update report",
+            proposed_changes=changes3,
         )
 
         assert "sec3" in evolve3["section_ids_added"]
@@ -417,9 +411,7 @@ class TestWarningsInWorkflows:
     """Test warnings infrastructure in multi-tool workflows."""
 
     @pytest.mark.asyncio
-    async def test_warnings_present_in_all_steps(
-        self, config, mock_catalog_service, temp_catalog_dir
-    ):
+    async def test_warnings_present_in_all_steps(self, config, mock_catalog_service, temp_catalog_dir):
         """Test that warnings field is present in all workflow steps."""
         build_tool = BuildCatalogTool(config, mock_catalog_service)
         search_tool = SearchCatalogTool()
@@ -437,9 +429,7 @@ class TestWarningsInWorkflows:
         assert search_result["warnings"] == []
 
     @pytest.mark.asyncio
-    async def test_warnings_independence_across_calls(
-        self, config, mock_catalog_service
-    ):
+    async def test_warnings_independence_across_calls(self, config, mock_catalog_service):
         """Test that warnings from one call don't affect another."""
         build_tool = BuildCatalogTool(config, mock_catalog_service)
 
@@ -494,8 +484,9 @@ class TestEndToEndWorkflows:
         }
 
         evolve1 = await evolve_tool.execute(
-            report_id=report_id,
-            changes=changes1,
+            report_selector=report_id,
+            instruction="Update report",
+            proposed_changes=changes1,
             request_id=workflow_id,
         )
 
@@ -517,8 +508,8 @@ class TestEndToEndWorkflows:
             }
 
             evolve2 = await evolve_tool.execute(
-                report_id=report_id,
-                changes=changes2,
+                report_selector=report_id,
+                proposed_changes=changes2,
                 request_id=workflow_id,
             )
 
@@ -535,9 +526,7 @@ class TestEndToEndWorkflows:
         assert create_result["request_id"] == evolve1["request_id"]
 
     @pytest.mark.asyncio
-    async def test_complete_catalog_workflow(
-        self, config, mock_catalog_service, temp_catalog_dir
-    ):
+    async def test_complete_catalog_workflow(self, config, mock_catalog_service, temp_catalog_dir):
         """Test complete workflow: build → search → summary."""
         build_tool = BuildCatalogTool(config, mock_catalog_service)
         search_tool = SearchCatalogTool()
@@ -581,12 +570,7 @@ class TestEndToEndWorkflows:
         assert "timing" in summary_result
 
         # All operations share correlation ID
-        assert (
-            build_result["request_id"]
-            == search_result["request_id"]
-            == summary_result["request_id"]
-            == workflow_id
-        )
+        assert build_result["request_id"] == search_result["request_id"] == summary_result["request_id"] == workflow_id
 
 
 class TestProductionScenarios:
@@ -628,8 +612,9 @@ class TestProductionScenarios:
         }
 
         evolve_result = await evolve_tool.execute(
-            report_id=report_id,
-            changes=changes,
+            report_selector=report_id,
+            instruction="Update report",
+            proposed_changes=changes,
         )
 
         assert evolve_result["status"] == "success"
