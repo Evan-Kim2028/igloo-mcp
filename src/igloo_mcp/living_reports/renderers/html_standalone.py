@@ -1,21 +1,16 @@
-"""HTML Standalone Renderer for Living Reports.
+"""HTML standalone renderer for living reports.
 
-Generates a single self-contained HTML file with:
-- Embedded CSS styling
-- Base64 encoded images/charts (if any)
-- Citations appendix
-- No external dependencies
-
-This renderer does NOT require Quarto installation.
+Generates self-contained HTML files with embedded CSS and no external dependencies.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from html import escape
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ..models import Outline
+from igloo_mcp.living_reports.models import Outline
 
 
 class HTMLStandaloneRenderer:
@@ -24,10 +19,6 @@ class HTMLStandaloneRenderer:
     Unlike the Quarto renderer, this produces a single HTML file
     with all assets embedded, making it ideal for sharing.
     """
-
-    def __init__(self) -> None:
-        """Initialize the HTML standalone renderer."""
-        pass
 
     def render(
         self,
@@ -134,14 +125,14 @@ class HTMLStandaloneRenderer:
     <meta name="generator" content="igloo-mcp HTML Standalone Renderer">
     <meta name="created" content="{outline.created_at}">
     <meta name="updated" content="{outline.updated_at}">
-    <title>{self._escape_html(outline.title)}</title>
+    <title>{escape(outline.title)}</title>
     <style>
 {css}
     </style>
 </head>
 <body>
     <header class="report-header">
-        <h1>{self._escape_html(outline.title)}</h1>
+        <h1>{escape(outline.title)}</h1>
         <div class="report-meta">
             <span class="meta-item">Report ID: <code>{outline.report_id}</code></span>
             <span class="meta-item">Generated: {datetime.now().strftime("%Y-%m-%d %H:%M UTC")}</span>
@@ -203,12 +194,12 @@ class HTMLStandaloneRenderer:
         # Section header
         html = f"""
         <section id="section-{section.section_id}" class="report-section">
-            <h2>{self._escape_html(section.title)}</h2>
+            <h2>{escape(section.title)}</h2>
 """
 
         # Section notes
         if section.notes:
-            html += f"""            <div class="section-notes">{self._escape_html(section.notes)}</div>
+            html += f"""            <div class="section-notes">{escape(section.notes)}</div>
 """
 
         # Section content (prose)
@@ -266,7 +257,7 @@ class HTMLStandaloneRenderer:
             importance_class = "low"
 
         stars = "★" * min(insight.importance, 5)
-        summary_escaped = self._escape_html(insight.summary)
+        summary_escaped = escape(insight.summary)
 
         html = f"""                <div class="insight insight-{importance_class}" \
 data-importance="{insight.importance}">
@@ -316,7 +307,7 @@ data-importance="{insight.importance}">
                     <span class="citation-time">Executed: {timestamp}</span>
 """
             if statement:
-                stmt_escaped = self._escape_html(statement[:100])
+                stmt_escaped = escape(statement[:100])
                 html += f'                    <div class="citation-sql"><code>{stmt_escaped}...</code></div>\n'
             html += f"""                    <span class="citation-stats">Rows: {rowcount}, Duration: {duration}ms</span>
                 </li>
@@ -343,7 +334,7 @@ data-importance="{insight.importance}">
             <ul>
 """
         for section in sorted_sections:
-            title_escaped = self._escape_html(section.title)
+            title_escaped = escape(section.title)
             html += f'                <li><a href="#section-{section.section_id}">{title_escaped}</a></li>\n'
 
         if any((insight.citations or insight.supporting_queries) for insight in outline.insights):
@@ -645,23 +636,15 @@ data-importance="{insight.importance}">
         return css
 
     def _escape_html(self, text: str) -> str:
-        """Escape HTML special characters.
+        """Escape HTML special characters using standard library.
 
         Args:
             text: Text to escape
 
         Returns:
-            Escaped text
+            Escaped text safe for HTML
         """
-        if not text:
-            return ""
-        return (
-            text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-            .replace("'", "&#x27;")
-        )
+        return escape(text) if text else ""
 
     def _markdown_to_html(self, markdown: str) -> str:
         """Convert basic markdown to HTML.

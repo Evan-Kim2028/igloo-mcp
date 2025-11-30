@@ -256,6 +256,127 @@ All modes support pagination via `limit` and `offset` parameters:
 
 ---
 
+## Mode Selection Guide
+
+Choose the right mode based on your needs to optimize token usage:
+
+### Quick Comparison
+
+| Mode | Rows Returned | Token Cost | Use Case |
+|------|---------------|------------|----------|
+| `summary` | Metadata only | ~50 tokens | List reports, check status |
+| `insights` | Key findings | ~200 tokens | Review conclusions without reading |
+| `sections` | Structure + content | ~500+ tokens | Read report prose |
+| `full` | Everything | ~1000+ tokens | Complete audit trail, exports |
+
+### When to Use Each Mode
+
+**`summary` mode** - Minimal metadata
+```python
+# Use when: Browsing reports, checking existence
+get_report(report_selector="Q1 Revenue", mode="summary")
+
+# Returns:
+# - report_id, title, created_at, updated_at
+# - tags, status, path
+# - Section count, insight count
+# - NO prose content, NO insights, NO citations
+```
+
+**`insights` mode** - Key findings only
+```python
+# Use when: Quick review of conclusions
+get_report(report_selector="Q1 Revenue", mode="insights")
+
+# Returns:
+# - All insights with summaries and importance
+# - Supporting query IDs
+# - Citations
+# - NO section prose content
+```
+
+**`sections` mode** - Structure and prose
+```python
+# Use when: Reading the report narrative
+get_report(report_selector="Q1 Revenue", mode="sections")
+
+# Returns:
+# - All section titles, order, prose content
+# - Section-to-insight mappings
+# - NO detailed insight metadata
+# - NO full citation details
+```
+
+**`full` mode** - Complete data
+```python
+# Use when: Exporting, auditing, or modifying
+get_report(report_selector="Q1 Revenue", mode="full")
+
+# Returns:
+# - EVERYTHING: metadata, sections, insights, citations
+# - Audit trail information
+# - Ready for render_report or evolve_report
+```
+
+### Recommended Workflow
+
+```
+1. Start with summary → See available reports
+   ↓
+2. Use insights → Review key findings
+   ↓
+3. Drill into sections → Read specific content
+   ↓
+4. Use full → Export or modify
+```
+
+### Token Efficiency Tips
+
+**Bad** (wastes tokens):
+```python
+# Getting full mode just to check if report exists
+result = get_report("Q1 Revenue", mode="full")  # 1000+ tokens
+if result["status"] == "success":
+    print("Report exists")
+```
+
+**Good** (token efficient):
+```python
+# Use summary mode for existence checks
+result = get_report("Q1 Revenue", mode="summary")  # 50 tokens
+if result["status"] == "success":
+    print("Report exists")
+```
+
+### Progressive Disclosure Pattern
+
+**Efficient multi-step workflow**:
+```python
+# Step 1: List all reports (summary mode)
+reports = search_report(tags=["quarterly"], fields=["report_id", "title"])
+
+# Step 2: Get insights for relevant report (insights mode)
+insights = get_report("Q1 Revenue", mode="insights")
+print(f"Found {len(insights['insights'])} key findings")
+
+# Step 3: Read specific sections if needed (sections mode)
+content = get_report(
+    "Q1 Revenue",
+    mode="sections",
+    section_titles=["Executive Summary"]  # Filter to specific section
+)
+
+# Step 4: Full mode only when modifying or exporting
+full_report = get_report("Q1 Revenue", mode="full")
+render_report(full_report["report_id"], format="pdf")
+```
+
+**Token savings**: 50 + 200 + 300 + 1000 = **1,550 tokens** (progressive)
+vs. 4 × 1000 = **4,000 tokens** (always using full mode)
+**Savings: 61%** ✨
+
+---
+
 ## Common Workflows
 
 ### Workflow 1: Progressive Disclosure

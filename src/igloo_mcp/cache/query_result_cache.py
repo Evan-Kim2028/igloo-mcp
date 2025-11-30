@@ -216,10 +216,14 @@ class QueryResultCache:
         profile: str,
         effective_context: Dict[str, Optional[str]],
     ) -> str:
+        # Normalize: exclude None values for consistent cache keys
+        # NULL and omitted parameters should produce the same cache key
+        normalized_context = {k: v for k, v in sorted(effective_context.items()) if v is not None}
+
         payload = {
             "sql_sha256": sql_sha256,
             "profile": profile,
-            "context": {k: effective_context.get(k) for k in sorted(effective_context)},
+            "context": normalized_context,
         }
         blob = json.dumps(payload, sort_keys=True, separators=("|", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
@@ -366,11 +370,26 @@ class QueryResultCache:
         result_csv_path: Optional[Path] = None
         columns = metadata.get("columns")
         if not columns:
-            # Derive columns from first row for CSV readability.
-            column_set: List[str] = []
+            # Derive columns from ALL rows to prevent data loss
+            # (first row may have NULL values for some columns)
+            column_set_gathered: set[str] = set()
             if rows:
-                column_set = list(rows[0].keys())
-            metadata["columns"] = column_set
+                for row in rows:
+                    column_set_gathered.update(row.keys())
+                metadata["columns"] = sorted(column_set_gathered)  # Deterministic ordering
+
+                # Warn if rows have inconsistent columns (indicates data quality issue)
+                if len(rows) > 1:
+                    first_keys = set(rows[0].keys())
+                    for i, row in enumerate(rows[1:], start=1):
+                        if set(row.keys()) != first_keys:
+                            logger.warning(
+                                "Inconsistent columns detected in cache rows: "
+                                f"row 0 has {sorted(first_keys)}, row {i} has {sorted(row.keys())}"
+                            )
+                            break  # Only log once
+            else:
+                metadata["columns"] = []
         try:
             if rows:
                 result_csv_path = key_dir / "rows.csv"
