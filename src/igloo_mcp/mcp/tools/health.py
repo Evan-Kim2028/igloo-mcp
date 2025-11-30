@@ -6,11 +6,13 @@ Part of v1.9.0 Phase 1 - consolidates health_check, check_profile_config, and ge
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import anyio
 
 from igloo_mcp.config import Config
+from igloo_mcp.mcp.exceptions import MCPValidationError
 from igloo_mcp.profile_utils import (
     ProfileValidationError,
     get_profile_summary,
@@ -100,26 +102,39 @@ class HealthCheckTool(MCPTool):
     @tool_error_handler("health_check")
     async def execute(
         self,
+        detail_level: str = "standard",
         include_cortex: bool = True,
         include_profile: bool = True,
         include_catalog: bool = False,
         request_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Execute comprehensive health check.
+        """Comprehensive health check of system components.
 
         Args:
+            detail_level: Response verbosity level:
+                - "summary": Just overall status and component health (~50 tokens)
+                - "standard": + Remediation guidance (~200 tokens, default)
+                - "full": + Diagnostic details (~400 tokens)
             include_cortex: Check Cortex AI services availability
             include_profile: Validate profile configuration
             include_catalog: Check catalog availability
-            request_id: Optional request correlation ID for tracing (auto-generated if not provided)
+            request_id: Optional request ID for tracing
 
         Returns:
-            Comprehensive health status
+            Health check results with optional detail levels
         """
         # Timing and request correlation
         start_time = time.time()
         request_id = ensure_request_id(request_id)
+
+        valid_levels = ("summary", "standard", "full")
+        detail_level = detail_level.lower()
+        if detail_level not in valid_levels:
+            raise MCPValidationError(
+                f"Invalid detail_level '{detail_level}'",
+                validation_errors=[f"Must be one of: {', '.join(valid_levels)}"],
+            )
 
         logger.info(
             "health_check_started",
@@ -177,7 +192,92 @@ class HealthCheckTool(MCPTool):
             },
         )
 
-        return results
+        # Determine overall status
+        overall_status = results.get("overall_status", "unknown")
+
+        # Determine component statuses for summary mode
+        snowflake_health = results.get("connection", {}).get("status", "unknown")
+        catalog_health = results.get("catalog", {}).get("status", "unknown")
+        profile_health = results.get("profile", {}).get("status", "unknown")
+
+        # Build response based on detail level
+        if detail_level == "summary":
+            # Minimal response - just statuses
+            return {
+                "status": overall_status,
+                "components": {
+                    "snowflake": snowflake_health,
+                    "catalog": catalog_health,
+                    "profile": profile_health,
+                },
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+        # Standard and full modes
+        response = {
+            "status": overall_status,
+            "checks": results,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Add remediation guidance for degraded/unhealthy components
+        remediation: Dict[str, Any] = {}
+
+        # Catalog health remediation
+        catalog_health = results.get("catalog", {}).get("status", "unknown")
+        catalog_age_days = results.get("catalog", {}).get("age_days")
+        catalog_exists = results.get("catalog", {}).get("exists")
+        if catalog_health != "healthy":
+            if catalog_age_days and catalog_age_days > 7:
+                remediation["catalog"] = (
+                    f"Catalog is {catalog_age_days} days old. "
+                    "Run build_catalog to refresh metadata and improve search accuracy"
+                )
+            elif not catalog_exists:
+                remediation["catalog"] = "No catalog found. Run build_catalog to enable offline object search"
+
+        # Snowflake connection remediation
+        snowflake_health = results.get("connection", {}).get("status", "unknown")
+        if snowflake_health != "healthy":
+            remediation["snowflake"] = (
+                "Snowflake connection failed. Run test_connection for detailed diagnostics, "
+                "or check SNOWFLAKE_PROFILE environment variable"
+            )
+
+        # Profile health remediation
+        profile_health = results.get("profile", {}).get("status", "unknown")
+        profile_name = results.get("profile", {}).get("name")
+        if profile_health != "healthy":
+            remediation["profile"] = (
+                f"Profile '{profile_name}' configuration issues detected. "
+                "Check ~/.snowflake/config.toml or run test_connection"
+            )
+
+        if remediation:
+            response["remediation"] = remediation
+            response["next_steps"] = "Address remediation items to improve system health"
+
+        if detail_level == "full":
+            # Add diagnostic details
+            diagnostics = {}
+
+            if "profile" in results:
+                diagnostics["profile"] = {
+                    "config_path": "~/.snowflake/config.toml",
+                    "active_profile": results.get("profile", {}).get("name"),
+                }
+
+            if "catalog" in results and results["catalog"].get("exists"):
+                diagnostics["catalog"] = {
+                    "path": results["catalog"].get("path"),
+                    "object_count": results["catalog"].get("object_count", 0),
+                    "last_build": results["catalog"].get("created_at"),
+                }
+
+            if diagnostics:
+                response["diagnostics"] = diagnostics
+
+        return response
 
     async def _test_connection(self) -> Dict[str, Any]:
         """Test basic Snowflake connectivity."""

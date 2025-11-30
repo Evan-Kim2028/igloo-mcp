@@ -13,6 +13,7 @@ from igloo_mcp.config import Config
 from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.exceptions import MCPExecutionError, MCPValidationError
 from igloo_mcp.mcp.tools.base import MCPTool, ensure_request_id, tool_error_handler
+from igloo_mcp.mcp.validation_helpers import validate_text_field
 
 VALID_TEMPLATES = (
     "default",
@@ -131,6 +132,25 @@ class CreateReportTool(MCPTool):
         """
         start_time = time.time()
         request_id = ensure_request_id(request_id)
+
+        # Validate title
+        validate_text_field(
+            value=title,
+            field_name="title",
+            min_length=3,
+            max_length=200,
+            pattern=r"^[a-zA-Z0-9\s\-_]+$",
+        )
+
+        # Validate description if provided
+        if description:
+            validate_text_field(
+                value=description,
+                field_name="description",
+                min_length=5,
+                max_length=500,
+                allow_empty=True,
+            )
 
         logger.info(
             "create_report_started",

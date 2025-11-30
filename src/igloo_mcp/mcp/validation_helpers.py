@@ -335,3 +335,137 @@ def validate_enum_value(
         )
 
     return value
+
+
+def validate_text_field(
+    value: str,
+    field_name: str,
+    min_length: int = 1,
+    max_length: int = 200,
+    pattern: Optional[str] = None,
+    allow_empty: bool = False,
+) -> None:
+    """Validate a text field with consistent error messages.
+
+    Raises MCPValidationError if validation fails.
+
+    Args:
+        value: The text value to validate
+        field_name: Name of the field (for error messages)
+        min_length: Minimum length (default: 1)
+        max_length: Maximum length (default: 200)
+        pattern: Optional regex pattern to match
+        allow_empty: Whether to allow empty strings (default: False)
+
+    Raises:
+        MCPValidationError: If validation fails
+
+    Example:
+        validate_text_field(
+            title,
+            "title",
+            min_length=3,
+            max_length=100,
+            pattern=r'^[a-zA-Z0-9\s\-_]+$'
+        )
+    """
+    if value is None or (not allow_empty and not value.strip()):
+        raise MCPValidationError(
+            f"Missing or empty {field_name}",
+            validation_errors=[f"{field_name} is required and cannot be empty"],
+            hints=[
+                f"Provide a {field_name} with at least {min_length} characters",
+                f"Use descriptive {field_name} that explains the purpose",
+            ],
+        )
+
+    value_clean = value.strip()
+
+    if len(value_clean) < min_length:
+        raise MCPValidationError(
+            f"{field_name} too short",
+            validation_errors=[f"{field_name} must be at least {min_length} characters (got {len(value_clean)})"],
+            hints=[
+                f"Current: '{value_clean}'",
+                f"Minimum length: {min_length} characters",
+                "Be more descriptive to meet minimum length requirement",
+            ],
+        )
+
+    if len(value_clean) > max_length:
+        raise MCPValidationError(
+            f"{field_name} too long",
+            validation_errors=[f"{field_name} must be at most {max_length} characters (got {len(value_clean)})"],
+            hints=[
+                f"Current length: {len(value_clean)} characters",
+                f"Maximum length: {max_length} characters",
+                f"Reduce {field_name} by {len(value_clean) - max_length} characters",
+            ],
+        )
+
+    if pattern:
+        import re
+
+        if not re.match(pattern, value_clean):
+            raise MCPValidationError(
+                f"Invalid {field_name} format",
+                validation_errors=[f"{field_name} contains invalid characters or format"],
+                hints=[
+                    f"Current: '{value_clean}'",
+                    "Use only alphanumeric characters, spaces, hyphens, and underscores",
+                    "Avoid special characters like @, #, $, %, etc.",
+                ],
+            )
+
+
+def validate_path_field(
+    value: str,
+    field_name: str,
+    must_exist: bool = False,
+    create_if_missing: bool = False,
+) -> None:
+    """Validate a file/directory path field.
+
+    Args:
+        value: The path value to validate
+        field_name: Name of the field (for error messages)
+        must_exist: Whether path must already exist (default: False)
+        create_if_missing: Whether to create directory if missing (default: False)
+
+    Raises:
+        MCPValidationError: If validation fails
+    """
+    from pathlib import Path
+
+    if not value or not value.strip():
+        raise MCPValidationError(
+            f"Missing {field_name}",
+            validation_errors=[f"{field_name} is required"],
+            hints=[f"Provide a valid file or directory path for {field_name}"],
+        )
+
+    path = Path(value.strip())
+
+    if must_exist and not path.exists():
+        raise MCPValidationError(
+            f"{field_name} not found",
+            validation_errors=[f"Path does not exist: {value}"],
+            hints=[
+                f"Check that {value} exists",
+                "Verify spelling and path structure",
+                "Create the directory first or use create_if_missing=True" if not create_if_missing else "",
+            ],
+        )
+
+    if create_if_missing and not path.exists():
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            raise MCPValidationError(
+                f"Cannot create {field_name}",
+                validation_errors=[f"Failed to create directory: {e}"],
+                hints=[
+                    f"Check permissions for {value}",
+                    "Verify parent directories exist",
+                ],
+            )

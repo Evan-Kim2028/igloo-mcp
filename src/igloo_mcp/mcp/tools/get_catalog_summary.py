@@ -78,24 +78,34 @@ class GetCatalogSummaryTool(MCPTool):
     async def execute(
         self,
         catalog_dir: str = "./data_catalogue",
-        database: Optional[str] = None,
+        mode: str = "summary",
         request_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Get catalog summary.
+        """Get catalog summary with progressive disclosure.
 
         Args:
-            catalog_dir: Catalog directory path (default: ./data_catalogue, resolves to unified storage)
-            database: Optional database name to resolve unified storage path (ignored if catalog_dir is custom)
-            request_id: Optional request correlation ID for tracing (auto-generated if not provided)
+            catalog_dir: Directory containing catalog artifacts
+            mode: Response verbosity level:
+                - "counts": Just total object counts (~30 tokens)
+                - "summary": + Database breakdown (~100 tokens, default)
+                - "detailed": + Column statistics (~200+ tokens)
+            request_id: Optional request ID for tracing
 
         Returns:
-            Catalog summary with metadata and statistics
-
-        Raises:
-            MCPSelectorError: If catalog directory or summary file not found
-            MCPExecutionError: If summary cannot be loaded
+            Catalog summary with requested detail level
         """
+        request_id = ensure_request_id(request_id)
+
+        # Validate mode
+        valid_modes = ("counts", "summary", "detailed")
+        mode = mode.lower()
+        if mode not in valid_modes:
+            raise MCPValidationError(
+                f"Invalid mode '{mode}'",
+                validation_errors=[f"Must be one of: {', '.join(valid_modes)}"],
+            )
+
         # Timing and request correlation
         start_time = time.time()
         request_id = ensure_request_id(request_id)
@@ -104,7 +114,6 @@ class GetCatalogSummaryTool(MCPTool):
         if catalog_dir == "./data_catalogue":
             try:
                 resolved_path = resolve_catalog_path(
-                    database=database,
                     account_scope=False,
                 )
                 catalog_dir = str(resolved_path)
@@ -116,7 +125,6 @@ class GetCatalogSummaryTool(MCPTool):
             "get_catalog_summary_started",
             extra={
                 "catalog_dir": catalog_dir,
-                "database": database,
                 "request_id": request_id,
             },
         )
@@ -159,15 +167,38 @@ class GetCatalogSummaryTool(MCPTool):
                 },
             )
 
-            return {
+            # Build response based on mode
+            if mode == "counts":
+                # Minimal - just counts
+                return {
+                    "status": "success",
+                    "total_objects": summary.get("total_objects"),
+                    "databases": summary.get("databases"),
+                    "timestamp": summary.get("created_at"),
+                }
+
+            # Summary mode (current behavior)
+            response = {
                 "status": "success",
-                "request_id": request_id,
-                "timing": {
-                    "total_duration_ms": round(total_duration, 2),
-                },
-                "catalog_dir": catalog_dir,
                 "summary": summary,
+                "database_breakdown": summary.get("database_breakdown"),
+                "timestamp": summary.get("created_at"),
             }
+
+            if mode == "detailed":
+                # Add detailed statistics if available
+                detailed_stats = {}
+
+                if "column_stats" in summary:
+                    detailed_stats["column_statistics"] = summary["column_stats"]
+
+                if "distribution" in summary:
+                    detailed_stats["data_distribution"] = summary["distribution"]
+
+                if detailed_stats:
+                    response["detailed_stats"] = detailed_stats
+
+            return response
 
         except FileNotFoundError as e:
             logger.warning(
@@ -204,12 +235,6 @@ class GetCatalogSummaryTool(MCPTool):
                     default="./data_catalogue",
                     examples=["./data_catalogue", "./artifacts/catalog"],
                 ),
-                "database": {
-                    "type": "string",
-                    "description": "Optional database name to resolve unified storage path. "
-                    "Only used when catalog_dir is default. Ignored if catalog_dir is custom.",
-                    "title": "Database",
-                },
                 "request_id": {
                     "type": "string",
                     "description": "Optional request correlation ID for tracing (auto-generated if not provided)",

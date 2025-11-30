@@ -189,7 +189,7 @@ def wrap_selector_error(
     error_type: str = "not_found",
     candidates: Optional[List[str]] = None,
     hints: Optional[List[str]] = None,
-    verbose: bool = True,  # Default True for backward compatibility with tests
+    verbose: bool = True,
 ) -> MCPSelectorError:
     """Create a standardized selector error.
 
@@ -206,20 +206,26 @@ def wrap_selector_error(
     """
     if hints is None:
         if error_type == "not_found":
+            # Always provide actionable hints for not found errors
             hints = [
-                f"Verify selector exists: {selector}",
+                f"Verify '{selector}' exists in the system",
                 "Check spelling and case sensitivity",
-                "List available resources to see valid selectors",
+                "Use search tool to list available items (e.g., search_report, search_catalog)",
             ]
+            # Add specific guidance if this looks like a report ID
+            if selector.startswith("rpt_"):
+                hints.append("Report IDs must be exact - use search_report to find the correct ID")
         elif error_type == "ambiguous":
             hints = [
-                f"Use a more specific selector or one of: {', '.join(candidates or [])}",
+                f"Multiple items match '{selector}' - be more specific",
+                f"Use one of these exact IDs: {', '.join(candidates[:3] if candidates else [])}",
                 "Provide full ID instead of partial match",
             ]
         else:
             hints = [
-                "Check selector format",
+                f"Check '{selector}' format and syntax",
                 "Verify selector matches expected pattern",
+                "Review tool documentation for selector requirements",
             ]
 
     return MCPSelectorError(
