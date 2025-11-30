@@ -219,3 +219,130 @@ async def test_health_check_handles_failures(monkeypatch: pytest.MonkeyPatch) ->
     assert result["checks"]["cortex"]["available"] is False
     assert result["checks"]["system"]["status"] == "error"
     assert result["status"] == "unhealthy"
+
+
+@pytest.mark.asyncio
+async def test_health_check_full_mode_includes_storage_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that full mode includes storage paths diagnostics."""
+    config = Config.from_env()
+    service = StubSnowflakeService()
+    monitor = StubHealthMonitor(
+        profile_health=StubProfileHealth(is_valid=True),
+        system_status=StubSystemStatus(),
+    )
+
+    # Mock profile validation to avoid dependency on real profile
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.validate_and_resolve_profile",
+        lambda: "DEFAULT",
+    )
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.get_profile_summary",
+        lambda: SummaryStub(),
+    )
+
+    tool = HealthCheckTool(
+        config=config,
+        snowflake_service=service,
+        health_monitor=monitor,
+    )
+
+    result = await tool.execute(response_mode="full", include_profile=True, include_cortex=False, include_catalog=False)
+
+    # Verify storage_paths is present in diagnostics
+    assert "diagnostics" in result
+    assert "storage_paths" in result["diagnostics"]
+
+    storage = result["diagnostics"]["storage_paths"]
+
+    # Verify required fields
+    assert "scope" in storage
+    assert "base_directory" in storage
+    assert "query_history" in storage
+    assert "artifacts" in storage
+    assert "cache" in storage
+    assert "reports" in storage
+    assert "catalogs" in storage
+    assert "namespaced" in storage
+
+    # Verify scope value is valid
+    assert storage["scope"] in ["global", "repo"]
+
+    # Verify all paths are strings and non-empty
+    assert isinstance(storage["base_directory"], str)
+    assert storage["base_directory"]
+    assert isinstance(storage["query_history"], str)
+    assert storage["query_history"]
+    assert isinstance(storage["artifacts"], str)
+    assert storage["artifacts"]
+    assert isinstance(storage["cache"], str)
+    assert storage["cache"]
+    assert isinstance(storage["reports"], str)
+    assert storage["reports"]
+    assert isinstance(storage["catalogs"], str)
+    assert storage["catalogs"]
+
+    # Verify namespaced is boolean
+    assert isinstance(storage["namespaced"], bool)
+
+
+@pytest.mark.asyncio
+async def test_health_check_minimal_mode_excludes_storage_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that minimal mode does NOT include storage paths (token efficiency)."""
+    config = Config.from_env()
+    service = StubSnowflakeService()
+
+    tool = HealthCheckTool(
+        config=config,
+        snowflake_service=service,
+    )
+
+    result = await tool.execute(response_mode="minimal", include_profile=False, include_cortex=False)
+
+    # Minimal mode should not have diagnostics at all
+    assert "diagnostics" not in result
+    # Double-check storage_paths is not in the result anywhere
+    assert "storage_paths" not in result.get("diagnostics", {})
+
+
+@pytest.mark.asyncio
+async def test_storage_paths_reflect_repo_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test storage paths correctly reflect repo scope configuration."""
+    config = Config.from_env()
+    service = StubSnowflakeService()
+    monitor = StubHealthMonitor(
+        profile_health=StubProfileHealth(is_valid=True),
+        system_status=StubSystemStatus(),
+    )
+
+    # Mock profile validation
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.validate_and_resolve_profile",
+        lambda: "DEFAULT",
+    )
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.get_profile_summary",
+        lambda: SummaryStub(),
+    )
+
+    # Mock repo scope environment
+    monkeypatch.setenv("IGLOO_MCP_LOG_SCOPE", "repo")
+
+    tool = HealthCheckTool(
+        config=config,
+        snowflake_service=service,
+        health_monitor=monitor,
+    )
+
+    result = await tool.execute(response_mode="full", include_profile=True, include_cortex=False, include_catalog=False)
+
+    storage = result["diagnostics"]["storage_paths"]
+
+    # Verify scope is repo
+    assert storage["scope"] == "repo"
+
+    # Repo scope paths should NOT start with ~/.igloo_mcp
+    home_igloo = str(Path.home() / ".igloo_mcp")
+    assert not storage["base_directory"].startswith(home_igloo), (
+        f"Repo scope should not use global base: {storage['base_directory']}"
+    )

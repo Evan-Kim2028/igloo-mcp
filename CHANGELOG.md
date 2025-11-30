@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Added
 
+### Progressive Disclosure & Token Efficiency (NEW!)
+
+**Standardized `response_mode` parameter across all tools**: Control response verbosity for 60-95% token reduction.
+
+**⚠️ BREAKING CHANGE: Default changed to `summary` mode**
+
+`execute_query` now defaults to `response_mode='summary'` (returns 5 sample rows + metadata) instead of `response_mode='full'` (all rows).
+
+**Migration**: To get all rows, explicitly set `response_mode='full'`:
+```python
+execute_query(
+    statement="SELECT * FROM table",
+    reason="Full export",
+    response_mode="full"  # ← Explicit for all rows
+)
+```
+
+**Why this change**: Based on production log analysis:
+- 3,103 queries analyzed
+- Average rowcount: 57 rows → `summary` mode saves **91% tokens**
+- Max rowcount: 2,100 rows → `summary` mode saves **99.8% tokens**
+- Small queries (≤5 rows) unaffected - return all rows anyway
+
+**Response Modes** (standardized across 6 tools):
+
+| Mode | Returns | Token Savings | Use Case |
+|------|---------|---------------|----------|
+| `schema_only` | Column schema only, no rows | **95%** | Structure discovery |
+| `summary` | 5 sample rows + key_metrics | **90%** | Validation, exploration (DEFAULT) |
+| `sample` | 10 sample rows | **60-80%** | Debugging, examples |
+| `full` | All rows and metadata | baseline | Final export, small results |
+
+**Tools supporting `response_mode`**:
+- `execute_query` (was `result_mode`)
+- `get_report` (was `mode`)
+- `search_report` (was `mode`)
+- `health_check` (was `detail_level`)
+- `get_catalog_summary` (was `mode`)
+- `evolve_report` / `evolve_report_batch` (was `response_detail`)
+
+**Backward Compatibility**: Legacy parameter names work with deprecation warnings (removed in v0.5.0).
+
+**Response Metadata**: Non-`full` modes include `result_mode_info`:
+```python
+{
+    "result_mode": "summary",
+    "result_mode_info": {
+        "total_rows": 2100,
+        "rows_returned": 5,
+        "sample_size": 5,
+        "hint": "Showing first 5 of 2100 rows. Use result_mode='full' to retrieve all rows"
+    }
+}
+```
+
+**Telemetry**: History logs now track `response_mode_requested` for usage analytics.
+
+**Documentation**: See `docs/api/PROGRESSIVE_DISCLOSURE.md` for complete guide.
+
+## Enhanced
+
+- **health_check**: Added `storage_paths` to `response_mode="full"` diagnostics, showing resolved locations for query history, artifacts, cache, reports, and catalogs. Helps users quickly discover where igloo-mcp stores data without checking environment variables. Available fields: `scope` (global/repo), `base_directory`, `query_history`, `artifacts`, `cache`, `reports`, `catalogs`, and `namespaced` flag.
+
 ### Multi-Source Citation System (#62)
 
 **Flexible citations beyond Snowflake**: New `Citation` model supports 5 source types for complete research traceability.

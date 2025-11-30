@@ -281,6 +281,9 @@ class HealthCheckTool(MCPTool):
                     "last_build": results["catalog"].get("created_at"),
                 }
 
+            # Add storage paths information
+            diagnostics["storage_paths"] = self._get_storage_paths()
+
             if diagnostics:
                 response["diagnostics"] = diagnostics
 
@@ -499,6 +502,63 @@ class HealthCheckTool(MCPTool):
                 "status": "error",
                 "error": str(e),
             }
+
+    def _get_storage_paths(self) -> dict[str, Any]:
+        """Get unified storage location information.
+
+        Returns resolved paths for all igloo-mcp storage locations including
+        query history, artifacts, cache, reports, and catalogs.
+
+        Returns:
+            Dictionary with storage configuration and resolved paths:
+            - scope: Storage scope ("global" or "repo")
+            - base_directory: Base directory for storage
+            - query_history: Path to query history JSONL file
+            - artifacts: Path to artifacts directory
+            - cache: Path to cache directory
+            - reports: Path to living reports directory
+            - catalogs: Path to catalog metadata directory
+            - namespaced: Whether namespaced logging is enabled
+        """
+        from igloo_mcp.path_utils import (
+            _get_log_scope,
+            _is_namespaced_logs,
+            get_global_base,
+            resolve_artifact_root,
+            resolve_cache_root,
+            resolve_catalog_root,
+            resolve_history_path,
+            resolve_reports_root,
+        )
+
+        scope = _get_log_scope()
+        namespaced = _is_namespaced_logs()
+
+        # Resolve all paths
+        history_path = resolve_history_path()
+        artifact_root = resolve_artifact_root()
+        cache_root = resolve_cache_root()
+        reports_root = resolve_reports_root()
+        catalog_root = resolve_catalog_root()
+
+        # Determine base directory
+        if scope == "global":
+            base_dir = str(get_global_base())
+        else:
+            # Repo scope - extract from one of the resolved paths
+            # history_path is logs/doc.jsonl, parent.parent gives repo root
+            base_dir = str(history_path.parent.parent)
+
+        return {
+            "scope": scope,
+            "base_directory": base_dir,
+            "query_history": str(history_path),
+            "artifacts": str(artifact_root),
+            "cache": str(cache_root),
+            "reports": str(reports_root),
+            "catalogs": str(catalog_root),
+            "namespaced": namespaced,
+        }
 
     def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
