@@ -155,7 +155,7 @@ dependencies/*
 lineage/*
 # Local test consumer
 tmp_consumer_rye/
-AGENTS.md
+/AGENTS.md
 repo/
 local_sf_test/
 .claude/*
