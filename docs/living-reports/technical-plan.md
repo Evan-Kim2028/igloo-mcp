@@ -1,4 +1,13 @@
-% Igloo Reports 0.3.0 – Living, Auditable, Agent-Assisted Reports
+# Igloo Reports 0.3.0 – Living, Auditable, Agent-Assisted Reports
+
+> **📐 Technical Design Document**
+> This document describes the v0.3.0 implementation architecture.
+> **For user-facing documentation**, see [User Guide](user-guide.md).
+> **Last updated**: November 2025
+>
+> **Audience**: Contributors, architects, maintainers
+> **Scope**: Design decisions, data models, invariants
+> **Status**: Implemented in v0.3.0+
 
 ## 1. Purpose and Scope
 - Define a production-grade reporting subsystem for `igloo-mcp` that creates Obsidian/Notion-style "living" documents fully backed by audited Snowflake data.
@@ -207,5 +216,5 @@ This plan is the authoritative technical blueprint for the 0.3.0 Igloo Reports r
 ## See Also
 
 - [Living Reports User Guide](user-guide.md) - User-facing documentation
-- [API Reference](../api-reference.md) - MCP tools documentation
+- [API Reference](../api/README.md) - MCP tools documentation
 - [Getting Started Guide](../getting-started.md) - Quick start overview

@@ -31,6 +31,6 @@ This index groups the existing guides so new users and contributors can find the
 
 ## See Also
 
-- [API Reference](api-reference.md) - Complete MCP tools documentation
+- [API Reference](api/README.md) - Complete MCP tools documentation
 - [Error Catalog](api/ERROR_CATALOG.md) - Error reference and solutions
 - [MCP Integration Guide](mcp-integration.md) - MCP client setup

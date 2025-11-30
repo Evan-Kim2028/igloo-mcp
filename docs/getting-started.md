@@ -3,177 +3,82 @@
 > **Quick Start**: Set up your Snowflake profile → Install igloo-mcp → Start using with your AI assistant
 
 ## How It Works
-- Your LLM calls MCP tools (execute_query, build_catalog, search_catalog, evolve_report, etc.) exposed by igloo-mcp.
-- igloo-mcp uses your Snowflake CLI profile for authentication and session context.
-- Built-in guardrails block write and DDL SQL (INSERT/UPDATE/CREATE/ALTER/DELETE/DROP/TRUNCATE); timeouts and best‑effort cancellation keep runs responsive.
-- Optional JSONL query history records success/timeout/error with minimal fields for auditing.
-- Configure your editor (Cursor or Claude Code) to launch igloo-mcp with your Snowflake profile.
+
+Your LLM calls MCP tools (execute_query, build_catalog, evolve_report, etc.) through igloo-mcp, which uses your Snowflake CLI profile for authentication. Built-in guardrails block risky SQL operations, while timeouts and cancellation keep runs responsive. Every query logs to JSONL for auditing.
 
 ## Prerequisites
 
 **Required**:
-1. **Python 3.12+** with `uv` or pip package manager
-   - Check: `python --version`
-   - Install: https://www.python.org/downloads/
+1. **Python 3.12+** with `uv` or pip
+2. **Snowflake CLI** (bundled with igloo-mcp)
+3. **Snowflake account** with appropriate permissions (USAGE on warehouse/database/schema, SELECT on INFORMATION_SCHEMA)
+4. **AI Assistant** that supports MCP (Cursor, Claude Code, etc.)
 
-2. **Snowflake CLI** (Official package - bundled with igloo-mcp)
-   - Expect: `snow --version` works after installing igloo-mcp
-   - Docs: https://docs.snowflake.com/en/developer-guide/snowflake-cli/
-   - Purpose: Manages Snowflake authentication profiles only
+## Installation & Setup
 
-3. **Snowflake account** with appropriate permissions
-   - Need: USAGE on warehouse/database/schema
-   - Need: SELECT on INFORMATION_SCHEMA
-   - Contact your Snowflake admin if unsure
-
-4. **AI Assistant** that supports MCP (e.g., Claude Code, Cline, etc.)
-
-## Step 1: Install igloo-mcp
-
-See the [Installation Guide](installation.md) for complete installation instructions.
+For complete installation instructions, see the **[Installation Guide](installation.md)**.
 
 **Quick install**:
 ```bash
 uv pip install igloo-mcp
 ```
 
-## Step 2: Set Up Your Snowflake Profile
-
-See the [Installation Guide](installation.md#2-create-a-snowflake-profile) for detailed profile setup instructions.
-
-**Quick setup** (SSO recommended):
+**Quick Snowflake profile** (SSO recommended):
 ```bash
-snow connection add \
-  --connection-name my-profile \
-  --account <account>.<region> \
-  --user <username> \
-  --warehouse COMPUTE_WH \
-  --authenticator externalbrowser
+snow connection add --connection-name my-profile --account <account>.<region> --user <username> --warehouse COMPUTE_WH --authenticator externalbrowser
 ```
 
-Verify your profile:
-```bash
-snow connection list
-snow sql -q "SELECT CURRENT_VERSION()" --connection my-profile
-```
-
-## Step 3: Configure Cursor MCP
-
-Add igloo-mcp to Cursor's MCP configuration.
-
-### Cursor Configuration
-
-Edit your Cursor MCP settings (`~/.cursor/mcp.json`):
-
-**For development installation** (recommended):
+**Quick MCP config** (Cursor example - see [Installation Guide](installation.md) for other clients):
 ```json
 {
   "mcpServers": {
     "igloo-mcp": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "/path/to/igloo-mcp",
-        "run",
-        "igloo-mcp",
-        "--profile",
-        "my-profile"
-      ],
-      "env": {
-        "SNOWFLAKE_PROFILE": "my-profile"
-      }
-    }
-  }
-}
-```
-
-> **Note**: No `service_config.yml` needed! igloo-mcp uses Snowflake CLI profiles directly for authentication.
-
-**Profile selection options**:
-- `--profile` flag (recommended): `"args": ["--profile", "my-profile"]`
-- Environment variable: `"env": {"SNOWFLAKE_PROFILE": "my-profile"}`
-- Default profile: Omit args/env if you set a default with `snow connection set-default`
-
-### Claude Code (alternative)
-
-Add this to your Claude Code MCP settings:
-
-```json
-{
-  "mcp": {
-    "igloo-mcp": {
       "command": "igloo-mcp",
-      "args": ["--profile", "my-profile"],
-      "env": { "SNOWFLAKE_PROFILE": "my-profile" }
+      "args": ["--profile", "my-profile"]
     }
   }
 }
 ```
 
-Then ask Claude to test the connection or list databases.
+> **Note**: For detailed setup including all authentication methods, multiple profiles, and troubleshooting, see [Installation Guide](installation.md).
 
-## Step 4: Test Your Setup
+## Your First Queries
 
-### Verify Snowflake Connection
-```bash
-# Test your profile
-snow sql -q "SELECT CURRENT_VERSION()" --connection my-profile
-```
-
-### Verify MCP Server
-```bash
-# Start MCP server (should show help without errors)
-igloo-mcp --profile my-profile --help
-```
-
-## Step 5: Start Using MCP Tools
-
-Once configured, interact with igloo-mcp through Cursor:
+Once configured, interact with igloo-mcp through your AI assistant:
 
 ### Example Prompts
 
 ```
 "Test my Snowflake connection"
-→ Uses: test_connection tool
+→ Uses: test_connection
+
+"Show me the first 10 rows from CUSTOMERS table"
+→ Uses: execute_query with auto-insights
 
 "Build a catalog for MY_DATABASE"
-→ Uses: build_catalog tool
+→ Uses: build_catalog
 
-"Build a dependency graph for USERS-related objects"
-→ Uses: build_dependency_graph tool
+"Find all tables with 'user' in the name"
+→ Uses: search_catalog
 
-"Execute this query: SELECT * FROM CUSTOMERS LIMIT 10"
-→ Uses: execute_query tool
+"Create a dependency graph for the ANALYTICS schema"
+→ Uses: build_dependency_graph
 ```
 
 ## Available MCP Tools
 
-Igloo MCP provides **13 focused tools** for Snowflake operations and Living Reports management.
+Igloo MCP provides **14 focused tools** organized by workflow. See [API Tools Index](api/TOOLS_INDEX.md) for complete workflow documentation.
 
-| Tool Name | Description | Key Parameters |
-|-----------|-------------|----------------|
-| `execute_query` | Execute SQL with safety checks, timeouts, cancellation | statement, timeout_seconds, verbose_errors, reason, warehouse, database, schema, role |
-| `build_catalog` | Build comprehensive catalog from INFORMATION_SCHEMA | output_dir, database, account, format |
-| `get_catalog_summary` | Get catalog statistics and metadata | catalog_dir |
-| `search_catalog` | Search locally cached catalog artifacts | catalog_dir, object_types, database, schema, name_contains, column_contains, limit |
-| `build_dependency_graph` | Generate object dependency graph (JSON/DOT) | database, schema, account, format |
-| `test_connection` | Test Snowflake connection | — |
-| `health_check` | Check MCP server health | — |
-| `create_report` | Create a new living report | title, template, tags, description |
-| `evolve_report` | Evolve living reports with LLM assistance | report_selector, instruction, constraints, dry_run, response_detail |
-| `render_report` | Render reports to various formats | report_selector, format, persist_output, preview_max_chars |
-| `search_report` | Search for living reports | report_selector, fields |
-| `get_report` | Read reports with progressive disclosure | report_selector, mode, section_ids, filters |
-| `get_report_schema` | API schema introspection | schema_type, format |
+### 🔍 Data Discovery
+- `test_connection`, `execute_query`, `build_catalog`, `search_catalog`, `build_dependency_graph`
 
-**Catalog Storage**: `build_catalog` uses unified storage by default, saving catalogs to `~/.igloo_mcp/catalogs/{database}/`. See [Configuration Guide](configuration.md) for details on customizing catalog storage.
+### 📊 Living Reports
+- `create_report`, `search_report`, `get_report`, `get_report_schema`, `evolve_report`, `evolve_report_batch`, `render_report`
 
-**Catalog Building Details**:
-- Queries Snowflake `INFORMATION_SCHEMA` for comprehensive metadata
-- Includes: databases, schemas, tables, views, materialized views, dynamic tables, tasks, functions, procedures, columns
-- **Functions**: Only user-defined functions (excludes built-in Snowflake functions like operators `!=`, `%`, `*`, etc.)
-- **Performance**: Optimized queries with proper filtering and ordering
-- **Output**: Structured JSON with detailed metadata for each object type
+### 🏥 Health & Diagnostics
+- `health_check`, `get_catalog_summary`
+
+**View complete workflows**: [API Tools Index](api/TOOLS_INDEX.md)
 
 ---
 
@@ -225,42 +130,32 @@ See [Living Reports User Guide](living-reports/user-guide.md) for complete workf
 
 ## Advanced Configuration
 
-For advanced configuration options including multiple profiles, environment variables, and custom settings, see the [Configuration Guide](configuration.md).
+For configuration options including multiple profiles, environment variables, and custom storage paths, see the [Configuration Guide](configuration.md).
 
 ## Troubleshooting
 
 ### MCP Server Won't Start
 
-**Issue**: MCP server fails to start
 **Solution**:
 1. Verify Snowflake profile: `snow connection list`
 2. Test connection: `snow sql -q "SELECT 1" --connection my-profile`
 3. Check MCP configuration in your AI assistant settings
-4. Review logs in your AI assistant
+4. See [Installation Guide](installation.md#troubleshooting) for detailed troubleshooting
 
 ### Authentication Errors
 
-**Issue**: "Authentication failed"
-**Solution**:
-1. Verify profile credentials are correct
-2. Check private key file permissions (should be 600)
-3. Ensure profile name matches `SNOWFLAKE_PROFILE` env var
+**Solution**: See [Authentication Guide](authentication.md) for all auth methods and troubleshooting.
 
 ### Tool Not Found
 
-**Issue**: Cursor can't find MCP tools
-**Solution**:
-1. Restart Cursor completely
-2. Verify MCP server is configured correctly
-3. Check command path in MCP configuration
-4. Ensure igloo-mcp is installed and accessible
+**Solution**: Restart your MCP client completely after configuration changes.
 
 ## Next Steps
 
-- 🎯 [Cursor MCP Setup Guide](mcp/cursor-mcp-setup.md) - **Recommended for Cursor users**
-- 📖 [API Reference](api-reference.md) - Complete MCP tools documentation
-- 🔧 [Configuration Guide](configuration.md) - Advanced settings
-- 📊 [Usage Examples](examples/catalog-examples.md) - Real-world examples
+- 🎯 [Installation Guide](installation.md) - **Complete setup documentation**
+- 🔧 [API Reference](api/README.md) - All MCP tools documentation
+- 📊 [Living Reports User Guide](living-reports/user-guide.md) - Report workflows
+- 💡 [Examples](examples/catalog-examples.md) - Real-world usage examples
 
 ## See Also
 

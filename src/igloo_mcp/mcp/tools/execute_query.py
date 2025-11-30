@@ -119,14 +119,30 @@ RESULT_MODE_SUMMARY_SAMPLE_SIZE = 5  # Sample size for 'summary' mode
 
 
 def _apply_result_mode(result: Dict[str, Any], mode: str) -> Dict[str, Any]:
-    """Apply result_mode filtering to reduce response size.
+    """Apply result_mode filtering to reduce response size for token efficiency.
+
+    This function modifies the query result based on the requested mode to reduce
+    token usage in LLM contexts. It preserves all metadata (columns, key_metrics,
+    insights) while controlling the number of rows returned.
 
     Args:
-        result: Full query result dict
-        mode: One of 'full', 'summary', 'schema_only', 'sample'
+        result: Full query result dict containing rows, columns, rowcount, etc.
+        mode: Result mode to apply. Options:
+              - 'full': No filtering, return all rows (pass-through)
+              - 'summary': Return key_metrics + 5 sample rows (~90% reduction)
+              - 'schema_only': Return schema/metrics only, no rows (~95% reduction)
+              - 'sample': Return first 10 rows only (~60-80% reduction)
 
     Returns:
-        Filtered result dict based on mode
+        Modified result dict. For non-'full' modes, adds:
+            - result_mode: The mode that was applied
+            - result_mode_info: Dict with filtering metadata including
+              total_rows, rows_returned, sample_size, and hint
+
+    Notes:
+        - Always preserves: columns, key_metrics, insights, session_context
+        - Only modifies: rows array (truncated based on mode)
+        - Safe to call multiple times (idempotent for same mode)
     """
     if mode == RESULT_MODE_FULL:
         return result
@@ -996,7 +1012,50 @@ class ExecuteQueryTool(MCPTool):
         ctx: Context | None = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """Public entry point for execute_query."""
+        """Execute SQL query against Snowflake with validation and token optimization.
+
+        This is the main entry point for SQL query execution. It provides:
+        - SQL permission validation (blocks DDL/DML by default)
+        - Configurable timeouts with server-side cancellation
+        - Session parameter overrides (warehouse, database, schema, role)
+        - Result caching with SHA-256 indexing
+        - Token-efficient response modes
+        - Auto-generated insights and key metrics
+
+        Args:
+            statement: SQL statement to execute (max 1MB)
+            warehouse: Optional warehouse override (default: from profile)
+            database: Optional database override (default: from profile)
+            schema: Optional schema override (default: from profile)
+            role: Optional role override (default: from profile)
+            timeout_seconds: Query timeout in seconds (1-3600, default: 120)
+            verbose_errors: Include all error hints (default: False for compact errors)
+            reason: Required. Short description for audit trail (min 5 chars).
+                   Stored in Snowflake QUERY_TAG and local history.
+            post_query_insight: Optional summary or structured JSON describing results.
+                              Stored in history and cache artifacts.
+            result_mode: Control response verbosity for token efficiency (default: "full")
+                        - "full": Return all rows (no filtering)
+                        - "summary": Return key_metrics + 5 sample rows (~90% token reduction)
+                        - "schema_only": Return column schema only, no rows (~95% reduction)
+                        - "sample": Return first 10 rows only (~60-80% reduction)
+            response_mode: Deprecated. Use "auto" or "sync" (default: "auto")
+            ctx: Optional MCP context for request correlation
+            **kwargs: Additional arguments (for backward compatibility)
+
+        Returns:
+            Dict containing query results and metadata. When result_mode is not "full",
+            includes additional fields:
+                - result_mode: Mode used ("summary", "schema_only", or "sample")
+                - result_mode_info: Filtering metadata with total_rows, rows_returned,
+                                   sample_size, and hint for retrieving all rows
+
+        Raises:
+            TypeError: If timeout_seconds is not an integer
+            MCPValidationError: If parameters fail validation
+            MCPExecutionError: If query execution fails
+            MCPPermissionError: If SQL contains blocked operations
+        """
 
         if "metric_insight" in kwargs:
             raise TypeError("execute_query no longer accepts 'metric_insight'; use 'post_query_insight' instead")

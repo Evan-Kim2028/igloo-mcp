@@ -456,4 +456,4 @@ cat ~/.igloo_mcp/catalogs/ANALYTICS/_catalog_metadata.json
 - [Installation Guide](installation.md) - Installation and profile setup
 - [Authentication Guide](authentication.md) - Authentication options
 - [MCP Integration Guide](mcp-integration.md) - MCP client configuration
-- [API Reference](api-reference.md) - Complete tool documentation
+- [API Reference](api/README.md) - Complete tool documentation

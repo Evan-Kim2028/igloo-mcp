@@ -216,19 +216,113 @@ class EvolveReportBatchTool(MCPTool):
         response_detail: str = "standard",
         request_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Execute batch report evolution.
+        """Execute atomic multi-operation report evolution.
+
+        Performs multiple report operations (add/modify/remove insights and sections)
+        in a single atomic transaction. All operations are validated before any are
+        applied, ensuring all-or-nothing transactional semantics.
+
+        Benefits over multiple evolve_report calls:
+        - Reduces API round-trips (1 call instead of N)
+        - Ensures atomicity (all operations succeed or none do)
+        - Single validation pass for all operations
+        - More efficient for building multi-section reports
 
         Args:
-            report_selector: Report ID or title to evolve
-            instruction: Natural language description for audit trail
-            operations: List of operations to perform
-            constraints: Optional constraints on evolution (e.g., skip_citation_validation)
-            dry_run: If True, validate without applying
-            response_detail: Response verbosity level
-            request_id: Optional request correlation ID
+            report_selector: Report ID (e.g., "rpt_550e8400...") or title
+            instruction: Natural language description for audit trail (min 5 chars).
+                        Stored in audit log to explain the batch operation.
+            operations: List of operation dicts, each with:
+                       - "type": Operation type (required). One of:
+                         * "add_insight" / "modify_insight" / "remove_insight"
+                         * "add_section" / "modify_section" / "remove_section"
+                         * "update_title" / "update_metadata"
+                       - Additional fields specific to operation type (see examples)
+            constraints: Optional constraints dictionary:
+                        - skip_citation_validation: bool - Skip citation requirement
+                        - max_importance_delta: int - Limit importance changes
+            dry_run: If True, validate without applying changes (default: False).
+                    Returns validation_passed status without persisting.
+            response_detail: Control response verbosity for token efficiency:
+                           - "minimal": Status, counts only (~200 tokens)
+                           - "standard": + IDs of created items (~400 tokens, default)
+                           - "full": + Complete changes echo (~1000+ tokens)
+            request_id: Optional UUID4 for distributed tracing
 
         Returns:
-            Structured response with operation results
+            Dict with structure depending on status:
+
+            Success (status="success"):
+                - status: "success"
+                - report_id: UUID of evolved report
+                - outline_version: New version number
+                - summary: Dict with counts and ID arrays:
+                    * sections_added / insights_added (int)
+                    * sections_modified / insights_modified (int)
+                    * sections_removed / insights_removed (int)
+                    * insight_ids_added / section_ids_added (List[str])
+                    * insight_ids_modified / section_ids_modified (List[str])
+                    * insight_ids_removed / section_ids_removed (List[str])
+                - batch_info: Batch-specific metadata:
+                    * operation_count: Number of operations performed
+                    * operations_summary: Count by operation type
+                    * total_duration_ms: Total execution time
+                - warnings: List of non-fatal issues
+
+            Validation Failed (status="validation_failed"):
+                - status: "validation_failed"
+                - validation_errors: List of error messages
+                - operation_count: Number of operations attempted
+
+            Dry Run (status="dry_run_success"):
+                - status: "dry_run_success"
+                - validation_passed: True
+                - operation_count: Number of operations validated
+                - operations_summary: Count by operation type
+
+        Raises:
+            MCPValidationError: If operations list is empty, has invalid types,
+                              or response_detail is invalid
+            MCPSelectorError: If report selector cannot be resolved
+            MCPExecutionError: If applying changes fails
+
+        Examples:
+            # Add multiple insights and section atomically
+            result = await tool.execute(
+                report_selector="Q1 Revenue Report",
+                instruction="Add revenue analysis with insights",
+                operations=[
+                    {
+                        "type": "add_insight",
+                        "summary": "Enterprise grew 45% YoY",
+                        "importance": 9,
+                        "citations": [{"execution_id": "exec-123"}]
+                    },
+                    {
+                        "type": "add_section",
+                        "title": "Revenue Analysis",
+                        "order": 1
+                    }
+                ]
+            )
+
+            # Dry run validation
+            result = await tool.execute(
+                report_selector="Q1 Revenue Report",
+                instruction="Preview changes",
+                operations=[...],
+                dry_run=True
+            )
+            assert result["validation_passed"]
+
+            # With constraints and minimal response
+            result = await tool.execute(
+                report_selector="Draft Report",
+                instruction="Add draft insights",
+                operations=[...],
+                constraints={"skip_citation_validation": True},
+                response_detail="minimal"  # ~200 tokens instead of ~400
+            )
         """
         start_time = time.time()
         request_id = ensure_request_id(request_id)
