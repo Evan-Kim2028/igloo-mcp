@@ -45,10 +45,10 @@ analyst_v1 = _templates_mod.analyst_v1
 
 __all__ = [
     "TEMPLATES",
-    "get_template",
+    "analyst_v1",
+    "deep_dive",
     "default",
+    "get_template",
     "monthly_sales",
     "quarterly_review",
-    "deep_dive",
-    "analyst_v1",
 ]

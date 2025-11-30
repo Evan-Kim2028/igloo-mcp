@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Optional, Type, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 
@@ -28,7 +29,7 @@ class CircuitBreakerConfig:
 
     failure_threshold: int = 5
     recovery_timeout: float = 60.0
-    expected_exception: Type[Exception] = Exception
+    expected_exception: type[Exception] = Exception
 
 
 class CircuitBreakerError(Exception):
@@ -43,7 +44,7 @@ class CircuitBreaker:
     def __init__(self, config: CircuitBreakerConfig):
         self.config = config
         self.failure_count = 0
-        self.last_failure_time: Optional[float] = None
+        self.last_failure_time: float | None = None
         self.state = CircuitState.CLOSED
         self._lock = threading.RLock()  # Reentrant lock for thread safety
 

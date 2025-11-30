@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .path_utils import find_repo_root, resolve_history_path
 
@@ -14,13 +14,13 @@ from .path_utils import find_repo_root, resolve_history_path
 class OptimizationFinding:
     level: str
     message: str
-    detail: Optional[str] = None
+    detail: str | None = None
 
 
-def _read_history_entries(history_path: Path) -> List[Dict[str, Any]]:
+def _read_history_entries(history_path: Path) -> list[dict[str, Any]]:
     if not history_path.exists():
         raise FileNotFoundError(f"history file not found: {history_path}")
-    entries: List[Dict[str, Any]] = []
+    entries: list[dict[str, Any]] = []
     with history_path.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -33,7 +33,7 @@ def _read_history_entries(history_path: Path) -> List[Dict[str, Any]]:
     return entries
 
 
-def _select_entry(entries: List[Dict[str, Any]], execution_id: Optional[str]) -> Dict[str, Any]:
+def _select_entry(entries: list[dict[str, Any]], execution_id: str | None) -> dict[str, Any]:
     if execution_id:
         for entry in reversed(entries):
             if str(entry.get("execution_id")) == execution_id:
@@ -49,7 +49,7 @@ def _select_entry(entries: List[Dict[str, Any]], execution_id: Optional[str]) ->
     raise ValueError("history file is empty")
 
 
-def _load_manifest(entry: Dict[str, Any]) -> Dict[str, Any]:
+def _load_manifest(entry: dict[str, Any]) -> dict[str, Any]:
     manifest_path = entry.get("cache_manifest")
     artifacts = entry.get("artifacts") or {}
     manifest_path = manifest_path or artifacts.get("cache_manifest")
@@ -67,7 +67,7 @@ def _load_manifest(entry: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
 
-def _load_sql_text(entry: Dict[str, Any]) -> Optional[str]:
+def _load_sql_text(entry: dict[str, Any]) -> str | None:
     artifacts = entry.get("artifacts") or {}
     sql_path = artifacts.get("sql_path")
     if not sql_path:
@@ -85,11 +85,11 @@ def _load_sql_text(entry: Dict[str, Any]) -> Optional[str]:
 
 
 def _detect_findings(
-    sql: Optional[str],
-    manifest: Dict[str, Any],
-    entry: Dict[str, Any],
-) -> List[OptimizationFinding]:
-    findings: List[OptimizationFinding] = []
+    sql: str | None,
+    manifest: dict[str, Any],
+    entry: dict[str, Any],
+) -> list[OptimizationFinding]:
+    findings: list[OptimizationFinding] = []
     duration = entry.get("duration_ms") or manifest.get("duration_ms") or 0
     rowcount = entry.get("rowcount") or manifest.get("rowcount") or 0
     objects = manifest.get("objects") or []
@@ -149,10 +149,10 @@ def _detect_findings(
 
 
 def optimize_execution(
-    execution_id: Optional[str] = None,
+    execution_id: str | None = None,
     *,
-    history_path: Optional[str] = None,
-) -> Dict[str, Any]:
+    history_path: str | None = None,
+) -> dict[str, Any]:
     path = Path(history_path).expanduser() if history_path else resolve_history_path()
     entries = _read_history_entries(path)
     entry = _select_entry(entries, execution_id)

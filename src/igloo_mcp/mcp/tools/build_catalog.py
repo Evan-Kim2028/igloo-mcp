@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import anyio
 
@@ -70,7 +70,7 @@ class BuildCatalogTool(MCPTool):
         return ["catalog", "metadata", "introspection", "documentation"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Build account-wide catalog for governance export",
@@ -93,13 +93,13 @@ class BuildCatalogTool(MCPTool):
     async def execute(
         self,
         output_dir: str = "./data_catalogue",
-        database: Optional[str] = None,
+        database: str | None = None,
         account: bool = False,
         format: str = "json",
         include_ddl: bool = True,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build comprehensive Snowflake catalog metadata.
 
         This tool queries Snowflake INFORMATION_SCHEMA to build a comprehensive
@@ -183,7 +183,7 @@ class BuildCatalogTool(MCPTool):
                 raise  # Re-raise validation errors
             except Exception as e:
                 raise MCPValidationError(
-                    f"Invalid output directory path: {str(e)}",
+                    f"Invalid output directory path: {e!s}",
                     validation_errors=[f"Path validation failed: {output_dir}"],
                     hints=[
                         "Use a relative path within the current directory",
@@ -269,7 +269,7 @@ class BuildCatalogTool(MCPTool):
             },
         }
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Build Catalog Parameters",

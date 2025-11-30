@@ -179,7 +179,7 @@ evolve_report(
 
 ### MCP Tool Usage
 
-> **⚠️ EXPERIMENTAL**: The `evolve_report` tool currently uses sample change generation. Full LLM integration is planned for version 0.3.0. For now, manually edit `outline.json` files and use `dry_run=True` to validate changes.
+> **⚠️ EXPERIMENTAL**: The `evolve_report` tool currently uses sample change generation. Full LLM integration is in progress. For now, manually edit `outline.json` files and use `dry_run=True` to validate changes.
 
 The `evolve_report` MCP tool provides a framework for LLM-assisted report evolution:
 
@@ -586,7 +586,7 @@ A more flexible field supporting multiple source types beyond just Snowflake que
 ```
 
 - **Purpose**: Multi-source attribution (queries, docs, URLs, observations, APIs)
-- **Status**: Model-level field added in v0.3.2 for future multi-source support
+- **Status**: Model-level field added for future multi-source support
 - **Compatibility**: Backward compatible shim ensures existing code works
 
 ### When to Use Which?
@@ -609,10 +609,10 @@ Both fields are kept in sync automatically:
 - Existing reports continue working without changes
 - Full migration path planned for future version (see #62)
 
-**Current Status (v0.3.2):**
+**Current Status:**
 - ✅ `citations` field exists in models
 - ✅ Backward compatible shim in place
-- ⏳ Full rendering/migration support coming in v0.3.3+
+- ⏳ Full rendering/migration support in progress
 
 ## JSON Schema Reference
 
@@ -654,7 +654,7 @@ This section provides copy-paste-ready JSON examples for all `evolve_report` ope
 **Optional Fields:**
 - `order` (integer) - Display order (defaults to append)
 - `notes` (string) - Section metadata/notes
-- `content` (string) - Free-form markdown/text content (new in v0.3.2)
+- `content` (string) - Free-form markdown/text content
 - `content_format` (string) - Content format: "markdown" (default), "text", or "html"
 
 **Example:**
@@ -791,17 +791,16 @@ Use `dry_run: true` to validate changes without applying them:
   "report_selector": "Q1 Analysis",
   "instruction": "Validate proposed structure changes",
   "proposed_changes": {
-    "sections_to_add": [{"title": "New Section"}]
-  },
-  "dry_run": true
+    "sections_to_add": [{"title": "New Section"}],
+    "dry_run": true
 }
 ```
 
 **Response includes:**
 - `validation_passed`: boolean
 - `planned_changes`: Preview of what would be applied
-- `validation_errors`: Array of errors if validation fails (new in v0.3.2)
-- `schema_examples`: Targeted examples for operations with errors (new in v0.3.2)
+- `validation_errors`: Array of errors if validation fails
+- `schema_examples`: Targeted examples for operations with errors
 
 ### Common Validation Errors
 
@@ -843,9 +842,9 @@ Use `dry_run: true` to validate changes without applying them:
 
 ---
 
-## Progressive Disclosure (v0.3.2+) ✨
+## Progressive Disclosure
 
-**New in v0.3.2**: Use `get_report` with selective retrieval modes for **60-80% token reduction**.
+Use `get_report` with selective retrieval modes for significant token reduction.
 
 ### Quick Start
 
@@ -868,15 +867,15 @@ insights = get_report(
 )  # ~400 tokens
 ```
 
-**Token Savings**: 60-92% reduction vs. always loading full reports.
+**Token Savings**: Significant reduction vs. always loading full reports.
 
 See [get_report Tool Documentation](../api/tools/get_report.md) for complete details.
 
 ---
 
-## API Discovery (v0.3.2+) ✨
+## API Discovery
 
-**New in v0.3.2**: Use `get_report_schema` to discover valid structures before constructing payloads.
+Use `get_report_schema` to discover valid structures before constructing payloads.
 
 ### Quick Start
 
@@ -902,45 +901,45 @@ See [get_report_schema Tool Documentation](../api/tools/get_report_schema.md) fo
 
 ---
 
-## Token Optimization Tips (v0.3.2+) ✨
+## Token Optimization Tips
 
-Achieve **70% token reduction** in multi-turn workflows:
+Minimize token usage in multi-turn workflows:
 
 ### 1. Search with Minimal Fields
 ```python
 # ✅ Efficient
-search_report(title="Q1", fields=["report_id", "title"])  # ~250 tokens
+search_report(title="Q1", fields=["report_id", "title"])
 
 # ❌ Wasteful
-search_report(title="Q1")  # ~800 tokens (all fields)
+search_report(title="Q1")  # Returns all fields
 ```
 
 ### 2. Progressive Report Reading
 ```python
 # ✅ Efficient
-summary = get_report("Q1", mode="summary")  # ~150 tokens
+summary = get_report("Q1", mode="summary")
 # Only drill down if needed
 
 # ❌ Wasteful
-full = get_report("Q1", mode="full")  # ~2000 tokens
+full = get_report("Q1", mode="full")
 ```
 
 ### 3. Minimal Evolution Responses
 ```python
 # ✅ Efficient
-evolve_report(..., response_detail="minimal")  # ~150 token response
+evolve_report(..., response_detail="minimal")
 
 # ❌ Wasteful
-evolve_report(..., response_detail="full")  # ~1000+ token response
+evolve_report(..., response_detail="full")
 ```
 
 ### 4. Compact Render Previews
 ```python
 # ✅ Efficient
-render_report(..., preview_max_chars=500)  # ~200 token response
+render_report(..., preview_max_chars=500)
 
 # ❌ Wasteful
-render_report(..., preview_max_chars=10000)  # ~3000 token response
+render_report(..., preview_max_chars=10000)
 ```
 
 ### Complete Optimized Workflow
@@ -949,10 +948,10 @@ render_report(..., preview_max_chars=10000)  # ~3000 token response
 # Multi-turn workflow with full optimization
 
 # 1. Find (minimal fields)
-reports = search_report(title="Q1", fields=["report_id"])  # ~100 tokens
+reports = search_report(title="Q1", fields=["report_id"])
 
 # 2. Inspect (summary mode)
-summary = get_report(reports["reports"][0]["report_id"], mode="summary")  # ~150 tokens
+summary = get_report(reports["reports"][0]["report_id"], mode="summary")
 
 # 3. Modify (minimal response)
 evolve_report(
@@ -960,29 +959,24 @@ evolve_report(
     instruction="Add insight",
     proposed_changes={...},
     response_detail="minimal"
-)  # ~150 tokens
+)
 
 # 4. Verify (selective)
 get_report(
     reports["reports"][0]["report_id"],
     mode="sections",
     section_titles=["Revenue"]
-)  # ~250 tokens
-
-# Total: ~650 tokens (vs. 3,500+ tokens before v0.3.2)
-# Savings: 81%
+)
 ```
 
 ---
 
 ## See Also
 
-- [get_report Tool Documentation](../api/tools/get_report.md) - Progressive disclosure API
-- [get_report_schema Tool Documentation](../api/tools/get_report_schema.md) - Schema introspection API
-- [search_report Tool Documentation](../api/tools/search_report.md) - Report discovery with field filtering
-- [evolve_report Tool Documentation](../api/tools/evolve_report.md) - Report modification with response detail control
-- [render_report Tool Documentation](../api/tools/render_report.md) - Rendering with preview size control
-- [Living Reports Technical Plan](technical-plan.md) - Technical implementation details
-- [API Reference](../api-reference.md) - Complete MCP tools documentation
-- [Getting Started Guide](../getting-started.md) - Quick start overview
-- [MCP Integration Guide](../mcp-integration.md) - MCP client setup
+- [Progressive Disclosure](../api/PROGRESSIVE_DISCLOSURE.md) - Control response verbosity for token efficiency
+- [create_report API](../api/tools/create_report.md)
+- [evolve_report API](../api/tools/evolve_report.md)
+- [evolve_report_batch API](../api/tools/evolve_report_batch.md)
+- [get_report API](../api/tools/get_report.md)
+- [render_report API](../api/tools/render_report.md)
+- [search_report API](../api/tools/search_report.md)

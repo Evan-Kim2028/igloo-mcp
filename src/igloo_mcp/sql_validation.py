@@ -7,7 +7,6 @@ for blocked operations like DELETE, DROP, and TRUNCATE.
 from __future__ import annotations
 
 import time
-from typing import Dict, List, Optional
 
 # Import upstream validation from snowflake-labs-mcp
 from mcp_server_snowflake.query_manager.tools import (
@@ -25,7 +24,7 @@ except ImportError:  # pragma: no cover
 
 
 # Template-based safe alternatives for blocked SQL operations
-SAFE_ALTERNATIVES: Dict[str, Dict[str, str]] = {
+SAFE_ALTERNATIVES: dict[str, dict[str, str]] = {
     "Delete": {
         "soft_delete": "UPDATE {table} SET deleted_at = CURRENT_TIMESTAMP() WHERE {condition}",
         "create_view": "CREATE VIEW active_{table} AS SELECT * FROM {table} WHERE NOT ({condition})",
@@ -135,7 +134,7 @@ def extract_table_name(sql_statement: str) -> str:
 def generate_sql_alternatives(
     statement: str,
     stmt_type: str,
-) -> List[str]:
+) -> list[str]:
     """Generate safe alternative SQL statements for blocked operations.
 
     Args:
@@ -219,8 +218,8 @@ def _strip_leading_comments_and_whitespace(statement: str) -> str:
 
 def validate_sql_statement(
     statement: str,
-    allow_list: List[str],
-    disallow_list: List[str],
+    allow_list: list[str],
+    disallow_list: list[str],
 ) -> tuple[str, bool, str | None]:
     """Validate SQL statement against permission lists.
 
@@ -258,7 +257,7 @@ def validate_sql_statement(
                 allow_set.add(extra)
 
     # ENHANCEMENT: Fallback validation with sqlglot for better robustness
-    fallback_stmt_type: Optional[str] = None
+    fallback_stmt_type: str | None = None
     select_like_hint = False
     multi_statement_detected = False
     parsed_expressions: list[exp.Expression] = []
@@ -440,7 +439,7 @@ def validate_sql_statement(
     return stmt_type, False, error_msg
 
 
-def _is_select_like_statement(statement: str, parsed: Optional[exp.Expression] = None) -> bool:
+def _is_select_like_statement(statement: str, parsed: exp.Expression | None = None) -> bool:
     """Return True when the SQL behaves like a SELECT or set operation."""
 
     if not HAS_SQLGLOT:

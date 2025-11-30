@@ -1,8 +1,12 @@
-# render_report - Report Rendering
+# render_report
 
-Render living reports to various output formats (HTML, PDF, Markdown, DOCX) using Quarto.
+Render living reports to human-readable formats (HTML, PDF, etc.) using Quarto.
 
-**Enhanced in v0.3.2** with `preview_max_chars` parameter for configurable preview truncation.
+**Features**:
+- Quarto-based rendering
+- Multiple format support (HTML, PDF, Markdown, DOCX)
+- Optional preview generation
+- **Optional preview**: Configurable preview truncation (100-10,000 chars)
 
 ## Overview
 
@@ -10,7 +14,7 @@ The `render_report` tool transforms Living Reports from JSON structure into huma
 
 - **Multiple formats**: HTML, PDF, Markdown, DOCX
 - **Quarto rendering**: Professional document generation with templates
-- **Optional preview** ✨ v0.3.2: Configurable preview truncation (100-10,000 chars)
+- **Optional preview**: Configurable preview truncation (100-10,000 chars)
 - **Dry-run mode**: Generate QMD without rendering
 - **Automatic cleanup**: Manages temporary files
 
@@ -28,7 +32,7 @@ The `render_report` tool transforms Living Reports from JSON structure into huma
 |-----------|------|---------|-------------|
 | `format` | string | "html" | Output format: `html`, `pdf`, `markdown`, or `docx` |
 | `include_preview` | boolean | false | Return truncated preview of rendered content |
-| `preview_max_chars` | integer | 2000 | **✨ v0.3.2** - Preview truncation size (100-10,000) |
+| `preview_max_chars` | integer | 2000 | Preview truncation size (100-10,000) |
 | `dry_run` | boolean | false | Generate QMD file without rendering |
 | `regenerate_outline_view` | boolean | true | Regenerate QMD from current outline |
 | `options` | object | null | Additional Quarto rendering options |
@@ -115,7 +119,7 @@ Microsoft Word format for:
 
 ---
 
-## Preview Feature (v0.3.2)
+## Preview Feature
 
 ### preview_max_chars Parameter
 
@@ -136,7 +140,7 @@ Control the size of preview text returned in the response.
 | 5000 chars | ~1500 tokens | Detailed review |
 | 10000 chars | ~3000 tokens | Full content check |
 
-### Example: Compact Preview ✨ v0.3.2
+### Example: Compact Preview
 
 ```json
 {
@@ -161,7 +165,7 @@ Control the size of preview text returned in the response.
 }
 ```
 
-**Token Savings**: 75% reduction (500 chars vs 2000 chars default)
+**Token Savings**: Significant reduction (500 chars vs 2000 chars default)
 
 ---
 
@@ -250,7 +254,7 @@ if "error" not in result["preview"]:
     print(f"Preview: {result['preview'][:200]}...")
 ```
 
-**Token Savings**: ~75% vs. default preview
+**Token Savings**: Substantial reduction vs. default preview
 
 ---
 
@@ -525,6 +529,4 @@ Rendered files are saved in the report's render directory:
 
 ---
 
-**Version**: Enhanced in v0.3.2 with `preview_max_chars` parameter
-**Category**: Living Reports
-**Token Efficiency**: Configure preview size for 50-95% reduction
+**Version**: Complete API documentation available

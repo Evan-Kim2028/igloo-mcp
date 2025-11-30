@@ -2,52 +2,73 @@
 
 > **Quick Links**: [Complete API Reference](README.md) | [Error Catalog](ERROR_CATALOG.md) | [Error Handling](ERROR_HANDLING.md)
 
-## Core MCP Tools
+## Overview
 
-Igloo MCP provides **13 focused tools** for Snowflake operations and Living Reports management.
+Igloo MCP provides **14 focused tools** organized by workflow. Each workflow shows how tools work together to accomplish common tasks.
 
-| Tool | Purpose | Key Parameters | Documentation |
-|------|---------|----------------|---------------|
-| [execute_query](tools/execute_query.md) | Execute SQL queries with guardrails and timeouts | statement, timeout_seconds, reason | [Details](tools/execute_query.md) |
-| [build_catalog](tools/build_catalog.md) | Build metadata catalog | database, format, output_dir | [Details](tools/build_catalog.md) |
-| [get_catalog_summary](tools/get_catalog_summary.md) | Get catalog info | catalog_dir | [Details](tools/get_catalog_summary.md) |
-| [search_catalog](tools/search_catalog.md) | Search locally built catalog artifacts | catalog_dir, name_contains, column_contains | [Details](tools/search_catalog.md) |
-| [build_dependency_graph](tools/build_dependency_graph.md) | Build dependency graph | database, schema, format | [Details](tools/build_dependency_graph.md) |
-| [test_connection](tools/test_connection.md) | Test connectivity | none | [Details](tools/test_connection.md) |
-| [health_check](tools/health_check.md) | System/profile/catalog health | include_cortex, include_profile, include_catalog | [Details](tools/health_check.md) |
-| [create_report](tools/create_report.md) | Create a new living report | title, template, tags, description | [Details](tools/create_report.md) |
-| [evolve_report](tools/evolve_report.md) | Evolve a living report with LLM assistance | report_selector, instruction, constraints, dry_run, response_detail | [Details](tools/evolve_report.md) |
-| [render_report](tools/render_report.md) | Render reports to various formats | report_selector, format, persist_output, preview_max_chars | [Details](tools/render_report.md) |
-| [search_report](tools/search_report.md) | Search for living reports | report_selector, fields | [Details](tools/search_report.md) |
-| [get_report](tools/get_report.md) **✨ v0.3.2** | Read reports with progressive disclosure | report_selector, mode, section_ids, filters | [Details](tools/get_report.md) |
-| [get_report_schema](tools/get_report_schema.md) **✨ v0.3.2** | Get report structure schemas | schema_type, format | [Details](tools/get_report_schema.md) |
+## Workflows
 
-## By Category
+### 🔍 Data Discovery Workflow
 
-### Query & Data Access
-- execute_query
+Explore your Snowflake environment, query safely, and build offline catalogs for fast searches.
 
-### Metadata & Discovery
-- build_catalog
-- get_catalog_summary
-- search_catalog
-- build_dependency_graph
+1. **[test_connection](tools/test_connection.md)** — Verify Snowflake authentication and profile setup
+2. **[execute_query](tools/execute_query.md)** — Run safe SQL with guardrails, timeouts, and auto-insights
+   - Use `result_mode` parameter for significant token reduction
+   - Automatically blocks DDL/DML operations
+3. **[build_catalog](tools/build_catalog.md)** — Export metadata (tables, views, columns) to offline catalog
+4. **[search_catalog](tools/search_catalog.md)** — Find objects by name/column without querying Snowflake
+5. **[build_dependency_graph](tools/build_dependency_graph.md)** — Visualize table lineage and dependencies
 
-### Health & Diagnostics
-- test_connection
-- health_check
+**Common pattern**: test_connection → execute_query (explore data) → build_catalog → search_catalog (fast offline lookups)
 
-### Living Reports
-- [create_report](tools/create_report.md) - Initialize new structured reports
-- [evolve_report](tools/evolve_report.md) - Modify reports with structured changes (Enhanced in v0.3.2 with `response_detail` parameter)
-- [render_report](tools/render_report.md) - Generate HTML/PDF/Markdown outputs (Enhanced in v0.3.2 with `preview_max_chars` parameter)
-- [search_report](tools/search_report.md) - Find reports by title/tags (Enhanced in v0.3.2 with `fields` parameter for token efficiency)
-- [get_report](tools/get_report.md) - Read reports with progressive disclosure (**New in v0.3.2**)
-- [get_report_schema](tools/get_report_schema.md) - API schema introspection (**New in v0.3.2**)
+### 📊 Analytics & Reporting Workflow
 
-**v0.3.2 Token Efficiency**: Achieve ~70% token reduction in multi-turn workflows using progressive disclosure (`get_report` modes), selective field retrieval (`search_report` fields), and configurable response verbosity (`evolve_report` response_detail).
+Create auditable business reports that evolve with LLM assistance and full change history.
 
-Living reports are stored in your igloo-mcp instance directory (default: `~/.igloo-mcp/reports/`) and are accessible across all projects.
+1. **[create_report](tools/create_report.md)** — Initialize new structured reports with optional templates
+2. **[search_report](tools/search_report.md)** — Find existing reports by title or tags
+   - Use `fields` parameter for selective retrieval
+3. **[get_report](tools/get_report.md)** — Read reports with progressive disclosure
+   - Modes: summary (metadata only), sections, insights, or full
+4. **[get_report_schema](tools/get_report_schema.md)** — Discover valid report structures before evolving
+5. **[evolve_report](tools/evolve_report.md)** — Modify reports safely with validation and audit logging
+   - Use `response_detail="minimal"` for token efficiency
+6. **[evolve_report_batch](tools/evolve_report_batch.md)** — Atomic multi-operation report evolution
+7. **[render_report](tools/render_report.md)** — Export to HTML, PDF, Markdown, or DOCX via Quarto
+
+**Common pattern**: search_report → get_report (summary mode) → get_report_schema → evolve_report (minimal response) → render_report
+
+**Token Efficiency**: Minimize token usage using progressive disclosure and selective retrieval.
+
+### 🏥 Monitoring Workflow
+
+Check system health, validate configuration, and monitor catalog status.
+
+1. **[health_check](tools/health_check.md)** — Comprehensive server, profile, and catalog health status
+2. **[test_connection](tools/test_connection.md)** — Validate Snowflake connectivity
+3. **[get_catalog_summary](tools/get_catalog_summary.md)** — Get catalog statistics and metadata health
+
+**Common pattern**: health_check (overall status) → test_connection (if issues) → get_catalog_summary (catalog health)
+
+## Quick Reference Table
+
+| Tool | Workflow | Key Use | Documentation |
+|------|----------|---------|---------------|
+| `test_connection` | Discovery, Monitoring | Validate auth | [Details](tools/test_connection.md) |
+| `execute_query` | Discovery | Safe SQL execution | [Details](tools/execute_query.md) |
+| `build_catalog` | Discovery | Export metadata | [Details](tools/build_catalog.md) |
+| `search_catalog` | Discovery | Offline object search | [Details](tools/search_catalog.md) |
+| `build_dependency_graph` | Discovery | Lineage visualization | [Details](tools/build_dependency_graph.md) |
+| `create_report` | Analytics | Initialize reports | [Details](tools/create_report.md) |
+| `search_report` | Analytics | Find reports | [Details](tools/search_report.md) |
+| `get_report` | Analytics | Read reports | [Details](tools/get_report.md) |
+| `get_report_schema` | Analytics | Discover structures | [Details](tools/get_report_schema.md) |
+| `evolve_report` | Analytics | Modify reports | [Details](tools/evolve_report.md) |
+| `evolve_report_batch` | Analytics | Batch operations | [Details](tools/evolve_report_batch.md) |
+| `render_report` | Analytics | Export formats | [Details](tools/render_report.md) |
+| `health_check` | Monitoring | System health | [Details](tools/health_check.md) |
+| `get_catalog_summary` | Monitoring | Catalog stats | [Details](tools/get_catalog_summary.md) |
 
 ## See Also
 
@@ -56,3 +77,4 @@ Living reports are stored in your igloo-mcp instance directory (default: `~/.igl
 - [Error Handling](ERROR_HANDLING.md) - Error handling architecture
 - [Catalog Examples](../examples/catalog-examples.md) - Real-world catalog examples
 - [Getting Started Guide](../getting-started.md) - Quick start overview
+- [Living Reports User Guide](../living-reports/user-guide.md) - Complete reporting workflows

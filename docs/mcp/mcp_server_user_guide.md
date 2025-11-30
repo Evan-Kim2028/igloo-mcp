@@ -226,4 +226,4 @@ The MCP server exposes Igloo MCP functionality through structured tools, so most
 - [Cursor MCP Setup](cursor-mcp-setup.md) - Cursor-specific setup instructions
 - [MCP Server Technical Guide](mcp_server_technical_guide.md) - Technical implementation details
 - [MCP Architecture](mcp_architecture.md) - MCP protocol design patterns
-- [API Reference](../api-reference.md) - Complete MCP tools documentation
+- [API Reference](../api/README.md) - Complete MCP tools documentation

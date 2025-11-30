@@ -102,7 +102,7 @@ class TestEvolveReportResponseDetail:
         assert "storage_duration_ms" in result["timing"]
 
     async def test_response_detail_invalid(self, tmp_path: Path):
-        """Test invalid response_detail raises validation error."""
+        """Test invalid response_mode raises validation error."""
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
@@ -116,10 +116,10 @@ class TestEvolveReportResponseDetail:
                 report_selector=report_id,
                 instruction="Add test section",
                 proposed_changes={"sections_to_add": [{"title": "Test", "order": 0}]},
-                response_detail="invalid",
+                response_mode="invalid",
             )
 
-        assert "Invalid response_detail" in str(exc_info.value)
+        assert "response_mode" in str(exc_info.value).lower()
 
 
 @pytest.mark.asyncio

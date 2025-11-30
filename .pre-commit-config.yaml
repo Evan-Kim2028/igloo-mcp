@@ -27,3 +27,33 @@ repos:
             "--no-strict-optional",
             "src/igloo_mcp",
           ]
+
+  # Security: Detect secrets in code
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: |
+          (?x)^(
+              .*\.lock$|
+              .*\.json$|
+              tests/.*
+          )$
+
+  # Phase 2 & 3.6: Local hooks for architecture and test quality
+  - repo: local
+    hooks:
+      - id: lint-imports
+        name: Check architectural layer boundaries
+        entry: uv run lint-imports
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: regression-test-check
+        name: Check regression tests for bug fixes
+        entry: uv run python scripts/check_regression_tests.py
+        language: system
+        stages: [commit-msg]
+        pass_filenames: false

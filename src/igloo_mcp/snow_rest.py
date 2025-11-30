@@ -8,10 +8,11 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 import jwt
 
@@ -34,11 +35,11 @@ class SnowRestConfig:
     account: str
     user: str
     private_key_path: Path
-    warehouse: Optional[str] = None
-    database: Optional[str] = None
-    schema: Optional[str] = None
-    role: Optional[str] = None
-    host_override: Optional[str] = None
+    warehouse: str | None = None
+    database: str | None = None
+    schema: str | None = None
+    role: str | None = None
+    host_override: str | None = None
 
 
 class SnowRestClient:
@@ -48,7 +49,7 @@ class SnowRestClient:
         self,
         config: SnowRestConfig,
         *,
-        default_context: Optional[Dict[str, Optional[str]]] = None,
+        default_context: dict[str, str | None] | None = None,
         request_timeout: int = 120,
         poll_interval: float = 0.5,
     ) -> None:
@@ -57,7 +58,7 @@ class SnowRestClient:
         self.request_timeout = request_timeout
         self.poll_interval = poll_interval
         self._private_key = _load_private_key(config.private_key_path)
-        self._token: Optional[str] = None
+        self._token: str | None = None
         self._token_expiry: float = 0.0
         host = config.host_override or f"{config.account}.snowflakecomputing.com"
         self.base_url = f"https://{host.strip()}"
@@ -66,8 +67,8 @@ class SnowRestClient:
     def from_env(
         cls,
         *,
-        default_context: Optional[Dict[str, Optional[str]]] = None,
-    ) -> "SnowRestClient":
+        default_context: dict[str, str | None] | None = None,
+    ) -> SnowRestClient:
         account = os.environ.get("SNOWFLAKE_REST_ACCOUNT") or os.environ.get("SNOWFLAKE_ACCOUNT")
         user = os.environ.get("SNOWFLAKE_REST_USER") or os.environ.get("SNOWFLAKE_USER")
         key_path = os.environ.get("SNOWFLAKE_REST_PRIVATE_KEY") or os.environ.get("SNOWFLAKE_PRIVATE_KEY")
@@ -91,10 +92,10 @@ class SnowRestClient:
         self,
         query: str,
         *,
-        ctx_overrides: Optional[Dict[str, Optional[str]]] = None,
-        timeout: Optional[int] = None,
+        ctx_overrides: dict[str, str | None] | None = None,
+        timeout: int | None = None,
     ) -> QueryOutput:
-        payload: Dict[str, Any] = {"statement": query}
+        payload: dict[str, Any] = {"statement": query}
         if timeout:
             payload["timeout"] = timeout
         context = self._merge_context(ctx_overrides)
@@ -142,15 +143,15 @@ class SnowRestClient:
             metadata=profile,
         )
 
-    def _merge_context(self, overrides: Optional[Dict[str, Optional[str]]]) -> Dict[str, Optional[str]]:
+    def _merge_context(self, overrides: dict[str, str | None] | None) -> dict[str, str | None]:
         combined = dict(self.default_context)
         if overrides:
             combined.update(overrides)
         return combined
 
-    def _collect_rows(self, response: Dict[str, Any]) -> tuple[List[Dict[str, Any]], List[str]]:
+    def _collect_rows(self, response: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
         meta = response.get("resultSetMetaData") or {}
-        row_types: Iterable[Dict[str, Any]] = meta.get("rowType") or []
+        row_types: Iterable[dict[str, Any]] = meta.get("rowType") or []
         columns = [rt.get("name") or f"column_{idx}" for idx, rt in enumerate(row_types)]
         rows = list(self._rows_from_response(response, columns))
 
@@ -165,8 +166,8 @@ class SnowRestClient:
 
         return rows, columns
 
-    def _rows_from_response(self, response: Dict[str, Any], columns: List[str]) -> Iterable[Dict[str, Any]]:
-        data_blocks: List[List[Any]] = []
+    def _rows_from_response(self, response: dict[str, Any], columns: list[str]) -> Iterable[dict[str, Any]]:
+        data_blocks: list[list[Any]] = []
         if isinstance(response.get("data"), list):
             data_blocks.append(response["data"])
         if isinstance(response.get("resultSet"), dict):
@@ -178,13 +179,13 @@ class SnowRestClient:
                 if isinstance(row, dict):
                     yield row
                     continue
-                record: Dict[str, Any] = {}
+                record: dict[str, Any] = {}
                 for idx, value in enumerate(row):
                     key = columns[idx] if idx < len(columns) else f"column_{idx}"
                     record[key] = value
                 yield record
 
-    def _request_url(self, url: str) -> Dict[str, Any]:
+    def _request_url(self, url: str) -> dict[str, Any]:
         parsed = urllib.parse.urlparse(url)
         if parsed.scheme:
             path = url
@@ -196,10 +197,10 @@ class SnowRestClient:
         self,
         method: str,
         path: str,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
         *,
         absolute: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if absolute:
             url = path
         else:
@@ -233,7 +234,7 @@ class SnowRestClient:
         return self._token
 
     def _generate_token(self) -> str:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires = now + timedelta(minutes=55)
         account = self.config.account.upper()
         user = self.config.user.upper()

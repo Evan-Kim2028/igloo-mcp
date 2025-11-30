@@ -21,6 +21,12 @@ This index groups the existing guides so new users and contributors can find the
 - Living reports CLI: `docs/living-reports/user-guide.md` (Administrative Operations section)
 - Administrative scripts: CLI examples under `examples/` and `scripts/`
 
+## Developer Documentation
+
+- [Architecture Documentation](architecture/) - For contributors and maintainers
+- [System Overview](architecture/system-overview.md) - High-level architecture
+- [Architecture Decisions](architecture/decisions/) - ADRs tracking design choices
+
 ## MCP Integration & Examples
 
 - MCP integration overview: `docs/mcp-integration.md`
@@ -31,6 +37,6 @@ This index groups the existing guides so new users and contributors can find the
 
 ## See Also
 
-- [API Reference](api-reference.md) - Complete MCP tools documentation
+- [API Reference](api/README.md) - Complete MCP tools documentation
 - [Error Catalog](api/ERROR_CATALOG.md) - Error reference and solutions
 - [MCP Integration Guide](mcp-integration.md) - MCP client setup

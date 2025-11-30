@@ -74,9 +74,8 @@ Get comprehensive health status for the MCP server and Snowflake connection.
 
 - **`request_id`**: UUID4 correlation ID for distributed tracing
 - **`timing`**: Performance metrics with `total_duration_ms` only
-```
 
-- `system` now reflects the consolidated `get_comprehensive_health` response (v0.2.5) with `healthy`, `error_count`, `metrics.uptime_seconds`, and recent errors populated. Older monitors that only expose `get_health_status()` are still supported.
+- `system` now reflects the consolidated `get_comprehensive_health` response with `healthy`, `error_count`, `metrics.uptime_seconds`, and recent errors populated. Older monitors that only expose `get_health_status()` are still supported.
 
 ## Examples
 

@@ -45,7 +45,7 @@ The calling LLM is responsible for:
 |-----------|------|-------------|
 | `constraints` | object | Optional constraints on evolution (max_importance_delta, sections) |
 | `dry_run` | boolean | Validate changes without applying (default: false) |
-| `response_detail` | string | **✨ v0.3.2** - Response verbosity: `minimal`, `standard` (default), or `full` |
+| `response_detail` | string | Response verbosity: `minimal`, `standard` (default), or `full` |
 
 ## ProposedChanges Schema
 
@@ -189,9 +189,9 @@ The insights are created atomically with the section and automatically linked. U
 
 **Note**: The `insights` field is mutually exclusive with `insight_ids_to_add`. Use `insights` for inline creation or `insight_ids_to_add` for referencing existing insights.
 
-### Response Detail Control (v0.3.2) ✨
+### Response Detail Control
 
-The `response_detail` parameter controls response verbosity for **50-80% token reduction**.
+The `response_detail` parameter controls response verbosity for significant token reduction.
 
 #### Options
 
@@ -225,7 +225,7 @@ The `response_detail` parameter controls response verbosity for **50-80% token r
 }
 ```
 
-**Token Savings**: ~60% reduction vs. standard response
+**Token Savings**: Substantial reduction vs. standard response
 
 #### Standard Response Example (Default)
 
@@ -313,9 +313,9 @@ The `response_detail` parameter controls response verbosity for **50-80% token r
 
 | Operation Type | Standard Response | Minimal Response | Savings |
 |---------------|------------------|------------------|---------|
-| Add 1 insight | 400 tokens | 150 tokens | 62% |
-| Modify 3 sections | 550 tokens | 180 tokens | 67% |
-| Complex operation (5+ changes) | 800 tokens | 200 tokens | 75% |
+| Add 1 insight | 400 tokens | 150 tokens | Significant reduction |
+| Modify 3 sections | 550 tokens | 180 tokens | Substantial reduction |
+| Complex operation (5+ changes) | 800 tokens | 200 tokens | Maximum reduction |
 
 **Recommendation**: Use `minimal` for multi-turn workflows, `standard` for interactive work, `full` only for debugging.
 

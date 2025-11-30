@@ -32,6 +32,15 @@ jobs:
           uv run ruff check . --output-format=github
           uv run ruff format --check .
 
+      # Phase 1: Security scanning
+      - name: Check for secrets
+        run: |
+          uv run detect-secrets scan --baseline .secrets.baseline
+
+      # Phase 2: Check architectural layer boundaries
+      - name: Check layer boundaries
+        run: uv run lint-imports
+
   type-check:
     runs-on: ubuntu-latest
     strategy:
@@ -82,7 +91,16 @@ jobs:
             --cov=src/igloo_mcp \
             --cov-report=xml \
             --cov-report=term-missing \
+            --cov-fail-under=80 \
             -v
+
+      # Phase 3.6: Enforce critical module coverage
+      - name: Check critical module coverage
+        run: |
+          uv run python scripts/check_critical_coverage.py \
+            --coverage-file coverage.xml \
+            --min-coverage 90 \
+            --critical-modules "mcp/tools" "service_layer" "sql_validation.py"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -90,5 +108,5 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           flags: unittests
-          fail_ci_if_error: false
+          fail_ci_if_error: true  # Phase 3.6: Fail if coverage upload fails
           verbose: true

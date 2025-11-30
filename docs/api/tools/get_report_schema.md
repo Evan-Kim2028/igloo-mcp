@@ -1,6 +1,6 @@
 # get_report_schema - API Schema Introspection
 
-**New in v0.3.2** ✨
+**Version**: Complete API documentation available
 
 Self-documenting schema introspection for Living Reports structures. Discover valid payload structures at runtime before constructing `evolve_report` calls.
 
@@ -544,9 +544,3 @@ When debugging validation errors, compare your payload against the examples form
 - [get_report](./get_report.md) - Get current report structure before evolving
 - [Living Reports User Guide](../../living-reports/user-guide.md) - Complete workflow documentation
 - [create_report](./create_report.md) - Initialize new reports
-
----
-
-**Version**: Added in v0.3.2
-**Category**: Living Reports
-**Single Source of Truth**: Auto-generated from Pydantic models

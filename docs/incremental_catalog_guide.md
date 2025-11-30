@@ -393,5 +393,5 @@ Planned for v1.10.0+:
 
 - [Getting Started Guide](getting-started.md) - Quick start overview
 - [Migration Guide](migration-guide.md) - Version migration instructions
-- [API Reference](api-reference.md) - Complete tool documentation
+- [API Reference](api/README.md) - Complete tool documentation
 - [Catalog Examples](examples/catalog-examples.md) - Real-world catalog examples

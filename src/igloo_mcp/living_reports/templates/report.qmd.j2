@@ -75,20 +75,19 @@ format: {{ format }}
 {% endfor %}
 {% endfor %}
 
-{# Query References Appendix #}
+{# Data Sources Appendix with Citation Grouping #}
 {% if citation_map|length > 0 %}
-## Appendix: Query References
+## Appendix: Data Sources
 
+### Query Executions
 {% set sorted_citations = citation_map.items() | sort(attribute='1') %}
 {% for exec_id, citation_num in sorted_citations %}
-[{{ citation_num }}] **Query Execution**: `{{ exec_id }}`
+[{{ citation_num }}] `{{ exec_id }}`
 {% set details = citation_details.get(exec_id, {}) %}
 {% if details.timestamp %}  - Executed: {{ details.timestamp }}{% endif %}
 {% if details.duration_ms %}  - Duration: {{ "%.2f"|format(details.duration_ms / 1000.0) }}s{% endif %}
-{% if details.rowcount is not none and details.rowcount is defined %}  - Rows returned: {{ "{:,}"|format(details.rowcount) }}{% endif %}
-{% if details.status %}  - Status: {{ details.status }}{% endif %}
-{% if details.statement_preview %}  - SQL Preview: `{{ details.statement_preview[:100] }}{% if details.statement_preview|length > 100 %}...{% endif %}`{% endif %}
-{% if details.sql_sha256 %}  - SQL Hash: `{{ details.sql_sha256[:16] }}...`{% endif %}
+{% if details.rowcount is not none and details.rowcount is defined %}  - Rows: {{ "{:,}"|format(details.rowcount) }}{% endif %}
+{% if details.statement_preview %}  - SQL: `{{ details.statement_preview[:80] }}{% if details.statement_preview|length > 80 %}...{% endif %}`{% endif %}
 
 {% endfor %}
 
@@ -118,20 +117,13 @@ format: {{ format }}
 
 **Importance:** {{ insight.importance }}/10
 
-{% if insight.draft_changes and insight.draft_changes.get('type') == 'chart' %}
-```{python}
-# Chart visualization for {{ insight.insight_id }}
-import matplotlib.pyplot as plt
-import pandas as pd
-
-# Placeholder chart - replace with actual data visualization
-plt.figure(figsize=(10, 6))
-plt.title("{{ insight.summary }}")
-plt.xlabel("X Axis")
-plt.ylabel("Y Axis")
-plt.text(0.5, 0.5, "Chart placeholder - implement with actual dataset", ha='center', va='center', transform=plt.gca().transAxes)
-plt.show()
-```
+{% if insight.metadata and insight.metadata.get('chart_id') %}
+{# Render attached chart #}
+{% set chart_id = insight.metadata.chart_id %}
+{% set chart_meta = outline.metadata.get('charts', {}).get(chart_id, {}) %}
+{% if chart_meta %}
+![{{ chart_meta.get('description', 'Chart') }}]({{ chart_meta.path }})
+{% endif %}
 {% elif insight.draft_changes and insight.draft_changes.get('type') == 'table' %}
 ```{python}
 # Table data for {{ insight.insight_id }}

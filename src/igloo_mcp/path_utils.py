@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
 
 from igloo_mcp.mcp.exceptions import MCPValidationError
 
@@ -59,7 +58,7 @@ def _iter_candidate_roots(start: Path) -> list[Path]:
     return candidates
 
 
-def find_repo_root(start: Optional[Path] = None) -> Path:
+def find_repo_root(start: Path | None = None) -> Path:
     """Best-effort detection of the repository root.
 
     Walks upward from *start* (default: current working directory) until a
@@ -81,7 +80,7 @@ def _resolve_with_repo_root(raw: str, repo_root: Path) -> Path:
     return (repo_root / path).resolve()
 
 
-def resolve_history_path(raw: Optional[str] = None, *, start: Optional[Path] = None) -> Path:
+def resolve_history_path(raw: str | None = None, *, start: Path | None = None) -> Path:
     """Return the desired path to the JSONL history file.
 
     Precedence:
@@ -115,7 +114,7 @@ def resolve_history_path(raw: Optional[str] = None, *, start: Optional[Path] = N
         return (repo_root / subpath).resolve()
 
 
-def resolve_artifact_root(raw: Optional[str] = None, *, start: Optional[Path] = None) -> Path:
+def resolve_artifact_root(raw: str | None = None, *, start: Path | None = None) -> Path:
     """Return the root directory for artifacts (queries/results/meta).
 
     Precedence:
@@ -150,10 +149,10 @@ def resolve_artifact_root(raw: Optional[str] = None, *, start: Optional[Path] = 
 
 
 def resolve_cache_root(
-    raw: Optional[str] = None,
+    raw: str | None = None,
     *,
-    start: Optional[Path] = None,
-    artifact_root: Optional[Path] = None,
+    start: Path | None = None,
+    artifact_root: Path | None = None,
 ) -> Path:
     """Return the root directory for cached query results.
 
@@ -187,9 +186,9 @@ def resolve_cache_root(
 
 
 def resolve_reports_root(
-    raw: Optional[str] = None,
+    raw: str | None = None,
     *,
-    start: Optional[Path] = None,
+    start: Path | None = None,
 ) -> Path:
     """Return the root directory for living reports.
 
@@ -251,9 +250,9 @@ def resolve_reports_root(
 
 
 def resolve_catalog_root(
-    raw: Optional[str] = None,
+    raw: str | None = None,
     *,
-    start: Optional[Path] = None,
+    start: Path | None = None,
 ) -> Path:
     """Return the root directory for catalog storage.
 
@@ -315,11 +314,11 @@ def resolve_catalog_root(
 
 
 def resolve_catalog_path(
-    database: Optional[str] = None,
+    database: str | None = None,
     account_scope: bool = False,
     *,
-    catalog_root: Optional[Path] = None,
-    start: Optional[Path] = None,
+    catalog_root: Path | None = None,
+    start: Path | None = None,
 ) -> Path:
     """Return the catalog directory path for a specific database or account.
 
@@ -356,7 +355,7 @@ def validate_safe_path(
     *,
     reject_parent_dirs: bool = True,
     reject_absolute: bool = False,
-    base_dir: Optional[Path] = None,
+    base_dir: Path | None = None,
 ) -> Path:
     """Validate and sanitize a file path to prevent path traversal attacks.
 
@@ -408,7 +407,7 @@ def validate_safe_path(
         path_obj = path_obj.expanduser()
     except (ValueError, RuntimeError) as e:
         raise MCPValidationError(
-            f"Invalid path format: {str(e)}",
+            f"Invalid path format: {e!s}",
             validation_errors=[f"Path expansion failed: {path_str}"],
             hints=["Check that the path is properly formatted"],
         ) from e
@@ -457,7 +456,7 @@ def validate_safe_path(
             # But if it's a clear traversal attempt, we should catch it
             if ".." in str(e).lower() or "parent" in str(e).lower():
                 raise MCPValidationError(
-                    f"Path validation failed: {str(e)}",
+                    f"Path validation failed: {e!s}",
                     validation_errors=[f"Path: {path_str}"],
                     hints=["Check that the path is valid and does not contain '..'"],
                 ) from e

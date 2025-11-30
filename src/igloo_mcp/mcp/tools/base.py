@@ -9,12 +9,9 @@ import functools
 import logging
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from typing import (
     Any,
-    Awaitable,
-    Callable,
-    Dict,
-    Optional,
     ParamSpec,
     TypeVar,
     cast,
@@ -49,7 +46,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 
-def ensure_request_id(request_id: Optional[str] = None) -> str:
+def ensure_request_id(request_id: str | None = None) -> str:
     """Ensure a request_id exists, generating one if not provided.
 
     Args:
@@ -98,7 +95,7 @@ class MCPTool(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+    async def execute(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Execute the tool's main logic.
 
         Args:
@@ -115,7 +112,7 @@ class MCPTool(ABC):
         pass
 
     @abstractmethod
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters.
 
         Returns:
@@ -138,11 +135,11 @@ class MCPTool(ABC):
         return []
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         """Example invocations (parameter sets) with brief context."""
         return []
 
-    def validate_parameters(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_parameters(self, params: dict[str, Any]) -> dict[str, Any]:
         """Validate and coerce parameters before execution.
 
         Override this method for custom validation logic.

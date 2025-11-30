@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from .config import Config, get_config, load_config
 from .mcp_health import MCPHealthMonitor
@@ -21,9 +20,9 @@ class ServiceContext:
 
 def create_service_context(
     *,
-    profile: Optional[str] = None,
-    config_path: Optional[str] = None,
-    existing_config: Optional[Config] = None,
+    profile: str | None = None,
+    config_path: str | None = None,
+    existing_config: Config | None = None,
 ) -> ServiceContext:
     """Factory for service contexts.
 

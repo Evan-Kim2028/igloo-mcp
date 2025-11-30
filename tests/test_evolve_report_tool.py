@@ -157,17 +157,17 @@ class TestEvolveReportToolIntegration:
         # Candidates list depends on selector implementation
 
     async def test_evolve_report_validation_error_invalid_response_detail(self, evolve_tool, test_report_id):
-        """Test validation error: invalid response_detail parameter."""
+        """Test validation error: invalid response_mode parameter."""
         with pytest.raises(MCPValidationError) as exc_info:
             await evolve_tool.execute(
                 report_selector=test_report_id,
                 instruction="Test",
                 proposed_changes={"sections_to_add": [{"title": "Test", "order": 0}]},
-                response_detail="invalid",  # Should be minimal/standard/full
+                response_mode="invalid",  # Should be minimal/standard/full
             )
 
         error = exc_info.value
-        assert "Invalid response_detail" in error.message
+        assert "Invalid response_mode" in error.message
         assert error.error_code == "VALIDATION_ERROR"
         assert any("minimal" in hint for hint in error.hints)
 
@@ -383,6 +383,231 @@ class TestEvolveReportToolIntegration:
         # Find the evolution event
         evolution_events = [e for e in audit_events if e.action_type == "evolve"]
         assert len(evolution_events) > 0
+
+    # =========================================================================
+    # content_merge_mode Integration Tests (Issue #101)
+    # =========================================================================
+
+    async def test_evolve_section_content_merge_mode_replace(self, evolve_tool, test_report_id, report_service):
+        """Test content_merge_mode='replace' replaces content entirely."""
+        # Setup: Add a section with initial content
+        await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section with content",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Test Section",
+                        "order": 0,
+                        "content": "Original paragraph one.\n\nOriginal paragraph two.",
+                    }
+                ]
+            },
+        )
+        outline = report_service.get_report_outline(test_report_id)
+        section_id = outline.sections[0].section_id
+
+        # Test: Replace content entirely
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Replace section content",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": section_id,
+                        "content": "Completely new content.",
+                        "content_merge_mode": "replace",
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+
+        # Verify: Content is completely replaced
+        outline = report_service.get_report_outline(test_report_id)
+        assert outline.sections[0].content == "Completely new content."
+        assert "Original" not in outline.sections[0].content
+
+    async def test_evolve_section_content_merge_mode_append(self, evolve_tool, test_report_id, report_service):
+        """Test content_merge_mode='append' adds content at end."""
+        # Setup: Add a section with initial content
+        await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Append Test",
+                        "order": 0,
+                        "content": "First paragraph.",
+                    }
+                ]
+            },
+        )
+        outline = report_service.get_report_outline(test_report_id)
+        section_id = outline.sections[0].section_id
+
+        # Test: Append content
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Append to section",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": section_id,
+                        "content": "Second paragraph added.",
+                        "content_merge_mode": "append",
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+
+        # Verify: New content is appended
+        outline = report_service.get_report_outline(test_report_id)
+        content = outline.sections[0].content
+        assert "First paragraph." in content
+        assert "Second paragraph added." in content
+        # First should come before second
+        assert content.index("First paragraph.") < content.index("Second paragraph added.")
+
+    async def test_evolve_section_content_merge_mode_prepend(self, evolve_tool, test_report_id, report_service):
+        """Test content_merge_mode='prepend' adds content at beginning."""
+        # Setup: Add a section with initial content
+        await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Prepend Test",
+                        "order": 0,
+                        "content": "Original content.",
+                    }
+                ]
+            },
+        )
+        outline = report_service.get_report_outline(test_report_id)
+        section_id = outline.sections[0].section_id
+
+        # Test: Prepend content
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Prepend to section",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": section_id,
+                        "content": "New introduction.",
+                        "content_merge_mode": "prepend",
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+
+        # Verify: New content is prepended
+        outline = report_service.get_report_outline(test_report_id)
+        content = outline.sections[0].content
+        assert "Original content." in content
+        assert "New introduction." in content
+        # New intro should come before original
+        assert content.index("New introduction.") < content.index("Original content.")
+
+    async def test_evolve_section_content_merge_mode_merge_with_placeholders(
+        self, evolve_tool, test_report_id, report_service
+    ):
+        """Test content_merge_mode='merge' with placeholder-based merging."""
+        # Setup: Add a section with structured content
+        initial_content = (
+            "# Introduction\n\nOpening paragraph.\n\n# Analysis\n\nAnalysis content.\n\n# Conclusion\n\nFinal thoughts."
+        )
+        await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Merge Test",
+                        "order": 0,
+                        "content": initial_content,
+                    }
+                ]
+            },
+        )
+        outline = report_service.get_report_outline(test_report_id)
+        section_id = outline.sections[0].section_id
+
+        # Test: Merge with placeholders - insert new content while keeping existing
+        new_content = "// ... keep above ...\n\n# New Analysis\n\nNew analysis paragraph.\n\n// ... keep below ..."
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add to analysis section",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": section_id,
+                        "content": new_content,
+                        "content_merge_mode": "merge",
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+
+        # Verify: Original content should still be there with new content merged
+        outline = report_service.get_report_outline(test_report_id)
+        content = outline.sections[0].content
+        # Check that original sections are preserved
+        assert "# Introduction" in content or "Opening paragraph." in content
+        assert "# New Analysis" in content or "New analysis paragraph." in content
+
+    async def test_evolve_section_content_default_merge_mode_is_replace(
+        self, evolve_tool, test_report_id, report_service
+    ):
+        """Test that default content_merge_mode is 'replace'."""
+        # Setup: Add a section with initial content
+        await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Default Mode Test",
+                        "order": 0,
+                        "content": "Original content.",
+                    }
+                ]
+            },
+        )
+        outline = report_service.get_report_outline(test_report_id)
+        section_id = outline.sections[0].section_id
+
+        # Test: Modify without specifying content_merge_mode (should default to replace)
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Update section",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": section_id,
+                        "content": "New content only.",
+                        # No content_merge_mode specified - should default to "replace"
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+
+        # Verify: Content is replaced (original not present)
+        outline = report_service.get_report_outline(test_report_id)
+        assert outline.sections[0].content == "New content only."
+        assert "Original" not in outline.sections[0].content
 
 
 @pytest.mark.asyncio

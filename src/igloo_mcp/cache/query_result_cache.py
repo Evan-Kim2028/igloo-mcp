@@ -1,3 +1,34 @@
+"""Query result caching with SHA-256 indexing and CSV/JSON storage.
+
+Provides transparent caching of Snowflake query results to reduce warehouse
+costs and improve response times. Uses SHA-256 hashing of SQL + session context
+for deduplication. Stores results as CSV/JSON with manifest metadata.
+
+Key Classes:
+- QueryResultCache: Main cache interface with get/set/invalidate operations
+- CacheManifest: Metadata about cached results (timestamp, rows, columns)
+- CacheHitMetadata: Information returned when cache hit occurs
+
+Features:
+- Automatic cache key generation from SQL + session context
+- Configurable modes: enabled, read_only, force_refresh, disabled
+- TTL support for cache expiration
+- CSV storage for efficient large result sets
+- Manifest files for metadata (execution_id, rowcount, columns)
+
+Usage:
+    cache = QueryResultCache.from_env()
+
+    # Try cache first
+    hit = cache.get(sql, session_context)
+    if hit:
+        return hit.rows
+
+    # Execute and cache
+    result = execute_query(sql)
+    cache.set(sql, session_context, result)
+"""
+
 from __future__ import annotations
 
 import csv
@@ -5,12 +36,13 @@ import hashlib
 import json
 import logging
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
-from ..path_utils import (
+from igloo_mcp.path_utils import (
     DEFAULT_ARTIFACT_ROOT,
     DEFAULT_CACHE_SUBDIR,
     resolve_cache_root,
@@ -24,11 +56,11 @@ class CacheHit:
     """Represents a successful cache lookup."""
 
     cache_key: str
-    rows: List[Dict[str, Any]]
-    metadata: Dict[str, Any]
+    rows: list[dict[str, Any]]
+    metadata: dict[str, Any]
     manifest_path: Path
     result_json_path: Path
-    result_csv_path: Optional[Path]
+    result_csv_path: Path | None
 
 
 class QueryResultCache:
@@ -43,12 +75,12 @@ class QueryResultCache:
         self,
         *,
         mode: str,
-        root: Optional[Path],
+        root: Path | None,
         max_rows: int = DEFAULT_MAX_ROWS,
-        fallbacks: Optional[Iterable[Path]] = None,
+        fallbacks: Iterable[Path] | None = None,
     ) -> None:
         self._mode = mode if mode in self.VALID_MODES else self.DEFAULT_MODE
-        self._root: Optional[Path] = None
+        self._root: Path | None = None
         self._max_rows = max_rows
         self._warnings: list[str] = []
 
@@ -87,8 +119,8 @@ class QueryResultCache:
     def from_env(
         cls,
         *,
-        artifact_root: Optional[Path],
-    ) -> "QueryResultCache":
+        artifact_root: Path | None,
+    ) -> QueryResultCache:
         mode_raw = os.environ.get("IGLOO_MCP_CACHE_MODE", cls.DEFAULT_MODE)
         mode = (mode_raw or cls.DEFAULT_MODE).strip().lower()
         if not mode:
@@ -162,7 +194,7 @@ class QueryResultCache:
         return self._mode != "disabled" and self._root is not None
 
     @property
-    def root(self) -> Optional[Path]:
+    def root(self) -> Path | None:
         return self._root
 
     @property
@@ -176,29 +208,33 @@ class QueryResultCache:
 
     @staticmethod
     def _iso_now() -> str:
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     def compute_cache_key(
         self,
         *,
         sql_sha256: str,
         profile: str,
-        effective_context: Dict[str, Optional[str]],
+        effective_context: dict[str, str | None],
     ) -> str:
+        # Normalize: exclude None values for consistent cache keys
+        # NULL and omitted parameters should produce the same cache key
+        normalized_context = {k: v for k, v in sorted(effective_context.items()) if v is not None}
+
         payload = {
             "sql_sha256": sql_sha256,
             "profile": profile,
-            "context": {k: effective_context.get(k) for k in sorted(effective_context)},
+            "context": normalized_context,
         }
         blob = json.dumps(payload, sort_keys=True, separators=("|", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
-    def _directory_for_key(self, cache_key: str) -> Optional[Path]:
+    def _directory_for_key(self, cache_key: str) -> Path | None:
         if self._root is None:
             return None
         return self._root / cache_key
 
-    def lookup(self, cache_key: str) -> Optional[CacheHit]:
+    def lookup(self, cache_key: str) -> CacheHit | None:
         if not self.enabled or self._mode == "refresh":
             return None
 
@@ -234,7 +270,7 @@ class QueryResultCache:
             logger.warning(warning)
             return None
 
-        rows: List[Dict[str, Any]] = []
+        rows: list[dict[str, Any]] = []
         try:
             with result_json_path.open("r", encoding="utf-8") as fh:
                 for line in fh:
@@ -248,7 +284,7 @@ class QueryResultCache:
             logger.warning(warning)
             return None
 
-        result_csv_path: Optional[Path] = None
+        result_csv_path: Path | None = None
         result_csv_rel = manifest_data.get("result_csv")
         if result_csv_rel:
             result_csv_path = key_dir / result_csv_rel
@@ -291,9 +327,9 @@ class QueryResultCache:
         self,
         cache_key: str,
         *,
-        rows: List[Dict[str, Any]],
-        metadata: Dict[str, Any],
-    ) -> Optional[Path]:
+        rows: list[dict[str, Any]],
+        metadata: dict[str, Any],
+    ) -> Path | None:
         if not self.enabled:
             return None
         if self._mode == "read_only":
@@ -332,14 +368,29 @@ class QueryResultCache:
             logger.warning(warning)
             return None
 
-        result_csv_path: Optional[Path] = None
+        result_csv_path: Path | None = None
         columns = metadata.get("columns")
         if not columns:
-            # Derive columns from first row for CSV readability.
-            column_set: List[str] = []
+            # Derive columns from ALL rows to prevent data loss
+            # (first row may have NULL values for some columns)
+            column_set_gathered: set[str] = set()
             if rows:
-                column_set = list(rows[0].keys())
-            metadata["columns"] = column_set
+                for row in rows:
+                    column_set_gathered.update(row.keys())
+                metadata["columns"] = sorted(column_set_gathered)  # Deterministic ordering
+
+                # Warn if rows have inconsistent columns (indicates data quality issue)
+                if len(rows) > 1:
+                    first_keys = set(rows[0].keys())
+                    for i, row in enumerate(rows[1:], start=1):
+                        if set(row.keys()) != first_keys:
+                            logger.warning(
+                                "Inconsistent columns detected in cache rows: "
+                                f"row 0 has {sorted(first_keys)}, row {i} has {sorted(row.keys())}"
+                            )
+                            break  # Only log once
+            else:
+                metadata["columns"] = []
         try:
             if rows:
                 result_csv_path = key_dir / "rows.csv"

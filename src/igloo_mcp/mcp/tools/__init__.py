@@ -18,6 +18,7 @@ from .build_catalog import BuildCatalogTool
 from .build_dependency_graph import BuildDependencyGraphTool
 from .create_report import CreateReportTool
 from .evolve_report import EvolveReportTool
+from .evolve_report_batch import EvolveReportBatchTool
 from .execute_query import ExecuteQueryTool
 from .get_catalog_summary import GetCatalogSummaryTool
 from .get_report import GetReportTool
@@ -25,23 +26,26 @@ from .get_report_schema import GetReportSchemaTool
 from .health import HealthCheckTool
 from .render_report import RenderReportTool
 from .search_catalog import SearchCatalogTool
+from .search_citations import SearchCitationsTool
 from .search_report import SearchReportTool
 from .test_connection import ConnectionTestTool
 
 __all__ = [
-    "MCPTool",
-    "MCPToolSchema",
     "BuildCatalogTool",
     "BuildDependencyGraphTool",
+    "ConnectionTestTool",
     "CreateReportTool",
-    "ExecuteQueryTool",
+    "EvolveReportBatchTool",
     "EvolveReportTool",
+    "ExecuteQueryTool",
     "GetCatalogSummaryTool",
-    "GetReportTool",
     "GetReportSchemaTool",
+    "GetReportTool",
     "HealthCheckTool",
+    "MCPTool",
+    "MCPToolSchema",
     "RenderReportTool",
     "SearchCatalogTool",
+    "SearchCitationsTool",
     "SearchReportTool",
-    "ConnectionTestTool",
 ]

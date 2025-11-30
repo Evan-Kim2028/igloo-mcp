@@ -118,7 +118,6 @@ def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
             warehouse="FIXTURE_WH",
             timeout_seconds=120,
             reason="Fixture baseline history",
-            response_mode="sync",
             post_query_insight={
                 "summary": "Fixture revenue sample",
                 "key_metrics": ["jan_revenue:125000.25", "feb_revenue:132500.75"],
@@ -133,7 +132,6 @@ def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
             warehouse="FIXTURE_WH",
             timeout_seconds=120,
             reason="Fixture baseline history",
-            response_mode="sync",
         )
 
     time_sequence = [

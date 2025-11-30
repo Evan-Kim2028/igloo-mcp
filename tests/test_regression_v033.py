@@ -136,7 +136,7 @@ class TestBug89CitationEnforcement:
                     "content": "Detailed breakdown...",
                     "importance": 10,
                     "tags": ["revenue", "q4"],
-                    "citations": [{"execution_id": "abc123-def456-789"}],
+                    "citations": [{"source": "query", "execution_id": "abc123-def456-789"}],
                 }
             ]
         }

@@ -88,7 +88,7 @@ result = await create_report(
 }
 ```
 
-### Response Fields (v0.3.3+)
+### Response Fields
 
 - **`section_ids_added`**: Array of section IDs created from template (empty for default template)
 - **`insight_ids_added`**: Array of insight IDs created from template (empty for default template)

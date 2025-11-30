@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
 
 import sqlglot
 from sqlglot import exp
@@ -13,13 +13,13 @@ from sqlglot import exp
 class QueryObject:
     """Represents a table/view reference detected in a SQL statement."""
 
-    database: Optional[str]
-    schema: Optional[str]
+    database: str | None
+    schema: str | None
     name: str
-    catalog: Optional[str] = None
-    type: Optional[str] = None
+    catalog: str | None = None
+    type: str | None = None
 
-    def as_dict(self) -> dict[str, Optional[str]]:
+    def as_dict(self) -> dict[str, str | None]:
         return {
             "catalog": self.catalog,
             "database": self.database,
@@ -39,14 +39,14 @@ def _iter_tables(expression: exp.Expression | None) -> Iterable[exp.Table]:
         yield table
 
 
-def extract_query_objects(sql: str) -> List[dict[str, Optional[str]]]:
+def extract_query_objects(sql: str) -> list[dict[str, str | None]]:
     """Parse SQL and return referenced Snowflake objects.
 
     Falls back to an empty list if parsing fails.
     """
 
-    objects: list[dict[str, Optional[str]]] = []
-    seen: set[tuple[Optional[str], Optional[str], str]] = set()
+    objects: list[dict[str, str | None]] = []
+    seen: set[tuple[str | None, str | None, str]] = set()
     try:
         parsed = sqlglot.parse(sql, read="snowflake")
     except Exception:

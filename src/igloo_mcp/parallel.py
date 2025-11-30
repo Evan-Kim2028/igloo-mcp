@@ -10,7 +10,7 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .config import get_config
 from .snow_cli import SnowCLI
@@ -32,9 +32,9 @@ class QueryResult:
     query: str
     success: bool
     # Raw row dicts parsed from Snow CLI output (CSV/JSON)
-    rows: Optional[List[Dict[str, Any]]] = None
-    json_data: Optional[List[Dict[str, Any]]] = None
-    error: Optional[str] = None
+    rows: list[dict[str, Any]] | None = None
+    json_data: list[dict[str, Any]] | None = None
+    error: str | None = None
     execution_time: float = 0.0
     row_count: int = 0
 
@@ -95,10 +95,10 @@ class ParallelQueryExecutor:
     - Result aggregation and formatting
     """
 
-    def __init__(self, config: Optional[ParallelQueryConfig] = None):
+    def __init__(self, config: ParallelQueryConfig | None = None):
         self.config = config or ParallelQueryConfig.from_global_config()
 
-    def _create_context_overrides(self) -> Dict[str, Any]:
+    def _create_context_overrides(self) -> dict[str, Any]:
         cfg = get_config().snowflake
         return {
             "warehouse": cfg.warehouse,
@@ -190,8 +190,8 @@ class ParallelQueryExecutor:
 
     async def execute_queries_async(
         self,
-        queries: Dict[str, str],
-    ) -> Dict[str, QueryResult]:
+        queries: dict[str, str],
+    ) -> dict[str, QueryResult]:
         """
         Execute multiple queries in parallel using asyncio.
 
@@ -206,7 +206,7 @@ class ParallelQueryExecutor:
 
         try:
             # Execute queries in parallel using ThreadPoolExecutor
-            results: Dict[str, QueryResult] = {}
+            results: dict[str, QueryResult] = {}
             logger.info(f"⚡ Executing {len(queries)} queries in parallel...")
 
             with ThreadPoolExecutor(
@@ -265,8 +265,8 @@ class ParallelQueryExecutor:
 
     def execute_queries(
         self,
-        queries: Dict[str, str],
-    ) -> Dict[str, QueryResult]:
+        queries: dict[str, str],
+    ) -> dict[str, QueryResult]:
         """
         Synchronous wrapper for execute_queries_async.
 
@@ -278,7 +278,7 @@ class ParallelQueryExecutor:
         """
         return asyncio.run(self.execute_queries_async(queries))
 
-    def get_execution_summary(self, results: Dict[str, QueryResult]) -> Dict[str, Any]:
+    def get_execution_summary(self, results: dict[str, QueryResult]) -> dict[str, Any]:
         """Generate a summary of query execution results."""
         total_queries = len(results)
         successful_queries = sum(1 for r in results.values() if r.success)
@@ -309,10 +309,10 @@ class ParallelQueryExecutor:
 
 
 def query_multiple_objects(
-    object_queries: Dict[str, str],
-    max_concurrent: Optional[int] = None,
-    timeout_seconds: Optional[int] = None,
-) -> Dict[str, QueryResult]:
+    object_queries: dict[str, str],
+    max_concurrent: int | None = None,
+    timeout_seconds: int | None = None,
+) -> dict[str, QueryResult]:
     """
     Convenience function to query multiple objects in parallel.
 
@@ -354,9 +354,9 @@ def query_multiple_objects(
 
 
 def create_object_queries(
-    object_names: List[str],
+    object_names: list[str],
     base_query_template: str = "SELECT * FROM object_parquet2 WHERE type = '{object}' LIMIT 100",
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """
     Create queries for multiple objects using a template.
 

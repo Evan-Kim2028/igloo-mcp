@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, Mapping, Optional, Protocol, Union
+from typing import Any, Protocol
 
 _LOCK_ATTR = "_snowcli_session_lock"
 
@@ -16,17 +17,17 @@ class SnowflakeServiceProtocol(Protocol):
 class CursorProtocol(Protocol):
     def execute(self, query: str) -> None: ...
 
-    def fetchone(self) -> Union[Dict[str, Any], tuple, None]: ...
+    def fetchone(self) -> dict[str, Any] | tuple | None: ...
 
 
 @dataclass(frozen=True)
 class SessionContext:
-    warehouse: Optional[str] = None
-    database: Optional[str] = None
-    schema: Optional[str] = None
-    role: Optional[str] = None
+    warehouse: str | None = None
+    database: str | None = None
+    schema: str | None = None
+    role: str | None = None
 
-    def to_mapping(self) -> Dict[str, Optional[str]]:
+    def to_mapping(self) -> dict[str, str | None]:
         return {key: value for key, value in asdict(self).items() if value is not None}
 
 
@@ -116,7 +117,7 @@ def snapshot_session(cursor: CursorProtocol) -> SessionSnapshot:
 
 def apply_session_context(
     cursor: CursorProtocol,
-    overrides: SessionContext | Mapping[str, Optional[str]],
+    overrides: SessionContext | Mapping[str, str | None],
 ) -> None:
     context = (
         overrides.to_mapping() if isinstance(overrides, SessionContext) else {k: v for k, v in overrides.items() if v}
@@ -133,7 +134,7 @@ def apply_session_context(
 
 def restore_session_context(
     cursor: CursorProtocol,
-    session: SessionSnapshot | Mapping[str, Optional[str]],
+    session: SessionSnapshot | Mapping[str, str | None],
 ) -> None:
     if isinstance(session, SessionSnapshot):
         target = session

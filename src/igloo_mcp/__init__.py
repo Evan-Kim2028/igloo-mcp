@@ -7,12 +7,12 @@ from .snow_cli import SnowCLI
 
 __version__ = "0.3.3"
 __all__ = [
-    "SnowCLI",
+    "Config",
     "ParallelQueryConfig",
     "ParallelQueryExecutor",
-    "query_multiple_objects",
+    "SnowCLI",
     "build_catalog",
-    "Config",
     "get_config",
+    "query_multiple_objects",
     "set_config",
 ]
