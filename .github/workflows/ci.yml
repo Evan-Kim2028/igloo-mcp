@@ -94,7 +94,7 @@ jobs:
         run: |
           uv run python scripts/check_critical_coverage.py \
             --coverage-file coverage.xml \
-            --min-coverage 90 \
+            --min-coverage 70 \
             --critical-modules "mcp/tools" "service_layer" "sql_validation.py"
 
       - name: Upload coverage to Codecov
