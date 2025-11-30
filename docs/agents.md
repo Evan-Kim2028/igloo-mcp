@@ -47,6 +47,39 @@ Read(file_path="...")                                # Blind file reading
 
 ---
 
+## 💡 Pro Tips: Tool Selection Decision Trees
+
+### File Editing: When to Batch vs Split
+**Rule:** Perform edits to one file in a single `morph-fast-tools___edit_file` call instead of multiple.
+- ✅ **DO**: Make all changes to a single file in one edit_file call
+- ❌ **NEVER**: Split edits to the same file across multiple tool invocations
+- **Why**: Faster execution, prevents merge conflicts, maintains atomic changes
+- **Example**: If updating imports, function signature, and docstring in `utils.py`, do all three edits in one call
+
+### Code Search: grep vs warp_grep Decision Tree
+**Question: Can you write the exact pattern to search for?**
+
+- **YES → Use `Grep`** (100ms, instant results)
+  - Example: "Find all occurrences of `execute_query(`"
+  - Example: "Search for `from igloo_mcp import` statements"
+  - Example: "Find FIXME comments in tests/"
+  - **When**: You know the exact string/regex pattern to match
+
+- **NO → Use `morph-fast-tools___warp_grep`** (5-10s, worth it for complex queries!)
+  - Example: "How is the Living Reports cache invalidated?"
+  - Example: "Where are Snowflake connection credentials validated?"
+  - Example: "What files implement the query result modes?"
+  - **When**:
+    - Asking "how/where/what" questions about code behavior
+    - Query spans 3+ files or crosses architectural boundaries
+    - Tracing data/execution flow through the codebase
+    - Understanding unfamiliar code patterns or architecture
+    - Need contextual understanding, not just literal matches
+
+**Rule of thumb:** If your search query is a natural language question, use `warp_grep`. If it's a literal string or regex pattern, use `Grep`.
+
+---
+
 ## Querying Allium Data
 
  ## Issue Recap

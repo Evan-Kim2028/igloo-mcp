@@ -832,6 +832,7 @@ class ExecuteQueryTool(MCPTool):
                 cache_hit_metadata=cache_hit_metadata,
                 session_context=effective_context,
                 columns=cache_hit_metadata.get("columns"),
+                include_full=(result_mode == "full"),
             )
             # Apply result_mode filtering before returning
             return _apply_result_mode(result, result_mode)
@@ -960,6 +961,7 @@ class ExecuteQueryTool(MCPTool):
                 cache_hit_metadata=None,
                 session_context=session_context,
                 columns=result.get("columns"),
+                include_full=(result_mode == "full"),
             )
 
             # Apply result_mode filtering before returning
@@ -1204,15 +1206,7 @@ class ExecuteQueryTool(MCPTool):
         await self._ensure_profile_health()
         self._enforce_sql_permissions(statement)
 
-        mode = (response_mode or "auto").lower()
-        if mode not in {"auto", "sync"}:
-            raise MCPValidationError(
-                "Invalid response_mode",
-                validation_errors=[f"response_mode must be one of: auto, sync (got: {mode})"],
-                hints=["Use response_mode='auto' or response_mode='sync'"],
-            )
-
-        # Both auto and sync modes use synchronous execution
+        # Use synchronous execution
         return await self._execute_impl(
             statement=statement,
             warehouse=warehouse,

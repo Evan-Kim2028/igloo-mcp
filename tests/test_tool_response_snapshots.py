@@ -77,6 +77,7 @@ class TestExecuteQueryResponseSchema:
                 "artifact_root",
                 "artifacts",
                 "cache",
+                "cache_hit",
                 "execution_id",
                 "history_enabled",
                 "history_path",
