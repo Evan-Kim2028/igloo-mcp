@@ -496,7 +496,7 @@ def register_igloo_mcp(
                 description=(
                     "List of operations to perform atomically. Each operation has a 'type' field "
                     "(add_insight, modify_insight, remove_insight, add_section, modify_section, "
-                    "remove_section, update_title, update_metadata) and type-specific fields."
+                    "remove_section, update_title, update_metadata, attach_chart) and type-specific fields."
                 )
             ),
         ],

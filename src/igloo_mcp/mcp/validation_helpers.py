@@ -469,3 +469,82 @@ def validate_path_field(
                     "Verify parent directories exist",
                 ],
             )
+
+
+def validate_response_mode(
+    response_mode: Optional[str],
+    legacy_param_name: Optional[str] = None,
+    legacy_param_value: Optional[str] = None,
+    valid_modes: tuple = ("minimal", "standard", "full"),
+    default: str = "standard",
+) -> str:
+    """Validate response_mode parameter with backward compatibility for legacy names.
+
+    This helper standardizes progressive disclosure across all tools, allowing smooth
+    migration from legacy parameter names (result_mode, detail_level, mode, response_detail)
+    to the unified response_mode parameter.
+
+    Args:
+        response_mode: New standard parameter name (preferred)
+        legacy_param_name: Name of deprecated parameter (for warning message)
+        legacy_param_value: Value of deprecated parameter (fallback if response_mode not set)
+        valid_modes: Tuple of valid mode values for this tool
+        default: Default mode if neither parameter is provided
+
+    Returns:
+        Validated mode value (lowercase)
+
+    Raises:
+        MCPValidationError: If mode value is not in valid_modes
+
+    Example:
+        # In execute_query tool
+        mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="result_mode",
+            legacy_param_value=result_mode,
+            valid_modes=("minimal", "sample", "summary", "full"),
+            default="full",
+        )
+
+        # User gets deprecation warning if using old parameter:
+        # "result_mode is deprecated, use response_mode instead (deprecated in v0.3.5)"
+    """
+    try:
+        from fastmcp.utilities.logging import get_logger
+    except ImportError:
+        from mcp.server.fastmcp.utilities.logging import get_logger
+
+    logger = get_logger(__name__)
+
+    # Prefer new parameter, fall back to legacy
+    if response_mode is not None:
+        mode = response_mode.lower()
+    elif legacy_param_value is not None:
+        mode = legacy_param_value.lower()
+        # Log deprecation warning
+        if legacy_param_name:
+            logger.warning(
+                f"{legacy_param_name} is deprecated, use response_mode instead",
+                extra={
+                    "deprecated_param": legacy_param_name,
+                    "deprecated_value": legacy_param_value,
+                    "deprecation_version": "v0.3.5",
+                    "removal_planned": "v0.5.0",
+                },
+            )
+    else:
+        mode = default
+
+    # Validate mode value
+    if mode not in valid_modes:
+        raise MCPValidationError(
+            f"Invalid response_mode '{mode}'",
+            validation_errors=[f"response_mode must be one of: {', '.join(valid_modes)} (got: {mode})"],
+            hints=[
+                f"Use response_mode='{default}' for the default behavior",
+                f"Valid modes: {', '.join(valid_modes)}",
+            ],
+        )
+
+    return mode

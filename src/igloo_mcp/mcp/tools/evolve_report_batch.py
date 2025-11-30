@@ -46,6 +46,7 @@ SUPPORTED OPERATIONS:
 - remove_section: Remove a section
 - update_title: Update report title
 - update_metadata: Update report metadata
+- attach_chart: Attach a chart file to the report and link to insights
 
 All operations are validated before any are applied, ensuring atomicity.
 """
@@ -82,6 +83,7 @@ OP_MODIFY_SECTION = "modify_section"
 OP_REMOVE_SECTION = "remove_section"
 OP_UPDATE_TITLE = "update_title"
 OP_UPDATE_METADATA = "update_metadata"
+OP_ATTACH_CHART = "attach_chart"
 
 VALID_OPERATIONS = {
     OP_ADD_INSIGHT,
@@ -92,6 +94,7 @@ VALID_OPERATIONS = {
     OP_REMOVE_SECTION,
     OP_UPDATE_TITLE,
     OP_UPDATE_METADATA,
+    OP_ATTACH_CHART,
 }
 
 
@@ -525,6 +528,65 @@ class EvolveReportBatchTool(MCPTool):
 
             elif op_type == OP_UPDATE_TITLE:
                 changes["title_change"] = op_data.get("title")
+
+            elif op_type == OP_ATTACH_CHART:
+                # Handle chart attachment
+                import os
+                from datetime import datetime, timezone
+                from pathlib import Path
+
+                chart_path = op_data.get("chart_path")
+                if not chart_path:
+                    # Skip if no chart_path provided
+                    continue
+
+                # Convert to absolute path
+                chart_path = os.path.abspath(chart_path)
+                path_obj = Path(chart_path)
+
+                # Validate file exists
+                if not path_obj.exists():
+                    # Will be caught by validation later
+                    continue
+
+                # Generate chart_id if not provided
+                chart_id = op_data.get("chart_id", str(uuid.uuid4()))
+
+                # Detect format from extension
+                chart_format = path_obj.suffix.lstrip(".").lower() or "unknown"
+
+                # Get file size
+                try:
+                    size_bytes = path_obj.stat().st_size
+                except OSError:
+                    size_bytes = 0
+
+                # Build chart metadata
+                chart_metadata = {
+                    "path": chart_path,
+                    "format": chart_format,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "size_bytes": size_bytes,
+                    "linked_insights": op_data.get("insight_ids", []),
+                    "source": op_data.get("source", "custom"),
+                    "description": op_data.get("description", ""),
+                }
+
+                # Add to metadata_updates.charts
+                if "charts" not in changes["metadata_updates"]:
+                    changes["metadata_updates"]["charts"] = {}
+                changes["metadata_updates"]["charts"][chart_id] = chart_metadata
+
+                # Link chart to insights via metadata
+                insight_ids = op_data.get("insight_ids", [])
+                for insight_id in insight_ids:
+                    # Add operation to modify insight metadata to link chart
+                    changes["insights_to_modify"].append(
+                        {
+                            "insight_id": insight_id,
+                            "metadata": {"chart_id": chart_id},
+                        }
+                    )
 
             elif op_type == OP_UPDATE_METADATA:
                 changes["metadata_updates"].update(op_data.get("metadata", {}))

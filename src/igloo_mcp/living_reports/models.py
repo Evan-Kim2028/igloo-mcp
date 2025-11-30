@@ -67,6 +67,91 @@ class DatasetSource(BaseModel):
         return DatasetSource(**merged)
 
 
+class Citation(BaseModel):
+    """Flexible citation supporting multiple source types.
+
+    Citations provide traceability for insights by linking to various
+    data sources including queries, APIs, URLs, observations, and documents.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Required: source type
+    source: str = Field(
+        ...,
+        description="Citation source type",
+        pattern="^(query|api|url|observation|document)$",
+    )
+
+    # Common optional fields
+    provider: Optional[str] = Field(
+        default=None,
+        description="Specific system (snowflake, allium, defillama, coingecko, etc.)",
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Human-readable context for this citation",
+    )
+
+    # Query-specific fields (source="query")
+    execution_id: Optional[str] = Field(
+        default=None,
+        description="Execution ID from query history (for Snowflake queries)",
+    )
+    query_id: Optional[str] = Field(
+        default=None,
+        description="Query ID for external query platforms (Allium, Dune, etc.)",
+    )
+    sql_sha256: Optional[str] = Field(
+        default=None,
+        description="SHA-256 hash of the SQL text",
+    )
+    cache_manifest: Optional[str] = Field(
+        default=None,
+        description="Path to cache manifest for query results",
+    )
+
+    # URL-specific fields (source="url")
+    url: Optional[str] = Field(
+        default=None,
+        description="Web URL for articles, blogs, documentation",
+    )
+    title: Optional[str] = Field(
+        default=None,
+        description="Title of the web page or article",
+    )
+    accessed_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 timestamp when URL was accessed",
+    )
+
+    # API-specific fields (source="api")
+    endpoint: Optional[str] = Field(
+        default=None,
+        description="API endpoint path or URL",
+    )
+    response_hash: Optional[str] = Field(
+        default=None,
+        description="Hash of API response for verification",
+    )
+
+    # Document-specific fields (source="document")
+    path: Optional[str] = Field(
+        default=None,
+        description="File path to document (PDF, whitepaper, etc.)",
+    )
+    page: Optional[str] = Field(
+        default=None,
+        description="Page number or section reference",
+    )
+
+    # Observation-specific fields (source="observation")
+    observed_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 timestamp when observation was made",
+    )
+
+
 class ResolvedDataset(BaseModel):
     """Concrete dataset resolved from history/cache artifacts."""
 
@@ -164,15 +249,19 @@ class Insight(BaseModel):
     )
     supporting_queries: List[DatasetSource] = Field(
         default_factory=list,
-        description="List of query references that support this insight",
+        description="DEPRECATED: Use citations instead. List of query references.",
     )
-    citations: List[DatasetSource] = Field(
+    citations: List[Citation] = Field(
         default_factory=list,
-        description="List of citation references (preferred over supporting_queries)",
+        description="List of citations (query, api, url, observation, document)",
     )
     draft_changes: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Pending changes from LLM evolution",
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional insight metadata (chart_id, etc.)",
     )
 
     @field_validator("insight_id")
@@ -187,11 +276,42 @@ class Insight(BaseModel):
 
     @model_validator(mode="after")
     def _sync_citations(self) -> "Insight":
-        """Keep citations and supporting_queries in sync for compatibility."""
+        """Keep citations and supporting_queries in sync for backward compatibility.
+
+        Migration shim: Automatically converts supporting_queries to citations.
+        Prefers citations if both are present.
+        """
+        # If citations is empty but supporting_queries has data, convert
         if not self.citations and self.supporting_queries:
-            self.citations = list(self.supporting_queries)
+            converted_citations = [
+                Citation(
+                    source="query",
+                    provider="snowflake",
+                    execution_id=q.execution_id,
+                    sql_sha256=q.sql_sha256,
+                    description=None,  # Supporting queries don't have descriptions
+                )
+                for q in self.supporting_queries
+            ]
+            # Use object.__setattr__ to bypass validate_assignment and prevent recursion
+            object.__setattr__(self, "citations", converted_citations)
+
+        # If supporting_queries is empty but citations has data, convert back
+        # (for tools that still expect supporting_queries)
         if not self.supporting_queries and self.citations:
-            self.supporting_queries = list(self.citations)
+            # Only convert query-type citations back to DatasetSource
+            converted_queries = [
+                DatasetSource(
+                    execution_id=cit.execution_id,
+                    sql_sha256=cit.sql_sha256,
+                    cache_manifest=cit.cache_manifest,
+                )
+                for cit in self.citations
+                if cit.source == "query" and (cit.execution_id or cit.sql_sha256)
+            ]
+            # Use object.__setattr__ to bypass validate_assignment and prevent recursion
+            object.__setattr__(self, "supporting_queries", converted_queries)
+
         return self
 
 
@@ -463,6 +583,8 @@ class IndexEntry(BaseModel):
 
 __all__ = [
     "AuditEvent",
+    "Citation",
+    "DatasetSource",
     "IndexEntry",
     "Insight",
     "Outline",

@@ -16,6 +16,7 @@ from igloo_mcp.mcp.exceptions import (
     MCPSelectorError,
     MCPValidationError,
 )
+from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.path_utils import resolve_catalog_path, validate_safe_path
 
 from .base import MCPTool, ensure_request_id, tool_error_handler
@@ -78,7 +79,8 @@ class GetCatalogSummaryTool(MCPTool):
     async def execute(
         self,
         catalog_dir: str = "./data_catalogue",
-        mode: str = "summary",
+        response_mode: Optional[str] = None,
+        mode: Optional[str] = None,  # DEPRECATED in v0.3.5
         request_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
@@ -86,10 +88,11 @@ class GetCatalogSummaryTool(MCPTool):
 
         Args:
             catalog_dir: Directory containing catalog artifacts
-            mode: Response verbosity level:
-                - "counts": Just total object counts (~30 tokens)
-                - "summary": + Database breakdown (~100 tokens, default)
-                - "detailed": + Column statistics (~200+ tokens)
+            response_mode: Response verbosity level (STANDARD):
+                - "minimal": Just total object counts (~30 tokens)
+                - "standard": + Database breakdown (~100 tokens, default)
+                - "full": + Column statistics (~200+ tokens)
+            mode: DEPRECATED - use response_mode instead
             request_id: Optional request ID for tracing
 
         Returns:
@@ -97,18 +100,17 @@ class GetCatalogSummaryTool(MCPTool):
         """
         request_id = ensure_request_id(request_id)
 
-        # Validate mode
-        valid_modes = ("counts", "summary", "detailed")
-        mode = mode.lower()
-        if mode not in valid_modes:
-            raise MCPValidationError(
-                f"Invalid mode '{mode}'",
-                validation_errors=[f"Must be one of: {', '.join(valid_modes)}"],
-            )
+        # Validate response_mode with backward compatibility
+        effective_mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="mode",
+            legacy_param_value=mode,
+            valid_modes=("minimal", "standard", "full"),
+            default="standard",
+        )
 
         # Timing and request correlation
         start_time = time.time()
-        request_id = ensure_request_id(request_id)
 
         # If catalog_dir is default, try to resolve to unified storage
         if catalog_dir == "./data_catalogue":
@@ -167,8 +169,8 @@ class GetCatalogSummaryTool(MCPTool):
                 },
             )
 
-            # Build response based on mode
-            if mode == "counts":
+            # Build response based on response_mode
+            if effective_mode == "minimal":
                 # Minimal - just counts
                 return {
                     "status": "success",
@@ -185,7 +187,7 @@ class GetCatalogSummaryTool(MCPTool):
                 "timestamp": summary.get("created_at"),
             }
 
-            if mode == "detailed":
+            if effective_mode == "full":
                 # Add detailed statistics if available
                 detailed_stats = {}
 

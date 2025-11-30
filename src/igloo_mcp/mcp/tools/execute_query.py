@@ -57,6 +57,7 @@ from igloo_mcp.logging import (
 from igloo_mcp.mcp.error_utils import wrap_execution_error, wrap_timeout_error
 from igloo_mcp.mcp.exceptions import MCPValidationError
 from igloo_mcp.mcp.utils import json_compatible
+from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.mcp_health import MCPHealthMonitor
 from igloo_mcp.path_utils import (
     DEFAULT_ARTIFACT_ROOT,
@@ -1094,21 +1095,21 @@ class ExecuteQueryTool(MCPTool):
                    Stored in Snowflake QUERY_TAG and local history.
             post_query_insight: Optional summary or structured JSON describing results.
                               Stored in history and cache artifacts.
-            result_mode: Control response verbosity for token efficiency (default: "full")
+            response_mode: Control response verbosity for token efficiency (STANDARD, default: "full")
                         - "full": Return all rows (no filtering)
                         - "summary": Return key_metrics + 5 sample rows (~90% token reduction)
                         - "schema_only": Return column schema only, no rows (~95% reduction)
                         - "sample": Return first 10 rows only (~60-80% reduction)
-            response_mode: Deprecated. Use "auto" or "sync" (default: "auto")
+            result_mode: DEPRECATED in v0.3.5 - use response_mode instead
             ctx: Optional MCP context for request correlation
             **kwargs: Additional arguments (for backward compatibility)
 
         Returns:
-            Dict containing query results and metadata. When result_mode is not "full",
+            Dict containing query results and metadata. When response_mode is not "full",
             includes additional fields:
                 - result_mode: Mode used ("summary", "schema_only", or "sample")
                 - result_mode_info: Filtering metadata with total_rows, rows_returned,
-                                   sample_size, and hint for retrieving all rows
+                                   sample_size, and hint for retrieving response_mode='full'
 
         Raises:
             TypeError: If timeout_seconds is not an integer
@@ -1124,17 +1125,14 @@ class ExecuteQueryTool(MCPTool):
         if post_query_insight is not None:
             normalized_insight = normalize_insight(post_query_insight)
 
-        # Validate result_mode parameter
-        valid_result_modes = {"full", "summary", "schema_only", "sample"}
-        effective_result_mode = (result_mode or "full").lower()
-        if effective_result_mode not in valid_result_modes:
-            raise MCPValidationError(
-                "Invalid result_mode",
-                validation_errors=[
-                    f"result_mode must be one of: {', '.join(sorted(valid_result_modes))} (got: {result_mode})"
-                ],
-                hints=["Use result_mode='summary' to reduce response size by ~90%"],
-            )
+        # Validate response_mode parameter with backward compatibility
+        effective_result_mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="result_mode",
+            legacy_param_value=result_mode,
+            valid_modes=("full", "summary", "schema_only", "sample"),
+            default="full",
+        )
 
         coerced_timeout: Optional[int] = None
         if timeout_seconds is not None:

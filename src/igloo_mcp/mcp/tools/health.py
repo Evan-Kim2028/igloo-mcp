@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 import anyio
 
 from igloo_mcp.config import Config
-from igloo_mcp.mcp.exceptions import MCPValidationError
+from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.profile_utils import (
     ProfileValidationError,
     get_profile_summary,
@@ -102,7 +102,8 @@ class HealthCheckTool(MCPTool):
     @tool_error_handler("health_check")
     async def execute(
         self,
-        detail_level: str = "standard",
+        response_mode: Optional[str] = None,
+        detail_level: Optional[str] = None,  # DEPRECATED in v0.3.5
         include_cortex: bool = True,
         include_profile: bool = True,
         include_catalog: bool = False,
@@ -112,10 +113,11 @@ class HealthCheckTool(MCPTool):
         """Comprehensive health check of system components.
 
         Args:
-            detail_level: Response verbosity level:
-                - "summary": Just overall status and component health (~50 tokens)
+            response_mode: Response verbosity level (STANDARD):
+                - "minimal": Just overall status and component health (~50 tokens)
                 - "standard": + Remediation guidance (~200 tokens, default)
                 - "full": + Diagnostic details (~400 tokens)
+            detail_level: DEPRECATED - use response_mode instead
             include_cortex: Check Cortex AI services availability
             include_profile: Validate profile configuration
             include_catalog: Check catalog availability
@@ -128,13 +130,14 @@ class HealthCheckTool(MCPTool):
         start_time = time.time()
         request_id = ensure_request_id(request_id)
 
-        valid_levels = ("summary", "standard", "full")
-        detail_level = detail_level.lower()
-        if detail_level not in valid_levels:
-            raise MCPValidationError(
-                f"Invalid detail_level '{detail_level}'",
-                validation_errors=[f"Must be one of: {', '.join(valid_levels)}"],
-            )
+        # Validate response_mode with backward compatibility
+        mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="detail_level",
+            legacy_param_value=detail_level,
+            valid_modes=("minimal", "standard", "full"),
+            default="standard",
+        )
 
         logger.info(
             "health_check_started",
@@ -200,8 +203,8 @@ class HealthCheckTool(MCPTool):
         catalog_health = results.get("catalog", {}).get("status", "unknown")
         profile_health = results.get("profile", {}).get("status", "unknown")
 
-        # Build response based on detail level
-        if detail_level == "summary":
+        # Build response based on response_mode
+        if mode == "minimal":
             # Minimal response - just statuses
             return {
                 "status": overall_status,
@@ -220,44 +223,47 @@ class HealthCheckTool(MCPTool):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-        # Add remediation guidance for degraded/unhealthy components
-        remediation: Dict[str, Any] = {}
+        # Add remediation for standard and full modes
+        if mode in ("standard", "full"):
+            # Add remediation guidance for degraded/unhealthy components
+            remediation: Dict[str, Any] = {}
 
-        # Catalog health remediation
-        catalog_health = results.get("catalog", {}).get("status", "unknown")
-        catalog_age_days = results.get("catalog", {}).get("age_days")
-        catalog_exists = results.get("catalog", {}).get("exists")
-        if catalog_health != "healthy":
-            if catalog_age_days and catalog_age_days > 7:
-                remediation["catalog"] = (
-                    f"Catalog is {catalog_age_days} days old. "
-                    "Run build_catalog to refresh metadata and improve search accuracy"
+            # Catalog health remediation
+            catalog_health = results.get("catalog", {}).get("status", "unknown")
+            catalog_age_days = results.get("catalog", {}).get("age_days")
+            catalog_exists = results.get("catalog", {}).get("exists")
+            if catalog_health != "healthy":
+                if catalog_age_days and catalog_age_days > 7:
+                    remediation["catalog"] = (
+                        f"Catalog is {catalog_age_days} days old. "
+                        "Run build_catalog to refresh metadata and improve search accuracy"
+                    )
+                elif not catalog_exists:
+                    remediation["catalog"] = "No catalog found. Run build_catalog to enable offline object search"
+
+            # Snowflake connection remediation
+            snowflake_health = results.get("connection", {}).get("status", "unknown")
+            if snowflake_health != "healthy":
+                remediation["snowflake"] = (
+                    "Snowflake connection failed. Run test_connection for detailed diagnostics, "
+                    "or check SNOWFLAKE_PROFILE environment variable"
                 )
-            elif not catalog_exists:
-                remediation["catalog"] = "No catalog found. Run build_catalog to enable offline object search"
 
-        # Snowflake connection remediation
-        snowflake_health = results.get("connection", {}).get("status", "unknown")
-        if snowflake_health != "healthy":
-            remediation["snowflake"] = (
-                "Snowflake connection failed. Run test_connection for detailed diagnostics, "
-                "or check SNOWFLAKE_PROFILE environment variable"
-            )
+            # Profile health remediation
+            profile_health = results.get("profile", {}).get("status", "unknown")
+            profile_name = results.get("profile", {}).get("name")
+            if profile_health != "healthy":
+                remediation["profile"] = (
+                    f"Profile '{profile_name}' configuration issues detected. "
+                    "Check ~/.snowflake/config.toml or run test_connection"
+                )
 
-        # Profile health remediation
-        profile_health = results.get("profile", {}).get("status", "unknown")
-        profile_name = results.get("profile", {}).get("name")
-        if profile_health != "healthy":
-            remediation["profile"] = (
-                f"Profile '{profile_name}' configuration issues detected. "
-                "Check ~/.snowflake/config.toml or run test_connection"
-            )
+            if remediation:
+                response["remediation"] = remediation
+                response["next_steps"] = "Address remediation items to improve system health"
 
-        if remediation:
-            response["remediation"] = remediation
-            response["next_steps"] = "Address remediation items to improve system health"
-
-        if detail_level == "full":
+        # Add full diagnostics for full mode
+        if mode == "full":
             # Add diagnostic details
             diagnostics = {}
 
