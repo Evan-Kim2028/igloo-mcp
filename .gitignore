@@ -175,3 +175,11 @@ building_a_mcp.md
 PR_63_*.md
 .worktrees
 grok-cli/
+
+# Plans and temporary documentation (not for main branch)
+plans/
+CI_FIX_SUMMARY.md
+GITHUB_ISSUES_CREATED.md
+
+# Environment example (secrets template - don't commit)
+.env.example
