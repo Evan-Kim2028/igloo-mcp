@@ -162,25 +162,24 @@ class TestResultModeConstants:
 
 
 # =========================================================================
-# Integration Tests for result_mode with ExecuteQueryTool
+# Additional Edge Case Tests for result_mode
 # =========================================================================
 
 
-class TestResultModeIntegration:
-    """Integration tests for result_mode parameter in ExecuteQueryTool.
+class TestResultModeEdgeCases:
+    """Edge case tests that complement the unit tests above.
 
-    These tests verify that result_mode is properly passed through
-    the execute() method and applied to actual query results.
+    These tests focus on scenarios not covered by TestApplyResultMode,
+    such as realistic Snowflake metadata fields and single-row aggregations.
     """
 
-    @pytest.fixture
-    def mock_query_result(self) -> dict:
-        """Create a mock query result simulating Snowflake output."""
-        return {
-            "rows": [{"id": i, "name": f"product_{i}", "price": i * 10.99} for i in range(50)],
-            "rowcount": 50,
-            "columns": ["id", "name", "price"],
-            "statement": "SELECT id, name, price FROM products LIMIT 50",
+    def test_result_mode_preserves_snowflake_metadata(self) -> None:
+        """Test that Snowflake-specific fields are preserved across all modes."""
+        snowflake_result = {
+            "rows": [{"id": i} for i in range(20)],
+            "rowcount": 20,
+            "columns": ["id"],
+            "statement": "SELECT id FROM table",
             "query_id": "01abc-def-123",
             "duration_ms": 120,
             "warehouse": "COMPUTE_WH",
@@ -188,94 +187,46 @@ class TestResultModeIntegration:
             "schema": "PUBLIC",
         }
 
-    def test_result_mode_full_returns_all_data(self, mock_query_result: dict) -> None:
-        """Test that result_mode='full' returns complete result set."""
-        result = _apply_result_mode(dict(mock_query_result), RESULT_MODE_FULL)
-
-        # Full mode should not modify rows
-        assert len(result["rows"]) == 50
-        assert "result_mode" not in result
-
-    def test_result_mode_summary_reduces_rows(self, mock_query_result: dict) -> None:
-        """Test that result_mode='summary' limits rows for token efficiency."""
-        result = _apply_result_mode(dict(mock_query_result), RESULT_MODE_SUMMARY)
-
-        # Summary mode should reduce rows to RESULT_MODE_SUMMARY_SAMPLE_SIZE
-        assert len(result["rows"]) == RESULT_MODE_SUMMARY_SAMPLE_SIZE
-        assert result["result_mode"] == "summary"
-        assert result["result_mode_info"]["total_rows"] == 50
-        assert result["result_mode_info"]["rows_returned"] == RESULT_MODE_SUMMARY_SAMPLE_SIZE
-
-        # Should include hint about getting more rows
-        assert result["result_mode_info"]["hint"] is not None
-        assert "full" in result["result_mode_info"]["hint"].lower()
-
-    def test_result_mode_schema_only_for_metadata_queries(self, mock_query_result: dict) -> None:
-        """Test that result_mode='schema_only' returns structure without data."""
-        result = _apply_result_mode(dict(mock_query_result), RESULT_MODE_SCHEMA_ONLY)
-
-        # Schema only mode should return no rows
-        assert len(result["rows"]) == 0
-        assert result["result_mode"] == "schema_only"
-
-        # But metadata should be preserved
-        assert result["columns"] == ["id", "name", "price"]
-        assert result["rowcount"] == 50  # Original count preserved
-        assert result["query_id"] == "01abc-def-123"
-
-    def test_result_mode_sample_for_data_preview(self, mock_query_result: dict) -> None:
-        """Test that result_mode='sample' returns a data sample."""
-        result = _apply_result_mode(dict(mock_query_result), RESULT_MODE_SAMPLE)
-
-        # Sample mode should return RESULT_MODE_SAMPLE_SIZE rows
-        assert len(result["rows"]) == RESULT_MODE_SAMPLE_SIZE
-        assert result["result_mode"] == "sample"
-        assert result["result_mode_info"]["total_rows"] == 50
-        assert result["result_mode_info"]["rows_returned"] == RESULT_MODE_SAMPLE_SIZE
-
-    def test_result_mode_preserves_execution_metadata(self, mock_query_result: dict) -> None:
-        """Test that all result modes preserve important execution metadata."""
         for mode in [RESULT_MODE_FULL, RESULT_MODE_SUMMARY, RESULT_MODE_SCHEMA_ONLY, RESULT_MODE_SAMPLE]:
-            result = _apply_result_mode(dict(mock_query_result), mode)
+            result = _apply_result_mode(dict(snowflake_result), mode)
 
-            # These fields should always be preserved
-            assert result["statement"] == "SELECT id, name, price FROM products LIMIT 50"
-            assert result["query_id"] == "01abc-def-123"
-            assert result["duration_ms"] == 120
+            # Snowflake-specific fields should always be preserved
             assert result["warehouse"] == "COMPUTE_WH"
             assert result["database"] == "ANALYTICS"
             assert result["schema"] == "PUBLIC"
 
-    def test_result_mode_with_single_row_result(self) -> None:
-        """Test result modes with single row result (common for aggregations)."""
-        single_row_result = {
-            "rows": [{"count": 12345, "avg_price": 99.99}],
+    def test_result_mode_with_aggregation_query(self) -> None:
+        """Test result modes with single-row aggregation (common pattern)."""
+        agg_result = {
+            "rows": [{"count": 12345, "avg_price": 99.99, "max_date": "2024-01-15"}],
             "rowcount": 1,
-            "columns": ["count", "avg_price"],
-            "statement": "SELECT COUNT(*), AVG(price) FROM products",
+            "columns": ["count", "avg_price", "max_date"],
+            "statement": "SELECT COUNT(*), AVG(price), MAX(date) FROM products",
             "query_id": "01xyz-789",
             "duration_ms": 50,
         }
 
-        # All modes should return the single row
+        # Non-schema modes should return the single row
         for mode in [RESULT_MODE_FULL, RESULT_MODE_SUMMARY, RESULT_MODE_SAMPLE]:
-            result = _apply_result_mode(dict(single_row_result), mode)
+            result = _apply_result_mode(dict(agg_result), mode)
             assert len(result["rows"]) == 1
             assert result["rows"][0]["count"] == 12345
 
         # Schema only should still return 0 rows
-        schema_result = _apply_result_mode(dict(single_row_result), RESULT_MODE_SCHEMA_ONLY)
+        schema_result = _apply_result_mode(dict(agg_result), RESULT_MODE_SCHEMA_ONLY)
         assert len(schema_result["rows"]) == 0
+        assert schema_result["columns"] == ["count", "avg_price", "max_date"]
 
-    def test_invalid_result_mode_handling(self) -> None:
-        """Test that invalid result_mode values are handled gracefully."""
+    def test_invalid_result_mode_falls_back_to_full(self) -> None:
+        """Test that invalid result_mode values fall back to full mode behavior."""
         result = {
-            "rows": [{"id": 1}],
-            "rowcount": 1,
+            "rows": [{"id": 1}, {"id": 2}],
+            "rowcount": 2,
             "columns": ["id"],
         }
 
-        # Invalid mode should fall back to full (no modification)
-        # Note: This tests the current behavior - may want to raise error instead
         output = _apply_result_mode(dict(result), "invalid_mode")
-        assert len(output["rows"]) == 1
+        # Should not modify rows (full mode behavior) - rows unchanged
+        assert len(output["rows"]) == 2
+        # Note: The function may still set result_mode to the invalid value
+        # The key behavior is that rows are not truncated
