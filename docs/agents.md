@@ -110,6 +110,116 @@ Read(file_path="...")                                # Blind file reading
 
 ---
 
+## 💡 Progressive Disclosure Best Practices (v0.3.5+)
+
+**Token Efficiency**: Use `response_mode` to control query result verbosity and save 60-95% tokens.
+
+### Default Behavior
+```python
+# execute_query defaults to 'summary' mode (5 sample rows + metadata)
+execute_query(
+    "SELECT * FROM large_table",
+    reason="Explore schema and data"
+)
+# Returns: 5 sample rows + key_metrics + hint for full retrieval
+```
+
+### Recommended Workflow Pattern
+
+**1. Start with Schema Discovery**
+```python
+# Step 1: Discover structure (95% token savings)
+execute_query(
+    "SELECT * FROM sui.dex.trades",
+    reason="Check schema",
+    response_mode="schema_only"
+)
+# Returns: Column names + types, no rows
+```
+
+**2. Validate with Summary**
+```python
+# Step 2: Validate data quality (90% token savings - DEFAULT)
+execute_query(
+    "SELECT * FROM sui.dex.trades WHERE coin ILIKE '%SUI%'",
+    reason="Validate SUI trades exist"
+)
+# Defaults to response_mode='summary' - returns 5 sample rows + metrics
+```
+
+**3. Full Export Only When Needed**
+```python
+# Step 3: Export final results (only when necessary)
+execute_query(
+    "SELECT date, SUM(volume) FROM sui.dex.trades GROUP BY 1 ORDER BY 1",
+    reason="Export daily volumes",
+    response_mode="full"
+)
+# Returns: All rows (no truncation)
+```
+
+### Response Mode Cheat Sheet
+
+| Mode | When to Use | Token Savings |
+|------|-------------|---------------|
+| `schema_only` | "What columns exist?" | 95% |
+| `summary` | "What's in the data?" (DEFAULT) | 90% |
+| `sample` | "Show me 10 examples" | 60-80% |
+| `full` | "Export all results" | baseline |
+
+### Reading `result_mode_info` Hints
+
+When using non-`full` modes, responses include guidance:
+
+```python
+result = execute_query(
+    "SELECT * FROM big_table",
+    reason="exploration"
+)
+
+print(result['result_mode_info'])
+# Output:
+# {
+#   "mode": "summary",
+#   "total_rows": 2100,
+#   "rows_returned": 5,
+#   "sample_size": 5,
+#   "hint": "Showing first 5 of 2100 rows. Use result_mode='full' to retrieve all rows"
+# }
+
+# Follow the hint if you need all rows:
+full_result = execute_query(
+    "SELECT * FROM big_table",
+    reason="full export",
+    response_mode="full"
+)
+```
+
+### Anti-Patterns to Avoid
+
+❌ **Don't request `full` by default**
+```python
+# BAD: Wastes tokens on large results
+execute_query(
+    "SELECT * FROM million_row_table",
+    reason="explore",
+    response_mode="full"  # ← Don't do this for exploration
+)
+```
+
+✅ **Do use progressive disclosure**
+```python
+# GOOD: Start minimal, drill down
+execute_query(
+    "SELECT * FROM million_row_table",
+    reason="explore schema",
+    response_mode="schema_only"  # ← Start here
+)
+# Then add filters and use summary/full as needed
+```
+
+---
+
 ## 📋 Version Naming Convention
 
 **Rule**: Version names should be **functional and descriptive**, clearly indicating what the upgrade delivers.

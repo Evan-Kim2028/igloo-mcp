@@ -913,6 +913,8 @@ class ExecuteQueryTool(MCPTool):
                 }
                 if sql_sha256 is not None:
                     payload["sql_sha256"] = sql_sha256
+                # Track response mode for telemetry
+                payload["response_mode_requested"] = result_mode
                 if history_artifacts:
                     payload["artifacts"] = dict(history_artifacts)
                 if reason:

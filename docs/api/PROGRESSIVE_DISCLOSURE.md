@@ -66,6 +66,13 @@ Legacy mode values mapped to standard:
 ### Quick Checks (Default Behavior - v0.3.5+)
 
 ```python
+# Execute query - defaults to 'summary' (5 sample rows + metrics)
+execute_query(
+    "SELECT * FROM customers",
+    reason="Quick validation"
+)
+# Returns: 5 sample rows + key_metrics + hint to use response_mode='full'
+
 # Check system health (defaults to minimal)
 health_check()
 
@@ -74,12 +81,6 @@ get_catalog_summary()
 
 # Check report exists (defaults to minimal)
 get_report("Q1 Revenue")
-
-# Execute query (defaults to summary - 5 sample rows)
-execute_query(
-    "SELECT * FROM customers",
-    reason="Quick validation"
-)
 ```
 
 ### Explicit Mode Control
