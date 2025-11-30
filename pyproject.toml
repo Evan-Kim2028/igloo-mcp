@@ -99,6 +99,11 @@ ignore = [
     "SIM105", # Suppressible exceptions - contextlib.suppress not always clearer
     "SIM117", # Multiple with statements - nested withs more readable
     "B023",  # Loop variable in function - false positives in middleware wrapping
+    "B904",  # Exception chaining - some re-raised exceptions intentionally hide internal details
+    "SIM102", # Nested ifs - sometimes more readable than combined conditions
+    "SIM108", # Ternary - explicit if/else more readable in complex cases
+    "SIM115", # Context manager - lock file needs explicit control  
+    "UP031", # String formatting - % format intentional for compatibility
 ]
 
 [tool.ruff.lint.per-file-ignores]
