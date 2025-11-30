@@ -394,7 +394,7 @@ class HealthCheckTool(MCPTool):
             async def test_cortex():
                 try:
                     # Import inline to avoid dependency issues
-                    from mcp_server_snowflake.cortex_services.tools import (
+                    from mcp_server_snowflake.cortex_services.tools import (  # type: ignore[import-untyped]
                         complete_cortex,
                     )
 

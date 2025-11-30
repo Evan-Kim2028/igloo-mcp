@@ -345,7 +345,7 @@ def validate_text_field(
     pattern: str | None = None,
     allow_empty: bool = False,
 ) -> None:
-    """Validate a text field with consistent error messages.
+    r"""Validate a text field with consistent error messages.
 
     Raises MCPValidationError if validation fails.
 
