@@ -88,6 +88,11 @@ ignore = [
     "S101",  # assert statements allowed in tests
     "S603",  # subprocess without shell validation (manually validated)
     "S607",  # partial executable paths (quarto, etc.)
+    "S110",  # try-except-pass - used for best-effort error handling
+    "S112",  # try-except-continue - used for robust iteration
+    "S608",  # SQL injection - false positives for Snowflake metadata queries
+    "S701",  # Jinja autoescape - templates are code-generated, not user input
+    "S314",  # XML parsing - coverage.xml is trusted build artifact
 ]
 
 [tool.ruff.lint.per-file-ignores]
