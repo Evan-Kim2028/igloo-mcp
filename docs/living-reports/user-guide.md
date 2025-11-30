@@ -791,9 +791,8 @@ Use `dry_run: true` to validate changes without applying them:
   "report_selector": "Q1 Analysis",
   "instruction": "Validate proposed structure changes",
   "proposed_changes": {
-    "sections_to_add": [{"title": "New Section"}]
-  },
-  "dry_run": true
+    "sections_to_add": [{"title": "New Section"}],
+    "dry_run": true
 }
 ```
 
@@ -868,7 +867,7 @@ insights = get_report(
 )  # ~400 tokens
 ```
 
-**Token Savings**: 60-92% reduction vs. always loading full reports.
+**Token Savings**: Significant reduction vs. always loading full reports.
 
 See [get_report Tool Documentation](../api/tools/get_report.md) for complete details.
 
@@ -904,43 +903,43 @@ See [get_report_schema Tool Documentation](../api/tools/get_report_schema.md) fo
 
 ## Token Optimization Tips
 
-Achieve **70% token reduction** in multi-turn workflows:
+Minimize token usage in multi-turn workflows:
 
 ### 1. Search with Minimal Fields
 ```python
 # ✅ Efficient
-search_report(title="Q1", fields=["report_id", "title"])  # ~250 tokens
+search_report(title="Q1", fields=["report_id", "title"])
 
 # ❌ Wasteful
-search_report(title="Q1")  # ~800 tokens (all fields)
+search_report(title="Q1")  # Returns all fields
 ```
 
 ### 2. Progressive Report Reading
 ```python
 # ✅ Efficient
-summary = get_report("Q1", mode="summary")  # ~150 tokens
+summary = get_report("Q1", mode="summary")
 # Only drill down if needed
 
 # ❌ Wasteful
-full = get_report("Q1", mode="full")  # ~2000 tokens
+full = get_report("Q1", mode="full")
 ```
 
 ### 3. Minimal Evolution Responses
 ```python
 # ✅ Efficient
-evolve_report(..., response_detail="minimal")  # ~150 token response
+evolve_report(..., response_detail="minimal")
 
 # ❌ Wasteful
-evolve_report(..., response_detail="full")  # ~1000+ token response
+evolve_report(..., response_detail="full")
 ```
 
 ### 4. Compact Render Previews
 ```python
 # ✅ Efficient
-render_report(..., preview_max_chars=500)  # ~200 token response
+render_report(..., preview_max_chars=500)
 
 # ❌ Wasteful
-render_report(..., preview_max_chars=10000)  # ~3000 token response
+render_report(..., preview_max_chars=10000)
 ```
 
 ### Complete Optimized Workflow
@@ -949,10 +948,10 @@ render_report(..., preview_max_chars=10000)  # ~3000 token response
 # Multi-turn workflow with full optimization
 
 # 1. Find (minimal fields)
-reports = search_report(title="Q1", fields=["report_id"])  # ~100 tokens
+reports = search_report(title="Q1", fields=["report_id"])
 
 # 2. Inspect (summary mode)
-summary = get_report(reports["reports"][0]["report_id"], mode="summary")  # ~150 tokens
+summary = get_report(reports["reports"][0]["report_id"], mode="summary")
 
 # 3. Modify (minimal response)
 evolve_report(
@@ -960,17 +959,14 @@ evolve_report(
     instruction="Add insight",
     proposed_changes={...},
     response_detail="minimal"
-)  # ~150 tokens
+)
 
 # 4. Verify (selective)
 get_report(
     reports["reports"][0]["report_id"],
     mode="sections",
     section_titles=["Revenue"]
-)  # ~250 tokens
-
-# Total: ~650 tokens (vs. 3,500+ tokens previously)
-# Savings: 81%
+)
 ```
 
 ---

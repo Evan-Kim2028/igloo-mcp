@@ -8,11 +8,11 @@ All tools support `response_mode` for token efficiency:
 
 | Value | Description | Token Range | Use Case |
 |-------|-------------|-------------|----------|
-| `minimal` | IDs, counts, status only | ~50-100 | Quick checks, validation |
-| `standard` | Structure + key details (default) | ~200-500 | Most operations |
-| `full` | Complete data and details | ~1000+ | Analysis, reporting |
+| `minimal` | IDs, counts, status only | Smallest | Quick checks, validation |
+| `standard` | Structure + key details (default) | Moderate | Most operations |
+| `full` | Complete data and details | Largest | Analysis, reporting |
 
-**Token Savings**: 60-95% reduction using `minimal` vs `full`
+**Token Savings**: Significant reduction using `minimal` vs `full`
 
 ## Standard Values
 
@@ -49,9 +49,9 @@ Complete data:
 
 | Mode | Description | Savings |
 |------|-------------|---------|
-| `schema_only` | Column schema only, no rows | ~90% |
-| `summary` | 5 sample rows + metrics | ~80% |
-| `sample` | 10 sample rows | ~60% |
+| `schema_only` | Column schema only, no rows | Maximum |
+| `summary` | 5 sample rows + metrics | High |
+| `sample` | 10 sample rows | Moderate |
 | `full` | All query results | baseline |
 
 ### get_report

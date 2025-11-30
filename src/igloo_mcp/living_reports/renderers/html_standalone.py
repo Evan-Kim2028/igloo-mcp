@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from html import escape
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from igloo_mcp.living_reports.models import Outline
 
@@ -24,10 +24,10 @@ class HTMLStandaloneRenderer:
         self,
         report_dir: Path,
         outline: Outline,
-        datasets: Optional[Dict[str, Any]] = None,
-        hints: Optional[Dict[str, Any]] = None,
-        options: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        datasets: dict[str, Any] | None = None,
+        hints: dict[str, Any] | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Render report to standalone HTML.
 
         Args:
@@ -47,7 +47,7 @@ class HTMLStandaloneRenderer:
         hints = hints or {}
         options = options or {}
 
-        warnings: List[str] = []
+        warnings: list[str] = []
 
         # Collect and embed charts
         embedded_charts = self._collect_and_embed_charts(outline, warnings)
@@ -82,11 +82,11 @@ class HTMLStandaloneRenderer:
     def _generate_html(
         self,
         outline: Outline,
-        datasets: Dict[str, Any],
-        hints: Dict[str, Any],
-        options: Dict[str, Any],
-        warnings: List[str],
-        embedded_charts: Dict[str, str],
+        datasets: dict[str, Any],
+        hints: dict[str, Any],
+        options: dict[str, Any],
+        warnings: list[str],
+        embedded_charts: dict[str, str],
     ) -> str:
         """Generate the complete HTML document.
 
@@ -163,8 +163,8 @@ class HTMLStandaloneRenderer:
     def _collect_and_embed_charts(
         self,
         outline: Outline,
-        warnings: List[str],
-    ) -> Dict[str, str]:
+        warnings: list[str],
+    ) -> dict[str, str]:
         """Collect charts from outline metadata and convert to base64 data URIs.
 
         Args:
@@ -176,7 +176,7 @@ class HTMLStandaloneRenderer:
         """
         import base64
 
-        embedded_charts: Dict[str, str] = {}
+        embedded_charts: dict[str, str] = {}
         charts_metadata = outline.metadata.get("charts", {})
 
         for chart_id, chart_meta in charts_metadata.items():
@@ -227,7 +227,7 @@ class HTMLStandaloneRenderer:
 
         return embedded_charts
 
-    def _render_sections(self, outline: Outline, citation_map: Dict[str, int], embedded_charts: Dict[str, str]) -> str:
+    def _render_sections(self, outline: Outline, citation_map: dict[str, int], embedded_charts: dict[str, str]) -> str:
         """Render all sections as HTML.
 
         Args:
@@ -253,8 +253,8 @@ class HTMLStandaloneRenderer:
         self,
         section,
         outline: Outline,
-        citation_map: Dict[str, int],
-        embedded_charts: Dict[str, str],
+        citation_map: dict[str, int],
+        embedded_charts: dict[str, str],
     ) -> str:
         """Render a single section.
 
@@ -318,7 +318,7 @@ class HTMLStandaloneRenderer:
 """
         return html
 
-    def _render_insight(self, insight, citation_map: Dict[str, int]) -> str:
+    def _render_insight(self, insight, citation_map: dict[str, int]) -> str:
         """Render a single insight.
 
         Args:
@@ -358,9 +358,9 @@ data-importance="{insight.importance}">
 
     def _render_citations_appendix(
         self,
-        citation_map: Dict[str, int],
-        citation_details: Dict[str, Any],
-        query_provenance: Dict[str, Any],
+        citation_map: dict[str, int],
+        citation_details: dict[str, Any],
+        query_provenance: dict[str, Any],
     ) -> str:
         """Render the citations appendix.
 

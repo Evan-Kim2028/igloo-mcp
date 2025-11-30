@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 
-def get_profile_recommendations(profile: Optional[str] = None) -> List[str]:
+def get_profile_recommendations(profile: str | None = None) -> list[str]:
     """Get profile recommendations for troubleshooting.
 
     Args:

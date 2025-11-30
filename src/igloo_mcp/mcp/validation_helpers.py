@@ -23,7 +23,7 @@ Usage:
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import ValidationError
 
@@ -49,8 +49,8 @@ def format_pydantic_validation_error(
         MCPValidationError with formatted validation errors and hints
     """
     errors = error.errors()
-    validation_errors: List[str] = []
-    hints: List[str] = []
+    validation_errors: list[str] = []
+    hints: list[str] = []
 
     for err in errors:
         field = err["loc"][0] if err["loc"] else None
@@ -155,7 +155,7 @@ def format_parameter_type_error(
     field: str,
     expected_type: str,
     received_type: str,
-    examples: Optional[List[Any]] = None,
+    examples: list[Any] | None = None,
 ) -> MCPValidationError:
     """Format parameter type error with helpful examples.
 
@@ -193,7 +193,7 @@ def validate_required_string(
     value: Any,
     field_name: str,
     min_length: int = 1,
-    max_length: Optional[int] = None,
+    max_length: int | None = None,
 ) -> str:
     """Validate required string parameter.
 
@@ -244,10 +244,10 @@ def validate_required_string(
 def validate_numeric_range(
     value: Any,
     field_name: str,
-    min_value: Optional[float] = None,
-    max_value: Optional[float] = None,
+    min_value: float | None = None,
+    max_value: float | None = None,
     allow_none: bool = False,
-) -> Optional[float]:
+) -> float | None:
     """Validate numeric parameter within range.
 
     Args:
@@ -301,9 +301,9 @@ def validate_numeric_range(
 def validate_enum_value(
     value: Any,
     field_name: str,
-    allowed_values: List[str],
+    allowed_values: list[str],
     allow_none: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """Validate string is one of allowed values.
 
     Args:
@@ -342,7 +342,7 @@ def validate_text_field(
     field_name: str,
     min_length: int = 1,
     max_length: int = 200,
-    pattern: Optional[str] = None,
+    pattern: str | None = None,
     allow_empty: bool = False,
 ) -> None:
     """Validate a text field with consistent error messages.
@@ -472,9 +472,9 @@ def validate_path_field(
 
 
 def validate_response_mode(
-    response_mode: Optional[str],
-    legacy_param_name: Optional[str] = None,
-    legacy_param_value: Optional[str] = None,
+    response_mode: str | None,
+    legacy_param_name: str | None = None,
+    legacy_param_value: str | None = None,
     valid_modes: tuple = ("minimal", "standard", "full"),
     default: str = "standard",
 ) -> str:

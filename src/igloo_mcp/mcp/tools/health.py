@@ -6,8 +6,8 @@ Part of v1.9.0 Phase 1 - consolidates health_check, check_profile_config, and ge
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import anyio
 
@@ -43,8 +43,8 @@ class HealthCheckTool(MCPTool):
         self,
         config: Config,
         snowflake_service: Any,
-        health_monitor: Optional[Any] = None,
-        resource_manager: Optional[Any] = None,
+        health_monitor: Any | None = None,
+        resource_manager: Any | None = None,
     ):
         """Initialize health check tool.
 
@@ -81,7 +81,7 @@ class HealthCheckTool(MCPTool):
         return ["health", "profile", "cortex", "catalog", "diagnostics"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Full health check including Cortex availability",
@@ -102,14 +102,14 @@ class HealthCheckTool(MCPTool):
     @tool_error_handler("health_check")
     async def execute(
         self,
-        response_mode: Optional[str] = None,
-        detail_level: Optional[str] = None,  # DEPRECATED in v0.3.5
+        response_mode: str | None = None,
+        detail_level: str | None = None,  # DEPRECATED in v0.3.5
         include_cortex: bool = True,
         include_profile: bool = True,
         include_catalog: bool = False,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Comprehensive health check of system components.
 
         Args:
@@ -149,7 +149,7 @@ class HealthCheckTool(MCPTool):
             },
         )
 
-        results: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
 
         # Always test basic connection
         results["connection"] = await self._test_connection()
@@ -208,7 +208,7 @@ class HealthCheckTool(MCPTool):
                     "catalog": catalog_health,
                     "profile": profile_health,
                 },
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "timing": {
                     "total_duration_ms": round(total_duration, 2),
                 },
@@ -219,7 +219,7 @@ class HealthCheckTool(MCPTool):
             "status": overall_status,
             "request_id": request_id,
             "checks": results,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "timing": {
                 "total_duration_ms": round(total_duration, 2),
             },
@@ -228,7 +228,7 @@ class HealthCheckTool(MCPTool):
         # Add remediation for standard and full modes
         if mode in ("standard", "full"):
             # Add remediation guidance for degraded/unhealthy components
-            remediation: Dict[str, Any] = {}
+            remediation: dict[str, Any] = {}
 
             # Catalog health remediation
             catalog_health = results.get("catalog", {}).get("status", "unknown")
@@ -287,7 +287,7 @@ class HealthCheckTool(MCPTool):
 
         return response
 
-    async def _test_connection(self) -> Dict[str, Any]:
+    async def _test_connection(self) -> dict[str, Any]:
         """Test basic Snowflake connectivity."""
         try:
             result = await anyio.to_thread.run_sync(self._test_connection_sync)
@@ -308,7 +308,7 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    def _test_connection_sync(self) -> Dict[str, Any]:
+    def _test_connection_sync(self) -> dict[str, Any]:
         """Test connection synchronously."""
         with self.snowflake_service.get_connection(
             use_dict_cursor=True,
@@ -327,7 +327,7 @@ class HealthCheckTool(MCPTool):
             cursor.execute("SELECT CURRENT_ROLE() as role")
             role_result = cursor.fetchone()
 
-            def _pick(d: Dict[str, Any] | None, lower: str, upper: str) -> Any:
+            def _pick(d: dict[str, Any] | None, lower: str, upper: str) -> Any:
                 if not isinstance(d, dict):
                     return None
                 return d.get(lower) if lower in d else d.get(upper)
@@ -339,7 +339,7 @@ class HealthCheckTool(MCPTool):
                 "role": _pick(role_result, "role", "ROLE"),
             }
 
-    async def _check_profile(self) -> Dict[str, Any]:
+    async def _check_profile(self) -> dict[str, Any]:
         """Validate profile configuration."""
         profile = self.config.snowflake.profile
 
@@ -352,7 +352,7 @@ class HealthCheckTool(MCPTool):
 
             # Derive authenticator details for troubleshooting
             auth = summary.current_profile_authenticator
-            auth_info: Dict[str, Any] = {
+            auth_info: dict[str, Any] = {
                 "authenticator": auth,
                 "is_externalbrowser": (auth == "externalbrowser"),
                 "is_okta_url": (isinstance(auth, str) and auth.startswith("http")),
@@ -388,7 +388,7 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    async def _check_cortex_availability(self) -> Dict[str, Any]:
+    async def _check_cortex_availability(self) -> dict[str, Any]:
         """Check if Cortex AI services are available."""
         try:
             # Test Cortex Complete with minimal query
@@ -432,7 +432,7 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    async def _check_catalog_exists(self) -> Dict[str, Any]:
+    async def _check_catalog_exists(self) -> dict[str, Any]:
         """Check if catalog resources are available."""
         if not self.resource_manager:
             return {
@@ -453,7 +453,7 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    def _get_system_health(self) -> Dict[str, Any]:
+    def _get_system_health(self) -> dict[str, Any]:
         """Get system health metrics from monitor."""
         if not self.health_monitor:
             return {
@@ -501,7 +501,7 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Health Check Parameters",

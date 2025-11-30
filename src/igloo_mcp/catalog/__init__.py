@@ -4,10 +4,10 @@ from .catalog_service import CatalogResult, CatalogService, CatalogTotals, build
 from .index import CatalogIndex, CatalogObject
 
 __all__ = [
-    "CatalogService",
-    "CatalogTotals",
-    "CatalogResult",
     "CatalogIndex",
     "CatalogObject",
+    "CatalogResult",
+    "CatalogService",
+    "CatalogTotals",
     "build_catalog",
 ]

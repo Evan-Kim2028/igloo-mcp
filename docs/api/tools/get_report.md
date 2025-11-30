@@ -8,7 +8,8 @@ The `get_report` tool enables agents to read report structure and content effici
 
 - **Multi-turn workflows**: Get section_ids/insight_ids before calling `evolve_report`
 - **Token efficiency**: Load only what you need (60-80% reduction vs. full reports)
-- **Progressive disclosure**: Start with summary, drill down as needed
+- **Progressive disclosure**: Only load what you need (summary/sections/insights/full modes)
+- **Selective retrieval**: Filter by sections, importance, or specific IDs
 - **Content inspection**: Understand report structure before modifications
 
 ## Parameters
@@ -88,7 +89,7 @@ Returns high-level report metadata and section overview. **Most token-efficient*
 }
 ```
 
-**Token Savings**: ~75% reduction vs. full report
+**Token Savings**: Significant reduction vs. full report
 
 ---
 
@@ -142,7 +143,7 @@ Returns detailed section information with optional prose content. Supports filte
 }
 ```
 
-**Token Savings**: ~50-70% reduction vs. full report (depending on filtering)
+**Token Savings**: Substantial reduction vs. full report (depending on filtering)
 
 ---
 
@@ -206,7 +207,7 @@ Returns detailed insight information. Supports filtering by importance, section,
 }
 ```
 
-**Token Savings**: ~60-75% reduction vs. full report (depending on filtering)
+**Token Savings**: Substantial reduction vs. full report (depending on filtering)
 
 ---
 
@@ -371,9 +372,7 @@ full_report = get_report("Q1 Revenue", mode="full")
 render_report(full_report["report_id"], format="pdf")
 ```
 
-**Token savings**: 50 + 200 + 300 + 1000 = **1,550 tokens** (progressive)
-vs. 4 × 1000 = **4,000 tokens** (always using full mode)
-**Savings: 61%** ✨
+**Efficient retrieval**: Progressive disclosure reduces token usage significantly vs. always loading full reports.
 
 ---
 
@@ -384,28 +383,26 @@ vs. 4 × 1000 = **4,000 tokens** (always using full mode)
 Start lightweight, drill down as needed:
 
 ```python
-# Step 1: Get overview (100 tokens)
+# Step 1: Get overview
 summary = get_report(
     report_selector="Q1 Analysis",
     mode="summary"
 )
 
-# Step 2: Get specific section details (200 tokens)
+# Step 2: Get specific section details
 section = get_report(
     report_selector="Q1 Analysis",
     mode="sections",
     section_titles=["Revenue Analysis"]
 )
 
-# Step 3: Get high-priority insights (300 tokens)
+# Step 3: Get high-priority insights
 insights = get_report(
     report_selector="Q1 Analysis",
     mode="insights",
     section_ids=["sec_revenue..."],
     min_importance=7
 )
-
-# Total: ~600 tokens vs. 2000+ for full report (70% savings)
 ```
 
 ### Workflow 2: Prepare for Evolution

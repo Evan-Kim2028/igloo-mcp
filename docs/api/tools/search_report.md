@@ -57,11 +57,11 @@ The `fields` parameter allows you to request only specific fields, significantly
 
 | Request Type | Tokens (All Fields) | Tokens (Minimal Fields) | Savings |
 |-------------|---------------------|-------------------------|---------|
-| Single report | ~150 tokens | ~50 tokens | 67% |
-| 10 reports | ~1,200 tokens | ~400 tokens | 67% |
-| 20 reports | ~2,400 tokens | ~800 tokens | 67% |
+| Single report | ~150 tokens | ~50 tokens | Significant reduction |
+| 10 reports | ~1,200 tokens | ~400 tokens | Substantial reduction |
+| 20 reports | ~2,400 tokens | ~800 tokens | Substantial reduction |
 
-**Average Savings**: 30-50% when using selective fields
+**Average Savings**: Significant token reduction when using selective fields
 
 ---
 
@@ -134,7 +134,7 @@ The `fields` parameter allows you to request only specific fields, significantly
 }
 ```
 
-**Token Savings**: ~70% reduction (400 tokens → 120 tokens)
+**Token Savings**: Substantial reduction vs. full fields
 
 ---
 
@@ -217,7 +217,7 @@ The `fields` parameter allows you to request only specific fields, significantly
 }
 ```
 
-**Token Savings**: ~85% reduction vs. full fields
+**Token Savings**: Substantial reduction vs. full fields
 
 ---
 
@@ -267,7 +267,7 @@ report_id = results["reports"][0]["report_id"]
 details = get_report(report_selector=report_id, mode="summary")
 ```
 
-**Token Savings**: ~70% vs. searching with all fields
+**Token Savings**: Significant reduction vs. searching with all fields
 
 ---
 
@@ -306,7 +306,7 @@ for report in reports["reports"]:
     # Analyze summary...
 ```
 
-**Token Savings**: ~60% vs. full field retrieval + full report reads
+**Token Savings**: Substantial reduction vs. full field retrieval + full report reads
 
 ---
 
@@ -420,10 +420,10 @@ archived = search_report(status="archived", fields=["report_id", "title", "updat
 
 | Search Pattern | Without `fields` | With `fields` | Savings |
 |---------------|-----------------|---------------|---------|
-| Find 1 report | 150 tokens | 50 tokens | 67% |
-| Find 5 reports | 650 tokens | 220 tokens | 66% |
-| Find 20 reports | 2,400 tokens | 800 tokens | 67% |
-| List all IDs (50 reports) | 6,000 tokens | 500 tokens | 92% |
+| Find 1 report | 150 tokens | 50 tokens | Significant reduction |
+| Find 5 reports | 650 tokens | 220 tokens | Substantial reduction |
+| Find 20 reports | 2,400 tokens | 800 tokens | Substantial reduction |
+| List all IDs (50 reports) | 6,000 tokens | 500 tokens | Maximum reduction |
 
 **Recommendation**: Always use `fields` parameter when you know what you need.
 

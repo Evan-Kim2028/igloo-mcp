@@ -35,9 +35,10 @@ import datetime
 import json
 import os
 import uuid
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional
+from typing import Any
 
 try:
     import portalocker
@@ -73,7 +74,7 @@ class ReportLock:
         """
         self.lock_path = lock_path
         self.timeout_seconds = timeout_seconds
-        self._lock_file: Optional[Any] = None
+        self._lock_file: Any | None = None
 
     def acquire(self) -> None:
         """Acquire the lock.
@@ -128,7 +129,7 @@ class ReportLock:
             finally:
                 self._lock_file = None
 
-    def __enter__(self) -> "ReportLock":
+    def __enter__(self) -> ReportLock:
         """Context manager entry."""
         self.acquire()
         return self
@@ -196,7 +197,7 @@ class ReportStorage:
         except (json.JSONDecodeError, ValueError) as e:
             raise ValueError(f"Invalid outline at {self.outline_path}: {e}") from e
 
-    def _save_outline_atomic(self, outline: Outline) -> Optional[str]:
+    def _save_outline_atomic(self, outline: Outline) -> str | None:
         """Atomically save outline to disk with backup.
 
         Args:
@@ -273,7 +274,7 @@ class ReportStorage:
                 event = AuditEvent(
                     action_id=str(uuid.uuid4()),
                     report_id=outline.report_id,
-                    ts=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    ts=datetime.datetime.now(datetime.UTC).isoformat(),
                     actor="cli",
                     action_type="backup",
                     payload={"reason": "outline_save"},
@@ -283,7 +284,7 @@ class ReportStorage:
                 # Best-effort; do not fail saves on audit issues
                 pass
 
-    def _create_backup(self) -> Optional[str]:
+    def _create_backup(self) -> str | None:
         """Create timestamped backup of current outline.
 
         Returns:
@@ -295,7 +296,7 @@ class ReportStorage:
 
         import datetime
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         # Include microseconds to avoid filename collisions within the same second
         timestamp_clean = now.strftime("%Y%m%dT%H%M%S") + f"_{now.microsecond:06d}"
         backup_filename = f"outline.json.{timestamp_clean}.bak"
@@ -433,7 +434,7 @@ class GlobalStorage:
         report_dir = self.reports_root / "by_id" / report_id
         return ReportStorage(report_dir)
 
-    def save_index_entry(self, entry: Dict[str, Any]) -> None:
+    def save_index_entry(self, entry: dict[str, Any]) -> None:
         """Atomically append index entry.
 
         Args:

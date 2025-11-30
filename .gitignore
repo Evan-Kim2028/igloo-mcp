@@ -181,6 +181,9 @@ plans/
 CI_FIX_SUMMARY.md
 GITHUB_ISSUES_CREATED.md
 
+# Internal architecture documentation (keep local, don't commit)
+docs/architecture/
+
 # Environment example (secrets template - don't commit)
 .env.example
 

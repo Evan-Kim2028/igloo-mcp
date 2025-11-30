@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import anyio
 
@@ -63,7 +63,7 @@ class GetCatalogSummaryTool(MCPTool):
         return ["catalog", "summary", "metadata"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Inspect default catalog directory",
@@ -79,11 +79,11 @@ class GetCatalogSummaryTool(MCPTool):
     async def execute(
         self,
         catalog_dir: str = "./data_catalogue",
-        response_mode: Optional[str] = None,
-        mode: Optional[str] = None,  # DEPRECATED in v0.3.5
-        request_id: Optional[str] = None,
+        response_mode: str | None = None,
+        mode: str | None = None,  # DEPRECATED in v0.3.5
+        request_id: str | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get catalog summary with progressive disclosure.
 
         Args:
@@ -146,7 +146,7 @@ class GetCatalogSummaryTool(MCPTool):
                 raise  # Re-raise validation errors
             except Exception as e:
                 raise MCPValidationError(
-                    f"Invalid catalog directory path: {str(e)}",
+                    f"Invalid catalog directory path: {e!s}",
                     validation_errors=[f"Path validation failed: {catalog_dir}"],
                     hints=[
                         "Use a relative path within the current directory",
@@ -230,7 +230,7 @@ class GetCatalogSummaryTool(MCPTool):
                 ],
             ) from e
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Catalog Summary Parameters",

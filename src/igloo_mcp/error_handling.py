@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 from .snow_cli import SnowCLIError
 
@@ -19,23 +20,23 @@ class ErrorContext:
     """Context information for error handling."""
 
     operation: str
-    database: Optional[str] = None
-    schema: Optional[str] = None
-    object_name: Optional[str] = None
-    query: Optional[str] = None
-    request_id: Optional[str] = None
-    timing: Dict[str, float] = field(default_factory=dict)
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    database: str | None = None
+    schema: str | None = None
+    object_name: str | None = None
+    query: str | None = None
+    request_id: str | None = None
+    timing: dict[str, float] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
 
     def add_timing(self, key: str, duration_ms: float) -> None:
         """Add timing information."""
         self.timing[key] = duration_ms
 
-    def get_total_duration_ms(self) -> Optional[float]:
+    def get_total_duration_ms(self) -> float | None:
         """Get total duration if available."""
         return self.timing.get("total_duration_ms")
 
-    def sanitize_parameters(self) -> Dict[str, Any]:
+    def sanitize_parameters(self) -> dict[str, Any]:
         """Return sanitized parameters (remove sensitive data, truncate long values)."""
         sanitized = {}
         for key, value in self.parameters.items():
@@ -136,17 +137,17 @@ def categorize_snowflake_error(error: SnowCLIError, context: ErrorContext) -> Ex
 
 def handle_snowflake_errors(
     operation: str,
-    database: Optional[str] = None,
-    schema: Optional[str] = None,
-    object_name: Optional[str] = None,
+    database: str | None = None,
+    schema: str | None = None,
+    object_name: str | None = None,
     fallback_value: Any = None,
     reraise: bool = True,
-) -> Callable[[Callable[..., T]], Callable[..., Union[T, Any]]]:
+) -> Callable[[Callable[..., T]], Callable[..., T | Any]]:
     """Decorator to handle Snowflake errors with context and proper categorization."""
 
-    def decorator(func: Callable[..., T]) -> Callable[..., Union[T, Any]]:
+    def decorator(func: Callable[..., T]) -> Callable[..., T | Any]:
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Union[T, Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> T | Any:
             context = ErrorContext(
                 operation=operation,
                 database=database,
@@ -194,10 +195,10 @@ def handle_snowflake_errors(
 def safe_execute(
     func: Callable[..., T],
     *args: Any,
-    context: Optional[ErrorContext] = None,
+    context: ErrorContext | None = None,
     fallback_value: Any = None,
     **kwargs: Any,
-) -> Union[T, Any]:
+) -> T | Any:
     """Execute a function safely with proper error handling."""
     try:
         return func(*args, **kwargs)
@@ -223,10 +224,10 @@ def format_error_response(
     status: str,
     error_type: str,
     message: str,
-    context: Optional[ErrorContext] = None,
-    hints: Optional[List[str]] = None,
-    additional_data: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    context: ErrorContext | None = None,
+    hints: list[str] | None = None,
+    additional_data: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Format a standardized error response.
 
     Args:
@@ -240,7 +241,7 @@ def format_error_response(
     Returns:
         Standardized error response dictionary
     """
-    response: Dict[str, Any] = {
+    response: dict[str, Any] = {
         "status": status,
         "error_type": error_type,
         "message": message,
@@ -283,8 +284,8 @@ class ErrorAggregator:
     """Aggregates errors during batch operations."""
 
     def __init__(self) -> None:
-        self.errors: Dict[str, Exception] = {}
-        self.warnings: Dict[str, str] = {}
+        self.errors: dict[str, Exception] = {}
+        self.warnings: dict[str, str] = {}
 
     def add_error(self, key: str, error: Exception) -> None:
         """Add an error for a specific key."""
@@ -300,7 +301,7 @@ class ErrorAggregator:
         """Check if any errors were recorded."""
         return len(self.errors) > 0
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get a summary of all errors and warnings."""
         return {
             "error_count": len(self.errors),

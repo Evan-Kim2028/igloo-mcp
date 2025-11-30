@@ -25,7 +25,6 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from .index import ReportIndex
 
@@ -36,9 +35,9 @@ class SelectorResolutionError(ValueError):
 
     selector: str
     error_type: str  # "not_found", "ambiguous", "invalid_format"
-    candidates: Optional[List[str]] = None
-    message: Optional[str] = None
-    candidate_details: Optional[List[Dict[str, str]]] = None  # List of {title, id} dicts
+    candidates: list[str] | None = None
+    message: str | None = None
+    candidate_details: list[dict[str, str]] | None = None  # List of {title, id} dicts
 
     def to_dict(self):
         result = {

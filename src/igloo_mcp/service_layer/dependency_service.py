@@ -1,12 +1,12 @@
 """Dependency service for service layer."""
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class DependencyService:
     """Service for building dependency graphs."""
 
-    def __init__(self, context: Optional[Any] = None):
+    def __init__(self, context: Any | None = None):
         """Initialize dependency service.
 
         Args:
@@ -20,12 +20,12 @@ class DependencyService:
 
     def build_dependency_graph(
         self,
-        database: Optional[str] = None,
-        schema: Optional[str] = None,
+        database: str | None = None,
+        schema: str | None = None,
         account_scope: bool = True,
         format: str = "dot",
         output_dir: str = "./dependencies",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build dependency graph.
 
         Args:

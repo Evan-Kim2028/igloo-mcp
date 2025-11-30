@@ -19,7 +19,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | `reason` | string | ✅ Yes | - | Short reason for running the query (min length 5). Stored in Snowflake `QUERY_TAG` and local history; avoid sensitive information. |
 | `timeout_seconds` | integer | ❌ No | 120 | Query timeout in seconds (1-3600) |
 | `verbose_errors` | boolean | ❌ No | false | Include detailed optimization hints |
-| `response_mode` | string | ❌ No | "full" | Control response verbosity: `full`, `summary`, `schema_only`, or `sample`. Reduces token usage by 60-90%. See [Progressive Disclosure](../PROGRESSIVE_DISCLOSURE.md). |
+| `response_mode` | string | ❌ No | "full" | Control response verbosity: `full`, `summary`, `schema_only`, or `sample`. Significantly reduces token usage. See [Progressive Disclosure](../PROGRESSIVE_DISCLOSURE.md). |
 | `result_mode` | string | ❌ No | - | **DEPRECATED** - Use `response_mode` instead. |
 | `warehouse` | string | ❌ No | profile | Warehouse override (Snowflake identifier) |
 | `database` | string | ❌ No | profile | Database override (Snowflake identifier) |
@@ -135,12 +135,12 @@ The `response_mode` parameter controls response verbosity to reduce token usage 
 
 ### Modes
 
-| Mode | Rows Returned | Use Case | Token Reduction |
+| Mode | Rows Returned | Use Case | Token Savings |
 |------|---------------|----------|-----------------|
-| `full` | All rows | Complete data retrieval (default) | 0% (baseline) |
-| `summary` | 5 sample rows + key_metrics | Quick analysis with metrics | ~90% |
-| `schema_only` | 0 rows (schema + metrics only) | Schema discovery | ~95% |
-| `sample` | 10 sample rows | Quick preview/validation | ~60-80% |
+| `full` | All rows | Complete data retrieval (default) | baseline |
+| `summary` | 5 sample rows + key_metrics | Quick analysis with metrics | Maximum |
+| `schema_only` | 0 rows (schema + metrics only) | Schema discovery | Maximum |
+| `sample` | 10 sample rows | Quick preview/validation | High |
 
 **Important:** Sampling returns rows in **result order** (as returned by Snowflake), not database order. For deterministic, repeatable samples across runs, add an `ORDER BY` clause to your query:
 
@@ -210,7 +210,7 @@ result = execute_query(
     response_mode="summary",
     reason="Analyze customer spending patterns"
 )
-# Returns key_metrics + 5 sample rows (90% token reduction)
+# Returns key_metrics + 5 sample rows (significant token reduction)
 ```
 
 ## Errors

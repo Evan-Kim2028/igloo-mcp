@@ -191,7 +191,7 @@ The insights are created atomically with the section and automatically linked. U
 
 ### Response Detail Control
 
-The `response_detail` parameter controls response verbosity for **50-80% token reduction**.
+The `response_detail` parameter controls response verbosity for significant token reduction.
 
 #### Options
 
@@ -225,7 +225,7 @@ The `response_detail` parameter controls response verbosity for **50-80% token r
 }
 ```
 
-**Token Savings**: ~60% reduction vs. standard response
+**Token Savings**: Substantial reduction vs. standard response
 
 #### Standard Response Example (Default)
 
@@ -313,9 +313,9 @@ The `response_detail` parameter controls response verbosity for **50-80% token r
 
 | Operation Type | Standard Response | Minimal Response | Savings |
 |---------------|------------------|------------------|---------|
-| Add 1 insight | 400 tokens | 150 tokens | 62% |
-| Modify 3 sections | 550 tokens | 180 tokens | 67% |
-| Complex operation (5+ changes) | 800 tokens | 200 tokens | 75% |
+| Add 1 insight | 400 tokens | 150 tokens | Significant reduction |
+| Modify 3 sections | 550 tokens | 180 tokens | Substantial reduction |
+| Complex operation (5+ changes) | 800 tokens | 200 tokens | Maximum reduction |
 
 **Recommendation**: Use `minimal` for multi-turn workflows, `standard` for interactive work, `full` only for debugging.
 

@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -113,7 +113,7 @@ class EvolveReportTool(MCPTool):
         return ["reports", "evolution", "llm", "structured-edits"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Add revenue insights with explicit changes",
@@ -188,14 +188,14 @@ class EvolveReportTool(MCPTool):
         self,
         report_selector: str,
         instruction: str,
-        proposed_changes: Optional[Dict[str, Any]] = None,
-        constraints: Optional[Dict[str, Any]] = None,
+        proposed_changes: dict[str, Any] | None = None,
+        constraints: dict[str, Any] | None = None,
         dry_run: bool = False,
-        status_change: Optional[str] = None,
-        response_mode: Optional[str] = None,
-        response_detail: Optional[str] = None,  # DEPRECATED in v0.3.5
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        status_change: str | None = None,
+        response_mode: str | None = None,
+        response_detail: str | None = None,  # DEPRECATED in v0.3.5
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute report evolution with structured error handling.
 
         Args:
@@ -461,7 +461,7 @@ class EvolveReportTool(MCPTool):
                     exc_info=True,
                 )
                 raise MCPExecutionError(
-                    f"Failed to apply changes to report: {str(e)}",
+                    f"Failed to apply changes to report: {e!s}",
                     operation="evolve_report",
                     hints=["Check logs for detailed error information"],
                 ) from e
@@ -533,7 +533,7 @@ class EvolveReportTool(MCPTool):
                     exc_info=True,
                 )
                 raise MCPExecutionError(
-                    f"Failed to save report changes: {str(e)}",
+                    f"Failed to save report changes: {e!s}",
                     operation="evolve_report",
                     hints=["Check file system permissions and disk space"],
                 ) from e
@@ -581,7 +581,7 @@ class EvolveReportTool(MCPTool):
             # Build response based on response_detail level
             if response_detail == "minimal":
                 # Minimal response: just status, IDs, version, and counts
-                minimal_summary: Dict[str, Any] = {
+                minimal_summary: dict[str, Any] = {
                     "sections_added": summary["sections_added"],
                     "insights_added": summary["insights_added"],
                     "sections_modified": summary["sections_modified"],
@@ -659,9 +659,9 @@ class EvolveReportTool(MCPTool):
     def _validate_changes(
         self,
         current_outline: Outline,
-        changes: Dict[str, Any],
-        constraints: Dict[str, Any],
-    ) -> List[str]:
+        changes: dict[str, Any],
+        constraints: dict[str, Any],
+    ) -> list[str]:
         """Validate proposed changes against safety constraints.
 
         Args:
@@ -774,14 +774,9 @@ class EvolveReportTool(MCPTool):
                             "then include it in citations. "
                             "To disable validation (not recommended): set skip_citation_validation=True in constraints"
                         )
-                    elif current_insight.supporting_queries and not current_insight.supporting_queries[0].execution_id:
-                        issues.append(
-                            f"All insights require citations. Insight '{insight_id}' "
-                            "missing execution_id in citations[0]. "
-                            "Use execute_query() first to get an execution_id, "
-                            "then include it in citations"
-                        )
-                    elif current_insight.citations and not current_insight.citations[0].execution_id:
+                    elif (
+                        current_insight.supporting_queries and not current_insight.supporting_queries[0].execution_id
+                    ) or (current_insight.citations and not current_insight.citations[0].execution_id):
                         issues.append(
                             f"All insights require citations. Insight '{insight_id}' "
                             "missing execution_id in citations[0]. "
@@ -792,8 +787,8 @@ class EvolveReportTool(MCPTool):
         return issues
 
     def _generate_proposed_changes(
-        self, current_outline: Outline, instruction: str, constraints: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        self, current_outline: Outline, instruction: str, constraints: dict[str, Any]
+    ) -> dict[str, Any]:
         """Fallback generator for proposed_changes when none are provided.
 
         This stub returns an empty change set to keep backwards compatibility
@@ -811,7 +806,7 @@ class EvolveReportTool(MCPTool):
             "sections_to_remove": [],
         }
 
-    def _apply_changes(self, current_outline: Outline, changes: Dict[str, Any]) -> tuple[Outline, Dict[str, Any]]:
+    def _apply_changes(self, current_outline: Outline, changes: dict[str, Any]) -> tuple[Outline, dict[str, Any]]:
         """Apply validated changes to create new outline.
 
         Args:
@@ -824,12 +819,12 @@ class EvolveReportTool(MCPTool):
         # Create a deep copy of the outline
         new_outline_data = current_outline.model_dump(by_alias=True)
         new_outline = Outline(**new_outline_data)
-        apply_stats: Dict[str, Any] = {
+        apply_stats: dict[str, Any] = {
             "insight_ids_added": [],
             "section_ids_added": [],
         }
 
-        def _ensure_supporting_queries(payload: Dict[str, Any]) -> None:
+        def _ensure_supporting_queries(payload: dict[str, Any]) -> None:
             if payload.get("citations") is None:
                 payload["citations"] = []
             if "supporting_queries" not in payload or payload["supporting_queries"] is None:
@@ -856,8 +851,8 @@ class EvolveReportTool(MCPTool):
             elif payload.get("supporting_queries"):
                 payload["citations"] = payload["supporting_queries"]
 
-        def _create_inline_insights(raw_insights: List[Dict[str, Any]], section_context: str) -> List[str]:
-            inline_ids: List[str] = []
+        def _create_inline_insights(raw_insights: list[dict[str, Any]], section_context: str) -> list[str]:
+            inline_ids: list[str] = []
             for idx, raw_insight in enumerate(raw_insights):
                 if not isinstance(raw_insight, dict):
                     raise ValueError(f"Section {section_context}: insights[{idx}] must be a dictionary")
@@ -901,7 +896,7 @@ class EvolveReportTool(MCPTool):
                         if key != "insight_id" and hasattr(insight, key) and value is not None:
                             if key == "citations" and not modify_data.get("supporting_queries"):
                                 # Keep supporting_queries in sync when only citations are provided
-                                setattr(insight, "supporting_queries", value)
+                                insight.supporting_queries = value
                             setattr(insight, key, value)
                     break
 
@@ -991,9 +986,7 @@ class EvolveReportTool(MCPTool):
                 if section.section_id:
                     apply_stats["section_ids_added"].append(section.section_id)
             except Exception as e:
-                raise ValueError(
-                    f"Failed to create section {section_id}: {str(e)}. Section data: {filtered_data}"
-                ) from e
+                raise ValueError(f"Failed to create section {section_id}: {e!s}. Section data: {filtered_data}") from e
 
         # Apply section modifications
         for modify_data in changes.get("sections_to_modify", []):
@@ -1032,7 +1025,7 @@ class EvolveReportTool(MCPTool):
                             section.title = modify_data["title"]
                             operations_performed.append("title")
                         except Exception as e:
-                            errors.append(f"Failed to update title: {str(e)}")
+                            errors.append(f"Failed to update title: {e!s}")
 
                     # Modify notes
                     if "notes" in modify_data and modify_data["notes"] is not None:
@@ -1042,7 +1035,7 @@ class EvolveReportTool(MCPTool):
                             section.notes = modify_data["notes"]
                             operations_performed.append("notes")
                         except Exception as e:
-                            errors.append(f"Failed to update notes: {str(e)}")
+                            errors.append(f"Failed to update notes: {e!s}")
 
                     # Modify content
                     if "content" in modify_data and modify_data["content"] is not None:
@@ -1065,7 +1058,7 @@ class EvolveReportTool(MCPTool):
                                 section.content = modify_data["content"]
                             operations_performed.append("content")
                         except Exception as e:
-                            errors.append(f"Failed to update content: {str(e)}")
+                            errors.append(f"Failed to update content: {e!s}")
 
                     # Modify content_format
                     if "content_format" in modify_data and modify_data["content_format"] is not None:
@@ -1079,7 +1072,7 @@ class EvolveReportTool(MCPTool):
                             section.content_format = modify_data["content_format"]
                             operations_performed.append("content_format")
                         except Exception as e:
-                            errors.append(f"Failed to update content_format: {str(e)}")
+                            errors.append(f"Failed to update content_format: {e!s}")
 
                     # Modify order
                     if "order" in modify_data and modify_data["order"] is not None:
@@ -1091,7 +1084,7 @@ class EvolveReportTool(MCPTool):
                             section.order = modify_data["order"]
                             operations_performed.append("order")
                         except Exception as e:
-                            errors.append(f"Failed to update order: {str(e)}")
+                            errors.append(f"Failed to update order: {e!s}")
 
                     # Add insight_ids
                     if "insight_ids_to_add" in modify_data and modify_data["insight_ids_to_add"] is not None:
@@ -1130,7 +1123,7 @@ class EvolveReportTool(MCPTool):
                                     f"insight_ids_to_add ({added_count} added, {skipped_count} already present)"
                                 )
                         except Exception as e:
-                            errors.append(f"Failed to add insight_ids: {str(e)}")
+                            errors.append(f"Failed to add insight_ids: {e!s}")
 
                     # Inline insights for modifications
                     if "insights" in modify_data and modify_data["insights"] is not None:
@@ -1145,7 +1138,7 @@ class EvolveReportTool(MCPTool):
                                     section.insight_ids.append(inline_id)
                             operations_performed.append(f"inline_insights_added ({len(inline_ids)})")
                         except Exception as e:
-                            errors.append(f"Failed to create inline insights: {str(e)}")
+                            errors.append(f"Failed to create inline insights: {e!s}")
 
                     # Remove insight_ids
                     if "insight_ids_to_remove" in modify_data and modify_data["insight_ids_to_remove"] is not None:
@@ -1174,7 +1167,7 @@ class EvolveReportTool(MCPTool):
                                     f"insight_ids_to_remove ({removed_count} removed, {skipped_count} not present)"
                                 )
                         except Exception as e:
-                            errors.append(f"Failed to remove insight_ids: {str(e)}")
+                            errors.append(f"Failed to remove insight_ids: {e!s}")
 
                     # Report errors if any occurred
                     if errors:
@@ -1219,7 +1212,7 @@ class EvolveReportTool(MCPTool):
 
         return new_outline, apply_stats
 
-    def _format_validation_errors(self, errors: List[Any]) -> Dict[str, Any]:
+    def _format_validation_errors(self, errors: list[Any]) -> dict[str, Any]:
         """Format Pydantic validation errors with hints and examples.
 
         Args:
@@ -1228,9 +1221,9 @@ class EvolveReportTool(MCPTool):
         Returns:
             Dict with errors, hints, examples, and schema help
         """
-        formatted_errors: list[Dict[str, Any]] = []
+        formatted_errors: list[dict[str, Any]] = []
         hints: list[str] = []
-        examples: Dict[str, Any] = {}
+        examples: dict[str, Any] = {}
 
         # Track which operation types had errors for targeted schema help
         operations_with_errors = set()
@@ -1283,7 +1276,7 @@ class EvolveReportTool(MCPTool):
             "documentation": "https://github.com/Evan-Kim2028/igloo-mcp/blob/main/docs/living-reports/user-guide.md",
         }
 
-    def _get_schema_examples_for_operations(self, operations: set[str]) -> Dict[str, Any]:
+    def _get_schema_examples_for_operations(self, operations: set[str]) -> dict[str, Any]:
         """Get schema examples for specific operations that had errors.
 
         Args:
@@ -1292,7 +1285,7 @@ class EvolveReportTool(MCPTool):
         Returns:
             Dict with schema examples for each operation type
         """
-        examples: Dict[str, Any] = {}
+        examples: dict[str, Any] = {}
 
         if "insights_to_add" in operations:
             examples["insights_to_add"] = [
@@ -1336,9 +1329,9 @@ class EvolveReportTool(MCPTool):
 
         return examples
 
-    def _calculate_outline_warnings(self, outline: Outline) -> List[str]:
+    def _calculate_outline_warnings(self, outline: Outline) -> list[str]:
         """Calculate warnings based on the post-change outline state."""
-        warnings: List[str] = []
+        warnings: list[str] = []
         referenced_insights = {insight_id for section in outline.sections for insight_id in section.insight_ids}
         all_insight_ids = {insight.insight_id for insight in outline.insights}
 
@@ -1352,7 +1345,7 @@ class EvolveReportTool(MCPTool):
 
         return warnings
 
-    def _calculate_preview(self, changes: ProposedChanges, outline: Outline) -> Dict[str, Any]:
+    def _calculate_preview(self, changes: ProposedChanges, outline: Outline) -> dict[str, Any]:
         """Calculate preview of changes that would be applied.
 
         Args:
@@ -1373,7 +1366,7 @@ class EvolveReportTool(MCPTool):
             "status_change": changes.status_change,
         }
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Evolve Report Parameters",

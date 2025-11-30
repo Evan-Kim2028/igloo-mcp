@@ -11,9 +11,9 @@ import os
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import anyio
 
@@ -86,7 +86,7 @@ from .schema_utils import (
 logger = get_logger(__name__)
 
 
-def _write_sql_artifact(artifact_root: Path, sql_sha256: str, sql: str) -> Optional[Path]:
+def _write_sql_artifact(artifact_root: Path, sql_sha256: str, sql: str) -> Path | None:
     """Write SQL statement to artifact storage with SHA-256 naming.
 
     Persists SQL text to disk for audit trails and query history correlation.
@@ -121,7 +121,7 @@ def _write_sql_artifact(artifact_root: Path, sql_sha256: str, sql: str) -> Optio
         return None
 
 
-def _relative_sql_path(repo_root: Path, artifact_path: Optional[Path]) -> Optional[str]:
+def _relative_sql_path(repo_root: Path, artifact_path: Path | None) -> str | None:
     """Compute relative path from repo root to SQL artifact.
 
     Used for portable artifact references in history logs and reports.
@@ -159,7 +159,7 @@ RESULT_MODE_SAMPLE_SIZE = 10  # Default sample size for 'sample' mode
 RESULT_MODE_SUMMARY_SAMPLE_SIZE = 5  # Sample size for 'summary' mode
 
 
-def _build_hint(rowcount: int, sample_size: int) -> Optional[str]:
+def _build_hint(rowcount: int, sample_size: int) -> str | None:
     """Build helpful hint for result mode based on actual vs sample size.
 
     Args:
@@ -176,7 +176,7 @@ def _build_hint(rowcount: int, sample_size: int) -> Optional[str]:
     return f"Showing first {sample_size} of {rowcount} rows. Use result_mode='full' to retrieve all rows"
 
 
-def _apply_result_mode(result: Dict[str, Any], mode: str) -> Dict[str, Any]:
+def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
     """Apply result_mode filtering to reduce response size for token efficiency.
 
     This function modifies the query result based on the requested mode to reduce
@@ -268,7 +268,7 @@ class ExecuteQueryTool(MCPTool):
         config: Config,
         snowflake_service: Any,
         query_service: QueryService,
-        health_monitor: Optional[MCPHealthMonitor] = None,
+        health_monitor: MCPHealthMonitor | None = None,
     ):
         """Initialize execute query tool.
 
@@ -302,7 +302,7 @@ class ExecuteQueryTool(MCPTool):
     def name(self) -> str:
         return "execute_query"
 
-    def _init_artifact_root(self) -> tuple[Optional[Path], list[str]]:
+    def _init_artifact_root(self) -> tuple[Path | None, list[str]]:
         warnings: list[str] = []
         raw = os.environ.get("IGLOO_MCP_ARTIFACT_ROOT")
         try:
@@ -330,7 +330,7 @@ class ExecuteQueryTool(MCPTool):
         warnings.append("Artifact root unavailable; SQL artifacts and cache will be disabled.")
         return None, warnings
 
-    def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Optional[Path]:
+    def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Path | None:
         if self._artifact_root is None:
             self._transient_audit_warnings.append("SQL artifact root is unavailable; statement text was not persisted.")
             return None
@@ -339,7 +339,7 @@ class ExecuteQueryTool(MCPTool):
             self._transient_audit_warnings.append("Failed to persist SQL text for audit history.")
         return artifact_path
 
-    def _resolve_cache_context(self, overrides: Dict[str, Optional[str]]) -> tuple[Dict[str, Optional[str]], bool]:
+    def _resolve_cache_context(self, overrides: dict[str, str | None]) -> tuple[dict[str, str | None], bool]:
         """Return effective session context for caching and a flag indicating success.
 
         When caching is enabled we snapshot the Snowflake session to capture the
@@ -347,16 +347,18 @@ class ExecuteQueryTool(MCPTool):
         overrides provided by the caller. If the snapshot fails we record a warning
         and signal the caller to skip cache usage for this execution.
         """
-        snapshot_values: Dict[str, Optional[str]] = {}
+        snapshot_values: dict[str, str | None] = {}
         success = False
 
         try:
             lock = ensure_session_lock(self.snowflake_service)
-            with lock:
-                with self.snowflake_service.get_connection(
+            with (
+                lock,
+                self.snowflake_service.get_connection(
                     use_dict_cursor=True,
-                ) as (_, cursor):
-                    snapshot = snapshot_session(cursor)
+                ) as (_, cursor),
+            ):
+                snapshot = snapshot_session(cursor)
             snapshot_values = {
                 "warehouse": snapshot.warehouse,
                 "database": snapshot.database,
@@ -369,7 +371,7 @@ class ExecuteQueryTool(MCPTool):
                 "Failed to snapshot session defaults; skipping cache for this execution."
             )
 
-        effective: Dict[str, Optional[str]] = {}
+        effective: dict[str, str | None] = {}
         for key in ("warehouse", "database", "schema", "role"):
             override_value = overrides.get(key)
             if override_value is not None:
@@ -439,7 +441,7 @@ class ExecuteQueryTool(MCPTool):
                 ],
             )
 
-    def _ensure_default_insights(self, result: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], List[str]]:
+    def _ensure_default_insights(self, result: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
         key_metrics = result.get("key_metrics")
         insights = result.get("insights")
         rows = result.get("rows")
@@ -462,20 +464,20 @@ class ExecuteQueryTool(MCPTool):
 
     @staticmethod
     def _iso_timestamp(epoch: float) -> str:
-        return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+        return datetime.fromtimestamp(epoch, tz=UTC).isoformat()
 
     def _build_audit_info(
         self,
         *,
         execution_id: str,
-        sql_sha256: Optional[str],
-        history_artifacts: Dict[str, str],
-        cache_key: Optional[str],
-        cache_hit_metadata: Optional[Dict[str, Any]] = None,
-        session_context: Optional[Dict[str, Optional[str]]] = None,
-        columns: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
-        info: Dict[str, Any] = {
+        sql_sha256: str | None,
+        history_artifacts: dict[str, str],
+        cache_key: str | None,
+        cache_hit_metadata: dict[str, Any] | None = None,
+        session_context: dict[str, str | None] | None = None,
+        columns: list[str] | None = None,
+    ) -> dict[str, Any]:
+        info: dict[str, Any] = {
             "execution_id": execution_id,
             "history_enabled": self.history.enabled and not self.history.disabled,
             "history_path": str(self.history.path) if self.history.path else None,
@@ -518,7 +520,7 @@ class ExecuteQueryTool(MCPTool):
         return ["sql", "execute", "analytics", "warehouse"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Preview recent sales rows",
@@ -554,7 +556,7 @@ class ExecuteQueryTool(MCPTool):
             },
         ]
 
-    def _extract_source_info(self, objects: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _extract_source_info(self, objects: list[dict[str, Any]]) -> dict[str, Any]:
         """Extract structured source info from referenced objects."""
         source_databases = set()
         tables = []
@@ -583,7 +585,7 @@ class ExecuteQueryTool(MCPTool):
             "tables": sorted(tables),
         }
 
-    def _enrich_payload_with_objects(self, payload: Dict[str, Any], referenced_objects: List[Dict[str, Any]]) -> None:
+    def _enrich_payload_with_objects(self, payload: dict[str, Any], referenced_objects: list[dict[str, Any]]) -> None:
         """Enrich payload with objects and extracted source info."""
         if referenced_objects:
             payload["objects"] = referenced_objects
@@ -593,22 +595,22 @@ class ExecuteQueryTool(MCPTool):
     async def _execute_impl(
         self,
         statement: str,
-        warehouse: Optional[str] = None,
-        database: Optional[str] = None,
-        schema: Optional[str] = None,
-        role: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        warehouse: str | None = None,
+        database: str | None = None,
+        schema: str | None = None,
+        role: str | None = None,
+        timeout_seconds: int | None = None,
         verbose_errors: bool = False,
-        reason: Optional[str] = None,
-        normalized_insight: Optional[Insight] = None,
+        reason: str | None = None,
+        normalized_insight: Insight | None = None,
         result_mode: str = "full",
         ctx: Context | None = None,
         *,
-        execution_id_override: Optional[str] = None,
-        sql_sha_override: Optional[str] = None,
+        execution_id_override: str | None = None,
+        sql_sha_override: str | None = None,
         validate_profile: bool = True,
         validate_statement: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Internal execute_query implementation shared by sync + async flows."""
 
         if validate_profile:
@@ -650,7 +652,7 @@ class ExecuteQueryTool(MCPTool):
         requested_ts = time.time()
         sql_sha256 = sql_sha_override or hashlib.sha256(statement.encode("utf-8")).hexdigest()
         referenced_objects = extract_query_objects(statement)
-        history_artifacts: Dict[str, str] = {}
+        history_artifacts: dict[str, str] = {}
         artifact_path = self._persist_sql_artifact(sql_sha256, statement)
         if artifact_path is not None:
             sql_rel = _relative_sql_path(self._repo_root, artifact_path)
@@ -659,9 +661,9 @@ class ExecuteQueryTool(MCPTool):
 
         timeout = int(timeout_seconds or getattr(self.config, "timeout_seconds", 120))  # type: ignore[arg-type]
 
-        cache_key: Optional[str] = None
-        cache_hit_metadata: Optional[Dict[str, Any]] = None
-        cache_rows: Optional[list[Dict[str, Any]]] = None
+        cache_key: str | None = None
+        cache_hit_metadata: dict[str, Any] | None = None
+        cache_rows: list[dict[str, Any]] | None = None
         if self._cache_enabled and cache_context_ready:
             try:
                 cache_key = self.cache.compute_cache_key(
@@ -745,7 +747,7 @@ class ExecuteQueryTool(MCPTool):
 
             key_metrics, derived_insights = self._ensure_default_insights(result)
 
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 "ts": requested_ts,
                 "timestamp": self._iso_timestamp(requested_ts),
                 "execution_id": execution_id,
@@ -823,7 +825,7 @@ class ExecuteQueryTool(MCPTool):
 
             # Persist success history (lightweight JSONL)
             session_context = result.get("session_context") or effective_context
-            manifest_path: Optional[Path] = None
+            manifest_path: Path | None = None
             if self._cache_enabled and cache_key and cache_context_ready:
                 try:
                     # Store truncated insight in cache manifest
@@ -1060,19 +1062,19 @@ class ExecuteQueryTool(MCPTool):
     async def execute(
         self,
         statement: str,
-        warehouse: Optional[str] = None,
-        database: Optional[str] = None,
-        schema: Optional[str] = None,
-        role: Optional[str] = None,
-        timeout_seconds: Optional[int] = None,
+        warehouse: str | None = None,
+        database: str | None = None,
+        schema: str | None = None,
+        role: str | None = None,
+        timeout_seconds: int | None = None,
         verbose_errors: bool = False,
-        reason: Optional[str] = None,
-        post_query_insight: Optional[Dict[str, Any] | str] = None,
-        result_mode: Optional[str] = None,
-        response_mode: Optional[str] = None,
+        reason: str | None = None,
+        post_query_insight: dict[str, Any] | str | None = None,
+        result_mode: str | None = None,
+        response_mode: str | None = None,
         ctx: Context | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute SQL query against Snowflake with validation and token optimization.
 
         This is the main entry point for SQL query execution. It provides:
@@ -1121,7 +1123,7 @@ class ExecuteQueryTool(MCPTool):
         if "metric_insight" in kwargs:
             raise TypeError("execute_query no longer accepts 'metric_insight'; use 'post_query_insight' instead")
 
-        normalized_insight: Optional[Insight] = None
+        normalized_insight: Insight | None = None
         if post_query_insight is not None:
             normalized_insight = normalize_insight(post_query_insight)
 
@@ -1134,7 +1136,7 @@ class ExecuteQueryTool(MCPTool):
             default="full",
         )
 
-        coerced_timeout: Optional[int] = None
+        coerced_timeout: int | None = None
         if timeout_seconds is not None:
             if isinstance(timeout_seconds, bool):
                 raise TypeError("timeout_seconds must be an integer value in seconds.")
@@ -1199,10 +1201,10 @@ class ExecuteQueryTool(MCPTool):
     def _execute_query_sync(
         self,
         statement: str,
-        overrides: Dict[str, Any],
+        overrides: dict[str, Any],
         timeout: int,
-        reason: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         """Execute query synchronously using Snowflake service with robust timeout/cancel.
 
         This path uses the official MCP Snowflake service to obtain a connector
@@ -1253,319 +1255,319 @@ class ExecuteQueryTool(MCPTool):
         lock = ensure_session_lock(self.snowflake_service)
         started = time.time()
 
-        with lock:
-            with self.snowflake_service.get_connection(
+        with (
+            lock,
+            self.snowflake_service.get_connection(
                 use_dict_cursor=True,
-            ) as (_, cursor):
-                original = snapshot_session(cursor)
+            ) as (_, cursor),
+        ):
+            original = snapshot_session(cursor)
 
-                result_box: Dict[str, Any] = {
-                    "rows": None,
-                    "rowcount": None,
-                    "error": None,
-                    "session": None,
-                    "columns": None,
-                }
-                query_id_box: Dict[str, Optional[str]] = {"id": None}
-                done = threading.Event()
+            result_box: dict[str, Any] = {
+                "rows": None,
+                "rowcount": None,
+                "error": None,
+                "session": None,
+                "columns": None,
+            }
+            query_id_box: dict[str, str | None] = {"id": None}
+            done = threading.Event()
 
-                def _validate_session_parameter_name(name: str) -> bool:
-                    """Validate that session parameter name is in the whitelist."""
-                    return name.upper() in ALLOWED_SESSION_PARAMETERS
+            def _validate_session_parameter_name(name: str) -> bool:
+                """Validate that session parameter name is in the whitelist."""
+                return name.upper() in ALLOWED_SESSION_PARAMETERS
 
-                def _escape_sql_identifier(identifier: str) -> str:
-                    r"""Escape SQL identifier for use in LIKE clause.
+            def _escape_sql_identifier(identifier: str) -> str:
+                r"""Escape SQL identifier for use in LIKE clause.
 
-                    Escapes:
-                    - Single quotes (' -> '')
-                    - LIKE wildcards (% -> \%, _ -> \_)
+                Escapes:
+                - Single quotes (' -> '')
+                - LIKE wildcards (% -> \%, _ -> \_)
 
-                    Args:
-                        identifier: SQL identifier to escape
+                Args:
+                    identifier: SQL identifier to escape
 
-                    Returns:
-                        Escaped identifier safe for LIKE clause
-                    """
-                    # Escape single quotes first
-                    escaped = identifier.replace("'", "''")
-                    # Escape LIKE wildcards (must escape backslash first if present)
-                    escaped = escaped.replace("\\", "\\\\")
-                    escaped = escaped.replace("%", "\\%")
-                    escaped = escaped.replace("_", "\\_")
-                    return escaped
+                Returns:
+                    Escaped identifier safe for LIKE clause
+                """
+                # Escape single quotes first
+                escaped = identifier.replace("'", "''")
+                # Escape LIKE wildcards (must escape backslash first if present)
+                escaped = escaped.replace("\\", "\\\\")
+                escaped = escaped.replace("%", "\\%")
+                escaped = escaped.replace("_", "\\_")
+                return escaped
 
-                def _escape_tag(tag_value: str) -> str:
-                    """Escape tag value for use in SQL string literal."""
-                    return tag_value.replace("'", "''")
+            def _escape_tag(tag_value: str) -> str:
+                """Escape tag value for use in SQL string literal."""
+                return tag_value.replace("'", "''")
 
-                def _escape_sql_value(value: Any) -> str:
-                    """Escape SQL value for use in SQL statement."""
-                    if isinstance(value, (int, float)):
-                        return str(value)
-                    value_str = str(value)
-                    # Escape single quotes and wrap in quotes
-                    return f"'{value_str.replace(chr(39), chr(39) + chr(39))}'"
+            def _escape_sql_value(value: Any) -> str:
+                """Escape SQL value for use in SQL statement."""
+                if isinstance(value, (int, float)):
+                    return str(value)
+                value_str = str(value)
+                # Escape single quotes and wrap in quotes
+                return f"'{value_str.replace(chr(39), chr(39) + chr(39))}'"
 
-                def _get_session_parameter(name: str) -> Optional[str]:
-                    """Get session parameter value with SQL injection protection."""
-                    try:
-                        # Validate parameter name
-                        if not _validate_session_parameter_name(name):
-                            logger.warning(f"Attempted to access invalid session parameter: {name}")
-                            return None
-                        # Escape the name for LIKE clause
-                        escaped_name = _escape_sql_identifier(name)
-                        cursor.execute(f"SHOW PARAMETERS LIKE '{escaped_name}' IN SESSION")
-                        rows = cursor.fetchall() or []
-                        if not rows:
-                            return None
-                        for row in rows:
-                            level = (row.get("level") or row.get("LEVEL") or "").upper()
-                            if level not in {"", "SESSION", "USER"}:
-                                continue
-                            value = row.get("value") or row.get("VALUE")
-                            if value in (None, ""):
-                                return None
-                            return str(value)
-                        # Fallback to first row if level filtering failed
-                        first = rows[0]
-                        value = first.get("value") or first.get("VALUE")
+            def _get_session_parameter(name: str) -> str | None:
+                """Get session parameter value with SQL injection protection."""
+                try:
+                    # Validate parameter name
+                    if not _validate_session_parameter_name(name):
+                        logger.warning(f"Attempted to access invalid session parameter: {name}")
+                        return None
+                    # Escape the name for LIKE clause
+                    escaped_name = _escape_sql_identifier(name)
+                    cursor.execute(f"SHOW PARAMETERS LIKE '{escaped_name}' IN SESSION")
+                    rows = cursor.fetchall() or []
+                    if not rows:
+                        return None
+                    for row in rows:
+                        level = (row.get("level") or row.get("LEVEL") or "").upper()
+                        if level not in {"", "SESSION", "USER"}:
+                            continue
+                        value = row.get("value") or row.get("VALUE")
                         if value in (None, ""):
                             return None
                         return str(value)
-                    except Exception:
-                        logger.debug(f"Failed to get session parameter {name}", exc_info=True)
+                    # Fallback to first row if level filtering failed
+                    first = rows[0]
+                    value = first.get("value") or first.get("VALUE")
+                    if value in (None, ""):
                         return None
+                    return str(value)
+                except Exception:
+                    logger.debug(f"Failed to get session parameter {name}", exc_info=True)
+                    return None
 
-                def _set_session_parameter(name: str, value: Any) -> None:
-                    """Set session parameter with SQL injection protection."""
-                    try:
-                        # Validate parameter name against whitelist
-                        if not _validate_session_parameter_name(name):
-                            logger.warning(f"Attempted to set invalid session parameter: {name}")
-                            return
+            def _set_session_parameter(name: str, value: Any) -> None:
+                """Set session parameter with SQL injection protection."""
+                try:
+                    # Validate parameter name against whitelist
+                    if not _validate_session_parameter_name(name):
+                        logger.warning(f"Attempted to set invalid session parameter: {name}")
+                        return
 
-                        name_upper = name.upper()
-                        if name_upper == "QUERY_TAG":
-                            if value:
-                                escaped = _escape_tag(str(value))
-                                cursor.execute(f"ALTER SESSION SET QUERY_TAG = '{escaped}'")
-                            else:
-                                cursor.execute("ALTER SESSION UNSET QUERY_TAG")
-                        elif name_upper == "STATEMENT_TIMEOUT_IN_SECONDS":
-                            # Validate value is numeric
-                            try:
-                                timeout_value = int(value)
-                                cursor.execute(f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {timeout_value}")
-                            except (ValueError, TypeError):
-                                logger.warning(f"Invalid timeout value for STATEMENT_TIMEOUT_IN_SECONDS: {value}")
+                    name_upper = name.upper()
+                    if name_upper == "QUERY_TAG":
+                        if value:
+                            escaped = _escape_tag(str(value))
+                            cursor.execute(f"ALTER SESSION SET QUERY_TAG = '{escaped}'")
                         else:
-                            # For other parameters, escape both name and value
-                            escaped_value = _escape_sql_value(value)
-                            cursor.execute(f"ALTER SESSION SET {name_upper} = {escaped_value}")
-                    except Exception:
-                        # Session parameter adjustments are best-effort; ignore failures.
-                        logger.debug(f"Failed to set session parameter {name}", exc_info=True)
-                        pass
+                            cursor.execute("ALTER SESSION UNSET QUERY_TAG")
+                    elif name_upper == "STATEMENT_TIMEOUT_IN_SECONDS":
+                        # Validate value is numeric
+                        try:
+                            timeout_value = int(value)
+                            cursor.execute(f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {timeout_value}")
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid timeout value for STATEMENT_TIMEOUT_IN_SECONDS: {value}")
+                    else:
+                        # For other parameters, escape both name and value
+                        escaped_value = _escape_sql_value(value)
+                        cursor.execute(f"ALTER SESSION SET {name_upper} = {escaped_value}")
+                except Exception:
+                    # Session parameter adjustments are best-effort; ignore failures.
+                    logger.debug(f"Failed to set session parameter {name}", exc_info=True)
+                    pass
 
-                def _restore_session_parameters(
-                    previous: Dict[str, Optional[str]],
-                ) -> None:
-                    """Restore session parameters with SQL injection protection."""
-                    try:
-                        prev_tag = previous.get("QUERY_TAG")
-                        if "QUERY_TAG" in params:
-                            if prev_tag:
-                                escaped = _escape_tag(prev_tag)
-                                cursor.execute(f"ALTER SESSION SET QUERY_TAG = '{escaped}'")
-                            else:
-                                cursor.execute("ALTER SESSION UNSET QUERY_TAG")
-                    except Exception:
-                        logger.debug(
-                            "Failed to restore QUERY_TAG session parameter",
-                            exc_info=True,
+            def _restore_session_parameters(
+                previous: dict[str, str | None],
+            ) -> None:
+                """Restore session parameters with SQL injection protection."""
+                try:
+                    prev_tag = previous.get("QUERY_TAG")
+                    if "QUERY_TAG" in params:
+                        if prev_tag:
+                            escaped = _escape_tag(prev_tag)
+                            cursor.execute(f"ALTER SESSION SET QUERY_TAG = '{escaped}'")
+                        else:
+                            cursor.execute("ALTER SESSION UNSET QUERY_TAG")
+                except Exception:
+                    logger.debug(
+                        "Failed to restore QUERY_TAG session parameter",
+                        exc_info=True,
+                    )
+                    pass
+
+                try:
+                    prev_timeout = previous.get("STATEMENT_TIMEOUT_IN_SECONDS")
+                    if "STATEMENT_TIMEOUT_IN_SECONDS" in params:
+                        if prev_timeout and prev_timeout.isdigit():
+                            cursor.execute(f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {int(prev_timeout)}")
+                        else:
+                            cursor.execute("ALTER SESSION UNSET STATEMENT_TIMEOUT_IN_SECONDS")
+                except Exception:
+                    pass
+
+            def run_query() -> None:
+                try:
+                    # Apply session overrides (warehouse/database/schema/role)
+                    if overrides:
+                        apply_session_context(cursor, overrides)
+                    previous_parameters: dict[str, str | None] = {}
+                    if "QUERY_TAG" in params:
+                        previous_parameters["QUERY_TAG"] = _get_session_parameter("QUERY_TAG")
+                        _set_session_parameter("QUERY_TAG", params["QUERY_TAG"])
+                    if "STATEMENT_TIMEOUT_IN_SECONDS" in params:
+                        previous_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] = _get_session_parameter(
+                            "STATEMENT_TIMEOUT_IN_SECONDS"
                         )
-                        pass
-
+                        _set_session_parameter(
+                            "STATEMENT_TIMEOUT_IN_SECONDS",
+                            params["STATEMENT_TIMEOUT_IN_SECONDS"],
+                        )
+                    cursor.execute(statement)
+                    # Capture Snowflake query id when available
                     try:
-                        prev_timeout = previous.get("STATEMENT_TIMEOUT_IN_SECONDS")
-                        if "STATEMENT_TIMEOUT_IN_SECONDS" in params:
-                            if prev_timeout and prev_timeout.isdigit():
-                                cursor.execute(
-                                    "ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {}".format(int(prev_timeout))
-                                )
+                        qid = getattr(cursor, "sfqid", None)
+                    except Exception:
+                        qid = None
+                    query_id_box["id"] = qid
+                    # Only fetch rows if a result set is present
+                    has_result_set = getattr(cursor, "description", None) is not None
+                    if has_result_set:
+                        raw_rows = cursor.fetchall()
+                        description = getattr(cursor, "description", None) or []
+                        column_names = []
+                        for idx, col in enumerate(description):
+                            name = None
+                            if isinstance(col, (list, tuple)) and col:
+                                name = col[0]
                             else:
-                                cursor.execute("ALTER SESSION UNSET STATEMENT_TIMEOUT_IN_SECONDS")
+                                name = getattr(col, "name", None) or getattr(col, "column_name", None)
+                            if not name:
+                                name = f"column_{idx}"
+                            column_names.append(str(name))
+
+                        processed_rows = []
+                        for raw in raw_rows:
+                            if isinstance(raw, dict):
+                                record = raw
+                            elif hasattr(raw, "_asdict"):
+                                record = raw._asdict()  # type: ignore[assignment]
+                            elif isinstance(raw, (list, tuple)):
+                                record = {}
+                                for idx, value in enumerate(raw):
+                                    key = column_names[idx] if idx < len(column_names) else f"column_{idx}"
+                                    record[key] = value
+                            else:
+                                # Fallback for scalar rows or mismatched metadata
+                                record = {"value": raw}
+
+                            processed_rows.append(json_compatible(record))
+
+                        result_box["rows"] = processed_rows
+                        result_box["rowcount"] = len(processed_rows)
+                        result_box["columns"] = column_names
+
+                        # Smart truncation for large outputs to prevent context window overflow
+                        if len(processed_rows) > RESULT_TRUNCATION_THRESHOLD:
+                            import json
+
+                            # Sample data size estimation
+                            sample_size = len(json.dumps(processed_rows[:100]))
+                            estimated_total_size = sample_size * (len(processed_rows) / 100)
+
+                            # If estimated output is too large, truncate with metadata
+                            size_limit_bytes = RESULT_SIZE_LIMIT_MB * 1024 * 1024
+                            if estimated_total_size > size_limit_bytes:
+                                original_count = len(processed_rows)
+                                truncated_rows = processed_rows[:RESULT_KEEP_FIRST_ROWS]
+                                last_rows = processed_rows[-RESULT_KEEP_LAST_ROWS:]
+
+                                result_box["rows"] = (
+                                    truncated_rows
+                                    + [
+                                        {
+                                            "__truncated__": True,
+                                            "__message__": "Large result set truncated",
+                                        }
+                                    ]
+                                    + last_rows
+                                )
+                                result_box["truncated"] = True
+                                result_box["original_rowcount"] = original_count
+                                result_box["returned_rowcount"] = len(result_box["rows"])
+                                result_box["truncation_info"] = {
+                                    "original_size_mb": round(estimated_total_size / (1024 * 1024), 2),
+                                    "truncated_for_context_window": True,
+                                    "export_suggestions": [
+                                        "Consider using LIMIT clause in your query",
+                                        "Export to CSV/Parquet: use warehouse with more memory",
+                                        "Add WHERE clause to filter data early",
+                                    ],
+                                }
+                    else:
+                        # DML/DDL: no result set, use rowcount from cursor if available
+                        rc = getattr(cursor, "rowcount", 0)
+                        try:
+                            # Normalize negative/None to 0
+                            rc = int(rc) if rc and int(rc) >= 0 else 0
+                        except Exception:
+                            rc = 0
+                        result_box["rows"] = []
+                        result_box["rowcount"] = rc
+                except Exception as exc:  # capture to re-raise on main thread
+                    result_box["error"] = exc
+                finally:
+                    try:
+                        session_snapshot = snapshot_session(cursor)
+                        result_box["session"] = session_snapshot.to_mapping()
+                    except Exception:
+                        result_box["session"] = None
+                    try:
+                        _restore_session_parameters(previous_parameters)
                     except Exception:
                         pass
-
-                def run_query() -> None:
                     try:
-                        # Apply session overrides (warehouse/database/schema/role)
-                        if overrides:
-                            apply_session_context(cursor, overrides)
-                        previous_parameters: Dict[str, Optional[str]] = {}
-                        if "QUERY_TAG" in params:
-                            previous_parameters["QUERY_TAG"] = _get_session_parameter("QUERY_TAG")
-                            _set_session_parameter("QUERY_TAG", params["QUERY_TAG"])
-                        if "STATEMENT_TIMEOUT_IN_SECONDS" in params:
-                            previous_parameters["STATEMENT_TIMEOUT_IN_SECONDS"] = _get_session_parameter(
-                                "STATEMENT_TIMEOUT_IN_SECONDS"
-                            )
-                            _set_session_parameter(
-                                "STATEMENT_TIMEOUT_IN_SECONDS",
-                                params["STATEMENT_TIMEOUT_IN_SECONDS"],
-                            )
-                        cursor.execute(statement)
-                        # Capture Snowflake query id when available
-                        try:
-                            qid = getattr(cursor, "sfqid", None)
-                        except Exception:
-                            qid = None
-                        query_id_box["id"] = qid
-                        # Only fetch rows if a result set is present
-                        has_result_set = getattr(cursor, "description", None) is not None
-                        if has_result_set:
-                            raw_rows = cursor.fetchall()
-                            description = getattr(cursor, "description", None) or []
-                            column_names = []
-                            for idx, col in enumerate(description):
-                                name = None
-                                if isinstance(col, (list, tuple)) and col:
-                                    name = col[0]
-                                else:
-                                    name = getattr(col, "name", None) or getattr(col, "column_name", None)
-                                if not name:
-                                    name = f"column_{idx}"
-                                column_names.append(str(name))
-
-                            processed_rows = []
-                            for raw in raw_rows:
-                                if isinstance(raw, dict):
-                                    record = raw
-                                elif hasattr(raw, "_asdict"):
-                                    record = raw._asdict()  # type: ignore[assignment]
-                                elif isinstance(raw, (list, tuple)):
-                                    record = {}
-                                    for idx, value in enumerate(raw):
-                                        key = column_names[idx] if idx < len(column_names) else f"column_{idx}"
-                                        record[key] = value
-                                else:
-                                    # Fallback for scalar rows or mismatched metadata
-                                    record = {"value": raw}
-
-                                processed_rows.append(json_compatible(record))
-
-                            result_box["rows"] = processed_rows
-                            result_box["rowcount"] = len(processed_rows)
-                            result_box["columns"] = column_names
-
-                            # Smart truncation for large outputs to prevent context window overflow
-                            if len(processed_rows) > RESULT_TRUNCATION_THRESHOLD:
-                                import json
-
-                                # Sample data size estimation
-                                sample_size = len(json.dumps(processed_rows[:100]))
-                                estimated_total_size = sample_size * (len(processed_rows) / 100)
-
-                                # If estimated output is too large, truncate with metadata
-                                size_limit_bytes = RESULT_SIZE_LIMIT_MB * 1024 * 1024
-                                if estimated_total_size > size_limit_bytes:
-                                    original_count = len(processed_rows)
-                                    truncated_rows = processed_rows[:RESULT_KEEP_FIRST_ROWS]
-                                    last_rows = processed_rows[-RESULT_KEEP_LAST_ROWS:]
-
-                                    result_box["rows"] = (
-                                        truncated_rows
-                                        + [
-                                            {
-                                                "__truncated__": True,
-                                                "__message__": "Large result set truncated",
-                                            }
-                                        ]
-                                        + last_rows
-                                    )
-                                    result_box["truncated"] = True
-                                    result_box["original_rowcount"] = original_count
-                                    result_box["returned_rowcount"] = len(result_box["rows"])
-                                    result_box["truncation_info"] = {
-                                        "original_size_mb": round(estimated_total_size / (1024 * 1024), 2),
-                                        "truncated_for_context_window": True,
-                                        "export_suggestions": [
-                                            "Consider using LIMIT clause in your query",
-                                            "Export to CSV/Parquet: use warehouse with more memory",
-                                            "Add WHERE clause to filter data early",
-                                        ],
-                                    }
-                        else:
-                            # DML/DDL: no result set, use rowcount from cursor if available
-                            rc = getattr(cursor, "rowcount", 0)
-                            try:
-                                # Normalize negative/None to 0
-                                rc = int(rc) if rc and int(rc) >= 0 else 0
-                            except Exception:
-                                rc = 0
-                            result_box["rows"] = []
-                            result_box["rowcount"] = rc
-                    except Exception as exc:  # capture to re-raise on main thread
-                        result_box["error"] = exc
-                    finally:
-                        try:
-                            session_snapshot = snapshot_session(cursor)
-                            result_box["session"] = session_snapshot.to_mapping()
-                        except Exception:
-                            result_box["session"] = None
-                        try:
-                            _restore_session_parameters(previous_parameters)
-                        except Exception:
-                            pass
-                        try:
-                            restore_session_context(cursor, original)
-                        except Exception:
-                            pass
-                        done.set()
-
-                worker = threading.Thread(target=run_query, daemon=True)
-                worker.start()
-
-                finished = done.wait(timeout)
-                if not finished:
-                    # Local timeout: cancel the running statement server-side
-                    try:
-                        cursor.cancel()
+                        restore_session_context(cursor, original)
                     except Exception:
-                        # Best-effort. If cancel fails, we still time out.
                         pass
+                    done.set()
 
-                    # Give a short grace period for cancellation to propagate
-                    done.wait(5)
-                    # Signal timeout to caller (will be caught and wrapped above)
-                    raise TimeoutError(f"Query execution exceeded timeout ({timeout}s) and was cancelled")
+            worker = threading.Thread(target=run_query, daemon=True)
+            worker.start()
 
-                # Worker finished: process result
-                if result_box["error"] is not None:
-                    raise result_box["error"]  # type: ignore[misc]
+            finished = done.wait(timeout)
+            if not finished:
+                # Local timeout: cancel the running statement server-side
+                try:
+                    cursor.cancel()
+                except Exception:
+                    # Best-effort. If cancel fails, we still time out.
+                    pass
 
-                rows = result_box["rows"] or []
-                rowcount = result_box.get("rowcount")
-                if rowcount is None:
-                    rowcount = len(rows)
-                duration_ms = int((time.time() - started) * 1000)
-                return {
-                    "statement": statement,
-                    "rowcount": rowcount,
-                    "rows": rows,
-                    "query_id": query_id_box.get("id"),
-                    "duration_ms": duration_ms,
-                    "session_context": result_box.get("session"),
-                    "columns": result_box.get("columns"),
-                    "truncated": result_box.get("truncated"),
-                    "original_rowcount": result_box.get("original_rowcount"),
-                    "returned_rowcount": result_box.get("returned_rowcount"),
-                    "truncation_info": result_box.get("truncation_info"),
-                }
+                # Give a short grace period for cancellation to propagate
+                done.wait(5)
+                # Signal timeout to caller (will be caught and wrapped above)
+                raise TimeoutError(f"Query execution exceeded timeout ({timeout}s) and was cancelled")
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+            # Worker finished: process result
+            if result_box["error"] is not None:
+                raise result_box["error"]  # type: ignore[misc]
+
+            rows = result_box["rows"] or []
+            rowcount = result_box.get("rowcount")
+            if rowcount is None:
+                rowcount = len(rows)
+            duration_ms = int((time.time() - started) * 1000)
+            return {
+                "statement": statement,
+                "rowcount": rowcount,
+                "rows": rows,
+                "query_id": query_id_box.get("id"),
+                "duration_ms": duration_ms,
+                "session_context": result_box.get("session"),
+                "columns": result_box.get("columns"),
+                "truncated": result_box.get("truncated"),
+                "original_rowcount": result_box.get("original_rowcount"),
+                "returned_rowcount": result_box.get("returned_rowcount"),
+                "truncation_info": result_box.get("truncation_info"),
+            }
+
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Execute Snowflake Query",

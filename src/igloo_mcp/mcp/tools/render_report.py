@@ -7,7 +7,7 @@ using Quarto as an optional dependency.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
@@ -61,7 +61,7 @@ class RenderReportTool(MCPTool):
         return ["reports", "rendering", "quarto", "html", "pdf", "export"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Render quarterly sales report to HTML",
@@ -97,9 +97,9 @@ class RenderReportTool(MCPTool):
         include_preview: bool = False,
         preview_max_chars: int = 2000,
         dry_run: bool = False,
-        options: Optional[Dict[str, Any]] = None,
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        options: dict[str, Any] | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute report rendering.
 
         Args:
@@ -276,7 +276,7 @@ class RenderReportTool(MCPTool):
 
         return result
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Render Report Parameters",
@@ -346,10 +346,10 @@ class RenderReportTool(MCPTool):
     def _render_standalone_html(
         self,
         report_id: str,
-        options: Dict[str, Any],
+        options: dict[str, Any],
         include_preview: bool = False,
         preview_max_chars: int = 2000,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Render report to standalone HTML without Quarto.
 
         Args:
@@ -370,13 +370,13 @@ class RenderReportTool(MCPTool):
             report_dir = storage.report_dir
 
             # Build hints (citation_map, query_provenance)
-            hints: Dict[str, Any] = {}
+            hints: dict[str, Any] = {}
             try:
                 citation_map = self.report_service._build_citation_map(outline)
                 hints["citation_map"] = citation_map
 
                 # Build citation_details from query provenance
-                query_provenance: Dict[str, Any] = {}
+                query_provenance: dict[str, Any] = {}
                 for insight in outline.insights:
                     references = insight.citations or insight.supporting_queries
                     for query in references:
@@ -416,7 +416,7 @@ class RenderReportTool(MCPTool):
             )
 
             # Build response
-            result: Dict[str, Any] = {
+            result: dict[str, Any] = {
                 "status": "success",
                 "report_id": report_id,
                 "output": {

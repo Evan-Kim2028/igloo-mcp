@@ -253,7 +253,7 @@ result = evolve_report_batch(
     report_selector="Q1 Sales Analysis",
     instruction="Add multiple insights",
     operations=[...],
-    response_detail="minimal"  # ~200 tokens vs ~400 for standard
+    response_detail="minimal"  # Significant token reduction
 )
 
 # Returns: status, report_id, summary counts only

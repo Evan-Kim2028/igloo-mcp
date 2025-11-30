@@ -369,7 +369,7 @@ igloo-mcp  # Shows immediate validation feedback
 ### Overall Test Statistics
 - **Total Tests**: 80+ passing tests
 - **Test Files**: 7 primary test files
-- **Coverage Estimate**: ~25-30% of codebase
+- **Coverage Estimate**: Good coverage of core features
 
 ### Coverage by Category
 

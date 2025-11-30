@@ -37,7 +37,6 @@ Example:
 from __future__ import annotations
 
 import re
-from typing import Optional, Tuple
 
 # Placeholder patterns
 PLACEHOLDER_EXISTING = re.compile(
@@ -84,7 +83,7 @@ def has_placeholders(content: str) -> bool:
     )
 
 
-def _find_section_content(content: str, section_title: str) -> Optional[Tuple[int, int]]:
+def _find_section_content(content: str, section_title: str) -> tuple[int, int] | None:
     """Find the start and end positions of a section by title.
 
     Args:
@@ -212,7 +211,7 @@ MERGE_MODE_PREPEND = "prepend"
 
 
 def apply_content_merge(
-    existing: Optional[str],
+    existing: str | None,
     new_content: str,
     merge_mode: str = MERGE_MODE_REPLACE,
 ) -> str:

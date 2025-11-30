@@ -7,7 +7,7 @@ across all reports to find insights backed by specific sources.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.service import ReportService
@@ -57,7 +57,7 @@ class SearchCitationsTool(MCPTool):
         return ["reports", "citations", "search", "audit"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Find all insights citing DeFiLlama API",
@@ -84,15 +84,15 @@ class SearchCitationsTool(MCPTool):
     @tool_error_handler("search_citations")
     async def execute(
         self,
-        source_type: Optional[str] = None,
-        provider: Optional[str] = None,
-        url_contains: Optional[str] = None,
-        description_contains: Optional[str] = None,
-        execution_id: Optional[str] = None,
+        source_type: str | None = None,
+        provider: str | None = None,
+        url_contains: str | None = None,
+        description_contains: str | None = None,
+        execution_id: str | None = None,
         limit: int = 50,
-        group_by: Optional[str] = None,
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        group_by: str | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Search citations across all reports.
 
         Args:
@@ -159,7 +159,7 @@ class SearchCitationsTool(MCPTool):
         )
 
         # Collect all citations from all reports
-        all_citations: List[Dict[str, Any]] = []
+        all_citations: list[dict[str, Any]] = []
 
         try:
             # Rebuild index to get latest reports
@@ -268,9 +268,9 @@ class SearchCitationsTool(MCPTool):
 
     def _group_citations(
         self,
-        citations: List[Dict[str, Any]],
+        citations: list[dict[str, Any]],
         group_by: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Group citations by specified field.
 
         Args:
@@ -280,7 +280,7 @@ class SearchCitationsTool(MCPTool):
         Returns:
             Dictionary with grouped results
         """
-        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        grouped: dict[str, list[dict[str, Any]]] = {}
 
         for cit_result in citations:
             citation = cit_result["citation"]
@@ -299,7 +299,7 @@ class SearchCitationsTool(MCPTool):
 
         return result
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "type": "object",

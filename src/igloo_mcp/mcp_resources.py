@@ -10,7 +10,7 @@ import json
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     from fastmcp.utilities.logging import get_logger
@@ -37,11 +37,11 @@ class ResourceAvailability:
 
     name: str
     state: ResourceState
-    reason: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    last_checked: Optional[float] = None
+    reason: str | None = None
+    metadata: dict[str, Any] | None = None
+    last_checked: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
             "name": self.name,
@@ -55,9 +55,9 @@ class ResourceAvailability:
 class MCPResourceManager:
     """Manages MCP resource availability based on configuration state."""
 
-    def __init__(self, health_monitor: Optional[MCPHealthMonitor] = None):
+    def __init__(self, health_monitor: MCPHealthMonitor | None = None):
         self.health_monitor = health_monitor
-        self.resource_cache: Dict[str, ResourceAvailability] = {}
+        self.resource_cache: dict[str, ResourceAvailability] = {}
         self.cache_ttl = 60.0  # Cache for 60 seconds
         self.dependencies = {
             "catalog": ["profile", "connection"],
@@ -263,17 +263,17 @@ class MCPResourceManager:
         return availability
 
     def get_all_resource_availability(
-        self, resource_names: List[str], snowflake_service=None, **kwargs: Any
-    ) -> Dict[str, ResourceAvailability]:
+        self, resource_names: list[str], snowflake_service=None, **kwargs: Any
+    ) -> dict[str, ResourceAvailability]:
         """Get availability for multiple resources."""
         return {name: self.get_resource_availability(name, snowflake_service, **kwargs) for name in resource_names}
 
-    def filter_available_resources(self, resource_names: List[str], snowflake_service=None, **kwargs: Any) -> List[str]:
+    def filter_available_resources(self, resource_names: list[str], snowflake_service=None, **kwargs: Any) -> list[str]:
         """Filter resource list to only include available resources."""
         availability = self.get_all_resource_availability(resource_names, snowflake_service, **kwargs)
         return [name for name, avail in availability.items() if avail.state == ResourceState.AVAILABLE]
 
-    def get_resource_recommendations(self, resource_name: str, availability: ResourceAvailability) -> List[str]:
+    def get_resource_recommendations(self, resource_name: str, availability: ResourceAvailability) -> list[str]:
         """Get recommendations for making a resource available."""
         recommendations = []
 
@@ -298,8 +298,8 @@ class MCPResourceManager:
         return recommendations
 
     def create_resource_status_response(
-        self, resource_names: List[str], snowflake_service=None, **kwargs: Any
-    ) -> Dict[str, Any]:
+        self, resource_names: list[str], snowflake_service=None, **kwargs: Any
+    ) -> dict[str, Any]:
         """Create a comprehensive resource status response."""
         availability = self.get_all_resource_availability(resource_names, snowflake_service, **kwargs)
 

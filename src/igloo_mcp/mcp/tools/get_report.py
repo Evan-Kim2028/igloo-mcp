@@ -7,7 +7,7 @@ with multiple modes for progressive disclosure and token efficiency.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
@@ -63,7 +63,7 @@ class GetReportTool(MCPTool):
         return ["reports", "read", "retrieval", "inspection"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Get lightweight summary of report structure",
@@ -102,18 +102,18 @@ class GetReportTool(MCPTool):
     async def execute(
         self,
         report_selector: str,
-        response_mode: Optional[str] = None,
-        mode: Optional[str] = None,  # DEPRECATED in v0.3.5
-        section_ids: Optional[List[str]] = None,
-        section_titles: Optional[List[str]] = None,
-        insight_ids: Optional[List[str]] = None,
-        min_importance: Optional[int] = None,
+        response_mode: str | None = None,
+        mode: str | None = None,  # DEPRECATED in v0.3.5
+        section_ids: list[str] | None = None,
+        section_titles: list[str] | None = None,
+        insight_ids: list[str] | None = None,
+        min_importance: int | None = None,
         limit: int = 50,
         offset: int = 0,
         include_content: bool = False,
         include_audit: bool = False,
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute report retrieval with selective filtering.
 
         Args:
@@ -224,7 +224,7 @@ class GetReportTool(MCPTool):
         except ValueError as e:
             retrieval_duration = (time.time() - retrieval_start) * 1000
             raise MCPExecutionError(
-                f"Failed to load report: {str(e)}",
+                f"Failed to load report: {e!s}",
                 operation="get_report",
                 hints=["Verify the report exists and is accessible"],
                 context={"request_id": request_id, "report_id": report_id},
@@ -312,7 +312,7 @@ class GetReportTool(MCPTool):
 
         return response
 
-    def _build_summary_response(self, outline: Any, include_audit: bool, report_id: str) -> Dict[str, Any]:
+    def _build_summary_response(self, outline: Any, include_audit: bool, report_id: str) -> dict[str, Any]:
         """Build summary mode response (lightweight overview)."""
         return {
             "status": "success",
@@ -342,12 +342,12 @@ class GetReportTool(MCPTool):
     def _build_sections_response(
         self,
         outline: Any,
-        section_ids: Optional[List[str]],
-        section_titles: Optional[List[str]],
+        section_ids: list[str] | None,
+        section_titles: list[str] | None,
         include_content: bool,
         limit: int,
         offset: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build sections mode response."""
         # Filter sections
         sections = outline.sections
@@ -395,12 +395,12 @@ class GetReportTool(MCPTool):
     def _build_insights_response(
         self,
         outline: Any,
-        insight_ids: Optional[List[str]],
-        min_importance: Optional[int],
-        section_ids: Optional[List[str]],
+        insight_ids: list[str] | None,
+        min_importance: int | None,
+        section_ids: list[str] | None,
         limit: int,
         offset: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build insights mode response."""
         # Build section ownership map
         section_map = {}
@@ -440,7 +440,7 @@ class GetReportTool(MCPTool):
             }
             insights_data.append(insight_dict)
 
-        filters_applied: Dict[str, Any] = {}
+        filters_applied: dict[str, Any] = {}
         if min_importance is not None:
             filters_applied["min_importance"] = min_importance
         if section_ids:
@@ -464,7 +464,7 @@ class GetReportTool(MCPTool):
         include_audit: bool,
         limit: int,
         offset: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build full mode response (complete report)."""
         # Paginate sections and insights
         sections = sorted(outline.sections, key=lambda x: x.order)
@@ -531,7 +531,7 @@ class GetReportTool(MCPTool):
             "offset": offset,
         }
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Get Report Parameters",

@@ -11,7 +11,7 @@
 - ✅ **DO**: Use `morph-fast-tools___edit_file` for ALL file modifications
 - ❌ **NEVER**: Use `sed`, `awk`, `perl`, or other bash commands for file edits
 - ❌ **NEVER**: Use the legacy `Edit` tool when Morph is available
-- **Why**: Morph is 10,500+ tokens/sec, prevents context pollution, 98% success rate
+- **Why**: Fast editing, prevents context pollution, high accuracy
 
 ### Code Search: ALWAYS use `morph-fast-tools___warp_grep`
 - ✅ **DO**: Use `morph-fast-tools___warp_grep` for ALL code searches and exploration
@@ -25,8 +25,8 @@
 - **Why**: AI-powered semantic search with live web content optimized for LLM consumption
 
 ### Performance Benefits
-- **Speed**: 10,500+ tokens/sec vs traditional editing
-- **Accuracy**: 98% success rate with intelligent context handling
+- **Speed**: Fast token processing vs traditional editing
+- **Accuracy**: High success rate with intelligent context handling
 - **Efficiency**: Only changed lines shown, no context pollution
 - **Intelligence**: AI-powered code understanding and precise targeting
 

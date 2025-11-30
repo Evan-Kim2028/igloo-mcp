@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 
 def create_error_context(
     operation: str,
-    request_id: Optional[str] = None,
+    request_id: str | None = None,
     **kwargs: Any,
 ) -> ErrorContext:
     """Create an ErrorContext for error handling.
@@ -65,7 +65,7 @@ def wrap_timeout_error(
     timeout_seconds: int,
     operation: str = "query",
     verbose: bool = False,
-    context: Optional[Dict[str, Any]] = None,
+    context: dict[str, Any] | None = None,
 ) -> MCPExecutionError:
     """Create a standardized timeout error.
 
@@ -111,9 +111,9 @@ def wrap_timeout_error(
 
 def wrap_validation_error(
     message: str,
-    validation_errors: Optional[List[str]] = None,
-    hints: Optional[List[str]] = None,
-    field: Optional[str] = None,
+    validation_errors: list[str] | None = None,
+    hints: list[str] | None = None,
+    field: str | None = None,
 ) -> MCPValidationError:
     """Create a standardized validation error.
 
@@ -148,9 +148,9 @@ def wrap_validation_error(
 def wrap_execution_error(
     message: str,
     operation: str,
-    original_error: Optional[Exception] = None,
-    hints: Optional[List[str]] = None,
-    context: Optional[Dict[str, Any]] = None,
+    original_error: Exception | None = None,
+    hints: list[str] | None = None,
+    context: dict[str, Any] | None = None,
     verbose: bool = True,  # Default True for backward compatibility with tests
 ) -> MCPExecutionError:
     """Create a standardized execution error.
@@ -187,8 +187,8 @@ def wrap_selector_error(
     message: str,
     selector: str,
     error_type: str = "not_found",
-    candidates: Optional[List[str]] = None,
-    hints: Optional[List[str]] = None,
+    candidates: list[str] | None = None,
+    hints: list[str] | None = None,
     verbose: bool = True,
 ) -> MCPSelectorError:
     """Create a standardized selector error.
@@ -240,9 +240,9 @@ def wrap_selector_error(
 
 def format_error_response(
     error: MCPToolError,
-    request_id: Optional[str] = None,
+    request_id: str | None = None,
     include_traceback: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Format an MCP error as a standardized response dictionary.
 
     Args:
@@ -269,10 +269,10 @@ def format_error_response(
 
 
 def format_success_response(
-    data: Dict[str, Any],
-    request_id: Optional[str] = None,
-    operation: Optional[str] = None,
-) -> Dict[str, Any]:
+    data: dict[str, Any],
+    request_id: str | None = None,
+    operation: str | None = None,
+) -> dict[str, Any]:
     """Format a successful tool execution as a standardized response.
 
     Args:
@@ -283,7 +283,7 @@ def format_success_response(
     Returns:
         Standardized success response dictionary
     """
-    response: Dict[str, Any] = {
+    response: dict[str, Any] = {
         "status": "success",
         **data,
     }
@@ -304,8 +304,8 @@ def format_success_response(
 
 def handle_mcp_exception_decorator(
     e: MCPToolError,
-    request_id: Optional[str],
-    kwargs: Dict[str, Any],
+    request_id: str | None,
+    kwargs: dict[str, Any],
 ) -> None:
     """Handle MCP exceptions in decorator - adds request_id and re-raises.
 
@@ -328,10 +328,10 @@ def handle_mcp_exception_decorator(
 
 def handle_validation_error_decorator(
     e: ValidationError,
-    request_id: Optional[str],
+    request_id: str | None,
     tool_name: str,
     logger: logging.Logger,
-    kwargs: Dict[str, Any],
+    kwargs: dict[str, Any],
 ) -> MCPValidationError:
     """Convert Pydantic ValidationError to MCPValidationError.
 
@@ -384,10 +384,10 @@ def handle_validation_error_decorator(
 
 def handle_generic_exception_decorator(
     e: Exception,
-    request_id: Optional[str],
+    request_id: str | None,
     tool_name: str,
     logger: logging.Logger,
-    kwargs: Dict[str, Any],
+    kwargs: dict[str, Any],
 ) -> MCPExecutionError:
     """Convert generic exception to MCPExecutionError.
 

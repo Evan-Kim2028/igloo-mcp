@@ -5,7 +5,7 @@ Part of v1.9.0 Phase 1 - simplified wrapper around HealthCheckTool for backward 
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from igloo_mcp.config import Config
 
@@ -64,7 +64,7 @@ class ConnectionTestTool(MCPTool):
         return ["connection", "health", "diagnostics"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Check active profile connectivity before running queries",
@@ -73,7 +73,7 @@ class ConnectionTestTool(MCPTool):
         ]
 
     @tool_error_handler("test_connection")
-    async def execute(self, request_id: Optional[str] = None, **kwargs: Any) -> Dict[str, Any]:
+    async def execute(self, request_id: str | None = None, **kwargs: Any) -> dict[str, Any]:
         """Test Snowflake connection.
 
         Args:
@@ -102,7 +102,7 @@ class ConnectionTestTool(MCPTool):
 
         return result
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "type": "object",

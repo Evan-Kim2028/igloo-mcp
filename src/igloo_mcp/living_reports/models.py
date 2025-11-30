@@ -7,7 +7,7 @@ providing validation and serialization for all report components.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -22,15 +22,15 @@ class DatasetSource(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    execution_id: Optional[str] = Field(
+    execution_id: str | None = Field(
         default=None,
         description="Execution ID from audit_info.execution_id or history JSONL",
     )
-    sql_sha256: Optional[str] = Field(
+    sql_sha256: str | None = Field(
         default=None,
         description="SHA-256 hash of the SQL text (statement_sha256)",
     )
-    cache_manifest: Optional[str] = Field(
+    cache_manifest: str | None = Field(
         default=None,
         description=(
             "Path to a cache manifest.json (absolute or repo-relative). When "
@@ -43,11 +43,11 @@ class DatasetSource(BaseModel):
     )
 
     # Future hints for profile/context overrides (stored but unused for now).
-    profile: Optional[str] = Field(default=None)
-    warehouse: Optional[str] = Field(default=None)
-    database: Optional[str] = Field(default=None)
-    db_schema: Optional[str] = Field(default=None, alias="schema")
-    role: Optional[str] = Field(default=None)
+    profile: str | None = Field(default=None)
+    warehouse: str | None = Field(default=None)
+    database: str | None = Field(default=None)
+    db_schema: str | None = Field(default=None, alias="schema")
+    role: str | None = Field(default=None)
 
     @field_validator("db_schema", mode="before")
     @classmethod
@@ -84,69 +84,69 @@ class Citation(BaseModel):
     )
 
     # Common optional fields
-    provider: Optional[str] = Field(
+    provider: str | None = Field(
         default=None,
         description="Specific system (snowflake, allium, defillama, coingecko, etc.)",
     )
-    description: Optional[str] = Field(
+    description: str | None = Field(
         default=None,
         description="Human-readable context for this citation",
     )
 
     # Query-specific fields (source="query")
-    execution_id: Optional[str] = Field(
+    execution_id: str | None = Field(
         default=None,
         description="Execution ID from query history (for Snowflake queries)",
     )
-    query_id: Optional[str] = Field(
+    query_id: str | None = Field(
         default=None,
         description="Query ID for external query platforms (Allium, Dune, etc.)",
     )
-    sql_sha256: Optional[str] = Field(
+    sql_sha256: str | None = Field(
         default=None,
         description="SHA-256 hash of the SQL text",
     )
-    cache_manifest: Optional[str] = Field(
+    cache_manifest: str | None = Field(
         default=None,
         description="Path to cache manifest for query results",
     )
 
     # URL-specific fields (source="url")
-    url: Optional[str] = Field(
+    url: str | None = Field(
         default=None,
         description="Web URL for articles, blogs, documentation",
     )
-    title: Optional[str] = Field(
+    title: str | None = Field(
         default=None,
         description="Title of the web page or article",
     )
-    accessed_at: Optional[str] = Field(
+    accessed_at: str | None = Field(
         default=None,
         description="ISO 8601 timestamp when URL was accessed",
     )
 
     # API-specific fields (source="api")
-    endpoint: Optional[str] = Field(
+    endpoint: str | None = Field(
         default=None,
         description="API endpoint path or URL",
     )
-    response_hash: Optional[str] = Field(
+    response_hash: str | None = Field(
         default=None,
         description="Hash of API response for verification",
     )
 
     # Document-specific fields (source="document")
-    path: Optional[str] = Field(
+    path: str | None = Field(
         default=None,
         description="File path to document (PDF, whitepaper, etc.)",
     )
-    page: Optional[str] = Field(
+    page: str | None = Field(
         default=None,
         description="Page number or section reference",
     )
 
     # Observation-specific fields (source="observation")
-    observed_at: Optional[str] = Field(
+    observed_at: str | None = Field(
         default=None,
         description="ISO 8601 timestamp when observation was made",
     )
@@ -156,11 +156,11 @@ class ResolvedDataset(BaseModel):
     """Concrete dataset resolved from history/cache artifacts."""
 
     name: str
-    rows: List[Dict[str, Any]]
-    columns: List[str]
-    key_metrics: Optional[Dict[str, Any]]
-    insights: List[Any]
-    provenance: Dict[str, Any]
+    rows: list[dict[str, Any]]
+    columns: list[str]
+    key_metrics: dict[str, Any] | None
+    insights: list[Any]
+    provenance: dict[str, Any]
 
 
 class ReportId:
@@ -204,7 +204,7 @@ class ReportId:
 
     def __repr__(self) -> str:
         """Return detailed string representation."""
-        return f"ReportId('{str(self)}')"
+        return f"ReportId('{self!s}')"
 
     def __eq__(self, other: object) -> bool:
         """Check equality with another ReportId."""
@@ -247,19 +247,19 @@ class Insight(BaseModel):
         description="Human-readable summary of the insight",
         min_length=1,
     )
-    supporting_queries: List[DatasetSource] = Field(
+    supporting_queries: list[DatasetSource] = Field(
         default_factory=list,
         description="DEPRECATED: Use citations instead. List of query references.",
     )
-    citations: List[Citation] = Field(
+    citations: list[Citation] = Field(
         default_factory=list,
         description="List of citations (query, api, url, observation, document)",
     )
-    draft_changes: Optional[Dict[str, Any]] = Field(
+    draft_changes: dict[str, Any] | None = Field(
         default=None,
         description="Pending changes from LLM evolution",
     )
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional insight metadata (chart_id, etc.)",
     )
@@ -275,7 +275,7 @@ class Insight(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _sync_citations(self) -> "Insight":
+    def _sync_citations(self) -> Insight:
         """Keep citations and supporting_queries in sync for backward compatibility.
 
         Migration shim: Automatically converts supporting_queries to citations.
@@ -338,24 +338,24 @@ class Section(BaseModel):
         description="Display order (lower numbers appear first)",
         ge=0,
     )
-    insight_ids: List[str] = Field(
+    insight_ids: list[str] = Field(
         default_factory=list,
         description="Ordered list of insight IDs in this section",
     )
-    notes: Optional[str] = Field(
+    notes: str | None = Field(
         default=None,
         description="Optional human notes or prose for this section",
     )
-    content: Optional[str] = Field(
+    content: str | None = Field(
         default=None,
         description="Optional prose content for this section (e.g., markdown)",
     )
-    content_format: Optional[str] = Field(
+    content_format: str | None = Field(
         default="markdown",
         description="Format for content field (markdown, html, plain)",
         pattern="^(markdown|html|plain)$",
     )
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional section metadata (category tags, etc.)",
     )
@@ -408,15 +408,15 @@ class Outline(BaseModel):
         description="Monotonic version counter for optimistic locking",
         ge=1,
     )
-    sections: List[Section] = Field(
+    sections: list[Section] = Field(
         default_factory=list,
         description="Ordered list of report sections",
     )
-    insights: List[Insight] = Field(
+    insights: list[Insight] = Field(
         default_factory=list,
         description="All insights referenced by sections",
     )
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional report metadata (tags, owner, etc.)",
     )
@@ -499,11 +499,11 @@ class AuditEvent(BaseModel):
         description="Type of action performed",
         pattern=r"^(create|evolve|revert|rename|tag_update|render|manual_edit_detected|backup|status_change|fork|synthesize|archive|delete)$",
     )
-    request_id: Optional[str] = Field(
+    request_id: str | None = Field(
         default=None,
         description="Optional correlation ID for request tracing",
     )
-    payload: Dict[str, Any] = Field(
+    payload: dict[str, Any] = Field(
         default_factory=dict,
         description="Action-specific data and metadata",
     )
@@ -556,7 +556,7 @@ class IndexEntry(BaseModel):
         ...,
         description="ISO 8601 timestamp when report was last updated",
     )
-    tags: List[str] = Field(
+    tags: list[str] = Field(
         default_factory=list,
         description="User-defined tags for organization",
     )

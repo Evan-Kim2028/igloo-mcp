@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any
 
 SEGMENT_PATTERN = r'(?:[A-Za-z_][A-Za-z0-9_$]*|"(?:""|[^"])+")'
 IDENTIFIER_PATTERN = rf"^{SEGMENT_PATTERN}$"
@@ -12,13 +13,13 @@ QUALIFIED_NAME_PATTERN = rf"^{SEGMENT_PATTERN}(?:\.{SEGMENT_PATTERN}){{0,2}}$"
 def string_schema(
     description: str,
     *,
-    title: Optional[str] = None,
-    examples: Optional[Iterable[str]] = None,
-    pattern: Optional[str] = None,
-    default: Optional[str] = None,
-) -> Dict[str, Any]:
+    title: str | None = None,
+    examples: Iterable[str] | None = None,
+    pattern: str | None = None,
+    default: str | None = None,
+) -> dict[str, Any]:
     """Create a basic string schema with optional pattern and examples."""
-    schema: Dict[str, Any] = {
+    schema: dict[str, Any] = {
         "type": "string",
         "description": description,
     }
@@ -36,10 +37,10 @@ def string_schema(
 def snowflake_identifier_schema(
     description: str,
     *,
-    title: Optional[str] = None,
-    examples: Optional[Iterable[str]] = None,
-    default: Optional[str] = None,
-) -> Dict[str, Any]:
+    title: str | None = None,
+    examples: Iterable[str] | None = None,
+    default: str | None = None,
+) -> dict[str, Any]:
     """Schema for Snowflake identifiers (warehouse, database, schema, role)."""
     return string_schema(
         description,
@@ -53,10 +54,10 @@ def snowflake_identifier_schema(
 def fully_qualified_object_schema(
     description: str,
     *,
-    title: Optional[str] = None,
-    examples: Optional[Iterable[str]] = None,
-    default: Optional[str] = None,
-) -> Dict[str, Any]:
+    title: str | None = None,
+    examples: Iterable[str] | None = None,
+    default: str | None = None,
+) -> dict[str, Any]:
     """Schema for fully qualified names (DATABASE.SCHEMA.OBJECT)."""
     return string_schema(
         description,
@@ -70,13 +71,13 @@ def fully_qualified_object_schema(
 def integer_schema(
     description: str,
     *,
-    minimum: Optional[int] = None,
-    maximum: Optional[int] = None,
-    default: Optional[int] = None,
-    examples: Optional[Iterable[int]] = None,
-) -> Dict[str, Any]:
+    minimum: int | None = None,
+    maximum: int | None = None,
+    default: int | None = None,
+    examples: Iterable[int] | None = None,
+) -> dict[str, Any]:
     """Schema for integer parameters."""
-    schema: Dict[str, Any] = {
+    schema: dict[str, Any] = {
         "type": "integer",
         "description": description,
     }
@@ -94,11 +95,11 @@ def integer_schema(
 def boolean_schema(
     description: str,
     *,
-    default: Optional[bool] = None,
-    examples: Optional[Iterable[bool]] = None,
-) -> Dict[str, Any]:
+    default: bool | None = None,
+    examples: Iterable[bool] | None = None,
+) -> dict[str, Any]:
     """Schema for boolean flags."""
-    schema: Dict[str, Any] = {
+    schema: dict[str, Any] = {
         "type": "boolean",
         "description": description,
     }
@@ -113,9 +114,9 @@ def enum_schema(
     description: str,
     *,
     values: Iterable[str],
-    default: Optional[str] = None,
-    examples: Optional[Iterable[str]] = None,
-) -> Dict[str, Any]:
+    default: str | None = None,
+    examples: Iterable[str] | None = None,
+) -> dict[str, Any]:
     """Schema for enumerated string values."""
     schema = string_schema(
         description,

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any
 
 from igloo_mcp.catalog import CatalogIndex
 from igloo_mcp.mcp.exceptions import (
@@ -62,7 +63,7 @@ class SearchCatalogTool(MCPTool):
         return ["catalog", "metadata", "search", "discovery"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Find tables containing the word 'customers'",
@@ -84,16 +85,16 @@ class SearchCatalogTool(MCPTool):
     async def execute(
         self,
         catalog_dir: str = "./data_catalogue",
-        object_types: Optional[List[str]] = None,
-        database: Optional[str] = None,
-        schema: Optional[str] = None,
-        name_contains: Optional[str] = None,
-        column_contains: Optional[str] = None,
+        object_types: list[str] | None = None,
+        database: str | None = None,
+        schema: str | None = None,
+        name_contains: str | None = None,
+        column_contains: str | None = None,
         limit: int = 20,
         search_all_databases: bool = False,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         # Timing and request correlation
         start_time = time.time()
         request_id = ensure_request_id(request_id)
@@ -139,7 +140,7 @@ class SearchCatalogTool(MCPTool):
                 raise  # Re-raise validation errors
             except Exception as e:
                 raise MCPValidationError(
-                    f"Invalid catalog directory path: {str(e)}",
+                    f"Invalid catalog directory path: {e!s}",
                     validation_errors=[f"Path validation failed: {catalog_dir}"],
                     hints=[
                         "Use a relative path within the current directory",
@@ -290,7 +291,7 @@ class SearchCatalogTool(MCPTool):
             )
 
             raise MCPSelectorError(
-                f"Catalog directory not found: {str(exc)}",
+                f"Catalog directory not found: {exc!s}",
                 selector=catalog_dir,
                 error="not_found",
                 hints=[
@@ -299,7 +300,7 @@ class SearchCatalogTool(MCPTool):
                 ],
             ) from exc
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         return {
             "title": "Search Catalog Parameters",
             "type": "object",
@@ -378,10 +379,10 @@ _SUPPORTED_OBJECT_TYPES: Sequence[str] = (
 )
 
 
-def _normalize_types(types: Optional[Iterable[str]]) -> Optional[List[str]]:
+def _normalize_types(types: Iterable[str] | None) -> list[str] | None:
     if not types:
         return None
-    normalized: List[str] = []
+    normalized: list[str] = []
     for value in types:
         if not value:
             continue

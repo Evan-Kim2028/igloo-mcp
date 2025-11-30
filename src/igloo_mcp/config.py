@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping, MutableMapping
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from threading import RLock
-from typing import Any, Dict, Mapping, MutableMapping, Optional
+from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
@@ -18,12 +19,12 @@ class ConfigError(RuntimeError):
 @dataclass(frozen=True)
 class SnowflakeConfig:
     profile: str
-    warehouse: Optional[str] = None
-    database: Optional[str] = None
-    schema: Optional[str] = None
-    role: Optional[str] = None
+    warehouse: str | None = None
+    database: str | None = None
+    schema: str | None = None
+    role: str | None = None
 
-    def apply_overrides(self, overrides: Mapping[str, Optional[str]]) -> "SnowflakeConfig":
+    def apply_overrides(self, overrides: Mapping[str, str | None]) -> SnowflakeConfig:
         if not overrides:
             return self
         data = asdict(self)
@@ -32,7 +33,7 @@ class SnowflakeConfig:
                 data[key] = value
         return SnowflakeConfig(**data)
 
-    def session_defaults(self) -> Dict[str, Optional[str]]:
+    def session_defaults(self) -> dict[str, str | None]:
         return {
             "warehouse": self.warehouse,
             "database": self.database,
@@ -153,7 +154,7 @@ class Config:
     log_level: str = "INFO"
     sql_permissions: SQLPermissions = field(default_factory=SQLPermissions)
 
-    def apply_overrides(self, overrides: "ConfigOverrides") -> "Config":
+    def apply_overrides(self, overrides: ConfigOverrides) -> Config:
         if overrides.is_empty():
             return self
         cfg = self
@@ -165,7 +166,7 @@ class Config:
         return cfg
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> "Config":
+    def from_env(cls, env: Mapping[str, str] | None = None) -> Config:
         loader = ConfigLoader()
         env_map = dict(env or os.environ)
         base = loader._default_config(env_map)
@@ -180,7 +181,7 @@ class Config:
         config_path: str,
         *,
         env: Mapping[str, str] | None = None,
-    ) -> "Config":
+    ) -> Config:
         loader = ConfigLoader()
         env_map = dict(env or os.environ)
         base = loader._default_config(env_map)
@@ -212,15 +213,15 @@ class Config:
 
 @dataclass(frozen=True)
 class ConfigOverrides:
-    snowflake: Dict[str, Optional[str]] = field(default_factory=dict)
-    values: Dict[str, Any] = field(default_factory=dict)
+    snowflake: dict[str, str | None] = field(default_factory=dict)
+    values: dict[str, Any] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
         return not self.snowflake and not self.values
 
 
 class ConfigLoader:
-    _ENV_SNOWFLAKE_KEYS: Dict[str, str] = {
+    _ENV_SNOWFLAKE_KEYS: dict[str, str] = {
         "SNOWFLAKE_PROFILE": "profile",
         "SNOWFLAKE_WAREHOUSE": "warehouse",
         "SNOWFLAKE_DATABASE": "database",
@@ -228,7 +229,7 @@ class ConfigLoader:
         "SNOWFLAKE_ROLE": "role",
     }
 
-    _ENV_RUNTIME_KEYS: Dict[str, tuple[str, type]] = {
+    _ENV_RUNTIME_KEYS: dict[str, tuple[str, type]] = {
         "MAX_CONCURRENT_QUERIES": ("max_concurrent_queries", int),
         "CONNECTION_POOL_SIZE": ("connection_pool_size", int),
         "RETRY_ATTEMPTS": ("retry_attempts", int),
@@ -237,7 +238,7 @@ class ConfigLoader:
         "LOG_LEVEL": ("log_level", str),
     }
 
-    _RUNTIME_CASTERS: Dict[str, type] = {
+    _RUNTIME_CASTERS: dict[str, type] = {
         "max_concurrent_queries": int,
         "connection_pool_size": int,
         "retry_attempts": int,
@@ -254,7 +255,7 @@ class ConfigLoader:
         *,
         config_path: str | Path | None = None,
         env: Mapping[str, str] | None = None,
-        cli_overrides: Mapping[str, Optional[str]] | None = None,
+        cli_overrides: Mapping[str, str | None] | None = None,
     ) -> Config:
         env_map = dict(env or os.environ)
         config = self._default_config(env_map)
@@ -278,12 +279,12 @@ class ConfigLoader:
         return Config(snowflake=SnowflakeConfig(profile=profile))
 
     def _overrides_from_env(self, env: Mapping[str, str]) -> ConfigOverrides:
-        snowflake: Dict[str, Optional[str]] = {}
+        snowflake: dict[str, str | None] = {}
         for env_key, attr in self._ENV_SNOWFLAKE_KEYS.items():
             if env_key in env and env[env_key] != "":
                 snowflake[attr] = env[env_key]
 
-        runtime: Dict[str, Any] = {}
+        runtime: dict[str, Any] = {}
         for env_key, (field_name, caster) in self._ENV_RUNTIME_KEYS.items():
             if env_key not in env or env[env_key] == "":
                 continue
@@ -308,7 +309,7 @@ class ConfigLoader:
         if snowflake_data and not isinstance(snowflake_data, MutableMapping):
             raise ConfigError("The 'snowflake' section must be a mapping")
 
-        snowflake: Dict[str, Optional[str]] = {}
+        snowflake: dict[str, str | None] = {}
         if isinstance(snowflake_data, Mapping):
             for key in ("profile", "warehouse", "database", "schema", "role"):
                 if key in snowflake_data:
@@ -319,9 +320,9 @@ class ConfigLoader:
 
         return ConfigOverrides(snowflake=snowflake, values=runtime)
 
-    def _overrides_from_cli(self, overrides: Mapping[str, Optional[str]]) -> ConfigOverrides:
-        snowflake: Dict[str, Optional[str]] = {}
-        runtime_candidates: Dict[str, Any] = {}
+    def _overrides_from_cli(self, overrides: Mapping[str, str | None]) -> ConfigOverrides:
+        snowflake: dict[str, str | None] = {}
+        runtime_candidates: dict[str, Any] = {}
 
         for key, value in overrides.items():
             if value is None:
@@ -339,8 +340,8 @@ class ConfigLoader:
         values: Mapping[str, Any],
         *,
         source: str,
-    ) -> Dict[str, Any]:
-        normalized: Dict[str, Any] = {}
+    ) -> dict[str, Any]:
+        normalized: dict[str, Any] = {}
         for field_name, caster in self._RUNTIME_CASTERS.items():
             if field_name not in values:
                 continue
@@ -375,7 +376,7 @@ class ConfigManager:
         *,
         config_path: str | Path | None = None,
         env: Mapping[str, str] | None = None,
-        cli_overrides: Mapping[str, Optional[str]] | None = None,
+        cli_overrides: Mapping[str, str | None] | None = None,
     ) -> Config:
         config = self._loader.build(
             config_path=config_path,
@@ -393,7 +394,7 @@ class ConfigManager:
             self._config = updated
             return updated
 
-    def normalize_runtime_values(self, values: Mapping[str, Any], *, source: str) -> Dict[str, Any]:
+    def normalize_runtime_values(self, values: Mapping[str, Any], *, source: str) -> dict[str, Any]:
         return self._loader.normalize_runtime_values(values, source=source)
 
 
@@ -412,7 +413,7 @@ def load_config(
     *,
     config_path: str | Path | None = None,
     env: Mapping[str, str] | None = None,
-    cli_overrides: Mapping[str, Optional[str]] | None = None,
+    cli_overrides: Mapping[str, str | None] | None = None,
 ) -> Config:
     return _CONFIG_MANAGER.load(
         config_path=config_path,
@@ -423,7 +424,7 @@ def load_config(
 
 def apply_config_overrides(
     *,
-    snowflake: Mapping[str, Optional[str]] | None = None,
+    snowflake: Mapping[str, str | None] | None = None,
     values: Mapping[str, Any] | None = None,
 ) -> Config:
     overrides = ConfigOverrides(

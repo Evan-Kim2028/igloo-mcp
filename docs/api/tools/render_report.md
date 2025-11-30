@@ -165,7 +165,7 @@ Control the size of preview text returned in the response.
 }
 ```
 
-**Token Savings**: 75% reduction (500 chars vs 2000 chars default)
+**Token Savings**: Significant reduction (500 chars vs 2000 chars default)
 
 ---
 
@@ -254,7 +254,7 @@ if "error" not in result["preview"]:
     print(f"Preview: {result['preview'][:200]}...")
 ```
 
-**Token Savings**: ~75% vs. default preview
+**Token Savings**: Substantial reduction vs. default preview
 
 ---
 

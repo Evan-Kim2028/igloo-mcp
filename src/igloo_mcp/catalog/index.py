@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
+from typing import Any, cast
 
 
 @dataclass(frozen=True)
@@ -13,12 +14,12 @@ class CatalogObject:
     """Normalized catalog object returned from search results."""
 
     object_type: str
-    database: Optional[str]
-    schema: Optional[str]
+    database: str | None
+    schema: str | None
     name: str
-    comment: Optional[str]
-    columns: List[Dict[str, Optional[str]]]
-    raw: Dict[str, Any]
+    comment: str | None
+    columns: list[dict[str, str | None]]
+    raw: dict[str, Any]
 
 
 class CatalogIndex:
@@ -31,13 +32,13 @@ class CatalogIndex:
     def search(
         self,
         *,
-        object_types: Optional[Sequence[str]] = None,
-        database: Optional[str] = None,
-        schema: Optional[str] = None,
-        name_contains: Optional[str] = None,
-        column_contains: Optional[str] = None,
+        object_types: Sequence[str] | None = None,
+        database: str | None = None,
+        schema: str | None = None,
+        name_contains: str | None = None,
+        column_contains: str | None = None,
         limit: int = 20,
-    ) -> tuple[List[CatalogObject], int, Dict[str, Any]]:
+    ) -> tuple[list[CatalogObject], int, dict[str, Any]]:
         """Search catalog artifacts using simple substring filters.
 
         Returns a tuple of ``(results, total_matches, metadata)`` where results
@@ -46,8 +47,8 @@ class CatalogIndex:
         """
 
         catalog = self._load_catalog()
-        meta = cast(Dict[str, Any], catalog.get("metadata", {}))
-        raw_columns = cast(Iterable[Dict[str, Any]], catalog.get("columns") or [])
+        meta = cast(dict[str, Any], catalog.get("metadata", {}))
+        raw_columns = cast(Iterable[dict[str, Any]], catalog.get("columns") or [])
         column_index = self._build_column_index(raw_columns)
 
         normalized_object_types = {obj.lower() for obj in object_types} if object_types else None
@@ -57,14 +58,14 @@ class CatalogIndex:
         name_filter = name_contains.lower() if name_contains else None
         column_filter = column_contains.lower() if column_contains else None
 
-        results: List[CatalogObject] = []
+        results: list[CatalogObject] = []
         total_matches = 0
 
         for object_type, source_key in self._object_sources().items():
             if normalized_object_types and object_type not in normalized_object_types:
                 continue
 
-            raw_entries = cast(Iterable[Dict[str, Any]], catalog.get(source_key, []) or [])
+            raw_entries = cast(Iterable[dict[str, Any]], catalog.get(source_key, []) or [])
             for raw in raw_entries:
                 entry = self._normalize_object(object_type, raw)
                 if entry is None:
@@ -104,21 +105,21 @@ class CatalogIndex:
         return results, total_matches, meta
 
     # ------------------------------------------------------------------
-    def _load_catalog(self) -> Dict[str, Any]:
+    def _load_catalog(self) -> dict[str, Any]:
         catalog_json = self.catalog_dir / "catalog.json"
         catalog_jsonl = self.catalog_dir / "catalog.jsonl"
 
         if catalog_json.exists():
             with catalog_json.open("r", encoding="utf-8") as handle:
-                return cast(Dict[str, Any], json.load(handle))
+                return cast(dict[str, Any], json.load(handle))
         if catalog_jsonl.exists():
             with catalog_jsonl.open("r", encoding="utf-8") as handle:
-                return cast(Dict[str, Any], json.loads(handle.read()))
+                return cast(dict[str, Any], json.loads(handle.read()))
 
         raise FileNotFoundError(f"Catalog not found in {self.catalog_dir}. Run build_catalog first.")
 
     @staticmethod
-    def _object_sources() -> Dict[str, str]:
+    def _object_sources() -> dict[str, str]:
         return {
             "database": "databases",
             "schema": "schemas",
@@ -132,7 +133,7 @@ class CatalogIndex:
         }
 
     @staticmethod
-    def _normalize_object(object_type: str, raw: Dict[str, Any]) -> Optional[CatalogObject]:
+    def _normalize_object(object_type: str, raw: dict[str, Any]) -> CatalogObject | None:
         name_keys: Iterable[str] = (
             "name",
             "table_name",
@@ -149,7 +150,7 @@ class CatalogIndex:
         )
         comment_keys = ("comment", "description")
 
-        name: Optional[str] = None
+        name: str | None = None
         for key in name_keys:
             value = raw.get(key)
             if isinstance(value, str) and value:
@@ -159,21 +160,21 @@ class CatalogIndex:
         if not name:
             return None
 
-        schema_value: Optional[str] = None
+        schema_value: str | None = None
         for key in schema_keys:
             value = raw.get(key)
             if isinstance(value, str) and value:
                 schema_value = value
                 break
 
-        database_value: Optional[str] = None
+        database_value: str | None = None
         for key in database_keys:
             value = raw.get(key)
             if isinstance(value, str) and value:
                 database_value = value
                 break
 
-        comment_value: Optional[str] = None
+        comment_value: str | None = None
         for key in comment_keys:
             value = raw.get(key)
             if isinstance(value, str) and value:
@@ -192,9 +193,9 @@ class CatalogIndex:
 
     @staticmethod
     def _build_column_index(
-        rows: Iterable[Dict[str, Any]],
-    ) -> Dict[Tuple[str, str, str], List[Dict[str, Optional[str]]]]:
-        index: Dict[Tuple[str, str, str], List[Dict[str, Optional[str]]]] = {}
+        rows: Iterable[dict[str, Any]],
+    ) -> dict[tuple[str, str, str], list[dict[str, str | None]]]:
+        index: dict[tuple[str, str, str], list[dict[str, str | None]]] = {}
         for row in rows:
             db = CatalogIndex._first_str(row, ("database_name", "table_catalog")) or ""
             schema = CatalogIndex._first_str(row, ("schema_name", "table_schema")) or ""
@@ -214,7 +215,7 @@ class CatalogIndex:
         return index
 
     @staticmethod
-    def _first_str(source: Dict[str, Any], keys: Iterable[str]) -> Optional[str]:
+    def _first_str(source: dict[str, Any], keys: Iterable[str]) -> str | None:
         for key in keys:
             value = source.get(key)
             if isinstance(value, str) and value:

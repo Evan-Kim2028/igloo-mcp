@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 
 from .circuit_breaker import CircuitBreakerError, circuit_breaker
 from .snow_cli import QueryOutput, SnowCLI, SnowCLIError
@@ -19,9 +19,9 @@ class SnowflakeService(Protocol):
         self,
         query: str,
         *,
-        output_format: Optional[str] = None,
-        ctx_overrides: Optional[Dict[str, Optional[str]]] = None,
-        timeout: Optional[int] = None,
+        output_format: str | None = None,
+        ctx_overrides: dict[str, str | None] | None = None,
+        timeout: int | None = None,
     ) -> QueryOutput:
         """Execute a query and return results."""
         ...
@@ -37,25 +37,25 @@ class HealthStatus:
 
     healthy: bool
     snowflake_connection: bool
-    last_error: Optional[str] = None
-    circuit_breaker_state: Optional[str] = None
+    last_error: str | None = None
+    circuit_breaker_state: str | None = None
 
 
 class RobustSnowflakeService:
     """Snowflake service with circuit breaker protection and health monitoring."""
 
-    def __init__(self, profile: Optional[str] = None):
+    def __init__(self, profile: str | None = None):
         self.cli = SnowCLI(profile)
-        self._last_error: Optional[str] = None
+        self._last_error: str | None = None
 
     @circuit_breaker(failure_threshold=5, recovery_timeout=60.0, expected_exception=SnowCLIError)
     def execute_query(
         self,
         query: str,
         *,
-        output_format: Optional[str] = None,
-        ctx_overrides: Optional[Dict[str, Optional[str]]] = None,
-        timeout: Optional[int] = None,
+        output_format: str | None = None,
+        ctx_overrides: dict[str, str | None] | None = None,
+        timeout: int | None = None,
     ) -> QueryOutput:
         """Execute a query with circuit breaker protection."""
         try:
@@ -88,7 +88,7 @@ class RobustSnowflakeService:
         """Get the underlying SnowCLI connection."""
         return self.cli
 
-    def get_query_tag_param(self) -> Optional[str]:
+    def get_query_tag_param(self) -> str | None:
         """Get query tag parameter."""
         return None
 
@@ -112,7 +112,7 @@ class RobustSnowflakeService:
             return HealthStatus(healthy=False, snowflake_connection=False, last_error=str(e))
 
 
-def execute_query_safe(service: SnowflakeService, query: str, **kwargs: Any) -> List[Dict[str, Any]]:
+def execute_query_safe(service: SnowflakeService, query: str, **kwargs: Any) -> list[dict[str, Any]]:
     """Execute a query safely, returning empty list on failure."""
     try:
         result = service.execute_query(query, **kwargs)

@@ -7,7 +7,7 @@ providing a seamless MCP-only workflow for report creation and evolution.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.service import ReportService
@@ -68,7 +68,7 @@ class CreateReportTool(MCPTool):
         return ["reports", "creation", "templates"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Create a simple report with default template",
@@ -108,11 +108,11 @@ class CreateReportTool(MCPTool):
         self,
         title: str,
         template: str = "default",
-        tags: Optional[List[str]] = None,
-        description: Optional[str] = None,
-        initial_sections: Optional[List[Dict[str, Any]]] = None,
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        tags: list[str] | None = None,
+        description: str | None = None,
+        initial_sections: list[dict[str, Any]] | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute report creation.
 
         Args:
@@ -177,7 +177,7 @@ class CreateReportTool(MCPTool):
             )
 
         # Prepare metadata
-        metadata: Dict[str, Any] = {}
+        metadata: dict[str, Any] = {}
         if tags:
             metadata["tags"] = tags
         if description:
@@ -206,7 +206,7 @@ class CreateReportTool(MCPTool):
             # Template validation errors from service
             create_duration = (time.time() - create_start) * 1000
             raise MCPValidationError(
-                f"Report creation failed: {str(e)}",
+                f"Report creation failed: {e!s}",
                 validation_errors=[str(e)],
                 hints=[
                     f"Check template name is valid: {template}",
@@ -221,7 +221,7 @@ class CreateReportTool(MCPTool):
         except Exception as e:
             create_duration = (time.time() - create_start) * 1000
             raise MCPExecutionError(
-                f"Failed to create report: {str(e)}",
+                f"Failed to create report: {e!s}",
                 operation="create_report",
                 original_error=e,
                 hints=[
@@ -271,7 +271,7 @@ class CreateReportTool(MCPTool):
             },
         }
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Create Report Parameters",

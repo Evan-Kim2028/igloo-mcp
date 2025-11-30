@@ -55,12 +55,14 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     from fastmcp.utilities.logging import get_logger
 except ImportError:
     from mcp.server.fastmcp.utilities.logging import get_logger
+
+from datetime import UTC
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.changes_schema import ProposedChanges
@@ -136,7 +138,7 @@ class EvolveReportBatchTool(MCPTool):
     def tags(self) -> list[str]:
         return ["reports", "evolution", "batch", "atomic"]
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "type": "object",
@@ -185,7 +187,7 @@ class EvolveReportBatchTool(MCPTool):
         }
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Add multiple insights and a section atomically",
@@ -214,13 +216,13 @@ class EvolveReportBatchTool(MCPTool):
         self,
         report_selector: str,
         instruction: str,
-        operations: List[Dict[str, Any]],
-        constraints: Optional[Dict[str, Any]] = None,
+        operations: list[dict[str, Any]],
+        constraints: dict[str, Any] | None = None,
         dry_run: bool = False,
-        response_mode: Optional[str] = None,
-        response_detail: Optional[str] = None,  # DEPRECATED in v0.3.5
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        response_mode: str | None = None,
+        response_detail: str | None = None,  # DEPRECATED in v0.3.5
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute atomic multi-operation report evolution.
 
         Performs multiple report operations (add/modify/remove insights and sections)
@@ -480,7 +482,7 @@ class EvolveReportBatchTool(MCPTool):
 
         return result
 
-    def _operations_to_proposed_changes(self, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _operations_to_proposed_changes(self, operations: list[dict[str, Any]]) -> dict[str, Any]:
         """Convert operations list to ProposedChanges format.
 
         Args:
@@ -489,7 +491,7 @@ class EvolveReportBatchTool(MCPTool):
         Returns:
             ProposedChanges-compatible dictionary
         """
-        changes: Dict[str, Any] = {
+        changes: dict[str, Any] = {
             "insights_to_add": [],
             "insights_to_modify": [],
             "insights_to_remove": [],
@@ -538,7 +540,7 @@ class EvolveReportBatchTool(MCPTool):
             elif op_type == OP_ATTACH_CHART:
                 # Handle chart attachment
                 import os
-                from datetime import datetime, timezone
+                from datetime import datetime
                 from pathlib import Path
 
                 chart_path = op_data.get("chart_path")
@@ -571,7 +573,7 @@ class EvolveReportBatchTool(MCPTool):
                 chart_metadata = {
                     "path": chart_path,
                     "format": chart_format,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                     "size_bytes": size_bytes,
                     "linked_insights": op_data.get("insight_ids", []),
                     "source": op_data.get("source", "custom"),
@@ -599,7 +601,7 @@ class EvolveReportBatchTool(MCPTool):
 
         return changes
 
-    def _summarize_operations(self, operations: List[Dict[str, Any]]) -> Dict[str, int]:
+    def _summarize_operations(self, operations: list[dict[str, Any]]) -> dict[str, int]:
         """Create a summary count of operations by type.
 
         Args:
@@ -608,7 +610,7 @@ class EvolveReportBatchTool(MCPTool):
         Returns:
             Dictionary mapping operation type to count
         """
-        summary: Dict[str, int] = {}
+        summary: dict[str, int] = {}
         for op in operations:
             op_type = op.get("type", "unknown")
             summary[op_type] = summary.get(op_type, 0) + 1

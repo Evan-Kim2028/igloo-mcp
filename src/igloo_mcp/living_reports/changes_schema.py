@@ -1,7 +1,7 @@
 """Schema definitions for report evolution changes with versioning."""
 
 import uuid
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -20,7 +20,7 @@ class ValidationErrorDetail(BaseModel):
     field: str  # Field path (e.g., "insights_to_modify[0].insight_id")
     value: Any  # Actual value that failed
     error: str  # Error message
-    available_ids: Optional[List[str]] = None  # Available IDs for "not found" errors
+    available_ids: list[str] | None = None  # Available IDs for "not found" errors
 
     def to_string(self) -> str:
         """Convert to human-readable error message with structural hints."""
@@ -67,12 +67,12 @@ class InsightChange(BaseModel):
     insight_id is required for modifications.
     """
 
-    insight_id: Optional[str] = None
-    importance: Optional[int] = Field(None, ge=0, le=10)
-    summary: Optional[str] = None
-    supporting_queries: Optional[List[Dict[str, Any]]] = None
-    citations: Optional[List[Dict[str, Any]]] = None
-    status: Optional[Literal["active", "archived", "killed"]] = None
+    insight_id: str | None = None
+    importance: int | None = Field(None, ge=0, le=10)
+    summary: str | None = None
+    supporting_queries: list[dict[str, Any]] | None = None
+    citations: list[dict[str, Any]] | None = None
+    status: Literal["active", "archived", "killed"] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -85,7 +85,7 @@ class InsightChange(BaseModel):
 
     @field_validator("insight_id")
     @classmethod
-    def validate_uuid(cls, v: Optional[str]) -> Optional[str]:
+    def validate_uuid(cls, v: str | None) -> str | None:
         """Validate UUID format if provided."""
         if v is None:
             return v
@@ -113,19 +113,19 @@ class SectionChange(BaseModel):
     - 'prepend': Prepend new content before existing
     """
 
-    section_id: Optional[str] = None
-    title: Optional[str] = None
-    order: Optional[int] = Field(None, ge=0)
-    notes: Optional[str] = None
-    content: Optional[str] = None
-    content_format: Optional[Literal["markdown", "html", "plain"]] = "markdown"
-    content_merge_mode: Optional[Literal["replace", "merge", "append", "prepend"]] = Field(
+    section_id: str | None = None
+    title: str | None = None
+    order: int | None = Field(None, ge=0)
+    notes: str | None = None
+    content: str | None = None
+    content_format: Literal["markdown", "html", "plain"] | None = "markdown"
+    content_merge_mode: Literal["replace", "merge", "append", "prepend"] | None = Field(
         default="replace",
         description="How to merge content with existing: replace, merge (placeholder-based), append, prepend",
     )
-    insight_ids_to_add: Optional[List[str]] = None
-    insight_ids_to_remove: Optional[List[str]] = None
-    insights: Optional[List[Dict[str, Any]]] = None
+    insight_ids_to_add: list[str] | None = None
+    insight_ids_to_remove: list[str] | None = None
+    insights: list[dict[str, Any]] | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -148,7 +148,7 @@ class SectionChange(BaseModel):
 
     @field_validator("section_id")
     @classmethod
-    def validate_uuid(cls, v: Optional[str]) -> Optional[str]:
+    def validate_uuid(cls, v: str | None) -> str | None:
         """Validate UUID format if provided."""
         if v is None:
             return v
@@ -166,20 +166,20 @@ class ProposedChanges(BaseModel):
         default=CURRENT_CHANGES_SCHEMA_VERSION,
         description="Schema version for forward compatibility",
     )
-    insights_to_add: List[InsightChange] = Field(default_factory=list)
-    insights_to_modify: List[InsightChange] = Field(default_factory=list)
-    insights_to_remove: List[str] = Field(default_factory=list)
-    sections_to_add: List[SectionChange] = Field(default_factory=list)
-    sections_to_modify: List[SectionChange] = Field(default_factory=list)
-    sections_to_remove: List[str] = Field(default_factory=list)
-    title_change: Optional[str] = None
-    metadata_updates: Dict[str, Any] = Field(default_factory=dict)
-    status_change: Optional[Literal["active", "archived", "deleted"]] = Field(
+    insights_to_add: list[InsightChange] = Field(default_factory=list)
+    insights_to_modify: list[InsightChange] = Field(default_factory=list)
+    insights_to_remove: list[str] = Field(default_factory=list)
+    sections_to_add: list[SectionChange] = Field(default_factory=list)
+    sections_to_modify: list[SectionChange] = Field(default_factory=list)
+    sections_to_remove: list[str] = Field(default_factory=list)
+    title_change: str | None = None
+    metadata_updates: dict[str, Any] = Field(default_factory=dict)
+    status_change: Literal["active", "archived", "deleted"] | None = Field(
         default=None,
         description="Optional status change for the report",
     )
 
-    def validate_against_outline(self, outline) -> List[ValidationErrorDetail]:
+    def validate_against_outline(self, outline) -> list[ValidationErrorDetail]:
         """Validate changes against current outline state.
 
         Returns:

@@ -42,9 +42,19 @@ snow connection add --connection-name my-profile --account <account>.<region> --
 
 > **Note**: For detailed setup including all authentication methods, multiple profiles, and troubleshooting, see [Installation Guide](installation.md).
 
-## Your First Queries
+## Verify Your Setup
 
-Once configured, interact with igloo-mcp through your AI assistant:
+Once configured, verify igloo-mcp works correctly through your AI assistant:
+
+### Health Check (Recommended First Step)
+
+```
+"Run a health check"
+→ Uses: health_check
+→ Validates: Snowflake connectivity, profile configuration, catalog availability
+```
+
+This verifies your server, profile authentication, and catalog status in one call—ensuring everything works before running queries.
 
 ### Example Prompts
 
@@ -84,7 +94,7 @@ Igloo MCP provides **14 focused tools** organized by workflow. See [API Tools In
 
 ## Token-Efficient Report Workflows
 
-Achieve **70% token reduction** in multi-turn Living Reports workflows with progressive disclosure:
+Use progressive disclosure to minimize token usage in multi-turn Living Reports workflows:
 
 ```python
 # Efficient workflow example
@@ -93,30 +103,27 @@ Achieve **70% token reduction** in multi-turn Living Reports workflows with prog
 reports = search_report(
     title="Q1 Sales",
     fields=["report_id", "title"]
-)  # ~100 tokens
+)
 
 # 2. Inspect with summary mode
 summary = get_report(
     report_selector=reports["reports"][0]["report_id"],
     mode="summary"
-)  # ~150 tokens
+)
 
 # 3. Discover valid schemas
 schema = get_report_schema(
     schema_type="proposed_changes",
     format="examples"
-)  # ~600 tokens
+)
 
 # 4. Evolve with minimal response
 result = evolve_report(
     report_selector=reports["reports"][0]["report_id"],
     instruction="Add revenue insight",
     proposed_changes={...},  # Based on schema
-    response_detail="minimal"  # Token-efficient
-)  # ~150 tokens
-
-# Total: ~1,000 tokens (vs. 3,500+ tokens previously)
-# Savings: 71%
+    response_detail="minimal"
+)
 ```
 
 **Key Features**:

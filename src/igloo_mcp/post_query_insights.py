@@ -3,27 +3,28 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any
 
 MAX_SAMPLE_ROWS = 2_000
 TOP_VALUES_LIMIT = 5
 TIME_HINT_KEYWORDS = ("timestamp", "_ts", "_time", "time", "date", "_dt", "at_ts")
 
 
-def _normalize_row(row: Any, existing_columns: Sequence[str] | None) -> Tuple[Dict[str, Any], List[str] | None]:
+def _normalize_row(row: Any, existing_columns: Sequence[str] | None) -> tuple[dict[str, Any], list[str] | None]:
     """Return a mapping representation of a row and inferred column names."""
 
     if isinstance(row, dict):
         mapping = dict(row)
-        inferred: List[str] | None = None
+        inferred: list[str] | None = None
         if not existing_columns:
             inferred = list(mapping.keys())
         return mapping, inferred
 
     if isinstance(row, (list, tuple)):
-        names: List[str]
+        names: list[str]
         if existing_columns:
             names = list(existing_columns)
         else:
@@ -72,9 +73,9 @@ def _stringify(value: Any) -> str:
 
 def _summarize_column(
     column: str,
-    rows: List[Dict[str, Any]],
+    rows: list[dict[str, Any]],
     sample_size: int,
-) -> Dict[str, Any] | None:
+) -> dict[str, Any] | None:
     if sample_size == 0:
         return None
 
@@ -168,8 +169,8 @@ def _summarize_column(
     return None
 
 
-def _compose_insights(key_metrics: Dict[str, Any]) -> List[str]:
-    insights: List[str] = []
+def _compose_insights(key_metrics: dict[str, Any]) -> list[str]:
+    insights: list[str] = []
     total_rows = key_metrics.get("total_rows")
     sampled_rows = key_metrics.get("sampled_rows")
     num_columns = key_metrics.get("num_columns")
@@ -211,11 +212,11 @@ def build_default_insights(
     columns: Sequence[str] | None,
     total_rows: int | None,
     truncated: bool,
-) -> Tuple[Dict[str, Any] | None, List[str]]:
+) -> tuple[dict[str, Any] | None, list[str]]:
     if not rows:
         return None, []
 
-    sampled_rows: List[Dict[str, Any]] = []
+    sampled_rows: list[dict[str, Any]] = []
     column_names = list(columns) if columns else []
     for entry in rows[:MAX_SAMPLE_ROWS]:
         normalized, inferred = _normalize_row(entry, column_names or None)
@@ -227,7 +228,7 @@ def build_default_insights(
     if sample_size == 0:
         return None, []
 
-    metrics_columns: List[Dict[str, Any]] = []
+    metrics_columns: list[dict[str, Any]] = []
     for column in column_names:
         summary = _summarize_column(column, sampled_rows, sample_size)
         if summary:
@@ -236,7 +237,7 @@ def build_default_insights(
     if not metrics_columns:
         return None, []
 
-    key_metrics: Dict[str, Any] = {
+    key_metrics: dict[str, Any] = {
         "total_rows": total_rows if total_rows is not None else sample_size,
         "sampled_rows": sample_size,
         "num_columns": len(column_names),

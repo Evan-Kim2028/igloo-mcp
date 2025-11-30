@@ -4,11 +4,13 @@ import hashlib
 import json
 import logging
 import os
+from collections.abc import Iterable
+from datetime import UTC
 from pathlib import Path
 from threading import Lock
-from typing import Any, Iterable, Optional, TypedDict, cast
+from typing import Any, TypedDict, cast
 
-from ..path_utils import (
+from igloo_mcp.path_utils import (
     DEFAULT_HISTORY_PATH,
     apply_namespacing,
     find_repo_root,
@@ -94,12 +96,12 @@ class QueryHistory:
 
     def __init__(
         self,
-        path: Optional[Path],
+        path: Path | None,
         *,
-        fallbacks: Optional[Iterable[Path]] = None,
+        fallbacks: Iterable[Path] | None = None,
         disabled: bool = False,
     ) -> None:
-        self._path: Optional[Path] = None
+        self._path: Path | None = None
         self._lock = Lock()
         self._enabled = False
         self._disabled = disabled
@@ -144,7 +146,7 @@ class QueryHistory:
                 pass
 
     @classmethod
-    def from_env(cls) -> "QueryHistory":
+    def from_env(cls) -> QueryHistory:
         """Create QueryHistory instance from environment configuration.
 
         Uses resolve_history_path() exclusively for path resolution.
@@ -200,7 +202,7 @@ class QueryHistory:
         return self._enabled
 
     @property
-    def path(self) -> Optional[Path]:
+    def path(self) -> Path | None:
         return self._path
 
     @property
@@ -226,7 +228,7 @@ class QueryHistory:
             import datetime
 
             # Use UTC timezone to ensure consistent timestamps across environments
-            payload["timestamp"] = datetime.datetime.fromtimestamp(payload["ts"], tz=datetime.timezone.utc).isoformat()
+            payload["timestamp"] = datetime.datetime.fromtimestamp(payload["ts"], tz=datetime.UTC).isoformat()
 
         try:
             line = json.dumps(payload, ensure_ascii=False)
@@ -234,7 +236,7 @@ class QueryHistory:
             # Fallback: convert to string representation
             line = json.dumps(
                 {
-                    "error": f"Serialization failed: {str(e)}",
+                    "error": f"Serialization failed: {e!s}",
                     "original_preview": str(payload)[:200],
                 },
                 ensure_ascii=False,
@@ -255,7 +257,7 @@ class QueryHistory:
         execution_id: str,
         post_query_insight: str | dict[str, Any],
         *,
-        source: Optional[str] = None,
+        source: str | None = None,
     ) -> dict[str, Any]:
         """Record a post-hoc insight for a prior query execution.
 
@@ -308,11 +310,11 @@ class QueryHistory:
         if not deduped:
             # Append new history entry
             import time
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             payload = {
                 "ts": time.time(),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "execution_id": execution_id,
                 "status": "insight_recorded",
                 "post_query_insight": truncated,
