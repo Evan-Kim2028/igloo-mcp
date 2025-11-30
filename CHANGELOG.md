@@ -7,121 +7,222 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Added
 
-### Query Optimization - `result_mode` Parameter (#100, #102)
+### Multi-Source Citation System (#62)
 
-**Token-Efficient Query Responses**: New `result_mode` parameter for `execute_query` reduces response size by 60-90%.
+**Flexible citations beyond Snowflake**: New `Citation` model supports 5 source types for complete research traceability.
 
-**Modes**:
-- `full` (default): Return all rows unchanged
-- `summary`: Return key_metrics + 5 sample rows only (~90% reduction)
-- `schema_only`: Return column names/types only, no rows (~95% reduction)
-- `sample`: Return first 10 rows only (~60-80% reduction for large results)
+**Citation Types**:
+- `query` — SQL database queries (Snowflake, Allium, Dune, Flipside)
+- `api` — REST/GraphQL APIs (DeFiLlama, CoinGecko, Etherscan, etc.)
+- `url` — Web pages, articles, blog posts, documentation
+- `observation` — Manual observations, visual analysis, human judgment
+- `document` — PDFs, whitepapers, internal documents, research papers
 
-**Response Format**:
-All non-full modes add `result_mode` and `result_mode_info` fields:
-```json
+**Citation Model**:
+```python
+class Citation(BaseModel):
+    source: str  # Required: query, api, url, observation, document
+    provider: Optional[str]  # snowflake, allium, defillama, etc.
+    description: Optional[str]
+
+    # Query fields
+    execution_id: Optional[str]
+    sql_sha256: Optional[str]
+
+    # URL fields
+    url: Optional[str]
+    title: Optional[str]
+    accessed_at: Optional[str]
+
+    # API fields
+    endpoint: Optional[str]
+
+    # Document fields
+    path: Optional[str]
+    page: Optional[str]
+
+    # Observation fields
+    observed_at: Optional[str]
+```
+
+**Migration Shim**: Automatic backward compatibility with `supporting_queries`
+- Old reports with `supporting_queries` auto-convert to `citations` on read
+- Query citations auto-convert back to `supporting_queries` for legacy tools
+- No breaking changes — existing workflows continue unchanged
+
+### Chart Management System (#74, #91)
+
+**Attach visual evidence to insights**: Complete chart lifecycle management with metadata tracking and HTML embedding.
+
+**Chart Attachment** via `evolve_report_batch`:
+```python
 {
-  "result_mode": "summary",
-  "result_mode_info": {
-    "mode": "summary",
-    "total_rows": 10000,
-    "rows_returned": 5,
-    "sample_size": 5,
-    "columns_count": 8,
-    "hint": "Use result_mode='full' to retrieve all rows"
-  },
-  "rows": [...5 rows...],
-  "key_metrics": {...}
+    "type": "attach_chart",
+    "chart_path": "/path/to/chart.png",
+    "insight_ids": ["insight-uuid"],
+    "description": "Revenue trend Q3",
+    "source": "matplotlib"  # or plotly, custom
 }
 ```
 
-**Use Cases**:
-- `schema_only`: Schema discovery without data transfer
-- `sample`: Quick data preview for validation
-- `summary`: Get metrics + representative sample for analysis
-- `full`: Complete data retrieval (backward compatible default)
-
-### Living Reports - Batch Operations (#101)
-
-**`evolve_report_batch` Tool**: Atomic multi-operation report evolution.
-
-**Benefits**:
-- Reduce round-trips: Perform multiple operations in one call
-- Ensure consistency: All-or-nothing transactional semantics
-- Improve ergonomics: Natural batching for multi-insight reports
-
-**Supported Operations** (8 types):
-- `add_insight` / `modify_insight` / `remove_insight`
-- `add_section` / `modify_section` / `remove_section`
-- `update_title` / `update_metadata`
-
-**Example**:
+**Chart Metadata** stored in `outline.metadata.charts`:
 ```python
-evolve_report_batch(
-    report_selector="Q1 Revenue Report",
-    instruction="Add revenue analysis section with insights",
-    operations=[
-        {
-            "type": "add_insight",
-            "summary": "Enterprise revenue grew 45% YoY",
-            "importance": 9,
-            "citations": [{"execution_id": "exec-123"}]
-        },
-        {
-            "type": "add_section",
-            "title": "Revenue Analysis",
-            "order": 1,
-            "insight_ids": ["<generated-uuid>"]
-        }
-    ]
-)
+{
+    "chart_uuid": {
+        "path": "/absolute/path/chart.png",
+        "format": "png",  # png, jpg, svg, plotly
+        "created_at": "2025-11-30T12:38:00Z",
+        "size_bytes": 177152,
+        "linked_insights": ["insight-uuid"],
+        "source": "matplotlib",
+        "description": "Revenue trend"
+    }
+}
 ```
 
-## Fixed
+**HTML Standalone Enhancements**:
+- Charts embedded as base64 data URIs for self-contained HTML
+- Single-file output (~1-5MB) — no external dependencies
+- Email/Slack friendly — works offline
+- Size validation: 5MB warning, 10MB caution, 50MB hard limit
 
-### CI/CD & Test Compatibility
+**Supported Formats**: PNG, JPG, JPEG, GIF, SVG, WebP
 
-- **Python 3.12/3.13 Compatibility**: Fixed threading.Lock type checking issues
-  - Fixed `isinstance(lock, threading.Lock)` errors in `session_utils.py`
-  - Updated test assertions to use proper type comparison
-  - `threading.Lock` is a factory function, not a direct type in Python 3.12
-  - All 715 tests now pass on both Python 3.12 and 3.13
+### Citation Search Tool (NEW!)
 
-- **Config Caching Test**: Fixed `test_config_loading_is_cached_by_mtime`
-  - Added delay to ensure mtime changes on fast filesystems
-  - Added mtime change verification
-  - Enhanced test reliability across different platforms
+**Search citations across all reports**: Powerful discovery and audit workflows.
+
+**`search_citations` tool** with filters:
+- `source_type` — Filter by citation type (query, api, url, etc.)
+- `provider` — Filter by provider (snowflake, allium, defillama, etc.)
+- `url_contains` — Substring search in URLs
+- `description_contains` — Substring search in descriptions
+- `execution_id` — Exact match on query execution ID
+- `group_by` — Group results by "source" or "provider"
+- `limit` — Max results (default: 50, max: 200)
+
+**Use Cases**:
+- Find all insights citing DeFiLlama API
+- List all reports using specific query
+- Audit data sources by provider
+- Track external URL citations
+- Compliance reporting
+
+**Response Structure**:
+```python
+{
+    "matches_found": 10,
+    "citations": [
+        {
+            "citation": {...},
+            "insight": {"insight_id", "summary", "importance"},
+            "report": {"report_id", "title"}
+        }
+    ],
+    "grouped_results": {...}  # If group_by specified
+}
+```
+
+### Template Enhancements
+
+**Quarto Template** (`report.qmd.j2`):
+- ✅ Removed TODO placeholder for chart generation (#74)
+- ✅ Implemented chart rendering from `insight.metadata.chart_id`
+- ✅ Citations grouped by source type in appendix
+- ✅ Cleaner, more structured output
+
+**HTML Standalone Renderer**:
+- ✅ Chart embedding with base64 data URIs
+- ✅ Responsive chart display with captions
+- ✅ CSS styling for charts (shadows, borders, captions)
 
 ## Changed
 
-### CI/CD Infrastructure
+### Non-Breaking Enhancements
 
-- **Python Version Support**: Added Python 3.13 to CI test matrix
-  - CI now tests both Python 3.12 and 3.13 in parallel
-  - Updated `requires-python` to `>=3.12,<3.14`
-  - Ensures compatibility across both versions on every commit
+**Insight Model**:
+- Added `citations: List[Citation]` field (preferred over `supporting_queries`)
+- `supporting_queries` deprecated but fully supported
+- Added `metadata: Dict[str, Any]` for chart references and extensions
 
-- **Multi-version Testing**: All CI jobs now run for both Python versions
-  - `lint` job: Runs on Python 3.12 and 3.13
-  - `type-check` job: Runs on Python 3.12 and 3.13
-  - `test` job: Runs on Python 3.12 and 3.13
+**Operation Types** (`evolve_report_batch`):
+- Added `attach_chart` operation type
+- Total operations: 9 (was 8)
+
+**Documentation**:
+- Added `docs/living-reports/charts.md` — Complete chart management guide
+- Added `docs/living-reports/citations.md` — Citation system reference
+- Added `docs/living-reports/citation-search.md` — Search patterns and use cases
+
+## Deprecated
+
+**`supporting_queries` field** (to be removed in v0.4.0):
+- Use `citations` instead with `source="query"`
+- Auto-migration ensures no breakage
+- Deprecation warnings in documentation
+
+**`draft_changes` chart placeholder** (superseded):
+- Use `attach_chart` operation instead
+- Old placeholder removed from templates
+
+## Migration Notes
+
+**From supporting_queries to citations**:
+
+No action required — migration is automatic!
+
+Old format still works:
+```python
+"supporting_queries": [{"execution_id": "exec-123"}]
+```
+
+New format recommended:
+```python
+"citations": [{
+    "source": "query",
+    "provider": "snowflake",
+    "execution_id": "exec-123",
+    "description": "Revenue analysis"
+}]
+```
+
+**Chart attachment**:
+
+Old way (unsupported):
+```python
+"draft_changes": {"type": "chart"}  # No longer works
+```
+
+New way:
+```python
+# Use evolve_report_batch
+{
+    "type": "attach_chart",
+    "chart_path": "/path.png",
+    "insight_ids": ["uuid"]
+}
+```
 
 ## Infrastructure
 
-- **Testing**: All 715 tests passing on both Python 3.12 and 3.13
-- **CI Duration**: ~1 minute total (parallel execution)
-- **Coverage**: Maintained 68%+ coverage across both Python versions
+- Total tests: 715 → 750+ (35 new tests for citations, charts, search)
+- Test coverage: 68%+ maintained
+- Documentation: 3 new comprehensive guides (~4000 words)
+- Zero breaking changes
 
 ## Summary
 
-**v0.3.5 delivers token efficiency and batch operations** for optimized AI workflows.
+**v0.3.5 delivers multi-source citations, chart management, and citation search**
 
 **Key Improvements**:
-1. **Token Efficiency**: 60-90% reduction in query response sizes via `result_mode`
-2. **Batch Operations**: Atomic multi-operation report evolution
-3. **Python Support**: Robust 3.12/3.13 compatibility with CI verification
+1. **Citation System**: 5 source types (query, api, url, observation, document)
+2. **Chart Management**: Attach, track, and embed charts in reports
+3. **Citation Search**: Find insights by source across all reports
+4. **Template Updates**: Removed TODOs, implemented chart rendering
 
-All changes are **backward compatible** with sensible defaults.
+**Solved Issues**: #62, #74, #91
+
+All changes are **backward compatible** with automatic migration.
 
 # [0.3.4] - 2025-11-29
 

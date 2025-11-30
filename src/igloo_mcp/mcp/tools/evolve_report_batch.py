@@ -71,6 +71,7 @@ from igloo_mcp.mcp.exceptions import (
     MCPValidationError,
 )
 from igloo_mcp.mcp.tools.base import MCPTool, ensure_request_id, tool_error_handler
+from igloo_mcp.mcp.validation_helpers import validate_response_mode
 
 logger = get_logger(__name__)
 
@@ -216,7 +217,8 @@ class EvolveReportBatchTool(MCPTool):
         operations: List[Dict[str, Any]],
         constraints: Optional[Dict[str, Any]] = None,
         dry_run: bool = False,
-        response_detail: str = "standard",
+        response_mode: Optional[str] = None,
+        response_detail: Optional[str] = None,  # DEPRECATED in v0.3.5
         request_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute atomic multi-operation report evolution.
@@ -246,8 +248,8 @@ class EvolveReportBatchTool(MCPTool):
                         - max_importance_delta: int - Limit importance changes
             dry_run: If True, validate without applying changes (default: False).
                     Returns validation_passed status without persisting.
-            response_detail: Control response verbosity for token efficiency:
-                           - "minimal": Status, counts only (~200 tokens)
+            response_mode: Control response verbosity (STANDARD: 'minimal', 'standard', 'full')
+            response_detail: DEPRECATED - use response_mode instead
                            - "standard": + IDs of created items (~400 tokens, default)
                            - "full": + Complete changes echo (~1000+ tokens)
             request_id: Optional UUID4 for distributed tracing
@@ -330,13 +332,17 @@ class EvolveReportBatchTool(MCPTool):
         start_time = time.time()
         request_id = ensure_request_id(request_id)
 
-        # Validate response_detail
-        valid_levels = ("minimal", "standard", "full")
-        if response_detail not in valid_levels:
-            raise MCPValidationError(
-                f"Invalid response_detail '{response_detail}'",
-                validation_errors=[f"Must be one of: {', '.join(valid_levels)}"],
-            )
+        # Validate response_mode parameter with backward compatibility
+        mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="response_detail",
+            legacy_param_value=response_detail,
+            valid_modes=("minimal", "standard", "full"),
+            default="standard",
+        )
+
+        # Use mode for the rest of the function
+        response_detail = mode
 
         # Validate operations list
         if not operations:

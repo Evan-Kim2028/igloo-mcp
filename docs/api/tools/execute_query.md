@@ -19,7 +19,8 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | `reason` | string | ✅ Yes | - | Short reason for running the query (min length 5). Stored in Snowflake `QUERY_TAG` and local history; avoid sensitive information. |
 | `timeout_seconds` | integer | ❌ No | 120 | Query timeout in seconds (1-3600) |
 | `verbose_errors` | boolean | ❌ No | false | Include detailed optimization hints |
-| `result_mode` | string | ❌ No | "full" | Control response verbosity: `full`, `summary`, `schema_only`, or `sample`. Reduces token usage by 60-90%. |
+| `response_mode` | string | ❌ No | "full" | Control response verbosity: `full`, `summary`, `schema_only`, or `sample`. Reduces token usage by 60-90%. See [Progressive Disclosure](../PROGRESSIVE_DISCLOSURE.md). |
+| `result_mode` | string | ❌ No | - | **DEPRECATED** - Use `response_mode` instead. |
 | `warehouse` | string | ❌ No | profile | Warehouse override (Snowflake identifier) |
 | `database` | string | ❌ No | profile | Database override (Snowflake identifier) |
 | `schema` | string | ❌ No | profile | Schema override (Snowflake identifier) |
@@ -130,7 +131,7 @@ These fields travel with tool responses, query history JSONL, and cache manifest
 
 ## Result Modes (Token Efficiency)
 
-The `result_mode` parameter controls response verbosity to reduce token usage in LLM contexts.
+The `response_mode` parameter controls response verbosity to reduce token usage in LLM contexts.
 
 ### Modes
 
@@ -147,32 +148,32 @@ The `result_mode` parameter controls response verbosity to reduce token usage in
 # ✅ Deterministic sampling - same 10 rows every time
 result = execute_query(
     statement="SELECT * FROM users ORDER BY user_id LIMIT 1000",
-    result_mode="sample",  # Returns first 10 rows in sorted order
+    response_mode="sample",  # Returns first 10 rows in sorted order
     reason="Preview user data"
 )
 
 # ⚠️ Non-deterministic - may return different rows each run
 result = execute_query(
     statement="SELECT * FROM users",  # No ORDER BY
-    result_mode="sample",  # Returns first 10 rows in arbitrary order
+    response_mode="sample",  # Returns first 10 rows in arbitrary order
     reason="Preview user data"
 )
 ```
 
 ### Response Format
 
-All non-full modes add `result_mode` and `result_mode_info` to the response:
+All non-full modes add `response_mode` and `response_mode_info` to the response:
 
 ```json
 {
-  "result_mode": "summary",
-  "result_mode_info": {
+  "response_mode": "summary",
+  "response_mode_info": {
     "mode": "summary",
     "total_rows": 10000,
     "rows_returned": 5,
     "sample_size": 5,
     "columns_count": 8,
-    "hint": "Use result_mode='full' to retrieve all rows"
+    "hint": "Use response_mode='full' to retrieve all rows"
   },
   "rows": [...5 sample rows...],
   "key_metrics": {...},
@@ -186,7 +187,7 @@ All non-full modes add `result_mode` and `result_mode_info` to the response:
 ```python
 result = execute_query(
     statement="SELECT * FROM large_table",
-    result_mode="schema_only",
+    response_mode="schema_only",
     reason="Discover table schema"
 )
 # Returns columns, types, key_metrics but no rows
@@ -196,7 +197,7 @@ result = execute_query(
 ```python
 result = execute_query(
     statement="SELECT * FROM orders WHERE date >= '2024-01-01'",
-    result_mode="sample",
+    response_mode="sample",
     reason="Preview recent orders"
 )
 # Returns first 10 rows
@@ -206,7 +207,7 @@ result = execute_query(
 ```python
 result = execute_query(
     statement="SELECT customer_id, total_spend FROM customer_summary",
-    result_mode="summary",
+    response_mode="summary",
     reason="Analyze customer spending patterns"
 )
 # Returns key_metrics + 5 sample rows (90% token reduction)

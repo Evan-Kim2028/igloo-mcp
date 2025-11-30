@@ -15,9 +15,9 @@ from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.exceptions import (
     MCPExecutionError,
     MCPSelectorError,
-    MCPValidationError,
 )
 from igloo_mcp.mcp.tools.base import MCPTool, ensure_request_id, tool_error_handler
+from igloo_mcp.mcp.validation_helpers import validate_response_mode
 
 try:
     from fastmcp.utilities.logging import get_logger
@@ -102,7 +102,8 @@ class GetReportTool(MCPTool):
     async def execute(
         self,
         report_selector: str,
-        mode: str = "summary",
+        response_mode: Optional[str] = None,
+        mode: Optional[str] = None,  # DEPRECATED in v0.3.5
         section_ids: Optional[List[str]] = None,
         section_titles: Optional[List[str]] = None,
         insight_ids: Optional[List[str]] = None,
@@ -117,7 +118,12 @@ class GetReportTool(MCPTool):
 
         Args:
             report_selector: Report ID or title to retrieve
-            mode: Retrieval mode ('summary', 'sections', 'insights', 'full')
+            response_mode: Retrieval mode (STANDARD: 'minimal', 'standard', 'full')
+                - 'minimal': Lightweight overview (metadata only)
+                - 'standard': Section/insight structure (default)
+                - 'full': Complete report with all details
+            mode: DEPRECATED - use response_mode instead
+                Legacy values: 'summary' → 'minimal', 'sections'/'insights' → 'standard', 'full' → 'full'
             section_ids: Filter to specific section IDs
             section_titles: Filter to sections matching titles (fuzzy)
             insight_ids: Filter to specific insight IDs
@@ -129,7 +135,7 @@ class GetReportTool(MCPTool):
             request_id: Optional request correlation ID
 
         Returns:
-            Report data formatted according to mode
+            Report data formatted according to response_mode
 
         Raises:
             MCPValidationError: If parameters are invalid
@@ -139,20 +145,26 @@ class GetReportTool(MCPTool):
         start_time = time.time()
         request_id = ensure_request_id(request_id)
 
-        # Validate mode
-        valid_modes = ("summary", "sections", "insights", "full")
-        if mode not in valid_modes:
-            raise MCPValidationError(
-                f"Invalid mode '{mode}'. Must be one of: {', '.join(valid_modes)}",
-                validation_errors=[f"Invalid mode: {mode}"],
-                hints=[
-                    "Use mode='summary' for lightweight overview",
-                    "Use mode='sections' for section details",
-                    "Use mode='insights' for insight details",
-                    "Use mode='full' for complete report",
-                ],
-                context={"request_id": request_id, "report_selector": report_selector},
-            )
+        # Validate response_mode with backward compatibility
+        # Map legacy 'mode' values to new response_mode
+        effective_mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="mode",
+            legacy_param_value=mode,
+            valid_modes=("minimal", "standard", "full", "summary", "sections", "insights"),
+            default="standard",
+        )
+
+        # Map legacy values to standard values
+        mode_mapping = {
+            "summary": "minimal",
+            "sections": "standard",
+            "insights": "standard",
+            "full": "full",
+            "minimal": "minimal",
+            "standard": "standard",
+        }
+        mode = mode_mapping.get(effective_mode, effective_mode)
 
         # Validate limit and offset
         if limit < 1:

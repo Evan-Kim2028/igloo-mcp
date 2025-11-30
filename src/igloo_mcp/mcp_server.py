@@ -67,6 +67,7 @@ from .mcp.tools import (
     HealthCheckTool,
     RenderReportTool,
     SearchCatalogTool,
+    SearchCitationsTool,
     SearchReportTool,
 )
 from .mcp.validation_helpers import format_pydantic_validation_error
@@ -336,6 +337,7 @@ def register_igloo_mcp(
     search_report_inst = SearchReportTool(config, report_service)
     get_report_inst = GetReportTool(config, report_service)
     get_report_schema_inst = GetReportSchemaTool(config)
+    search_citations_inst = SearchCitationsTool(config, report_service)
 
     @server.tool(name="execute_query", description="Execute a SQL query against Snowflake")
     async def execute_query_tool(
@@ -803,6 +805,57 @@ def register_igloo_mcp(
         return await get_report_schema_inst.execute(
             schema_type=schema_type,
             format=format,
+        )
+
+    @server.tool(
+        name="search_citations",
+        description="Search citations across all living reports by source type, provider, URL, etc.",
+    )
+    async def search_citations_tool(
+        source_type: Annotated[
+            Optional[str],
+            Field(
+                description="Filter by source type (query, api, url, observation, document)",
+                default=None,
+                pattern="^(query|api|url|observation|document)$",
+            ),
+        ] = None,
+        provider: Annotated[
+            Optional[str],
+            Field(description="Filter by provider (snowflake, allium, defillama, etc.)", default=None),
+        ] = None,
+        url_contains: Annotated[
+            Optional[str],
+            Field(description="Substring search in URL field (case-insensitive)", default=None),
+        ] = None,
+        description_contains: Annotated[
+            Optional[str],
+            Field(description="Substring search in description field (case-insensitive)", default=None),
+        ] = None,
+        execution_id: Annotated[
+            Optional[str],
+            Field(description="Exact match on execution_id (for query sources)", default=None),
+        ] = None,
+        limit: Annotated[
+            int,
+            Field(description="Maximum results to return (default: 50, max: 200)", default=50, ge=1, le=200),
+        ] = 50,
+        group_by: Annotated[
+            Optional[str],
+            Field(
+                description="Group results by field (source or provider)", default=None, pattern="^(source|provider)$"
+            ),
+        ] = None,
+    ) -> Dict[str, Any]:
+        """Search citations across all reports - delegates to SearchCitationsTool."""
+        return await search_citations_inst.execute(
+            source_type=source_type,
+            provider=provider,
+            url_contains=url_contains,
+            description_contains=description_contains,
+            execution_id=execution_id,
+            limit=limit,
+            group_by=group_by,
         )
 
     @server.tool(name="build_catalog", description="Build Snowflake catalog metadata")

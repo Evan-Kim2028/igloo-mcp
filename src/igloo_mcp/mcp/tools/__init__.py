@@ -26,6 +26,7 @@ from .get_report_schema import GetReportSchemaTool
 from .health import HealthCheckTool
 from .render_report import RenderReportTool
 from .search_catalog import SearchCatalogTool
+from .search_citations import SearchCitationsTool
 from .search_report import SearchReportTool
 from .test_connection import ConnectionTestTool
 
@@ -44,6 +45,7 @@ __all__ = [
     "HealthCheckTool",
     "RenderReportTool",
     "SearchCatalogTool",
+    "SearchCitationsTool",
     "SearchReportTool",
     "ConnectionTestTool",
 ]

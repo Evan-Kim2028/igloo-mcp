@@ -49,6 +49,9 @@ class HTMLStandaloneRenderer:
 
         warnings: List[str] = []
 
+        # Collect and embed charts
+        embedded_charts = self._collect_and_embed_charts(outline, warnings)
+
         # Generate HTML content
         html_content = self._generate_html(
             outline=outline,
@@ -56,6 +59,7 @@ class HTMLStandaloneRenderer:
             hints=hints,
             options=options,
             warnings=warnings,
+            embedded_charts=embedded_charts,
         )
 
         # Write to file
@@ -82,6 +86,7 @@ class HTMLStandaloneRenderer:
         hints: Dict[str, Any],
         options: Dict[str, Any],
         warnings: List[str],
+        embedded_charts: Dict[str, str],
     ) -> str:
         """Generate the complete HTML document.
 
@@ -91,6 +96,7 @@ class HTMLStandaloneRenderer:
             hints: Render hints
             options: Render options
             warnings: List to append warnings to
+            embedded_charts: Dict mapping chart_id to base64 data URI
 
         Returns:
             Complete HTML document as string
@@ -105,7 +111,7 @@ class HTMLStandaloneRenderer:
         include_toc = options.get("toc", True)
 
         # Build sections HTML
-        sections_html = self._render_sections(outline, citation_map)
+        sections_html = self._render_sections(outline, citation_map, embedded_charts)
 
         # Build citations appendix
         citations_html = self._render_citations_appendix(citation_map, citation_details, query_provenance)
@@ -154,12 +160,80 @@ class HTMLStandaloneRenderer:
 
         return html
 
-    def _render_sections(self, outline: Outline, citation_map: Dict[str, int]) -> str:
+    def _collect_and_embed_charts(
+        self,
+        outline: Outline,
+        warnings: List[str],
+    ) -> Dict[str, str]:
+        """Collect charts from outline metadata and convert to base64 data URIs.
+
+        Args:
+            outline: Report outline with chart metadata
+            warnings: List to append warnings to
+
+        Returns:
+            Dictionary mapping chart_id to base64-encoded data URI
+        """
+        import base64
+
+        embedded_charts: Dict[str, str] = {}
+        charts_metadata = outline.metadata.get("charts", {})
+
+        for chart_id, chart_meta in charts_metadata.items():
+            chart_path = Path(chart_meta.get("path", ""))
+
+            # Validate chart file exists
+            if not chart_path.exists():
+                warnings.append(f"Chart file not found: {chart_path}")
+                continue
+
+            # Check file size
+            size_bytes = chart_meta.get("size_bytes", 0)
+            if size_bytes > 5 * 1024 * 1024:  # 5MB
+                warnings.append(
+                    f"Chart {chart_id} is large ({size_bytes / 1024 / 1024:.1f}MB). "
+                    "Consider optimizing before attaching."
+                )
+
+            # Hard limit: 50MB
+            if size_bytes > 50 * 1024 * 1024:
+                warnings.append(f"Chart {chart_id} exceeds 50MB limit. Skipping embedding.")
+                continue
+
+            # Read and encode chart
+            try:
+                chart_data = chart_path.read_bytes()
+                base64_data = base64.b64encode(chart_data).decode("utf-8")
+
+                # Detect MIME type from format
+                chart_format = chart_meta.get("format", "png").lower()
+                mime_types = {
+                    "png": "image/png",
+                    "jpg": "image/jpeg",
+                    "jpeg": "image/jpeg",
+                    "gif": "image/gif",
+                    "svg": "image/svg+xml",
+                    "webp": "image/webp",
+                }
+                mime_type = mime_types.get(chart_format, "image/png")
+
+                # Create data URI
+                data_uri = f"data:{mime_type};base64,{base64_data}"
+                embedded_charts[chart_id] = data_uri
+
+            except Exception as e:
+                warnings.append(f"Failed to embed chart {chart_id}: {e}")
+                continue
+
+        return embedded_charts
+
+    def _render_sections(self, outline: Outline, citation_map: Dict[str, int], embedded_charts: Dict[str, str]) -> str:
         """Render all sections as HTML.
 
         Args:
             outline: Report outline
             citation_map: Mapping of execution_id to citation number
+            embedded_charts: Dict of chart_id to base64 data URI
 
         Returns:
             HTML string for all sections
@@ -170,7 +244,7 @@ class HTMLStandaloneRenderer:
         sorted_sections = sorted(outline.sections, key=lambda s: s.order)
 
         for section in sorted_sections:
-            section_html = self._render_section(section, outline, citation_map)
+            section_html = self._render_section(section, outline, citation_map, embedded_charts)
             sections_html.append(section_html)
 
         return "\n".join(sections_html)
@@ -180,6 +254,7 @@ class HTMLStandaloneRenderer:
         section,
         outline: Outline,
         citation_map: Dict[str, int],
+        embedded_charts: Dict[str, str],
     ) -> str:
         """Render a single section.
 
@@ -187,6 +262,7 @@ class HTMLStandaloneRenderer:
             section: Section object
             outline: Full outline (to look up insights)
             citation_map: Citation number mapping
+            embedded_charts: Dict of chart_id to base64 data URI
 
         Returns:
             HTML for the section
@@ -216,6 +292,19 @@ class HTMLStandaloneRenderer:
             for insight_id in section.insight_ids:
                 try:
                     insight = outline.get_insight(insight_id)
+
+                    # Render chart if insight has one
+                    chart_id = insight.metadata.get("chart_id") if insight.metadata else None
+                    if chart_id and chart_id in embedded_charts:
+                        chart_meta = outline.metadata.get("charts", {}).get(chart_id, {})
+                        chart_desc = chart_meta.get("description", "Chart")
+                        data_uri = embedded_charts[chart_id]
+                        html += f"""                <div class="insight-chart">
+                    <img src="{data_uri}" alt="{escape(chart_desc)}" loading="lazy" />
+                    <p class="chart-caption">{escape(chart_desc)}</p>
+                </div>
+"""
+
                     insight_html = self._render_insight(insight, citation_map)
                     html += insight_html
                 except ValueError:
@@ -508,6 +597,25 @@ data-importance="{insight.importance}">
             color: var(--warning);
             margin-left: 1rem;
             white-space: nowrap;
+        }
+
+        .insight-chart {
+            margin: 1rem 0;
+            text-align: center;
+        }
+
+        .insight-chart img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-caption {
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-style: italic;
         }
 
         .citation-ref {

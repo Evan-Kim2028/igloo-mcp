@@ -168,6 +168,7 @@ test_connection()
 - [Error Catalog](ERROR_CATALOG.md) - Error reference
 - [Error Handling](ERROR_HANDLING.md) - Error handling architecture
 - [Tools Index](TOOLS_INDEX.md) - Quick tool reference
+- [Progressive Disclosure](./PROGRESSIVE_DISCLOSURE.md) - Control response verbosity for token efficiency
 
 ---
 

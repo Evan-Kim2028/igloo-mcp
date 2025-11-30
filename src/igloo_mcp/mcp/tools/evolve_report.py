@@ -69,6 +69,7 @@ from igloo_mcp.mcp.exceptions import (
     MCPValidationError,
 )
 from igloo_mcp.mcp.tools.base import MCPTool, ensure_request_id, tool_error_handler
+from igloo_mcp.mcp.validation_helpers import validate_response_mode
 
 logger = get_logger(__name__)
 
@@ -191,7 +192,8 @@ class EvolveReportTool(MCPTool):
         constraints: Optional[Dict[str, Any]] = None,
         dry_run: bool = False,
         status_change: Optional[str] = None,
-        response_detail: str = "standard",
+        response_mode: Optional[str] = None,
+        response_detail: Optional[str] = None,  # DEPRECATED in v0.3.5
         request_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Execute report evolution with structured error handling.
@@ -203,7 +205,8 @@ class EvolveReportTool(MCPTool):
             constraints: Optional constraints on evolution
             dry_run: If True, validate without applying changes
             status_change: Optional status change for the report
-            response_detail: Response verbosity level ('minimal', 'standard', 'full')
+            response_mode: Response verbosity level (STANDARD: 'minimal', 'standard', 'full')
+            response_detail: DEPRECATED - use response_mode instead
             request_id: Optional request correlation ID for tracing
 
         Returns:
@@ -217,19 +220,17 @@ class EvolveReportTool(MCPTool):
         start_time = time.time()
         request_id = ensure_request_id(request_id)
 
-        # Validate response_detail parameter
-        valid_levels = ("minimal", "standard", "full")
-        if response_detail not in valid_levels:
-            raise MCPValidationError(
-                f"Invalid response_detail '{response_detail}'. Must be one of: {', '.join(valid_levels)}",
-                validation_errors=[f"Invalid response_detail: {response_detail}"],
-                hints=[
-                    "Use 'minimal' for compact responses (~200 tokens)",
-                    "Use 'standard' for balanced responses with IDs (~400 tokens)",
-                    "Use 'full' for complete responses with all details (~1000+ tokens)",
-                ],
-                context={"request_id": request_id},
-            )
+        # Validate response_mode parameter with backward compatibility
+        mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="response_detail",
+            legacy_param_value=response_detail,
+            valid_modes=("minimal", "standard", "full"),
+            default="standard",
+        )
+
+        # Use mode for the rest of the function
+        response_detail = mode
 
         proposed_changes = proposed_changes or {}
 
