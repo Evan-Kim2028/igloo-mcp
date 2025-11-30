@@ -34,6 +34,7 @@ def _compare_jsonl(expected_path: Path, actual_path: Path) -> None:
         "objects",
         "source_databases",
         "tables",
+        "response_mode_requested",  # Added in v0.3.5 for telemetry
     }
     for expected, actual in zip(expected_records, actual_records, strict=False):
         extra_keys = set(actual) - set(expected)
