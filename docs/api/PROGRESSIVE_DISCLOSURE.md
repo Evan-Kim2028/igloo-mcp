@@ -63,43 +63,50 @@ Legacy mode values mapped to standard:
 
 ## Usage Examples
 
-### Quick Checks
+### Quick Checks (Default Behavior - v0.3.5+)
 
 ```python
-# Check system health
-health_check(response_mode="minimal")
+# Check system health (defaults to minimal)
+health_check()
 
-# Verify catalog exists
-get_catalog_summary(response_mode="minimal")
+# Verify catalog exists (defaults to minimal)
+get_catalog_summary()
 
-# Check report exists
-get_report("Q1 Revenue", response_mode="minimal")
-```
+# Check report exists (defaults to minimal)
+get_report("Q1 Revenue")
 
-### Standard Operations
-
-```python
-# Execute query with sample (default)
+# Execute query (defaults to summary - 5 sample rows)
 execute_query(
     "SELECT * FROM customers",
-    reason="Analysis"
+    reason="Quick validation"
 )
+```
 
-# Get report structure
+### Explicit Mode Control
+
+```python
+# Get full report structure
 get_report("Q1 Revenue", response_mode="standard")
+
+# Get all query results (no sampling)
+execute_query(
+    "SELECT * FROM table",
+    reason="Full export",
+    response_mode="full"
+)
 ```
 
 ### Complete Data
 
 ```python
-# Get all results
+# Get all results (explicit)
 execute_query(
     "SELECT * FROM table",
     reason="Export",
     response_mode="full"
 )
 
-# Get full report content
+# Get full report content with audit trail
 get_report("Q1 Revenue", response_mode="full")
 ```
 

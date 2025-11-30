@@ -642,9 +642,6 @@ class ExecuteQueryTool(MCPTool):
         if validate_profile:
             await self._ensure_profile_health()
 
-        # Validate result_mode early since it's used in cache hit response
-        effective_result_mode = result_mode  # Use result_mode directly for now
-
         if validate_statement:
             # Validate SQL statement length
             if len(statement) > MAX_SQL_STATEMENT_LENGTH:
@@ -677,6 +674,7 @@ class ExecuteQueryTool(MCPTool):
                 "role": overrides_input.get("role"),
             }
 
+        # Generate execution metadata
         execution_id = execution_id_override or uuid.uuid4().hex
         requested_ts = time.time()
         sql_sha256 = sql_sha256 or hashlib.sha256(statement.encode("utf-8")).hexdigest()
@@ -1616,7 +1614,7 @@ class ExecuteQueryTool(MCPTool):
                             "REQUIRED: Short reason for executing this query. "
                             "Stored in Snowflake QUERY_TAG, history, and cache metadata "
                             "to explain why the data was requested. Avoid sensitive information. "
-                            "Examples: 'Validate revenue spike', 'Dashboard refresh', 'Debug missing data'"
+                            "Examples: 'Validate revenue spike', 'Dashboard refresh', 'Investigate missing data'"
                         ),
                         title="Reason (REQUIRED)",
                         examples=[
