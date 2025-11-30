@@ -192,7 +192,7 @@ def handle_snowflake_errors(
     return decorator
 
 
-def safe_execute(
+def safe_execute[T](
     func: Callable[..., T],
     *args: Any,
     context: ErrorContext | None = None,

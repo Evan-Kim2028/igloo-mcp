@@ -36,7 +36,7 @@ import json
 import os
 import uuid
 from collections.abc import Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
@@ -248,17 +248,13 @@ class ReportStorage:
 
         except Exception as e:
             # Clean up temp file on failure
-            try:
+            with suppress(Exception):
                 temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
             raise StorageError(f"Failed to save outline: {e}") from e
         finally:
             # Ensure temp file is cleaned up
-            try:
+            with suppress(Exception):
                 temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
 
     def save_outline(self, outline: Outline) -> None:
         """Atomically save outline and record a backup audit event.
@@ -355,10 +351,8 @@ class ReportStorage:
                 pass
 
         except Exception as e:
-            try:
+            with suppress(Exception):
                 temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
             raise StorageError(f"Failed to append audit event: {e}") from e
 
     def load_audit_events(self) -> list[AuditEvent]:
@@ -373,7 +367,7 @@ class ReportStorage:
         events = []
         try:
             with self.audit_path.open("r", encoding="utf-8") as f:
-                for line_num, line in enumerate(f, 1):
+                for _line_num, line in enumerate(f, 1):
                     line = line.strip()
                     if not line:
                         continue
@@ -470,10 +464,8 @@ class GlobalStorage:
                 pass
 
         except Exception as e:
-            try:
+            with suppress(Exception):
                 temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
             raise StorageError(f"Failed to save index entry: {e}") from e
 
 

@@ -158,7 +158,8 @@ class TestApplyContentMerge:
         result = apply_content_merge("First", "Second", MERGE_MODE_APPEND)
         assert result.startswith("First")
         assert result.endswith("Second")
-        assert "First" in result and "Second" in result
+        assert "First" in result
+        assert "Second" in result
 
     def test_prepend_mode(self) -> None:
         """Prepend mode adds new content before existing."""

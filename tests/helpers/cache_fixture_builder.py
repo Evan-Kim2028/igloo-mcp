@@ -9,7 +9,6 @@ import shutil
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, List
 from unittest.mock import patch
 
 from igloo_mcp.cache.query_result_cache import QueryResultCache
@@ -26,7 +25,7 @@ from tests.helpers.fake_snowflake_connector import (
 class _TimeSequence:
     """Iterator-friendly helper to supply deterministic timestamps."""
 
-    def __init__(self, values: List[float]) -> None:
+    def __init__(self, values: list[float]) -> None:
         self._values = iter(values)
         self._last = values[-1] if values else 0.0
 
@@ -39,7 +38,7 @@ class _TimeSequence:
 
 
 @contextmanager
-def _patched_time(values: List[float]):
+def _patched_time(values: list[float]):
     seq = _TimeSequence(values)
 
     def fake_sleep(_seconds: float) -> None:
@@ -53,7 +52,7 @@ def _patched_time(values: List[float]):
         yield
 
 
-def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
+def generate_cache_fixture(output_dir: Path) -> dict[str, Path]:
     """Produce deterministic cache/history artifacts for testing.
 
     Args:
@@ -184,8 +183,8 @@ def generate_cache_fixture(output_dir: Path) -> Dict[str, Path]:
     }
 
 
-def load_jsonl(path: Path) -> List[Dict[str, object]]:
-    records: List[Dict[str, object]] = []
+def load_jsonl(path: Path) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
     with path.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()

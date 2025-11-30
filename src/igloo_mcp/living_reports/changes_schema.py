@@ -78,9 +78,8 @@ class InsightChange(BaseModel):
     @classmethod
     def generate_uuid_if_missing(cls, data: Any) -> Any:
         """Auto-generate UUID if insight_id is None or missing."""
-        if isinstance(data, dict):
-            if data.get("insight_id") is None:
-                data["insight_id"] = str(uuid.uuid4())
+        if isinstance(data, dict) and data.get("insight_id") is None:
+            data["insight_id"] = str(uuid.uuid4())
         return data
 
     @field_validator("insight_id")
@@ -131,9 +130,8 @@ class SectionChange(BaseModel):
     @classmethod
     def generate_uuid_if_missing(cls, data: Any) -> Any:
         """Auto-generate UUID if section_id is None or missing."""
-        if isinstance(data, dict):
-            if data.get("section_id") is None:
-                data["section_id"] = str(uuid.uuid4())
+        if isinstance(data, dict) and data.get("section_id") is None:
+            data["section_id"] = str(uuid.uuid4())
         return data
 
     @model_validator(mode="after")
@@ -264,7 +262,7 @@ class ProposedChanges(BaseModel):
                 # Check that at least one non-ID field is provided for modification
                 non_id_fields = [
                     k
-                    for k in change.model_dump(exclude={"insight_id"}).keys()
+                    for k in change.model_dump(exclude={"insight_id"})
                     if change.model_dump(exclude={"insight_id"}).get(k) is not None
                 ]
                 if not non_id_fields:
@@ -411,7 +409,7 @@ class ProposedChanges(BaseModel):
                 # Check that at least one non-ID field is provided for modification
                 non_id_fields = [
                     k
-                    for k in section_change.model_dump(exclude={"section_id"}).keys()
+                    for k in section_change.model_dump(exclude={"section_id"})
                     if section_change.model_dump(exclude={"section_id"}).get(k) is not None
                 ]
                 if not non_id_fields:

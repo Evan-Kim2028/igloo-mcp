@@ -49,10 +49,10 @@ async def test_create_combined_lifespan_handles_health(monkeypatch: pytest.Monke
         return cm
 
     class StubMonitor:
-        def __init__(self, server_start_time):  # noqa: ARG003
+        def __init__(self, server_start_time):
             self.errors: list[str] = []
 
-        def get_profile_health(self, profile, force_refresh):  # noqa: ARG002
+        def get_profile_health(self, profile, force_refresh):
             return SimpleNamespace(
                 is_valid=False,
                 validation_error="missing warehouse",
@@ -62,11 +62,11 @@ async def test_create_combined_lifespan_handles_health(monkeypatch: pytest.Monke
         def record_error(self, message):
             self.errors.append(message)
 
-        def check_connection_health(self, service):  # noqa: ARG002
+        def check_connection_health(self, service):
             raise RuntimeError("connect failed")
 
     class StubResourceManager:
-        def __init__(self, health_monitor):  # noqa: ARG002
+        def __init__(self, health_monitor):
             pass
 
     async def run_sync(func, *args, **kwargs):
@@ -117,7 +117,7 @@ def test_main_happy_path(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("igloo_mcp.mcp_server.get_profile_summary", lambda: {"profiles": []})
 
     @asynccontextmanager
-    async def fake_lifespan(server):  # noqa: ARG001
+    async def fake_lifespan(server):
         yield "service"
 
     monkeypatch.setattr("igloo_mcp.mcp_server.create_combined_lifespan", lambda args: fake_lifespan)
@@ -125,7 +125,7 @@ def test_main_happy_path(monkeypatch: pytest.MonkeyPatch):
     run_calls = []
 
     class StubFastMCP:
-        def __init__(self, *a, **kw):  # noqa: D401
+        def __init__(self, *a, **kw):
             pass
 
         def run(self, **kwargs):

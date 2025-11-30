@@ -7,6 +7,7 @@ report directories.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -176,10 +177,8 @@ class ReportIndex:
                 pass
 
         except Exception as e:
-            try:
+            with contextlib.suppress(Exception):
                 temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
             raise IndexError(f"Failed to save index: {e}") from e
 
     def add_entry(self, entry: IndexEntry) -> None:
@@ -314,7 +313,7 @@ class ReportIndex:
         by_id_dir = reports_root / "by_id"
 
         # Check that all indexed reports exist on disk
-        for report_id, entry in self._entries.items():
+        for report_id, _entry in self._entries.items():
             report_dir = by_id_dir / report_id
             if not report_dir.exists():
                 errors.append(f"Indexed report {report_id} not found on disk")

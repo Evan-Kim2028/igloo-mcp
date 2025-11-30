@@ -558,8 +558,8 @@ class EvolveReportTool(MCPTool):
                 "section_ids_added": apply_stats.get("section_ids_added", []),
                 "insight_ids_modified": [c.insight_id for c in changes_obj.insights_to_modify if c.insight_id],
                 "section_ids_modified": [c.section_id for c in changes_obj.sections_to_modify if c.section_id],
-                "insight_ids_removed": [c for c in changes_obj.insights_to_remove],
-                "section_ids_removed": [c for c in changes_obj.sections_to_remove],
+                "insight_ids_removed": list(changes_obj.insights_to_remove),
+                "section_ids_removed": list(changes_obj.sections_to_remove),
             }
             if changes_obj.status_change:
                 summary["status_change"] = changes_obj.status_change
@@ -888,7 +888,7 @@ class EvolveReportTool(MCPTool):
         # Apply insight modifications
         for modify_data in changes.get("insights_to_modify", []):
             insight_id = modify_data["insight_id"]
-            for i, insight in enumerate(new_outline.insights):
+            for _i, insight in enumerate(new_outline.insights):
                 if insight.insight_id == insight_id:
                     for key, value in modify_data.items():
                         # Skip None values to support partial updates

@@ -82,10 +82,7 @@ def _is_select_equivalent(stmt_type: str | None) -> bool:
     if not canonical:
         return False
 
-    if canonical.startswith(_SELECT_EQUIVALENT_PREFIXES):
-        return True
-
-    return False
+    return bool(canonical.startswith(_SELECT_EQUIVALENT_PREFIXES))
 
 
 def extract_table_name(sql_statement: str) -> str:
@@ -116,13 +113,12 @@ def extract_table_name(sql_statement: str) -> str:
                 return table_str
 
         # Special handling for DROP which uses Identifier
-        if isinstance(parsed, exp.Drop):
-            if hasattr(parsed, "this"):
-                # Get the identifier
-                identifier = parsed.this
-                if hasattr(identifier, "name"):
-                    return identifier.name
-                return str(identifier)
+        if isinstance(parsed, exp.Drop) and hasattr(parsed, "this"):
+            # Get the identifier
+            identifier = parsed.this
+            if hasattr(identifier, "name"):
+                return identifier.name
+            return str(identifier)
 
     except Exception:
         # If parsing fails, return placeholder

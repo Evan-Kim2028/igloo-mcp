@@ -15,13 +15,13 @@ def parse_coverage_xml(coverage_file: Path) -> dict[str, float]:
     root = tree.getroot()
 
     coverage_by_file = {}
-    for package in root.findall('.//package'):
-        for cls in package.findall('classes/class'):
-            filename = cls.get('filename', '')
-            lines = cls.find('lines')
+    for package in root.findall(".//package"):
+        for cls in package.findall("classes/class"):
+            filename = cls.get("filename", "")
+            lines = cls.find("lines")
             if lines is not None:
-                total = len(list(lines.findall('line')))
-                covered = len([line_elem for line_elem in lines.findall('line') if line_elem.get('hits', '0') != '0'])
+                total = len(list(lines.findall("line")))
+                covered = len([line_elem for line_elem in lines.findall("line") if line_elem.get("hits", "0") != "0"])
                 coverage_pct = (covered / total * 100) if total > 0 else 100.0
                 coverage_by_file[filename] = coverage_pct
 

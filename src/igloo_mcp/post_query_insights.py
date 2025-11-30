@@ -25,10 +25,7 @@ def _normalize_row(row: Any, existing_columns: Sequence[str] | None) -> tuple[di
 
     if isinstance(row, (list, tuple)):
         names: list[str]
-        if existing_columns:
-            names = list(existing_columns)
-        else:
-            names = [f"column_{idx}" for idx in range(len(row))]
+        names = list(existing_columns) if existing_columns else [f"column_{idx}" for idx in range(len(row))]
         mapping = {names[idx] if idx < len(names) else f"column_{idx}": value for idx, value in enumerate(row)}
         inferred = None if existing_columns else list(mapping.keys())
         return mapping, inferred

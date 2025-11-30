@@ -304,7 +304,7 @@ class TestSmokeIntegration:
         ]
 
         for pattern in snowflake_patterns:
-            stmt_type, is_valid, error_msg = validate_sql_statement(pattern, ["Select"], [])
+            _stmt_type, is_valid, error_msg = validate_sql_statement(pattern, ["Select"], [])
 
             assert is_valid is True, f"Complex Snowflake pattern should be valid: {pattern[:100]}..."
             assert error_msg is None, f"Complex pattern should not have error: {error_msg}"
@@ -385,7 +385,7 @@ class TestSmokeIntegration:
             LIMIT 100"""
 
             # Test validation (should work)
-            stmt_type, is_valid, error_msg = validate_sql_statement(complex_lateral_query, ["Select"], [])
+            stmt_type, is_valid, _error_msg = validate_sql_statement(complex_lateral_query, ["Select"], [])
 
             assert is_valid is True, "Complex integration query should validate"
             assert stmt_type == "Select"

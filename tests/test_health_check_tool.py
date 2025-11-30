@@ -6,7 +6,7 @@ import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import pytest
 
@@ -18,13 +18,13 @@ from igloo_mcp.profile_utils import ProfileValidationError
 
 class _StubCursor:
     def __init__(self) -> None:
-        self._current: Dict[str, Any] = {}
+        self._current: dict[str, Any] = {}
 
     def execute(self, query: str) -> None:
         key = query.split("CURRENT_", 1)[-1].split("()")[0].lower()
         self._current = {key: key.upper()}
 
-    def fetchone(self) -> Dict[str, Any]:
+    def fetchone(self) -> dict[str, Any]:
         return self._current
 
 
@@ -40,13 +40,13 @@ class _StubConnection:
 
 
 class StubSnowflakeService:
-    def __init__(self, cursor: Optional[_StubCursor] = None) -> None:
+    def __init__(self, cursor: _StubCursor | None = None) -> None:
         self._cursor = cursor or _StubCursor()
 
-    def get_query_tag_param(self) -> Dict[str, Any]:
+    def get_query_tag_param(self) -> dict[str, Any]:
         return {}
 
-    def get_connection(self, **kwargs: Any) -> _StubConnection:  # noqa: ANN401
+    def get_connection(self, **kwargs: Any) -> _StubConnection:
         return _StubConnection(self._cursor)
 
 
@@ -57,7 +57,7 @@ class StubProfileHealth:
     config_path: Path = Path("/tmp/config.toml")
     available_profiles: list[str] = None  # type: ignore[assignment]
     config_exists: bool = True
-    validation_error: Optional[str] = None
+    validation_error: str | None = None
 
     def __post_init__(self) -> None:
         if self.available_profiles is None:
@@ -70,7 +70,7 @@ class StubSystemStatus:
     is_healthy: bool = True
     error_count: int = 0
     warning_count: int = 0
-    metrics: Dict[str, int] = None  # type: ignore[assignment]
+    metrics: dict[str, int] = None  # type: ignore[assignment]
     recent_errors: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -171,7 +171,7 @@ async def test_health_check_handles_failures(monkeypatch: pytest.MonkeyPatch) ->
     config = Config.from_env()
 
     class FailingService(StubSnowflakeService):
-        def get_connection(self, **kwargs: Any) -> _StubConnection:  # noqa: ANN401
+        def get_connection(self, **kwargs: Any) -> _StubConnection:
             raise RuntimeError("connection refused")
 
     failing_monitor = StubHealthMonitor(

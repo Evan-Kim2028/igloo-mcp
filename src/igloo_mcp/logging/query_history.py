@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
@@ -129,10 +130,7 @@ class QueryHistory:
                     logger.warning(warning)
                 break
             except Exception as exc:
-                warning = "Failed to initialise query history path %s: %s" % (
-                    candidate,
-                    exc,
-                )
+                warning = f"Failed to initialise query history path {candidate}: {exc}"
                 self._warnings.append(warning)
                 logger.warning(warning)
 
@@ -248,7 +246,7 @@ class QueryHistory:
                     fh.write(line)
                     fh.write("\n")
             except Exception:
-                warning = "Failed to append query history entry to %s" % (self._path,)
+                warning = f"Failed to append query history entry to {self._path}"
                 self._warnings.append(warning)
                 logger.warning(warning, exc_info=True)
 
@@ -340,7 +338,7 @@ class QueryHistory:
                         fh.write(line)
                         fh.write("\n")
                 except Exception:
-                    warning = "Failed to append insight record to %s" % (self._path,)
+                    warning = f"Failed to append insight record to {self._path}"
                     self._warnings.append(warning)
                     logger.warning(warning, exc_info=True)
 
@@ -386,10 +384,8 @@ def update_cache_manifest_insight(manifest_path: Path, post_query_insight: str |
             return True
         except Exception:
             # Clean up temp file on failure
-            try:
+            with contextlib.suppress(Exception):
                 temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
             return False
     except Exception:
         logger.debug("Failed to update cache manifest", exc_info=True)

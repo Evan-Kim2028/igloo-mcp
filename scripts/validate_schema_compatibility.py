@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import List, Set
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -28,7 +27,7 @@ from igloo_mcp.living_reports.schema_constants import (
 )
 
 
-def extract_pydantic_fields(model_class) -> Set[str]:
+def extract_pydantic_fields(model_class) -> set[str]:
     """Extract field names from a Pydantic model.
 
     Args:
@@ -45,7 +44,7 @@ def extract_pydantic_fields(model_class) -> Set[str]:
     return set()
 
 
-def validate_schema_fields(schema_class, constants_class, schema_name: str) -> List[str]:
+def validate_schema_fields(schema_class, constants_class, schema_name: str) -> list[str]:
     """Validate that schema fields match constants.
 
     Args:

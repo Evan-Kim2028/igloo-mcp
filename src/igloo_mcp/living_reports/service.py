@@ -128,7 +128,7 @@ class ReportService:
                     raw_insights = data["insights"]
                     if not isinstance(raw_insights, list):
                         raise ValueError("initial_sections.insights must be a list of insight dicts")
-                    for insight_idx, raw_insight in enumerate(raw_insights):
+                    for _insight_idx, raw_insight in enumerate(raw_insights):
                         if not isinstance(raw_insight, dict):
                             raise ValueError("Each insight must be a dict")
                         payload = dict(raw_insight)
@@ -290,13 +290,12 @@ class ReportService:
             old_outline = storage.load_outline()
 
             # Version check for optimistic locking
-            if expected_version is not None:
-                if old_outline.outline_version != expected_version:
-                    raise ValueError(
-                        f"Version mismatch: expected {expected_version}, "
-                        f"got {old_outline.outline_version}. "
-                        f"Report was modified concurrently."
-                    )
+            if expected_version is not None and old_outline.outline_version != expected_version:
+                raise ValueError(
+                    f"Version mismatch: expected {expected_version}, "
+                    f"got {old_outline.outline_version}. "
+                    f"Report was modified concurrently."
+                )
 
             # Increment version
             outline.outline_version = old_outline.outline_version + 1
@@ -702,7 +701,7 @@ class ReportService:
             if tags_to_remove:
                 current_tags.difference_update(tags_to_remove)
 
-            outline.metadata["tags"] = sorted(list(current_tags))
+            outline.metadata["tags"] = sorted(current_tags)
             outline.updated_at = now
             backup_filename = storage._save_outline_atomic(outline)
 
@@ -869,7 +868,7 @@ class ReportService:
         new_outline.insights = all_insights
         # Preserve "synthesized" tag and add source tags
         all_tags.add("synthesized")
-        new_outline.metadata["tags"] = sorted(list(all_tags))
+        new_outline.metadata["tags"] = sorted(all_tags)
         new_outline.metadata["synthesized_from"] = source_ids
         new_outline.metadata["synthesis_note"] = (
             f"Synthesized from {len(source_ids)} source reports. "
@@ -1031,7 +1030,7 @@ class ReportService:
             if outline.metadata.get("template") == "analyst_v1":
                 citation_map = self._build_citation_map(outline)
                 # Build citation_details dict with provenance info for appendix
-                for exec_id, citation_num in citation_map.items():
+                for exec_id, _citation_num in citation_map.items():
                     if exec_id in query_provenance:
                         citation_details[exec_id] = query_provenance[exec_id]
                     else:

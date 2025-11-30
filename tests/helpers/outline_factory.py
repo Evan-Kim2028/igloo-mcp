@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from igloo_mcp.living_reports.models import Outline
@@ -28,7 +28,7 @@ def create_test_outline(**kwargs: Any) -> Outline:
         ... )
     """
     # Outline expects ISO format strings, not datetime objects
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     defaults = {
         "created_at": now,

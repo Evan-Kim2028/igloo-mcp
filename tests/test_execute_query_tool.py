@@ -42,8 +42,9 @@ async def test_execute_query_allows_union_statement():
     assert result["rows"] == expected["rows"]
     assert result["statement"] == statement
     assert result["cache"]["hit"] is False
-    assert "key_metrics" in result and result["key_metrics"]["total_rows"] == 2
-    assert "insights" in result and result["insights"]
+    assert "key_metrics" in result
+    assert result["key_metrics"]["total_rows"] == 2
+    assert result.get("insights")
     assert tool._execute_query_sync.call_count == 1
 
 

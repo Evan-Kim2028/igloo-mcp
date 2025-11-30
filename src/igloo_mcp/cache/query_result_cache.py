@@ -100,12 +100,12 @@ class QueryResultCache:
                 candidate.mkdir(parents=True, exist_ok=True)
                 self._root = candidate
                 if index > 0:
-                    warning = "Cache root unavailable; using fallback: %s" % candidate
+                    warning = f"Cache root unavailable; using fallback: {candidate}"
                     self._warnings.append(warning)
                     logger.warning(warning)
                 break
             except Exception as exc:
-                warning = "Failed to initialise cache root %s: %s" % (candidate, exc)
+                warning = f"Failed to initialise cache root {candidate}: {exc}"
                 self._warnings.append(warning)
                 logger.warning(warning)
 
@@ -351,7 +351,7 @@ class QueryResultCache:
         try:
             key_dir.mkdir(parents=True, exist_ok=True)
         except Exception as exc:
-            warning = "Failed to create cache directory %s: %s" % (key_dir, exc)
+            warning = f"Failed to create cache directory {key_dir}: {exc}"
             self._warnings.append(warning)
             logger.warning(warning)
             return None
@@ -363,7 +363,7 @@ class QueryResultCache:
                     fh.write(json.dumps(row, ensure_ascii=False))
                     fh.write("\n")
         except Exception as exc:
-            warning = "Failed to persist cached rows for %s: %s" % (cache_key, exc)
+            warning = f"Failed to persist cached rows for {cache_key}: {exc}"
             self._warnings.append(warning)
             logger.warning(warning)
             return None
@@ -400,7 +400,7 @@ class QueryResultCache:
                     for row in rows:
                         writer.writerow({col: row.get(col) for col in metadata["columns"]})
         except Exception as exc:
-            warning = "Failed to persist cached CSV for %s: %s" % (cache_key, exc)
+            warning = f"Failed to persist cached CSV for {cache_key}: {exc}"
             # CSV is optional; keep going but record warning.
             self._warnings.append(warning)
             logger.warning(warning)
@@ -433,7 +433,7 @@ class QueryResultCache:
                 encoding="utf-8",
             )
         except Exception as exc:
-            warning = "Failed to write cache manifest for %s: %s" % (cache_key, exc)
+            warning = f"Failed to write cache manifest for {cache_key}: {exc}"
             self._warnings.append(warning)
             logger.warning(warning)
             return None

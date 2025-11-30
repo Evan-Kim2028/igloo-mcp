@@ -315,7 +315,7 @@ class ConfigLoader:
                 if key in snowflake_data:
                     snowflake[key] = snowflake_data.get(key)
 
-        runtime_candidates = {key: data[key] for key in self._RUNTIME_CASTERS.keys() if key in data}
+        runtime_candidates = {key: data[key] for key in self._RUNTIME_CASTERS if key in data}
         runtime = self.normalize_runtime_values(runtime_candidates, source=f"file {path}")
 
         return ConfigOverrides(snowflake=snowflake, values=runtime)

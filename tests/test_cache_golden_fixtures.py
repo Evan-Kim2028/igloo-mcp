@@ -35,7 +35,7 @@ def _compare_jsonl(expected_path: Path, actual_path: Path) -> None:
         "source_databases",
         "tables",
     }
-    for expected, actual in zip(expected_records, actual_records):
+    for expected, actual in zip(expected_records, actual_records, strict=False):
         extra_keys = set(actual) - set(expected)
         assert extra_keys <= allowed_extra
         filtered_actual = {key: actual[key] for key in expected}

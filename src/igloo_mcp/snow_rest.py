@@ -187,10 +187,7 @@ class SnowRestClient:
 
     def _request_url(self, url: str) -> dict[str, Any]:
         parsed = urllib.parse.urlparse(url)
-        if parsed.scheme:
-            path = url
-        else:
-            path = f"{self.base_url}{url}"
+        path = url if parsed.scheme else f"{self.base_url}{url}"
         return self._request("GET", path, absolute=True)
 
     def _request(
@@ -201,10 +198,7 @@ class SnowRestClient:
         *,
         absolute: bool = False,
     ) -> dict[str, Any]:
-        if absolute:
-            url = path
-        else:
-            url = f"{self.base_url}{path}"
+        url = path if absolute else f"{self.base_url}{path}"
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         headers = {
             "Authorization": f"Bearer {self._get_token()}",

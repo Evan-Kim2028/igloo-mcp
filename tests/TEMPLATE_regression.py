@@ -43,8 +43,6 @@ def test_regression_issue_999_sql_injection_in_query_validation():
     This test ensures SQL injection is prevented.
     """
 
-    from igloo_mcp.sql_validation import validate_sql
-
     # GIVEN: Malicious SQL with injection attempt
     # malicious_sql = "SELECT * FROM users WHERE id = '1' OR '1'='1'"  # Example only
 

@@ -6,10 +6,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 from igloo_mcp.path_utils import (
     find_repo_root,
@@ -20,14 +21,14 @@ from igloo_mcp.path_utils import (
 
 @dataclass
 class SelectionCriteria:
-    query_ids: Optional[List[str]] = None
-    reason_contains: Optional[str] = None
-    since: Optional[str] = None
-    until: Optional[str] = None
+    query_ids: list[str] | None = None
+    reason_contains: str | None = None
+    since: str | None = None
+    until: str | None = None
     latest_per_sql: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {}
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
         if self.query_ids is not None:
             payload["query_ids"] = self.query_ids
         if self.reason_contains is not None:
@@ -84,19 +85,19 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _resolve_doc_path(raw: Optional[str]) -> Path:
+def _resolve_doc_path(raw: str | None) -> Path:
     if raw is None:
         return resolve_history_path()
     return resolve_history_path(raw=raw)
 
 
-def _resolve_artifact_root(raw: Optional[str]) -> Path:
+def _resolve_artifact_root(raw: str | None) -> Path:
     if raw is None:
         return resolve_artifact_root()
     return resolve_artifact_root(raw=raw)
 
 
-def _load_jsonl(path: Path) -> Iterable[Dict[str, Any]]:
+def _load_jsonl(path: Path) -> Iterable[dict[str, Any]]:
     with path.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -110,7 +111,7 @@ def _load_jsonl(path: Path) -> Iterable[Dict[str, Any]]:
                 yield payload
 
 
-def _ts_from_iso8601(raw: Optional[str]) -> Optional[float]:
+def _ts_from_iso8601(raw: str | None) -> float | None:
     if not raw:
         return None
     if raw.endswith("Z"):
@@ -122,10 +123,10 @@ def _ts_from_iso8601(raw: Optional[str]) -> Optional[float]:
 
 
 def _select_entries(
-    records: Iterable[Dict[str, Any]],
+    records: Iterable[dict[str, Any]],
     criteria: SelectionCriteria,
-) -> List[Dict[str, Any]]:
-    selected: List[Dict[str, Any]] = []
+) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
     since_ts = _ts_from_iso8601(criteria.since)
     until_ts = _ts_from_iso8601(criteria.until)
     for record in records:
@@ -147,7 +148,7 @@ def _select_entries(
             continue
         selected.append(record)
     if criteria.latest_per_sql:
-        latest: Dict[str, Dict[str, Any]] = {}
+        latest: dict[str, dict[str, Any]] = {}
         for record in selected:
             sha = record.get("sql_sha256")
             if not sha:
@@ -159,7 +160,7 @@ def _select_entries(
     return selected
 
 
-def _read_sql_text(artifact_root: Path, sha: str, artifacts: Dict[str, Any]) -> Optional[str]:
+def _read_sql_text(artifact_root: Path, sha: str, artifacts: dict[str, Any]) -> str | None:
     if len(sha) != 64 or any(c not in "0123456789abcdef" for c in sha):
         raise ValueError(f"Invalid sql_sha256 '{sha}'")
     if artifacts:
@@ -206,8 +207,8 @@ def main() -> int:
         print("No matching entries found", file=sys.stderr)
         return 1
 
-    failures: Dict[str, str] = {}
-    entries: List[Dict[str, Any]] = []
+    failures: dict[str, str] = {}
+    entries: list[dict[str, Any]] = []
 
     for record in selected:
         sha = record.get("sql_sha256")
@@ -218,7 +219,7 @@ def main() -> int:
         if sql_text is None:
             failures[sha] = "SQL artifact not found"
             continue
-        entry: Dict[str, Any] = {
+        entry: dict[str, Any] = {
             "sql_sha256": sha,
             "mcp_uri": f"igloo://queries/by-sha/{sha}.sql",
             "sql_text": sql_text,

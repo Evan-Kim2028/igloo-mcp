@@ -7,19 +7,19 @@ reducing test maintenance burden when schema evolves.
 from __future__ import annotations
 
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 def create_valid_insight(
     summary: str,
     importance: int,
     *,
-    insight_id: Optional[str] = None,
-    supporting_queries: Optional[List[Dict[str, Any]]] = None,
-    citations: Optional[List[Dict[str, Any]]] = None,
+    insight_id: str | None = None,
+    supporting_queries: list[dict[str, Any]] | None = None,
+    citations: list[dict[str, Any]] | None = None,
     status: str = "active",
-    draft_changes: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    draft_changes: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Create insight with guaranteed valid schema.
 
     Args:
@@ -45,7 +45,7 @@ def create_valid_insight(
     if not 0 <= importance <= 10:
         raise ValueError(f"importance must be 0-10, got {importance}")
 
-    insight: Dict[str, Any] = {
+    insight: dict[str, Any] = {
         "summary": summary,
         "importance": importance,
     }
@@ -78,15 +78,15 @@ def create_valid_section(
     title: str,
     order: int,
     *,
-    section_id: Optional[str] = None,
-    content: Optional[str] = None,
+    section_id: str | None = None,
+    content: str | None = None,
     content_format: str = "markdown",
-    notes: Optional[str] = None,
-    insight_ids: Optional[List[str]] = None,
-    insights: Optional[List[Dict[str, Any]]] = None,
-    insight_ids_to_add: Optional[List[str]] = None,
-    insight_ids_to_remove: Optional[List[str]] = None,
-) -> Dict[str, Any]:
+    notes: str | None = None,
+    insight_ids: list[str] | None = None,
+    insights: list[dict[str, Any]] | None = None,
+    insight_ids_to_add: list[str] | None = None,
+    insight_ids_to_remove: list[str] | None = None,
+) -> dict[str, Any]:
     """Create section with guaranteed valid schema.
 
     Args:
@@ -118,7 +118,7 @@ def create_valid_section(
     if content_format not in ("markdown", "html", "plain"):
         raise ValueError(f"content_format must be markdown/html/plain, got {content_format}")
 
-    section: Dict[str, Any] = {
+    section: dict[str, Any] = {
         "title": title,
         "order": order,
     }
@@ -159,10 +159,10 @@ def create_valid_section(
 def create_mock_citation(
     execution_id: str = "mock-execution-id",
     *,
-    query_text: Optional[str] = None,
-    row_count: Optional[int] = None,
-    timestamp: Optional[str] = None,
-) -> Dict[str, Any]:
+    query_text: str | None = None,
+    row_count: int | None = None,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
     """Create mock citation for test insights.
 
     Args:
@@ -182,7 +182,7 @@ def create_mock_citation(
         ...     row_count=100
         ... )
     """
-    citation: Dict[str, Any] = {"execution_id": execution_id}
+    citation: dict[str, Any] = {"execution_id": execution_id}
 
     if query_text is not None:
         citation["query_text"] = query_text
@@ -201,7 +201,7 @@ def create_insight_with_citation(
     importance: int,
     execution_id: str = "mock-qid-123",
     **kwargs: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create insight with mock citation (for tests requiring citations).
 
     Convenience wrapper around create_valid_insight that adds a mock citation.
@@ -231,9 +231,9 @@ def create_insight_with_citation(
 def create_section_with_insights(
     title: str,
     order: int,
-    insights: List[tuple[str, int]],
+    insights: list[tuple[str, int]],
     **kwargs: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create section with inline insights (avoids section_id validation).
 
     Args:

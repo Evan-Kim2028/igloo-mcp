@@ -34,6 +34,8 @@ except ImportError:  # pragma: no cover
             return logging.getLogger(name)
 
 
+import contextlib
+
 from igloo_mcp.cache import QueryResultCache
 from igloo_mcp.config import Config
 from igloo_mcp.constants import (
@@ -1478,14 +1480,7 @@ class ExecuteQueryTool(MCPTool):
                                 last_rows = processed_rows[-RESULT_KEEP_LAST_ROWS:]
 
                                 result_box["rows"] = (
-                                    truncated_rows
-                                    + [
-                                        {
-                                            "__truncated__": True,
-                                            "__message__": "Large result set truncated",
-                                        }
-                                    ]
-                                    + last_rows
+                                    [*truncated_rows, {"__truncated__": True, "__message__": "Large result set truncated"}, *last_rows]
                                 )
                                 result_box["truncated"] = True
                                 result_box["original_rowcount"] = original_count
@@ -1517,14 +1512,10 @@ class ExecuteQueryTool(MCPTool):
                         result_box["session"] = session_snapshot.to_mapping()
                     except Exception:
                         result_box["session"] = None
-                    try:
+                    with contextlib.suppress(Exception):
                         _restore_session_parameters(previous_parameters)
-                    except Exception:
-                        pass
-                    try:
+                    with contextlib.suppress(Exception):
                         restore_session_context(cursor, original)
-                    except Exception:
-                        pass
                     done.set()
 
             worker = threading.Thread(target=run_query, daemon=True)

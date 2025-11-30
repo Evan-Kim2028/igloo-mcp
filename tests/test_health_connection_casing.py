@@ -5,7 +5,7 @@ Ensures that DictCursor results with UPPERCASE keys are handled.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 import pytest
 
@@ -15,7 +15,7 @@ from igloo_mcp.mcp.tools.health import HealthCheckTool
 
 class _UpperDictCursor:
     def __init__(self) -> None:
-        self._current: Dict[str, Any] = {}
+        self._current: dict[str, Any] = {}
 
     def execute(self, query: str) -> None:
         # Emulate UPPERCASE column labels typically seen with DictCursor
@@ -23,7 +23,7 @@ class _UpperDictCursor:
         label = key.split()[0]  # strip potential "as ..." suffix
         self._current = {label: label}
 
-    def fetchone(self) -> Dict[str, Any]:
+    def fetchone(self) -> dict[str, Any]:
         return self._current
 
 
@@ -42,10 +42,10 @@ class _Svc:
     def __init__(self) -> None:
         self._cursor = _UpperDictCursor()
 
-    def get_query_tag_param(self) -> Dict[str, Any]:
+    def get_query_tag_param(self) -> dict[str, Any]:
         return {}
 
-    def get_connection(self, **kwargs: Any) -> _Conn:  # noqa: ANN401
+    def get_connection(self, **kwargs: Any) -> _Conn:
         return _Conn(self._cursor)
 
 

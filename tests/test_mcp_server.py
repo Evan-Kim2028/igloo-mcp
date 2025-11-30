@@ -6,7 +6,7 @@ import os
 import threading
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, List
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -55,14 +55,14 @@ class CapturingServer:
         self.tools: dict[str, Any] = {}
         self.resources: dict[str, Any] = {}
 
-    def tool(self, *, name: str, description: str):  # noqa: D401
+    def tool(self, *, name: str, description: str):
         def decorator(func):
             self.tools[name] = func
             return func
 
         return decorator
 
-    def resource(self, uri: str, **_: Any):  # noqa: D401
+    def resource(self, uri: str, **_: Any):
         def decorator(func):
             self.resources[uri] = func
             return func
@@ -228,17 +228,17 @@ def test_register_igloo_mcp_registers_once():
 
     class DummyServer:
         def __init__(self) -> None:
-            self.names: List[str] = []
-            self.resources: List[str] = []
+            self.names: list[str] = []
+            self.resources: list[str] = []
 
-        def tool(self, *, name: str, description: str):  # noqa: ARG002, unused-argument
+        def tool(self, *, name: str, description: str):
             def decorator(func):  # pragma: no cover - executed by registration
                 self.names.append(name)
                 return func
 
             return decorator
 
-        def resource(self, uri: str, **_: Any):  # noqa: ARG002
+        def resource(self, uri: str, **_: Any):
             def decorator(func):  # pragma: no cover - executed by registration
                 self.resources.append(uri)
                 return func
@@ -373,7 +373,7 @@ async def test_execute_query_tool_verbose_errors(monkeypatch: pytest.MonkeyPatch
     tool = server.tools["execute_query"]
 
     with pytest.raises(RuntimeError) as exc_info:
-        await tool("SELECT 1", verbose_errors=True, reason="test verbose error")  # noqa: FBT003
+        await tool("SELECT 1", verbose_errors=True, reason="test verbose error")
 
     assert "detailed failure" in str(exc_info.value)
 
@@ -410,7 +410,7 @@ def test_apply_config_overrides_raises_on_failure(monkeypatch: pytest.MonkeyPatc
         role=None,
     )
 
-    def fake_load_config(config_path=None, cli_overrides=None):  # noqa: ARG001
+    def fake_load_config(config_path=None, cli_overrides=None):
         raise mcp_server.ConfigError("boom")
 
     monkeypatch.setattr("igloo_mcp.mcp_server.load_config", fake_load_config)

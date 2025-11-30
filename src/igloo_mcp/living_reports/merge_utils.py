@@ -99,10 +99,7 @@ def _find_section_content(content: str, section_title: str) -> tuple[int, int] |
         if match.group(2).strip().lower() == section_title.lower():
             start = match.start()
             # End is either next header or end of content
-            if i + 1 < len(headers):
-                end = headers[i + 1].start()
-            else:
-                end = len(content)
+            end = headers[i + 1].start() if i + 1 < len(headers) else len(content)
             return (start, end)
 
     return None

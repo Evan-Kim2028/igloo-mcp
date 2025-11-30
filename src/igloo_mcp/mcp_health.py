@@ -256,10 +256,7 @@ class MCPHealthMonitor:
         """Get comprehensive health status for the MCP server."""
         profile_health = self.get_profile_health(profile_name)
 
-        if connection_health_override:
-            connection_status = connection_health_override
-        else:
-            connection_status = self.check_connection_health(snowflake_service)
+        connection_status = connection_health_override or self.check_connection_health(snowflake_service)
 
         resources = server_resources or []
         resource_availability = self.check_resource_availability(resources)

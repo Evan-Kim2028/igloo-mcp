@@ -75,7 +75,7 @@ def sample_reports(tmp_path):
 async def test_search_by_source_type(search_tool, sample_reports):
     """Test filtering citations by source type."""
     tool, _ = search_tool
-    service, report_ids = sample_reports
+    _service, _report_ids = sample_reports
 
     result = await tool.execute(source_type="query")
 
@@ -88,7 +88,7 @@ async def test_search_by_source_type(search_tool, sample_reports):
 async def test_search_by_provider(search_tool, sample_reports):
     """Test filtering citations by provider."""
     tool, _ = search_tool
-    service, report_ids = sample_reports
+    _service, _report_ids = sample_reports
 
     result = await tool.execute(provider="defillama")
 
@@ -101,7 +101,7 @@ async def test_search_by_provider(search_tool, sample_reports):
 async def test_search_url_substring(search_tool, sample_reports):
     """Test URL substring search."""
     tool, _ = search_tool
-    service, report_ids = sample_reports
+    _service, _report_ids = sample_reports
 
     result = await tool.execute(url_contains="monad.xyz")
 
@@ -114,7 +114,7 @@ async def test_search_url_substring(search_tool, sample_reports):
 async def test_search_exact_execution_id(search_tool, sample_reports):
     """Test exact execution_id match."""
     tool, _ = search_tool
-    service, report_ids = sample_reports
+    _service, _report_ids = sample_reports
 
     result = await tool.execute(execution_id="exec-123")
 
@@ -127,7 +127,7 @@ async def test_search_exact_execution_id(search_tool, sample_reports):
 async def test_group_by_source(search_tool, sample_reports):
     """Test grouping results by source type."""
     tool, _ = search_tool
-    service, report_ids = sample_reports
+    _service, _report_ids = sample_reports
 
     result = await tool.execute(group_by="source")
 
@@ -141,7 +141,7 @@ async def test_group_by_source(search_tool, sample_reports):
 async def test_group_by_provider(search_tool, sample_reports):
     """Test grouping results by provider."""
     tool, _ = search_tool
-    service, report_ids = sample_reports
+    _service, _report_ids = sample_reports
 
     result = await tool.execute(group_by="provider")
 
@@ -154,7 +154,7 @@ async def test_group_by_provider(search_tool, sample_reports):
 async def test_empty_results_handling(search_tool, sample_reports):
     """Test handling of no matching citations."""
     tool, _ = search_tool
-    service, report_ids = sample_reports
+    _service, _report_ids = sample_reports
 
     result = await tool.execute(execution_id="nonexistent-exec")
 
@@ -167,7 +167,7 @@ async def test_empty_results_handling(search_tool, sample_reports):
 async def test_limit_parameter(search_tool, sample_reports):
     """Test limit parameter works correctly."""
     tool, _ = search_tool
-    service, report_ids = sample_reports
+    _service, _report_ids = sample_reports
 
     result = await tool.execute(limit=1)
 
@@ -197,7 +197,7 @@ async def test_invalid_group_by_raises_error(search_tool):
 async def test_citation_result_structure(search_tool, sample_reports):
     """Test that citation results have correct structure."""
     tool, _ = search_tool
-    service, report_ids = sample_reports
+    _service, _report_ids = sample_reports
 
     result = await tool.execute()
 

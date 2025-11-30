@@ -388,10 +388,7 @@ def validate_safe_path(
         MCPValidationError: Absolute paths are not allowed
     """
     # Convert to Path object
-    if isinstance(path, str):
-        path_obj = Path(path)
-    else:
-        path_obj = path
+    path_obj = Path(path) if isinstance(path, str) else path
 
     # Check for null bytes (path traversal indicator)
     path_str = str(path_obj)

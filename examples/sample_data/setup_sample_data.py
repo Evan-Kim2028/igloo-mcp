@@ -10,7 +10,6 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Dict
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
@@ -25,7 +24,7 @@ def setup_logging():
     return logging.getLogger(__name__)
 
 
-def load_ddl_files(ddl_dir: Path) -> Dict[str, str]:
+def load_ddl_files(ddl_dir: Path) -> dict[str, str]:
     """Load all SQL DDL files from the ddl directory."""
     ddl_files = {}
 
@@ -39,7 +38,7 @@ def load_ddl_files(ddl_dir: Path) -> Dict[str, str]:
     for sql_file in sql_files:
         file_path = ddl_dir / sql_file
         if file_path.exists():
-            with open(file_path, "r") as f:
+            with open(file_path) as f:
                 ddl_files[sql_file] = f.read()
         else:
             logging.warning(f"DDL file not found: {file_path}")
@@ -77,7 +76,7 @@ def create_database_structure(snow_cli: SnowCLI, logger: logging.Logger) -> bool
         return False
 
 
-def create_sample_tables(snow_cli: SnowCLI, ddl_files: Dict[str, str], logger: logging.Logger) -> bool:
+def create_sample_tables(snow_cli: SnowCLI, ddl_files: dict[str, str], logger: logging.Logger) -> bool:
     """Create sample tables using the DDL files."""
     try:
         logger.info("Creating sample tables...")

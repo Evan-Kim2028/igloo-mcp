@@ -25,8 +25,8 @@ def fix_file(filepath: Path) -> tuple[int, list[str]]:
     # Get the package path from the file location
     # e.g., src/igloo_mcp/catalog/catalog_service.py -> igloo_mcp.catalog
     parts = filepath.parts
-    src_idx = parts.index('src')
-    package_parts = parts[src_idx + 1:-1]  # Exclude 'src' and filename
+    src_idx = parts.index("src")
+    package_parts = parts[src_idx + 1 : -1]  # Exclude 'src' and filename
     # Note: current_package not needed, we build absolute paths directly
 
     # Pattern 1: from .. import X or from ..module import X
@@ -54,14 +54,14 @@ def fix_file(filepath: Path) -> tuple[int, list[str]]:
                 # from ..module -> from igloo_mcp.module
                 if package_parts:
                     # We're in a subpackage, go up one level
-                    parent_package = '.'.join(package_parts[:-1]) if len(package_parts) > 1 else 'igloo_mcp'
+                    parent_package = ".".join(package_parts[:-1]) if len(package_parts) > 1 else "igloo_mcp"
                     absolute_path = f"{parent_package}.{first_module}{rest_path}" if first_module else parent_package
                 else:
                     # We're in the root package
                     absolute_path = f"igloo_mcp.{first_module}{rest_path}" if first_module else "igloo_mcp"
             elif levels_up == 2:
                 # from ... -> go up 2 levels
-                parent_package = '.'.join(package_parts[:-2]) if len(package_parts) > 2 else 'igloo_mcp'
+                parent_package = ".".join(package_parts[:-2]) if len(package_parts) > 2 else "igloo_mcp"
                 absolute_path = f"{parent_package}.{first_module}{rest_path}" if first_module else parent_package
             else:
                 # More than 2 levels up - just use igloo_mcp
