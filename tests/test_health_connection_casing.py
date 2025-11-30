@@ -56,7 +56,7 @@ async def test_health_connection_handles_uppercase_keys() -> None:
 
     result = await tool.execute()
 
-    conn = result["connection"]
+    conn = result["checks"]["connection"]
     # Values should not be None when uppercase keys are returned
     assert conn["connected"] is True
     assert conn["warehouse"] is not None

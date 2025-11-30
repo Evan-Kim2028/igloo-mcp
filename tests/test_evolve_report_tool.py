@@ -157,17 +157,17 @@ class TestEvolveReportToolIntegration:
         # Candidates list depends on selector implementation
 
     async def test_evolve_report_validation_error_invalid_response_detail(self, evolve_tool, test_report_id):
-        """Test validation error: invalid response_detail parameter."""
+        """Test validation error: invalid response_mode parameter."""
         with pytest.raises(MCPValidationError) as exc_info:
             await evolve_tool.execute(
                 report_selector=test_report_id,
                 instruction="Test",
                 proposed_changes={"sections_to_add": [{"title": "Test", "order": 0}]},
-                response_detail="invalid",  # Should be minimal/standard/full
+                response_mode="invalid",  # Should be minimal/standard/full
             )
 
         error = exc_info.value
-        assert "Invalid response_detail" in error.message
+        assert "Invalid response_mode" in error.message
         assert error.error_code == "VALIDATION_ERROR"
         assert any("minimal" in hint for hint in error.hints)
 

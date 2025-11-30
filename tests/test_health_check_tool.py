@@ -158,12 +158,12 @@ async def test_health_check_tool_success(monkeypatch: pytest.MonkeyPatch) -> Non
 
     result = await tool.execute(include_cortex=True, include_catalog=True)
 
-    assert result["connection"]["status"] == "connected"
-    assert result["profile"]["status"] == "valid"
-    assert result["cortex"]["available"] is True
-    assert result["catalog"]["status"] == "available"
-    assert result["system"]["healthy"] is True
-    assert result["overall_status"] == "healthy"
+    assert result["checks"]["connection"]["status"] == "connected"
+    assert result["checks"]["profile"]["status"] == "valid"
+    assert result["checks"]["cortex"]["available"] is True
+    assert result["checks"]["catalog"]["status"] == "available"
+    assert result["checks"]["system"]["healthy"] is True
+    assert result["status"] == "healthy"
 
 
 @pytest.mark.asyncio
@@ -213,9 +213,9 @@ async def test_health_check_handles_failures(monkeypatch: pytest.MonkeyPatch) ->
 
     result = await tool.execute(include_cortex=True, include_catalog=True)
 
-    assert result["connection"]["connected"] is False
-    assert result["profile"]["status"] in {"invalid", "error"}
-    assert result["catalog"]["status"] == "error"
-    assert result["cortex"]["available"] is False
-    assert result["system"]["status"] == "error"
-    assert result["overall_status"] == "unhealthy"
+    assert result["checks"]["connection"]["connected"] is False
+    assert result["checks"]["profile"]["status"] in {"invalid", "error"}
+    assert result["checks"]["catalog"]["status"] == "error"
+    assert result["checks"]["cortex"]["available"] is False
+    assert result["checks"]["system"]["status"] == "error"
+    assert result["status"] == "unhealthy"

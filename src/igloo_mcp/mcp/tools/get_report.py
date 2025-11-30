@@ -155,7 +155,10 @@ class GetReportTool(MCPTool):
             default="standard",
         )
 
-        # Map legacy values to standard values
+        # Keep track of original mode for routing decisions
+        original_mode = effective_mode
+
+        # Map legacy values to standard values for response structure
         mode_mapping = {
             "summary": "minimal",
             "sections": "standard",
@@ -228,26 +231,60 @@ class GetReportTool(MCPTool):
             ) from e
 
         # Build response based on mode
-        if mode == "summary":
+        if mode == "minimal":
             response = self._build_summary_response(outline, include_audit, report_id)
-        elif mode == "sections":
-            response = self._build_sections_response(
-                outline,
-                section_ids,
-                section_titles,
-                include_content,
-                limit,
-                offset,
-            )
-        elif mode == "insights":
-            response = self._build_insights_response(
-                outline,
-                insight_ids,
-                min_importance,
-                section_ids,
-                limit,
-                offset,
-            )
+        elif mode == "standard":
+            # For standard mode, decide based on original mode (for backward compat) first, then filters
+            if original_mode == "insights":
+                # Legacy 'insights' mode - always use insights response
+                response = self._build_insights_response(
+                    outline,
+                    insight_ids,
+                    min_importance,
+                    section_ids,  # Can filter insights by section
+                    limit,
+                    offset,
+                )
+            elif original_mode == "sections":
+                # Legacy 'sections' mode - always use sections response
+                response = self._build_sections_response(
+                    outline,
+                    section_ids,
+                    section_titles,
+                    include_content,
+                    limit,
+                    offset,
+                )
+            elif insight_ids or min_importance is not None:
+                # New response_mode with insight filters
+                response = self._build_insights_response(
+                    outline,
+                    insight_ids,
+                    min_importance,
+                    section_ids,
+                    limit,
+                    offset,
+                )
+            elif section_ids or section_titles:
+                # New response_mode with section filters
+                response = self._build_sections_response(
+                    outline,
+                    section_ids,
+                    section_titles,
+                    include_content,
+                    limit,
+                    offset,
+                )
+            else:
+                # Default to sections view if no specific mode or filters
+                response = self._build_sections_response(
+                    outline,
+                    section_ids,
+                    section_titles,
+                    include_content,
+                    limit,
+                    offset,
+                )
         elif mode == "full":
             response = self._build_full_response(outline, include_content, include_audit, limit, offset)
 
