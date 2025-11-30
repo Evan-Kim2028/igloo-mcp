@@ -1104,11 +1104,11 @@ class ExecuteQueryTool(MCPTool):
                    Stored in Snowflake QUERY_TAG and local history.
             post_query_insight: Optional summary or structured JSON describing results.
                               Stored in history and cache artifacts.
-            response_mode: Control response verbosity for token efficiency (STANDARD, default: "full")
+            response_mode: Control response verbosity for token efficiency (STANDARD, default: "summary")
+                        - "summary": Return key_metrics + 5 sample rows (default)
                         - "full": Return all rows (no filtering)
-                        - "summary": Return key_metrics + 5 sample rows (~90% token reduction)
-                        - "schema_only": Return column schema only, no rows (~95% reduction)
-                        - "sample": Return first 10 rows only (~60-80% reduction)
+                        - "schema_only": Return column schema only, no rows
+                        - "sample": Return first 10 rows only
             result_mode: DEPRECATED in v0.3.5 - use response_mode instead
             ctx: Optional MCP context for request correlation
             **kwargs: Additional arguments (for backward compatibility)

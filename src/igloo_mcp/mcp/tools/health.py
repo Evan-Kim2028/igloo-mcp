@@ -129,13 +129,13 @@ class HealthCheckTool(MCPTool):
         start_time = time.time()
         request_id = ensure_request_id(request_id)
 
-        # Validate response_mode with backward compatibility
+        # Validate response_mode parameter with backward compatibility
         mode = validate_response_mode(
             response_mode,
             legacy_param_name="detail_level",
             legacy_param_value=detail_level,
             valid_modes=("minimal", "standard", "full"),
-            default="standard",
+            default="minimal",
         )
 
         logger.info(

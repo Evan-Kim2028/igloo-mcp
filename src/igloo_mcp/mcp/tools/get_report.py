@@ -144,13 +144,13 @@ class GetReportTool(MCPTool):
         request_id = ensure_request_id(request_id)
 
         # Validate response_mode with backward compatibility
-        # Map legacy 'mode' values to new response_mode
+        # Map legacy values to standard values for response structure
         effective_mode = validate_response_mode(
             response_mode,
             legacy_param_name="mode",
             legacy_param_value=mode,
             valid_modes=("minimal", "standard", "full", "summary", "sections", "insights"),
-            default="standard",
+            default="minimal",
         )
 
         # Keep track of original mode for routing decisions
