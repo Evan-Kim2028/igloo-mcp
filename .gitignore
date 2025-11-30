@@ -181,6 +181,10 @@ plans/
 CI_FIX_SUMMARY.md
 GITHUB_ISSUES_CREATED.md
 
+# Internal todos and linter status (keep local, don't commit)
+todos/
+LINTER_IMPLEMENTATION_STATUS.md
+
 # Internal architecture documentation (keep local, don't commit)
 docs/architecture/
 
