@@ -306,7 +306,7 @@ def register_igloo_mcp(
 
     if getattr(server, "_igloo_mcp_registered", False):  # pragma: no cover - safety
         return
-    server._igloo_mcp_registered = True
+    server._igloo_mcp_registered = True  # type: ignore[attr-defined]
 
     config = get_config()
     context = create_service_context(existing_config=config)

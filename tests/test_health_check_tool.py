@@ -156,7 +156,7 @@ async def test_health_check_tool_success(monkeypatch: pytest.MonkeyPatch) -> Non
         resource_manager=resource_manager,
     )
 
-    result = await tool.execute(include_cortex=True, include_catalog=True)
+    result = await tool.execute(include_cortex=True, include_catalog=True, response_mode="full")
 
     assert result["checks"]["connection"]["status"] == "connected"
     assert result["checks"]["profile"]["status"] == "valid"
@@ -211,7 +211,7 @@ async def test_health_check_handles_failures(monkeypatch: pytest.MonkeyPatch) ->
         resource_manager=FailingResourceManager(),
     )
 
-    result = await tool.execute(include_cortex=True, include_catalog=True)
+    result = await tool.execute(include_cortex=True, include_catalog=True, response_mode="full")
 
     assert result["checks"]["connection"]["connected"] is False
     assert result["checks"]["profile"]["status"] in {"invalid", "error"}

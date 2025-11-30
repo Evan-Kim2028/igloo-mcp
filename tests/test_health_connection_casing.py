@@ -54,7 +54,7 @@ async def test_health_connection_handles_uppercase_keys() -> None:
     config = Config.from_env()
     tool = HealthCheckTool(config=config, snowflake_service=_Svc())
 
-    result = await tool.execute()
+    result = await tool.execute(response_mode="full")
 
     conn = result["checks"]["connection"]
     # Values should not be None when uppercase keys are returned

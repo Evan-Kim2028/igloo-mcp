@@ -55,7 +55,7 @@ class TestRenderReportTool:
     def test_tool_properties(self, tool):
         """Test tool properties."""
         assert tool.name == "render_report"
-        assert "Render a living report to human-readable formats" in tool.description
+        assert "Export a report to shareable formats" in tool.description
         assert tool.category == "reports"
         assert "rendering" in tool.tags
         assert "quarto" in tool.tags

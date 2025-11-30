@@ -154,6 +154,7 @@ class TestSmokeIntegration:
                     warehouse="ANALYTICS_WH",
                     timeout_seconds=120,
                     reason="Q4 2023 revenue analysis with customer cohort breakdown",
+                    response_mode="full",
                     post_query_insight={
                         "summary": (
                             "Q4 showed record performance with 23% revenue growth and improved customer acquisition"

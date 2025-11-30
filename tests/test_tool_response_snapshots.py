@@ -51,6 +51,7 @@ class TestExecuteQueryResponseSchema:
         result = await tool.execute(
             statement="SELECT 1",
             reason="Snapshot test",
+            response_mode="full",
         )
 
         # Verify response schema stability
