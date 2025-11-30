@@ -83,7 +83,7 @@ class ResponseFields:
     WARNINGS = "warnings"
     OUTLINE_VERSION = "outline_version"
 
-    # Response symmetry (v0.3.3+)
+    # Response symmetry for complete CRUD tracking
     SECTION_IDS_ADDED = "section_ids_added"
     SECTION_IDS_MODIFIED = "section_ids_modified"
     SECTION_IDS_REMOVED = "section_ids_removed"

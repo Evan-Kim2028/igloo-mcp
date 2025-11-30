@@ -1296,7 +1296,7 @@ class EvolveReportTool(MCPTool):
                     "title": "Executive Summary",
                     "order": 1,
                     "notes": "Optional section notes",
-                    "content": "Optional markdown content",  # New in v0.3.2
+                    "content": "Optional markdown content",
                     "content_format": "markdown",  # Optional, defaults to "markdown"
                 }
             ]

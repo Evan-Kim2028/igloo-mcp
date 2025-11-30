@@ -1,8 +1,8 @@
-# Igloo MCP MCP API Documentation
+# Igloo MCP API Documentation
 
 ## Overview
 
-Igloo MCP provides a focused set of MCP tools for Snowflake data operations, built on top of the official `snowflake-labs-mcp` service.
+Igloo MCP provides a focused set of MCP tools for Snowflake data operations, built on SnowCLI.
 
 ## Quick Links
 
@@ -31,10 +31,10 @@ Igloo MCP provides a focused set of MCP tools for Snowflake data operations, bui
 
 ### Living Reports Tools
 
-8. **[create_report](tools/create_report.md)** *(MCP-only)* - Create a new living report with optional template and tags
-9. **[evolve_report](tools/evolve_report.md)** *(MCP-only)* - Evolve a living report with LLM assistance and audit logging
+8. **[create_report](tools/create_report.md)** *(MCP-only)* - Create new living reports with optional templates
+9. **[evolve_report](tools/evolve_report.md)** *(MCP-only)* - Evolve reports with LLM assistance and audit logging
 10. **[render_report](tools/render_report.md)** *(MCP-only)* - Render reports to various formats
-11. **[search_report](tools/search_report.md)** *(MCP-only)* - Search for living reports with intelligent fallback behavior
+11. **[search_report](tools/search_report.md)** *(MCP-only)* - Search for living reports with intelligent fallback
 12. **[get_report](tools/get_report.md)** *(MCP-only)* - Read reports with progressive disclosure
 13. **[get_report_schema](tools/get_report_schema.md)** *(MCP-only)* - API schema introspection
 
@@ -57,6 +57,7 @@ result: {"status": "connected", "profile": "default"}
 tool: execute_query
 params:
   statement: "SELECT * FROM customers LIMIT 10"
+  reason: "Preview customer data"
 result: {"rowcount": 10, "rows": [...]}
 
 # 3. Build catalog for metadata
@@ -68,7 +69,7 @@ result: {"output_dir": "./data_catalogue", "totals": {...}}
 
 ## Error Handling
 
-All tools follow consistent error patterns:
+All tools use consistent error patterns:
 
 - **ValueError**: Invalid parameters or configuration
 - **RuntimeError**: Execution failures (connection, timeout, etc.)
@@ -130,7 +131,7 @@ build_dependency_graph(database="PROD")
 
 # 2. Search catalog for related objects
 search_catalog(
-    catalog_dir="./data_catalogue",  # Default resolves to unified storage
+    catalog_dir="./data_catalogue",
     name_contains="MY_TABLE"
 )
 ```
@@ -138,24 +139,20 @@ search_catalog(
 ### Pattern 3: Health Monitoring
 
 ```python
-# 1. Check overall health (includes profile and catalog status)
-health_check(
-    include_profile=True,
-    include_catalog=True,
-    include_cortex=False
-)
+# 1. Check overall health
+health_check()
 
-# 2. Test connection separately if needed
+# 2. Test connection if needed
 test_connection()
 ```
 
 ## Performance Tips
 
 1. **Use appropriate timeouts** - Default is 30s, increase for large queries
-2. **Inspect lightweight history** - Records land in `logs/doc.jsonl` (falling back to `~/.igloo_mcp/logs/doc.jsonl`); override via `IGLOO_MCP_QUERY_HISTORY` / `IGLOO_MCP_ARTIFACT_ROOT`
-3. **Leverage local result cache** - Default-on CSV/JSON cache keyed by SQL + context; control with `IGLOO_MCP_CACHE_MODE` / `IGLOO_MCP_CACHE_ROOT`
+2. **Inspect lightweight history** - Records land in `logs/doc.jsonl` (falling back to `~/.igloo_mcp/logs/doc.jsonl`)
+3. **Leverage local result cache** - Default-on CSV/JSON cache keyed by SQL + context
 4. **Search the catalog snapshot** - Run `search_catalog` after `build_catalog` to locate tables/views/columns instantly
-5. **Batch operations** - Catalog builds are optimized for batch processing
+5. **Batch operations** - Catalog builds optimize for batch processing
 6. **Profile your queries** - Use `verbose_errors` for optimization hints
 
 ## Support
@@ -174,5 +171,5 @@ test_connection()
 
 ---
 
-**Version:** 0.3.3
+**Version:** 0.3.5
 **Last Updated:** November 2025

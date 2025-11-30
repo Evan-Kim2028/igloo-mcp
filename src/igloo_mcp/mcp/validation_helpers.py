@@ -1,7 +1,24 @@
-"""Validation helpers for MCP tool parameter validation.
+"""Parameter validation utilities for MCP tools.
 
-This module provides standardized validation error formatting for common
-parameter validation scenarios, extracted from mcp_server.py.
+Provides reusable validation functions for common parameter types including
+strings, enums, and numeric ranges. All validators raise MCPValidationError
+with structured error messages and actionable hints.
+
+Key Functions:
+- validate_required_string(): String validation with length constraints
+- validate_numeric_range(): Numeric bounds checking
+- validate_enum_value(): Enum membership validation
+- format_pydantic_validation_error(): Convert Pydantic errors to MCP format
+
+Usage:
+    from igloo_mcp.mcp.validation_helpers import validate_required_string
+
+    validate_required_string(
+        value=reason,
+        field_name="reason",
+        min_length=5,
+        max_length=500
+    )
 """
 
 from __future__ import annotations
@@ -169,7 +186,7 @@ def format_parameter_type_error(
     )
 
 
-# New validation helper functions for v0.3.4
+# Validation helper functions for standardized parameter validation
 
 
 def validate_required_string(

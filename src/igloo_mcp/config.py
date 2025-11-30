@@ -43,7 +43,42 @@ class SnowflakeConfig:
 
 @dataclass(frozen=True)
 class SQLPermissions:
-    """SQL statement permissions configuration."""
+    """SQL statement permissions configuration.
+
+    Controls which SQL statement types are allowed in execute_query.
+    Defaults block mutating operations (INSERT, DELETE, DROP, etc.) for safety.
+
+    Examples:
+        # Default (read-only mode)
+        >>> perms = SQLPermissions()
+        >>> assert perms.select == True
+        >>> assert perms.delete == False
+
+        # Allow DML for data loading
+        >>> perms = SQLPermissions(insert=True, update=True)
+        >>> assert "insert" in perms.get_allow_list()
+
+        # Permissive mode (not recommended for production)
+        >>> perms = SQLPermissions(
+        ...     delete=True,
+        ...     drop=True,
+        ...     truncate=True
+        ... )
+
+    Attributes:
+        select: Allow SELECT queries (default: True)
+        show: Allow SHOW commands (default: True)
+        describe: Allow DESCRIBE commands (default: True)
+        use: Allow USE commands (default: True)
+        insert: Allow INSERT statements (default: False)
+        update: Allow UPDATE statements (default: False)
+        create: Allow CREATE statements (default: False)
+        alter: Allow ALTER statements (default: False)
+        delete: Allow DELETE statements (default: False - use soft delete pattern)
+        drop: Allow DROP statements (default: False - use RENAME pattern)
+        truncate: Allow TRUNCATE statements (default: False - use DELETE with WHERE)
+        unknown: Allow unparseable SQL (default: False - reject by default)
+    """
 
     select: bool = True
     show: bool = True

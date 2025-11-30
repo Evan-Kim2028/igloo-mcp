@@ -1,3 +1,34 @@
+"""Query result caching with SHA-256 indexing and CSV/JSON storage.
+
+Provides transparent caching of Snowflake query results to reduce warehouse
+costs and improve response times. Uses SHA-256 hashing of SQL + session context
+for deduplication. Stores results as CSV/JSON with manifest metadata.
+
+Key Classes:
+- QueryResultCache: Main cache interface with get/set/invalidate operations
+- CacheManifest: Metadata about cached results (timestamp, rows, columns)
+- CacheHitMetadata: Information returned when cache hit occurs
+
+Features:
+- Automatic cache key generation from SQL + session context
+- Configurable modes: enabled, read_only, force_refresh, disabled
+- TTL support for cache expiration
+- CSV storage for efficient large result sets
+- Manifest files for metadata (execution_id, rowcount, columns)
+
+Usage:
+    cache = QueryResultCache.from_env()
+
+    # Try cache first
+    hit = cache.get(sql, session_context)
+    if hit:
+        return hit.rows
+
+    # Execute and cache
+    result = execute_query(sql)
+    cache.set(sql, session_context, result)
+"""
+
 from __future__ import annotations
 
 import csv

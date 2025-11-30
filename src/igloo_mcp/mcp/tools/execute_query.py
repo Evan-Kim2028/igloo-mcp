@@ -86,8 +86,28 @@ logger = get_logger(__name__)
 
 
 def _write_sql_artifact(artifact_root: Path, sql_sha256: str, sql: str) -> Optional[Path]:
-    """Persist SQL text under the by-sha directory if missing."""
+    """Write SQL statement to artifact storage with SHA-256 naming.
 
+    Persists SQL text to disk for audit trails and query history correlation.
+    Creates parent directories if needed. Uses SHA-256 hash for deduplication
+    so identical queries share the same artifact file.
+
+    Args:
+        artifact_root: Base directory for SQL artifacts
+        sql_sha256: SHA-256 hash of SQL statement (used as filename)
+        sql: SQL statement text to persist
+
+    Returns:
+        Path to written artifact file, or None if write failed
+
+    Example:
+        >>> path = _write_sql_artifact(
+        ...     Path("logs/artifacts"),
+        ...     "a1b2c3d4...",
+        ...     "SELECT * FROM table"
+        ... )
+        >>> assert path.name == "a1b2c3d4....sql"
+    """
     try:
         queries_dir = artifact_root / "queries" / "by_sha"
         queries_dir.mkdir(parents=True, exist_ok=True)
@@ -101,6 +121,26 @@ def _write_sql_artifact(artifact_root: Path, sql_sha256: str, sql: str) -> Optio
 
 
 def _relative_sql_path(repo_root: Path, artifact_path: Optional[Path]) -> Optional[str]:
+    """Compute relative path from repo root to SQL artifact.
+
+    Used for portable artifact references in history logs and reports.
+    Returns None if artifact_path is None or path computation fails.
+
+    Args:
+        repo_root: Repository root directory
+        artifact_path: Absolute path to artifact file
+
+    Returns:
+        Relative path string (e.g., "logs/artifacts/a1b2c3....sql")
+        or absolute path if not under repo_root, or None if input is None
+
+    Example:
+        >>> rel = _relative_sql_path(
+        ...     Path("/repo"),
+        ...     Path("/repo/logs/foo.sql")
+        ... )
+        >>> assert rel == "logs/foo.sql"
+    """
     if artifact_path is None:
         return None
     try:
