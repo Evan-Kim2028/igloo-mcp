@@ -18,6 +18,7 @@ from .build_catalog import BuildCatalogTool
 from .build_dependency_graph import BuildDependencyGraphTool
 from .create_report import CreateReportTool
 from .evolve_report import EvolveReportTool
+from .evolve_report_batch import EvolveReportBatchTool
 from .execute_query import ExecuteQueryTool
 from .get_catalog_summary import GetCatalogSummaryTool
 from .get_report import GetReportTool
@@ -36,6 +37,7 @@ __all__ = [
     "CreateReportTool",
     "ExecuteQueryTool",
     "EvolveReportTool",
+    "EvolveReportBatchTool",
     "GetCatalogSummaryTool",
     "GetReportTool",
     "GetReportSchemaTool",

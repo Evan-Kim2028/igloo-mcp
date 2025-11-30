@@ -58,6 +58,7 @@ from .mcp.tools import (
     BuildDependencyGraphTool,
     ConnectionTestTool,
     CreateReportTool,
+    EvolveReportBatchTool,
     EvolveReportTool,
     ExecuteQueryTool,
     GetCatalogSummaryTool,
@@ -330,6 +331,7 @@ def register_igloo_mcp(
     report_service = ReportService()
     create_report_inst = CreateReportTool(config, report_service)
     evolve_report_inst = EvolveReportTool(config, report_service)
+    evolve_report_batch_inst = EvolveReportBatchTool(config, report_service)
     render_report_inst = RenderReportTool(config, report_service)
     search_report_inst = SearchReportTool(config, report_service)
     get_report_inst = GetReportTool(config, report_service)
@@ -479,6 +481,48 @@ def register_igloo_mcp(
         )
 
     @server.tool(
+        name="evolve_report_batch",
+        description="Perform multiple report evolution operations atomically",
+    )
+    async def evolve_report_batch_tool(
+        report_selector: Annotated[str, Field(description="Report ID or title to evolve")],
+        instruction: Annotated[
+            str,
+            Field(description="Natural language description of batch operation for audit trail"),
+        ],
+        operations: Annotated[
+            List[Dict[str, Any]],
+            Field(
+                description=(
+                    "List of operations to perform atomically. Each operation has a 'type' field "
+                    "(add_insight, modify_insight, remove_insight, add_section, modify_section, "
+                    "remove_section, update_title, update_metadata) and type-specific fields."
+                )
+            ),
+        ],
+        dry_run: Annotated[
+            bool,
+            Field(description="Validate without applying changes", default=False),
+        ] = False,
+        response_detail: Annotated[
+            str,
+            Field(
+                description="Response verbosity level",
+                default="standard",
+                pattern="^(minimal|standard|full)$",
+            ),
+        ] = "standard",
+    ) -> Dict[str, Any]:
+        """Batch evolve report - delegates to EvolveReportBatchTool."""
+        return await evolve_report_batch_inst.execute(
+            report_selector=report_selector,
+            instruction=instruction,
+            operations=operations,
+            dry_run=dry_run,
+            response_detail=response_detail,
+        )
+
+    @server.tool(
         name="render_report",
         description="Render a living report to human-readable formats (HTML, PDF, etc.) using Quarto",
     )
@@ -487,9 +531,9 @@ def register_igloo_mcp(
         format: Annotated[
             str,
             Field(
-                description="Output format",
+                description="Output format. Use 'html_standalone' for self-contained HTML without Quarto.",
                 default="html",
-                pattern="^(html|pdf|markdown|docx)$",
+                pattern="^(html|pdf|markdown|docx|html_standalone)$",
             ),
         ] = "html",
         regenerate_outline_view: Annotated[

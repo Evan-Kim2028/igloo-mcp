@@ -1035,7 +1035,18 @@ class EvolveReportTool(MCPTool):
                                 raise ValueError(
                                     f"content must be a string, got {type(modify_data['content']).__name__}"
                                 )
-                            section.content = modify_data["content"]
+                            # Apply content merge mode if specified
+                            merge_mode = modify_data.get("content_merge_mode", "replace")
+                            if merge_mode != "replace":
+                                from igloo_mcp.living_reports.merge_utils import apply_content_merge
+
+                                section.content = apply_content_merge(
+                                    existing=section.content,
+                                    new_content=modify_data["content"],
+                                    merge_mode=merge_mode,
+                                )
+                            else:
+                                section.content = modify_data["content"]
                             operations_performed.append("content")
                         except Exception as e:
                             errors.append(f"Failed to update content: {str(e)}")

@@ -7,6 +7,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 CURRENT_CHANGES_SCHEMA_VERSION = "1.0"
 
+# Merge mode constants (matching merge_utils.py)
+MERGE_MODE_REPLACE = "replace"
+MERGE_MODE_MERGE = "merge"
+MERGE_MODE_APPEND = "append"
+MERGE_MODE_PREPEND = "prepend"
+
 
 class ValidationErrorDetail(BaseModel):
     """Structured validation error with field path, value, and context."""
@@ -99,6 +105,12 @@ class SectionChange(BaseModel):
     insights: Optional list of insight dictionaries for inline creation.
     When provided, insights are created atomically with the section and automatically linked.
     Mutually exclusive with insight_ids_to_add.
+
+    content_merge_mode: Controls how content field is merged with existing content.
+    - 'replace' (default): Replace existing content entirely
+    - 'merge': Use placeholder-based merging (supports // ... existing ... patterns)
+    - 'append': Append new content after existing
+    - 'prepend': Prepend new content before existing
     """
 
     section_id: Optional[str] = None
@@ -107,6 +119,10 @@ class SectionChange(BaseModel):
     notes: Optional[str] = None
     content: Optional[str] = None
     content_format: Optional[Literal["markdown", "html", "plain"]] = "markdown"
+    content_merge_mode: Optional[Literal["replace", "merge", "append", "prepend"]] = Field(
+        default="replace",
+        description="How to merge content with existing: replace, merge (placeholder-based), append, prepend",
+    )
     insight_ids_to_add: Optional[List[str]] = None
     insight_ids_to_remove: Optional[List[str]] = None
     insights: Optional[List[Dict[str, Any]]] = None
