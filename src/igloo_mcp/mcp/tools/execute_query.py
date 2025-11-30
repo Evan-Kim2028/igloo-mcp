@@ -677,7 +677,7 @@ class ExecuteQueryTool(MCPTool):
         # Generate execution metadata
         execution_id = execution_id_override or uuid.uuid4().hex
         requested_ts = time.time()
-        sql_sha256 = sql_sha256 or hashlib.sha256(statement.encode("utf-8")).hexdigest()
+        sql_sha256 = sql_sha_override or hashlib.sha256(statement.encode("utf-8")).hexdigest()
         referenced_objects = extract_query_objects(statement)
         history_artifacts: dict[str, str] = {}
         artifact_path = self._persist_sql_artifact(sql_sha256, statement)
