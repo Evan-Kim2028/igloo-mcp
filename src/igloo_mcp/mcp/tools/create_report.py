@@ -48,11 +48,12 @@ class CreateReportTool(MCPTool):
     def name(self) -> str:
         return "create_report"
 
-    @property
-    def description(self) -> str:
+    @staticmethod
+    def description() -> str:
         return (
             "Initialize a new living report for accumulating insights over time. "
-            "Use AFTER running queries and gathering initial findings—the report is your 'notebook' for consolidating discoveries. "
+            "Use AFTER running queries and gathering initial findings—the report is your "
+            "'notebook' for consolidating discoveries. "
             "Start with template='default' for flexibility, or 'analyst_v1' when citations are mandatory."
         )
 

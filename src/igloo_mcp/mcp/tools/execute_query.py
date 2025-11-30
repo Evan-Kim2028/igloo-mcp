@@ -642,6 +642,9 @@ class ExecuteQueryTool(MCPTool):
         if validate_profile:
             await self._ensure_profile_health()
 
+        # Validate result_mode early since it's used in cache hit response
+        effective_result_mode = result_mode  # Use result_mode directly for now
+
         if validate_statement:
             # Validate SQL statement length
             if len(statement) > MAX_SQL_STATEMENT_LENGTH:

@@ -598,6 +598,7 @@ class EvolveReportTool(MCPTool):
                     "report_id": report_id,
                     "outline_version": int(new_outline.outline_version),
                     "summary": minimal_summary,
+                    "duration_ms": round(total_duration, 2),
                 }
             elif response_detail == "standard":
                 # Standard response: add IDs and warnings but no full echo
@@ -607,6 +608,7 @@ class EvolveReportTool(MCPTool):
                     "outline_version": int(new_outline.outline_version),
                     "summary": summary,
                     "warnings": warnings,
+                    "duration_ms": round(total_duration, 2),
                     # Response symmetry: flatten ID tracking fields to top level
                     "section_ids_added": summary["section_ids_added"],
                     "insight_ids_added": summary["insight_ids_added"],

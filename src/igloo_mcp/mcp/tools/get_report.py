@@ -291,11 +291,16 @@ class GetReportTool(MCPTool):
 
         # Add common fields
         response["request_id"] = request_id
-        response["timing"] = {
-            "selector_duration_ms": round((time.time() - selector_start) * 1000, 2),
-            "retrieval_duration_ms": round(retrieval_duration, 2),
-            "total_duration_ms": round(total_duration, 2),
-        }
+        
+        # Condense timing based on mode
+        if mode == "minimal":
+            response["duration_ms"] = round(total_duration, 2)
+        else:
+            response["timing"] = {
+                "selector_duration_ms": round((time.time() - selector_start) * 1000, 2),
+                "retrieval_duration_ms": round(retrieval_duration, 2),
+                "total_duration_ms": round(total_duration, 2),
+            }
 
         logger.info(
             "get_report_completed",
