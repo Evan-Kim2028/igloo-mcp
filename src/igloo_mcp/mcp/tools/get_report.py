@@ -291,7 +291,7 @@ class GetReportTool(MCPTool):
 
         # Add common fields
         response["request_id"] = request_id
-        
+
         # Condense timing based on mode
         if mode == "minimal":
             response["duration_ms"] = round(total_duration, 2)
