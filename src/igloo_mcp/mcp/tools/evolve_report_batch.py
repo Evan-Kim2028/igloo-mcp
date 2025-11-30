@@ -160,6 +160,11 @@ class EvolveReportBatchTool(MCPTool):
                         "required": ["type"],
                     },
                 },
+                "constraints": {
+                    "type": "object",
+                    "description": "Optional constraints on evolution (e.g., skip_citation_validation: true)",
+                    "default": None,
+                },
                 "dry_run": {
                     "type": "boolean",
                     "description": "Validate without applying changes",
@@ -206,6 +211,7 @@ class EvolveReportBatchTool(MCPTool):
         report_selector: str,
         instruction: str,
         operations: List[Dict[str, Any]],
+        constraints: Optional[Dict[str, Any]] = None,
         dry_run: bool = False,
         response_detail: str = "standard",
         request_id: Optional[str] = None,
@@ -216,6 +222,7 @@ class EvolveReportBatchTool(MCPTool):
             report_selector: Report ID or title to evolve
             instruction: Natural language description for audit trail
             operations: List of operations to perform
+            constraints: Optional constraints on evolution (e.g., skip_citation_validation)
             dry_run: If True, validate without applying
             response_detail: Response verbosity level
             request_id: Optional request correlation ID
@@ -342,6 +349,7 @@ class EvolveReportBatchTool(MCPTool):
             report_selector=report_id,
             instruction=f"[BATCH] {instruction}",
             proposed_changes=proposed_changes,
+            constraints=constraints,
             dry_run=False,
             response_detail=response_detail,
             request_id=request_id,

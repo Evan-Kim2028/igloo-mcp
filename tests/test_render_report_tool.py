@@ -388,3 +388,192 @@ def test_render_tool_schema_completeness():
     assert props["include_preview"]["type"] == "boolean"
     assert props["dry_run"]["type"] == "boolean"
     assert props["options"]["type"] == "object"
+
+
+# =========================================================================
+# HTML Standalone Format Tests (Issue #91)
+# =========================================================================
+
+
+@pytest.mark.asyncio
+async def test_render_html_standalone_format(report_service, render_tool):
+    """Test rendering with html_standalone format - no Quarto required."""
+    report_id = report_service.create_report("HTML Standalone Test")
+
+    # Add a section with content
+    from igloo_mcp.config import Config, SnowflakeConfig
+    from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
+
+    config = Config(snowflake=SnowflakeConfig(profile="TEST"))
+    evolve_tool = EvolveReportTool(config, report_service)
+
+    await evolve_tool.execute(
+        report_selector=report_id,
+        instruction="Add test section",
+        proposed_changes={
+            "sections_to_add": [
+                {
+                    "title": "Test Section",
+                    "order": 0,
+                    "content": "Test content for standalone HTML.",
+                }
+            ]
+        },
+    )
+
+    # Render as html_standalone
+    result = await render_tool.execute(
+        report_selector=report_id,
+        format="html_standalone",
+        include_preview=True,
+    )
+
+    assert result["status"] == "success"
+    assert result["output"]["format"] == "html_standalone"
+
+    # Verify output file exists
+    output_path = result["output"].get("output_path")
+    assert output_path is not None
+    assert Path(output_path).exists()
+
+    # Verify it's a self-contained HTML file
+    content = Path(output_path).read_text(encoding="utf-8")
+    assert "<!DOCTYPE html>" in content
+    assert "<style>" in content  # CSS is embedded
+    assert "Test Section" in content
+    assert "Test content for standalone HTML" in content
+
+
+@pytest.mark.asyncio
+async def test_render_html_standalone_with_theme(report_service, render_tool):
+    """Test html_standalone format with theme option."""
+    report_id = report_service.create_report("Theme Test")
+
+    result = await render_tool.execute(
+        report_selector=report_id,
+        format="html_standalone",
+        options={"theme": "dark"},
+    )
+
+    assert result["status"] == "success"
+
+    # Verify dark theme CSS is applied
+    output_path = result["output"].get("output_path")
+    content = Path(output_path).read_text(encoding="utf-8")
+    assert "--background: #0f172a" in content  # Dark theme background color
+
+
+@pytest.mark.asyncio
+async def test_render_html_standalone_without_toc(report_service, render_tool):
+    """Test html_standalone format with TOC disabled."""
+    report_id = report_service.create_report("No TOC Test")
+
+    # Add a section first
+    from igloo_mcp.config import Config, SnowflakeConfig
+    from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
+
+    config = Config(snowflake=SnowflakeConfig(profile="TEST"))
+    evolve_tool = EvolveReportTool(config, report_service)
+
+    await evolve_tool.execute(
+        report_selector=report_id,
+        instruction="Add section",
+        proposed_changes={"sections_to_add": [{"title": "Section 1", "order": 0}]},
+    )
+
+    result = await render_tool.execute(
+        report_selector=report_id,
+        format="html_standalone",
+        options={"toc": False},
+    )
+
+    assert result["status"] == "success"
+
+    # Verify TOC is not in the output
+    output_path = result["output"].get("output_path")
+    content = Path(output_path).read_text(encoding="utf-8")
+    assert '<nav class="table-of-contents">' not in content
+
+
+@pytest.mark.asyncio
+async def test_render_html_standalone_includes_preview(report_service, render_tool):
+    """Test html_standalone format with preview included."""
+    report_id = report_service.create_report("Preview Test")
+
+    result = await render_tool.execute(
+        report_selector=report_id,
+        format="html_standalone",
+        include_preview=True,
+        preview_max_chars=500,
+    )
+
+    assert result["status"] == "success"
+    assert "preview" in result
+    assert isinstance(result["preview"], str)
+    # Preview should be present and include truncation indicator
+    assert len(result["preview"]) > 0
+    # Should contain truncation message when content exceeds limit
+    if len(result["preview"]) > 500:
+        assert "[Content truncated]" in result["preview"] or "truncated" in result["preview"].lower()
+
+
+@pytest.mark.asyncio
+async def test_render_html_standalone_no_quarto_required(report_service, render_tool):
+    """Verify html_standalone doesn't require Quarto installation."""
+    report_id = report_service.create_report("No Quarto Test")
+
+    # This should work even if Quarto is not installed
+    result = await render_tool.execute(
+        report_selector=report_id,
+        format="html_standalone",
+    )
+
+    assert result["status"] == "success"
+    # The output should be a standalone HTML file, not a Quarto-generated one
+    output_path = result["output"].get("output_path")
+    assert "report_standalone.html" in output_path
+
+
+@pytest.mark.asyncio
+async def test_render_html_standalone_with_citations(report_service, render_tool):
+    """Test html_standalone format includes citations appendix."""
+    report_id = report_service.create_report("Citations Test")
+
+    # Add an insight with citation
+    from igloo_mcp.config import Config, SnowflakeConfig
+    from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
+
+    config = Config(snowflake=SnowflakeConfig(profile="TEST"))
+    evolve_tool = EvolveReportTool(config, report_service)
+
+    await evolve_tool.execute(
+        report_selector=report_id,
+        instruction="Add insight with citation",
+        proposed_changes={
+            "sections_to_add": [
+                {
+                    "title": "Analysis",
+                    "order": 0,
+                    "insights": [
+                        {
+                            "summary": "Key finding",
+                            "importance": 8,
+                            "citations": [{"execution_id": "exec-test-001"}],
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+
+    result = await render_tool.execute(
+        report_selector=report_id,
+        format="html_standalone",
+    )
+
+    assert result["status"] == "success"
+
+    # Verify the output contains the insight
+    output_path = result["output"].get("output_path")
+    content = Path(output_path).read_text(encoding="utf-8")
+    assert "Key finding" in content

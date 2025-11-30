@@ -3,7 +3,79 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# [0.3.5] - 2025-11-29
+# [0.3.5] - 2025-11-30
+
+## Added
+
+### Query Optimization - `result_mode` Parameter (#100, #102)
+
+**Token-Efficient Query Responses**: New `result_mode` parameter for `execute_query` reduces response size by 60-90%.
+
+**Modes**:
+- `full` (default): Return all rows unchanged
+- `summary`: Return key_metrics + 5 sample rows only (~90% reduction)
+- `schema_only`: Return column names/types only, no rows (~95% reduction)
+- `sample`: Return first 10 rows only (~60-80% reduction for large results)
+
+**Response Format**:
+All non-full modes add `result_mode` and `result_mode_info` fields:
+```json
+{
+  "result_mode": "summary",
+  "result_mode_info": {
+    "mode": "summary",
+    "total_rows": 10000,
+    "rows_returned": 5,
+    "sample_size": 5,
+    "columns_count": 8,
+    "hint": "Use result_mode='full' to retrieve all rows"
+  },
+  "rows": [...5 rows...],
+  "key_metrics": {...}
+}
+```
+
+**Use Cases**:
+- `schema_only`: Schema discovery without data transfer
+- `sample`: Quick data preview for validation
+- `summary`: Get metrics + representative sample for analysis
+- `full`: Complete data retrieval (backward compatible default)
+
+### Living Reports - Batch Operations (#101)
+
+**`evolve_report_batch` Tool**: Atomic multi-operation report evolution.
+
+**Benefits**:
+- Reduce round-trips: Perform multiple operations in one call
+- Ensure consistency: All-or-nothing transactional semantics
+- Improve ergonomics: Natural batching for multi-insight reports
+
+**Supported Operations** (8 types):
+- `add_insight` / `modify_insight` / `remove_insight`
+- `add_section` / `modify_section` / `remove_section`
+- `update_title` / `update_metadata`
+
+**Example**:
+```python
+evolve_report_batch(
+    report_selector="Q1 Revenue Report",
+    instruction="Add revenue analysis section with insights",
+    operations=[
+        {
+            "type": "add_insight",
+            "summary": "Enterprise revenue grew 45% YoY",
+            "importance": 9,
+            "citations": [{"execution_id": "exec-123"}]
+        },
+        {
+            "type": "add_section",
+            "title": "Revenue Analysis",
+            "order": 1,
+            "insight_ids": ["<generated-uuid>"]
+        }
+    ]
+)
+```
 
 ## Fixed
 
@@ -42,14 +114,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Summary
 
-**v0.3.5 ensures robust multi-version Python support** with comprehensive CI testing.
+**v0.3.5 delivers token efficiency and batch operations** for optimized AI workflows.
 
 **Key Improvements**:
-1. **Cross-version Compatibility**: Full Python 3.12 and 3.13 support verified in CI
-2. **Reliable Testing**: Fixed flaky mtime-based cache invalidation test
-3. **Future-proof**: Matrix testing catches version-specific issues early
+1. **Token Efficiency**: 60-90% reduction in query response sizes via `result_mode`
+2. **Batch Operations**: Atomic multi-operation report evolution
+3. **Python Support**: Robust 3.12/3.13 compatibility with CI verification
 
-All changes are **backward compatible** with no breaking changes.
+All changes are **backward compatible** with sensible defaults.
 
 # [0.3.4] - 2025-11-29
 
