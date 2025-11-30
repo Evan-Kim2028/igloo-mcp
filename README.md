@@ -11,7 +11,9 @@ Connect your AI assistant (Cursor, Claude) to Snowflake with built-in safety, ca
 ## Why Igloo MCP?
 
 ✅ **Query Safely** — Blocks DDL/DML by default, auto-cancels slow queries, logs every execution
+
 ✅ **Work Faster** — Minimizes token usage through progressive disclosure and smart caching
+
 ✅ **Stay Audited** — Complete query history with source attribution for compliance tracking
 
 ## Quick Start
