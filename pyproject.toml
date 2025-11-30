@@ -58,8 +58,6 @@ dev-dependencies = [
     "pytest-cov>=7.0.0",
     "trio>=0.26.0",
     "hypothesis>=6.90.0",
-    # Phase 1: Security scanning
-    "detect-secrets>=1.5.0",
     # Phase 2: Import linting
     "import-linter>=2.0",
 ]

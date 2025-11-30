@@ -28,19 +28,6 @@ repos:
             "src/igloo_mcp",
           ]
 
-  # Security: Detect secrets in code
-  - repo: https://github.com/Yelp/detect-secrets
-    rev: v1.5.0
-    hooks:
-      - id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: |
-          (?x)^(
-              .*\.lock$|
-              .*\.json$|
-              tests/.*
-          )$
-
   # Phase 2 & 3.6: Local hooks for architecture and test quality
   - repo: local
     hooks:

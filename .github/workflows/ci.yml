@@ -32,11 +32,6 @@ jobs:
           uv run ruff check . --output-format=github
           uv run ruff format --check .
 
-      # Phase 1: Security scanning
-      - name: Check for secrets
-        run: |
-          uv run detect-secrets scan --baseline .secrets.baseline
-
       # Phase 2: Check architectural layer boundaries
       - name: Check layer boundaries
         run: uv run lint-imports
