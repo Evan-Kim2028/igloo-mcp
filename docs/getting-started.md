@@ -162,7 +162,6 @@ For configuration options including multiple profiles, environment variables, an
 - [Installation Guide](installation.md) - Detailed installation and profile setup
 - [MCP Integration Guide](mcp-integration.md) - General MCP client configuration
 - [Authentication Guide](authentication.md) - Authentication options and troubleshooting
-- [Architecture Overview](architecture.md) - System architecture and design
 - [Features Overview](features_overview.md) - Complete feature list
 
 ## Administrative CLI Tools

@@ -183,3 +183,9 @@ GITHUB_ISSUES_CREATED.md
 
 # Environment example (secrets template - don't commit)
 .env.example
+
+# Personal/local notes (not committed)
+notes/personal/
+notes/brainstorming/
+notes/*.local.md
+.scratch/

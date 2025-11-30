@@ -141,6 +141,24 @@ The `result_mode` parameter controls response verbosity to reduce token usage in
 | `schema_only` | 0 rows (schema + metrics only) | Schema discovery | ~95% |
 | `sample` | 10 sample rows | Quick preview/validation | ~60-80% |
 
+**Important:** Sampling returns rows in **result order** (as returned by Snowflake), not database order. For deterministic, repeatable samples across runs, add an `ORDER BY` clause to your query:
+
+```python
+# ✅ Deterministic sampling - same 10 rows every time
+result = execute_query(
+    statement="SELECT * FROM users ORDER BY user_id LIMIT 1000",
+    result_mode="sample",  # Returns first 10 rows in sorted order
+    reason="Preview user data"
+)
+
+# ⚠️ Non-deterministic - may return different rows each run
+result = execute_query(
+    statement="SELECT * FROM users",  # No ORDER BY
+    result_mode="sample",  # Returns first 10 rows in arbitrary order
+    reason="Preview user data"
+)
+```
+
 ### Response Format
 
 All non-full modes add `result_mode` and `result_mode_info` to the response:

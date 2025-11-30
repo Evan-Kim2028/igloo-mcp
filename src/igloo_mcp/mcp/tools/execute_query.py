@@ -171,7 +171,7 @@ def _apply_result_mode(result: Dict[str, Any], mode: str) -> Dict[str, Any]:
               - 'full': No filtering, return all rows (pass-through)
               - 'summary': Return key_metrics + 5 sample rows (~90% reduction)
               - 'schema_only': Return schema/metrics only, no rows (~95% reduction)
-              - 'sample': Return first 10 rows only (~60-80% reduction)
+              - 'sample': Return first 10 rows in result order (~60-80% reduction)
 
     Returns:
         Modified result dict. For non-'full' modes, adds:
@@ -180,8 +180,11 @@ def _apply_result_mode(result: Dict[str, Any], mode: str) -> Dict[str, Any]:
               total_rows, rows_returned, sample_size, and hint
 
     Notes:
+        - **Mutates input dict**: Modifies result in-place for efficiency.
+          If you need the original dict, pass a copy: _apply_result_mode(dict(result), mode)
         - Always preserves: columns, key_metrics, insights, session_context
-        - Only modifies: rows array (truncated based on mode)
+        - Only modifies: rows array (truncated based on mode), adds result_mode metadata
+        - Sampling uses result order, not database order. Use ORDER BY for deterministic sampling.
         - Safe to call multiple times (idempotent for same mode)
     """
     if mode == RESULT_MODE_FULL:
@@ -207,15 +210,25 @@ def _apply_result_mode(result: Dict[str, Any], mode: str) -> Dict[str, Any]:
         return result
 
     if mode == RESULT_MODE_SAMPLE:
-        # Return first N rows only
+        # Return first N rows only (in result order - use ORDER BY for deterministic sampling)
         sample_rows = rows[:RESULT_MODE_SAMPLE_SIZE]
         result["rows"] = sample_rows
+
+        # Generate helpful hint based on whether all rows fit in sample
+        if rowcount <= RESULT_MODE_SAMPLE_SIZE:
+            hint = f"All {rowcount} rows returned" if rowcount > 0 else None
+        else:
+            hint = (
+                f"Showing first {RESULT_MODE_SAMPLE_SIZE} of {rowcount} rows. "
+                "Use result_mode='full' to retrieve all rows"
+            )
+
         result["result_mode_info"] = {
             "mode": "sample",
             "total_rows": rowcount,
             "rows_returned": len(sample_rows),
             "sample_size": RESULT_MODE_SAMPLE_SIZE,
-            "hint": "Use result_mode='full' to retrieve all rows" if rowcount > RESULT_MODE_SAMPLE_SIZE else None,
+            "hint": hint,
         }
         return result
 
@@ -223,15 +236,23 @@ def _apply_result_mode(result: Dict[str, Any], mode: str) -> Dict[str, Any]:
         # Return key_metrics + small sample only
         sample_rows = rows[:RESULT_MODE_SUMMARY_SAMPLE_SIZE]
         result["rows"] = sample_rows
+
+        # Generate helpful hint based on whether all rows fit in sample
+        if rowcount <= RESULT_MODE_SUMMARY_SAMPLE_SIZE:
+            hint = f"All {rowcount} rows returned" if rowcount > 0 else None
+        else:
+            hint = (
+                f"Showing first {RESULT_MODE_SUMMARY_SAMPLE_SIZE} of {rowcount} rows. "
+                "Use result_mode='full' to retrieve all rows"
+            )
+
         result["result_mode_info"] = {
             "mode": "summary",
             "total_rows": rowcount,
             "rows_returned": len(sample_rows),
             "sample_size": RESULT_MODE_SUMMARY_SAMPLE_SIZE,
             "columns_count": len(columns),
-            "hint": "Use result_mode='full' to retrieve all rows"
-            if rowcount > RESULT_MODE_SUMMARY_SAMPLE_SIZE
-            else None,
+            "hint": hint,
         }
         # Ensure key_metrics is present (already computed by _ensure_default_insights)
         return result

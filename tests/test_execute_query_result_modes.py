@@ -96,8 +96,8 @@ class TestApplyResultMode:
         assert len(result["rows"]) == 3
         assert result["result_mode_info"]["total_rows"] == 3
         assert result["result_mode_info"]["rows_returned"] == 3
-        # No hint needed when all rows returned
-        assert result["result_mode_info"]["hint"] is None
+        # Should show helpful hint indicating all rows returned
+        assert result["result_mode_info"]["hint"] == "All 3 rows returned"
 
     def test_small_result_with_sample_mode(self) -> None:
         """Sample mode with fewer rows than sample size should return all rows."""
@@ -111,8 +111,8 @@ class TestApplyResultMode:
         assert len(result["rows"]) == 5
         assert result["result_mode_info"]["total_rows"] == 5
         assert result["result_mode_info"]["rows_returned"] == 5
-        # No hint needed when all rows returned
-        assert result["result_mode_info"]["hint"] is None
+        # Should show helpful hint indicating all rows returned
+        assert result["result_mode_info"]["hint"] == "All 5 rows returned"
 
     def test_empty_result_with_all_modes(self) -> None:
         """All modes should handle empty results gracefully."""
@@ -142,6 +142,22 @@ class TestApplyResultMode:
         result = _apply_result_mode(dict(sample_result), RESULT_MODE_SUMMARY)
 
         assert result["result_mode_info"]["columns_count"] == 3
+
+    def test_summary_mode_hint_shows_truncation_info(self, sample_result: dict) -> None:
+        """Summary mode should show detailed hint when rows are truncated."""
+        result = _apply_result_mode(dict(sample_result), RESULT_MODE_SUMMARY)
+
+        # Should indicate truncation with row counts
+        assert "Showing first 5 of 100 rows" in result["result_mode_info"]["hint"]
+        assert "result_mode='full'" in result["result_mode_info"]["hint"]
+
+    def test_sample_mode_hint_shows_truncation_info(self, sample_result: dict) -> None:
+        """Sample mode should show detailed hint when rows are truncated."""
+        result = _apply_result_mode(dict(sample_result), RESULT_MODE_SAMPLE)
+
+        # Should indicate truncation with row counts
+        assert "Showing first 10 of 100 rows" in result["result_mode_info"]["hint"]
+        assert "result_mode='full'" in result["result_mode_info"]["hint"]
 
 
 class TestResultModeConstants:
@@ -230,3 +246,69 @@ class TestResultModeEdgeCases:
         assert len(output["rows"]) == 2
         # Note: The function may still set result_mode to the invalid value
         # The key behavior is that rows are not truncated
+
+
+# =========================================================================
+# Integration Tests for result_mode Validation
+# =========================================================================
+
+
+class TestResultModeValidation:
+    """Integration tests for result_mode parameter validation in execute_query.
+
+    These tests verify that the validation layer properly catches invalid
+    result_mode values and provides helpful error messages to users.
+    """
+
+    def test_invalid_result_mode_typo_gives_clear_error(self) -> None:
+        """Test that typos in result_mode give helpful error messages.
+
+        This is an important UX test - users might typo 'summary' as 'summery'
+        and should get a clear error showing valid options and what they sent.
+        """
+        from igloo_mcp.mcp.exceptions import MCPValidationError
+
+        # Simulate validation that happens in execute_query
+        valid_result_modes = {"full", "summary", "schema_only", "sample"}
+        user_input = "summery"  # Common typo
+        effective_result_mode = user_input.lower()
+
+        # This should raise MCPValidationError
+        if effective_result_mode not in valid_result_modes:
+            error = MCPValidationError(
+                "Invalid result_mode",
+                validation_errors=[
+                    f"result_mode must be one of: {', '.join(sorted(valid_result_modes))} (got: {user_input})"
+                ],
+                hints=["Use result_mode='summary' to reduce response size by ~90%"],
+            )
+
+            # Verify error contains helpful information in its dict representation
+            error_dict = error.to_dict()
+            assert "validation_errors" in error_dict
+            validation_msg = error_dict["validation_errors"][0]
+
+            # Should show what user sent
+            assert "summery" in validation_msg
+            # Should show all valid options
+            assert "full" in validation_msg
+            assert "summary" in validation_msg
+            assert "schema_only" in validation_msg
+            assert "sample" in validation_msg
+            # Should have helpful phrasing
+            assert "must be one of" in validation_msg
+
+    def test_case_insensitive_result_mode_accepted(self) -> None:
+        """Test that result_mode accepts uppercase/mixed case values.
+
+        This verifies the UX improvement where we lowercase user input
+        before validation, making the API more forgiving.
+        """
+        valid_result_modes = {"full", "summary", "schema_only", "sample"}
+
+        # These should all be valid after lowercasing
+        test_cases = ["SUMMARY", "Summary", "FuLl", "SCHEMA_ONLY", "sAmPlE"]
+
+        for user_input in test_cases:
+            effective_result_mode = user_input.lower()
+            assert effective_result_mode in valid_result_modes

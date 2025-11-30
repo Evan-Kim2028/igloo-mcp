@@ -982,7 +982,6 @@ get_report(
 - [search_report Tool Documentation](../api/tools/search_report.md) - Report discovery with field filtering
 - [evolve_report Tool Documentation](../api/tools/evolve_report.md) - Report modification with response detail control
 - [render_report Tool Documentation](../api/tools/render_report.md) - Rendering with preview size control
-- [Living Reports Technical Plan](technical-plan.md) - Technical implementation details
 - [API Reference](../api/README.md) - Complete MCP tools documentation
 - [Getting Started Guide](../getting-started.md) - Quick start overview
 - [MCP Integration Guide](../mcp-integration.md) - MCP client setup
