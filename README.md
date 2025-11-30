@@ -17,10 +17,10 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 - 📊 **Auto Insights**: Every query returns `key_metrics` (null ratios, ranges, top values) + insights – fuels LLM reasoning without follow-up SQL.
 - 🧠 **Error Handling**: Compact errors; verbose mode for hints. v0.2.3 adds better REST init fallbacks and v0.2.5 ensures health-check feedback routes through the new `get_comprehensive_health` monitor. v0.3.0 improves timeout error messaging with catalog-based filtering guidance.
 - 📡 **Source Attribution**: v0.2.5+ includes structured `source_databases`/`tables` fields in both query responses and history logs so compliance reviews no longer rely on session defaults.
-- 🧩 **MCP-Compliant Tools**: 13 focused tools for querying, cataloging, lineage, and living reports. Consolidated in v0.2.3 for reporting workflows. **v0.3.2 adds 2 new tools** for progressive disclosure and API introspection.
-- ⚡ **Token Efficiency**: 70% reduction in multi-turn workflows via progressive disclosure and configurable verbosity (v0.3.2+). Read only what you need, when you need it.
+- 🧩 **MCP-Compliant Tools**: 14 focused tools for querying, cataloging, lineage, and living reports. Consolidated in v0.2.3 for reporting workflows. **v0.3.2 adds 2 new tools** for progressive disclosure and API introspection. **v0.3.5 adds batch operations**.
+- ⚡ **Token Efficiency**: 70% reduction in multi-turn workflows via progressive disclosure and configurable verbosity (v0.3.2+). **60-90% reduction in query responses via `result_mode` parameter (v0.3.5+)**. Read only what you need, when you need it.
 - 📂 **Unified Storage**: All data (query history, artifacts, reports) stored together per instance for easy access across projects. Reports use `~/.igloo_mcp/reports/` by default in v0.3.0+.
-- 📋 **Living Reports**: JSON-backed, auditable business reports that evolve safely with LLM assistance (v0.3.0+). Three-layer architecture: Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs. **Complete tooling ecosystem in v0.3.2**.
+- 📋 **Living Reports**: JSON-backed, auditable business reports that evolve safely with LLM assistance (v0.3.0+). Three-layer architecture: Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs. **Complete tooling ecosystem in v0.3.2**. **Batch operations in v0.3.5**.
 - 🔍 **API Completeness** ✨ v0.3.3: Distributed tracing with `request_id` (UUID4), performance monitoring with `timing` metrics, complete audit trails with symmetric CRUD tracking (`*_ids_added`/`*_ids_modified`/`*_ids_removed`), and structured `warnings` for graceful handling of partial results. Full observability for multi-step workflows.
 - ⚡ **Simple Backend**: SnowCLI integration for max performance; CLI/REST modes. Python 3.12+, MIT-licensed.
 
@@ -41,11 +41,11 @@ In essence: Use official for production Snowflake AI ecosystems. Choose Igloo fo
 
 ## MCP Tools
 
-Igloo exposes 13 focused tools for Snowflake ops. Use via any MCP client (e.g., Cursor: add to `.mcp.json`).
+Igloo exposes 14 focused tools for Snowflake ops. Use via any MCP client (e.g., Cursor: add to `.mcp.json`).
 
 | Tool | Purpose | Key Use |
 |------|---------|---------|
-| `execute_query` | Run safe SQL with guards/timeouts | Agent-generated queries; returns rows + insights |
+| `execute_query` | Run safe SQL with guards/timeouts | Agent-generated queries; returns rows + insights. **v0.3.5: `result_mode` for 60-90% token reduction** |
 | `build_catalog` | Export metadata (tables/views/etc.) to JSONL | Offline catalog for search/lineage |
 | `get_catalog_summary` | Stats on built catalogs (counts, health) | Quick schema overviews |
 | `search_catalog` | Offline search by name/column/schema | Find objects without Snowflake hits |
@@ -54,6 +54,7 @@ Igloo exposes 13 focused tools for Snowflake ops. Use via any MCP client (e.g., 
 | `health_check` | System/profile/catalog status | Monitoring |
 | `create_report` | Create a new living report | Initialize structured business reports |
 | `evolve_report` | LLM-agnostic report evolution | Safely evolve audited reports (v0.3.2: +`response_detail`) |
+| `evolve_report_batch` **✨ v0.3.5** | Atomic multi-operation report evolution | Batch add/modify/remove insights & sections in one call |
 | `render_report` | Quarto-based report rendering | Export reports to HTML/PDF/Markdown (v0.3.2: +`preview_max_chars`) |
 | `search_report` | Search for living reports | Find reports by title or ID (v0.3.2: +`fields`) |
 | `get_report` **✨ v0.3.2** | Read reports with progressive disclosure | Token-efficient report inspection (4 modes) |
