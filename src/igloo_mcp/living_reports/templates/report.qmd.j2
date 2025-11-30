@@ -124,7 +124,6 @@ format: {{ format }}
 {% if chart_meta %}
 ![{{ chart_meta.get('description', 'Chart') }}]({{ chart_meta.path }})
 {% endif %}
-{% endif %}
 {% elif insight.draft_changes and insight.draft_changes.get('type') == 'table' %}
 ```{python}
 # Table data for {{ insight.insight_id }}
