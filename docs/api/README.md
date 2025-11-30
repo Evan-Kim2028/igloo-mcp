@@ -6,10 +6,17 @@ Igloo MCP provides a focused set of MCP tools for Snowflake data operations, bui
 
 ## Quick Links
 
+- [Core Concepts](#core-concepts)
 - [Tool Reference](#available-tools)
 - [Getting Started](#getting-started)
-- [Error Handling](#error-handling)
 - [Configuration](#configuration)
+
+## Core Concepts
+
+- **[Progressive Disclosure](./PROGRESSIVE_DISCLOSURE.md)** - Control response verbosity for token efficiency
+- **[Error Handling](./ERROR_HANDLING.md)** - Error handling patterns and recovery strategies
+- **[Error Catalog](./ERROR_CATALOG.md)** - Complete error reference
+- **[Tools Index](./TOOLS_INDEX.md)** - Quick tool reference
 
 ## Available Tools
 
@@ -33,10 +40,11 @@ Igloo MCP provides a focused set of MCP tools for Snowflake data operations, bui
 
 8. **[create_report](tools/create_report.md)** *(MCP-only)* - Create new living reports with optional templates
 9. **[evolve_report](tools/evolve_report.md)** *(MCP-only)* - Evolve reports with LLM assistance and audit logging
-10. **[render_report](tools/render_report.md)** *(MCP-only)* - Render reports to various formats
-11. **[search_report](tools/search_report.md)** *(MCP-only)* - Search for living reports with intelligent fallback
-12. **[get_report](tools/get_report.md)** *(MCP-only)* - Read reports with progressive disclosure
-13. **[get_report_schema](tools/get_report_schema.md)** *(MCP-only)* - API schema introspection
+10. **[evolve_report_batch](tools/evolve_report_batch.md)** *(MCP-only)* - Atomic multi-operation report evolution
+11. **[render_report](tools/render_report.md)** *(MCP-only)* - Render reports to various formats
+12. **[search_report](tools/search_report.md)** *(MCP-only)* - Search for living reports with intelligent fallback
+13. **[get_report](tools/get_report.md)** *(MCP-only)* - Read reports with progressive disclosure
+14. **[get_report_schema](tools/get_report_schema.md)** *(MCP-only)* - API schema introspection
 
 ## Getting Started
 

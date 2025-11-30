@@ -977,11 +977,10 @@ get_report(
 
 ## See Also
 
-- [get_report Tool Documentation](../api/tools/get_report.md) - Progressive disclosure API
-- [get_report_schema Tool Documentation](../api/tools/get_report_schema.md) - Schema introspection API
-- [search_report Tool Documentation](../api/tools/search_report.md) - Report discovery with field filtering
-- [evolve_report Tool Documentation](../api/tools/evolve_report.md) - Report modification with response detail control
-- [render_report Tool Documentation](../api/tools/render_report.md) - Rendering with preview size control
-- [API Reference](../api/README.md) - Complete MCP tools documentation
-- [Getting Started Guide](../getting-started.md) - Quick start overview
-- [MCP Integration Guide](../mcp-integration.md) - MCP client setup
+- [Progressive Disclosure](../api/PROGRESSIVE_DISCLOSURE.md) - Control response verbosity for token efficiency
+- [create_report API](../api/tools/create_report.md)
+- [evolve_report API](../api/tools/evolve_report.md)
+- [evolve_report_batch API](../api/tools/evolve_report_batch.md)
+- [get_report API](../api/tools/get_report.md)
+- [render_report API](../api/tools/render_report.md)
+- [search_report API](../api/tools/search_report.md)

@@ -49,16 +49,20 @@ Restart your MCP client and ask: *"Preview the customers table"*
 ### 📊 Living Reports
 - **`create_report`** — Initialize auditable JSON-backed business reports
 - **`evolve_report`** — Modify reports safely with LLM assistance and full audit trail
+- **`evolve_report_batch`** — Perform multiple report operations atomically (add insights, attach charts)
 - **`render_report`** — Export to HTML, PDF, or Markdown via Quarto
 - **`get_report`** — Read reports efficiently with progressive disclosure (summary/sections/insights/full modes)
 - **`search_report`** — Find reports by title or tags
+- **`search_citations`** — Search citations across reports by source type, provider, or URL
 - **`get_report_schema`** — Discover valid report structures at runtime
+
+Attach charts to insights, cite multiple source types (query, API, URL, observation, document), and search citations across all reports.
 
 ### 🏥 Health & Diagnostics
 - **`test_connection`** — Validate Snowflake authentication
 - **`health_check`** — Monitor server, profile, and catalog status
 
-**View all 14 tools**: [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md)
+**View all 15 tools**: [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md)
 
 ## When to Use Igloo MCP
 
