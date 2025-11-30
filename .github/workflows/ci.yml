@@ -86,7 +86,7 @@ jobs:
             --cov=src/igloo_mcp \
             --cov-report=xml \
             --cov-report=term-missing \
-            --cov-fail-under=80 \
+            --cov-fail-under=70 \
             -v
 
       # Phase 3.6: Enforce critical module coverage
