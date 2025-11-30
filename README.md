@@ -10,18 +10,18 @@ Igloo MCP is a standalone, SnowCLI-powered MCP server designed for seamless Snow
 
 ## Key Features
 
-- 🛡️ **Built-in Guardrails**: Defaults block writes/DDL (e.g., no INSERT/CREATE); safe alternatives suggested. Enhanced in v0.2.3 for stricter validation. DESCRIBE statements correctly classified in v0.3.0.
+- 🛡️ **Built-in Guardrails**: Defaults block writes/DDL (e.g., no INSERT/CREATE); safe alternatives suggested.
 - ⏱️ **Timeouts & Cancellation**: Per-query limits (default 30s) with server-side cancel; captures query IDs for tracing.
 - 📝 **Always-On History**: Auto-logs executions (success/error/timeout) to JSONL + SHA-hashed SQL artifacts. Fallback to `~/.igloo_mcp/logs/` if no workspace.
 - 📦 **Smart Caching**: Cache results (up to 5k rows as CSV/JSONL) by SQL + context; modes for refresh/read-only. Instant for AI replays.
 - 📊 **Auto Insights**: Every query returns `key_metrics` (null ratios, ranges, top values) + insights – fuels LLM reasoning without follow-up SQL.
-- 🧠 **Error Handling**: Compact errors; verbose mode for hints. v0.2.3 adds better REST init fallbacks and v0.2.5 ensures health-check feedback routes through the new `get_comprehensive_health` monitor. v0.3.0 improves timeout error messaging with catalog-based filtering guidance.
-- 📡 **Source Attribution**: v0.2.5+ includes structured `source_databases`/`tables` fields in both query responses and history logs so compliance reviews no longer rely on session defaults.
-- 🧩 **MCP-Compliant Tools**: 14 focused tools for querying, cataloging, lineage, and living reports. Consolidated in v0.2.3 for reporting workflows. **v0.3.2 adds 2 new tools** for progressive disclosure and API introspection. **v0.3.5 adds batch operations**.
-- ⚡ **Token Efficiency**: 70% reduction in multi-turn workflows via progressive disclosure and configurable verbosity (v0.3.2+). **60-90% reduction in query responses via `result_mode` parameter (v0.3.5+)**. Read only what you need, when you need it.
-- 📂 **Unified Storage**: All data (query history, artifacts, reports) stored together per instance for easy access across projects. Reports use `~/.igloo_mcp/reports/` by default in v0.3.0+.
-- 📋 **Living Reports**: JSON-backed, auditable business reports that evolve safely with LLM assistance (v0.3.0+). Three-layer architecture: Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs. **Complete tooling ecosystem in v0.3.2**. **Batch operations in v0.3.5**.
-- 🔍 **API Completeness** ✨ v0.3.3: Distributed tracing with `request_id` (UUID4), performance monitoring with `timing` metrics, complete audit trails with symmetric CRUD tracking (`*_ids_added`/`*_ids_modified`/`*_ids_removed`), and structured `warnings` for graceful handling of partial results. Full observability for multi-step workflows.
+- 🧠 **Error Handling**: Compact errors; verbose mode for hints. Improved timeout error messaging with catalog-based filtering guidance.
+- 📡 **Source Attribution**: Structured `source_databases`/`tables` fields in both query responses and history logs for complete compliance tracking.
+- 🧩 **MCP-Compliant Tools**: 14 focused tools for querying, cataloging, lineage, and living reports.
+- ⚡ **Token Efficiency**: Up to 90% reduction in workflows via progressive disclosure, configurable verbosity, and `result_mode` parameter. Read only what you need, when you need it.
+- 📂 **Unified Storage**: All data (query history, artifacts, reports) stored together per instance for easy access across projects.
+- 📋 **Living Reports**: JSON-backed, auditable business reports that evolve safely with LLM assistance. Three-layer architecture: Presentation/Quarto, Machine Truth/JSON, Immutable Memory/audit logs. Includes atomic batch operations.
+- 🔍 **API Completeness**: Distributed tracing with `request_id` (UUID4), performance monitoring with `timing` metrics, complete audit trails with symmetric CRUD tracking, and structured `warnings` for graceful handling of partial results.
 - ⚡ **Simple Backend**: SnowCLI integration for max performance; CLI/REST modes. Python 3.12+, MIT-licensed.
 
 Full API in [docs/api/README.md](./docs/api/README.md).
@@ -45,7 +45,7 @@ Igloo exposes 14 focused tools for Snowflake ops. Use via any MCP client (e.g., 
 
 | Tool | Purpose | Key Use |
 |------|---------|---------|
-| `execute_query` | Run safe SQL with guards/timeouts | Agent-generated queries; returns rows + insights. **v0.3.5: `result_mode` for 60-90% token reduction** |
+| `execute_query` | Run safe SQL with guards/timeouts | Agent-generated queries; returns rows + insights. `result_mode` for 60-90% token reduction |
 | `build_catalog` | Export metadata (tables/views/etc.) to JSONL | Offline catalog for search/lineage |
 | `get_catalog_summary` | Stats on built catalogs (counts, health) | Quick schema overviews |
 | `search_catalog` | Offline search by name/column/schema | Find objects without Snowflake hits |
@@ -53,18 +53,18 @@ Igloo exposes 14 focused tools for Snowflake ops. Use via any MCP client (e.g., 
 | `test_connection` | Validate profile/auth | Setup checks |
 | `health_check` | System/profile/catalog status | Monitoring |
 | `create_report` | Create a new living report | Initialize structured business reports |
-| `evolve_report` | LLM-agnostic report evolution | Safely evolve audited reports (v0.3.2: +`response_detail`) |
-| `evolve_report_batch` **✨ v0.3.5** | Atomic multi-operation report evolution | Batch add/modify/remove insights & sections in one call |
-| `render_report` | Quarto-based report rendering | Export reports to HTML/PDF/Markdown (v0.3.2: +`preview_max_chars`) |
-| `search_report` | Search for living reports | Find reports by title or ID (v0.3.2: +`fields`) |
-| `get_report` **✨ v0.3.2** | Read reports with progressive disclosure | Token-efficient report inspection (4 modes) |
-| `get_report_schema` **✨ v0.3.2** | API schema introspection | Discover valid structures at runtime |
+| `evolve_report` | LLM-agnostic report evolution | Safely evolve audited reports with configurable verbosity |
+| `evolve_report_batch` | Atomic multi-operation report evolution | Batch add/modify/remove insights & sections in one call |
+| `render_report` | Quarto-based report rendering | Export reports to HTML/PDF/Markdown with preview control |
+| `search_report` | Search for living reports | Find reports by title or ID with selective field retrieval |
+| `get_report` | Read reports with progressive disclosure | Token-efficient report inspection (4 modes) |
+| `get_report_schema` | API schema introspection | Discover valid structures at runtime |
 
 Detailed schemas in [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md).
 
-## Living Reports (v0.3.0+, Complete in v0.3.2)
+## Living Reports
 
-Living Reports are JSON-backed, auditable business reports that evolve safely with LLM assistance. **v0.3.2 completes the tooling ecosystem** with progressive disclosure and schema introspection.
+Living Reports are JSON-backed, auditable business reports that evolve safely with LLM assistance.
 
 ### Key Features
 
@@ -74,11 +74,11 @@ Living Reports are JSON-backed, auditable business reports that evolve safely wi
 - **MCP-First**: Primary interface through AI assistants and MCP tools
 - **Quarto Rendering**: Export to HTML, PDF, Markdown, or DOCX via `render_report`
 - **Three-Layer Architecture**: Presentation (Quarto), Machine Truth (JSON), Immutable Memory (audit logs)
-- **Progressive Disclosure** ✨ v0.3.2: Read only what you need with `get_report` (summary/sections/insights/full modes)
-- **API Discovery** ✨ v0.3.2: Discover valid structures with `get_report_schema` before evolving
-- **Token Efficient** ✨ v0.3.2: 70% reduction in multi-turn workflows via selective retrieval and configurable verbosity
+- **Progressive Disclosure**: Read only what you need with `get_report` (summary/sections/insights/full modes)
+- **API Discovery**: Discover valid structures with `get_report_schema` before evolving
+- **Token Efficient**: Up to 70% reduction in multi-turn workflows via selective retrieval and configurable verbosity
 
-### Complete Workflow (v0.3.2)
+### Complete Workflow
 
 ```python
 # 1. Find reports efficiently (30-50% token reduction)
@@ -154,7 +154,7 @@ Restart client; test: Ask "Preview the customers table" – should return safe r
 
 Full client guides: [docs/installation.md](./docs/installation.md).
 
-## Usage Notes: Required `reason` Parameter (v0.3.0)
+## Usage Notes: Required `reason` Parameter
 
 - **Every `execute_query` needs `reason`** (5+ chars): Explains query purpose for audits.
 - Examples:

@@ -19,7 +19,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | `reason` | string | ✅ Yes | - | Short reason for running the query (min length 5). Stored in Snowflake `QUERY_TAG` and local history; avoid sensitive information. |
 | `timeout_seconds` | integer | ❌ No | 120 | Query timeout in seconds (1-3600) |
 | `verbose_errors` | boolean | ❌ No | false | Include detailed optimization hints |
-| `result_mode` | string | ❌ No | "full" | Control response verbosity: `full`, `summary`, `schema_only`, or `sample`. Reduces token usage by 60-90%. **✨ v0.3.5** |
+| `result_mode` | string | ❌ No | "full" | Control response verbosity: `full`, `summary`, `schema_only`, or `sample`. Reduces token usage by 60-90%. |
 | `warehouse` | string | ❌ No | profile | Warehouse override (Snowflake identifier) |
 | `database` | string | ❌ No | profile | Database override (Snowflake identifier) |
 | `schema` | string | ❌ No | profile | Schema override (Snowflake identifier) |
