@@ -382,6 +382,19 @@ def register_igloo_mcp(
                 default=None,
             ),
         ] = None,
+        result_mode: Annotated[
+            Optional[str],
+            Field(
+                description=(
+                    "Control response verbosity to reduce token usage. Options: "
+                    "'full' (default) - return all rows; "
+                    "'summary' - return key_metrics + 5 sample rows only; "
+                    "'schema_only' - return column names/types only, no rows; "
+                    "'sample' - return first 10 rows only."
+                ),
+                default=None,
+            ),
+        ] = None,
         ctx: Context | None = None,
     ) -> Dict[str, Any]:
         """Execute a SQL query against Snowflake - delegates to ExecuteQueryTool."""
@@ -407,6 +420,7 @@ def register_igloo_mcp(
                 timeout_seconds=timeout_int,
                 verbose_errors=verbose_errors,
                 post_query_insight=post_query_insight,
+                result_mode=result_mode,
                 ctx=ctx,
             )
         except (MCPValidationError, MCPExecutionError, MCPToolError):

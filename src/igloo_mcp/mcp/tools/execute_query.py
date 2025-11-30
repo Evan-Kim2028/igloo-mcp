@@ -109,6 +109,80 @@ def _relative_sql_path(repo_root: Path, artifact_path: Optional[Path]) -> Option
         return artifact_path.resolve().as_posix()
 
 
+# Result mode constants
+RESULT_MODE_FULL = "full"
+RESULT_MODE_SUMMARY = "summary"
+RESULT_MODE_SCHEMA_ONLY = "schema_only"
+RESULT_MODE_SAMPLE = "sample"
+RESULT_MODE_SAMPLE_SIZE = 10  # Default sample size for 'sample' mode
+RESULT_MODE_SUMMARY_SAMPLE_SIZE = 5  # Sample size for 'summary' mode
+
+
+def _apply_result_mode(result: Dict[str, Any], mode: str) -> Dict[str, Any]:
+    """Apply result_mode filtering to reduce response size.
+
+    Args:
+        result: Full query result dict
+        mode: One of 'full', 'summary', 'schema_only', 'sample'
+
+    Returns:
+        Filtered result dict based on mode
+    """
+    if mode == RESULT_MODE_FULL:
+        return result
+
+    # Get original rows for filtering
+    rows = result.get("rows", [])
+    rowcount = result.get("rowcount", len(rows))
+    columns = result.get("columns", [])
+
+    # Add result_mode to response so caller knows what they got
+    result["result_mode"] = mode
+
+    if mode == RESULT_MODE_SCHEMA_ONLY:
+        # Return only schema info, no rows
+        result["rows"] = []
+        result["result_mode_info"] = {
+            "mode": "schema_only",
+            "total_rows": rowcount,
+            "rows_returned": 0,
+            "hint": "Use result_mode='full' to retrieve all rows",
+        }
+        return result
+
+    if mode == RESULT_MODE_SAMPLE:
+        # Return first N rows only
+        sample_rows = rows[:RESULT_MODE_SAMPLE_SIZE]
+        result["rows"] = sample_rows
+        result["result_mode_info"] = {
+            "mode": "sample",
+            "total_rows": rowcount,
+            "rows_returned": len(sample_rows),
+            "sample_size": RESULT_MODE_SAMPLE_SIZE,
+            "hint": "Use result_mode='full' to retrieve all rows" if rowcount > RESULT_MODE_SAMPLE_SIZE else None,
+        }
+        return result
+
+    if mode == RESULT_MODE_SUMMARY:
+        # Return key_metrics + small sample only
+        sample_rows = rows[:RESULT_MODE_SUMMARY_SAMPLE_SIZE]
+        result["rows"] = sample_rows
+        result["result_mode_info"] = {
+            "mode": "summary",
+            "total_rows": rowcount,
+            "rows_returned": len(sample_rows),
+            "sample_size": RESULT_MODE_SUMMARY_SAMPLE_SIZE,
+            "columns_count": len(columns),
+            "hint": "Use result_mode='full' to retrieve all rows"
+            if rowcount > RESULT_MODE_SUMMARY_SAMPLE_SIZE
+            else None,
+        }
+        # Ensure key_metrics is present (already computed by _ensure_default_insights)
+        return result
+
+    return result
+
+
 class ExecuteQueryTool(MCPTool):
     """MCP tool for executing SQL queries against Snowflake."""
 
@@ -450,6 +524,7 @@ class ExecuteQueryTool(MCPTool):
         verbose_errors: bool = False,
         reason: Optional[str] = None,
         normalized_insight: Optional[Insight] = None,
+        result_mode: str = "full",
         ctx: Context | None = None,
         *,
         execution_id_override: Optional[str] = None,
@@ -650,7 +725,8 @@ class ExecuteQueryTool(MCPTool):
                 session_context=effective_context,
                 columns=cache_hit_metadata.get("columns"),
             )
-            return result
+            # Apply result_mode filtering before returning
+            return _apply_result_mode(result, result_mode)
 
         # Execute query with session context management
 
@@ -778,7 +854,8 @@ class ExecuteQueryTool(MCPTool):
                 columns=result.get("columns"),
             )
 
-            return result
+            # Apply result_mode filtering before returning
+            return _apply_result_mode(result, result_mode)
 
         except TimeoutError as e:
             # Persist timeout history
@@ -914,6 +991,7 @@ class ExecuteQueryTool(MCPTool):
         verbose_errors: bool = False,
         reason: Optional[str] = None,
         post_query_insight: Optional[Dict[str, Any] | str] = None,
+        result_mode: Optional[str] = None,
         response_mode: Optional[str] = None,
         ctx: Context | None = None,
         **kwargs: Any,
@@ -926,6 +1004,18 @@ class ExecuteQueryTool(MCPTool):
         normalized_insight: Optional[Insight] = None
         if post_query_insight is not None:
             normalized_insight = normalize_insight(post_query_insight)
+
+        # Validate result_mode parameter
+        valid_result_modes = {"full", "summary", "schema_only", "sample"}
+        effective_result_mode = (result_mode or "full").lower()
+        if effective_result_mode not in valid_result_modes:
+            raise MCPValidationError(
+                "Invalid result_mode",
+                validation_errors=[
+                    f"result_mode must be one of: {', '.join(sorted(valid_result_modes))} (got: {result_mode})"
+                ],
+                hints=["Use result_mode='summary' to reduce response size by ~90%"],
+            )
 
         coerced_timeout: Optional[int] = None
         if timeout_seconds is not None:
@@ -985,6 +1075,7 @@ class ExecuteQueryTool(MCPTool):
             verbose_errors=verbose_errors,
             reason=reason,
             normalized_insight=normalized_insight,
+            result_mode=effective_result_mode,
             ctx=ctx,
         )
 
