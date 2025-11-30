@@ -42,10 +42,9 @@ class SearchCitationsTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Search citations across all living reports. Find insights backed by specific "
-            "data sources including queries, APIs, URLs, observations, and documents. "
-            "Supports filtering by source type, provider, URL patterns, and more. "
-            "Enables citation auditing and discovery workflows."
+            "Search citations across all reports by source type, provider, or URL. "
+            "Use to find which reports cite a specific query or data source. "
+            "Helps track query reuse and data lineage."
         )
 
     @property

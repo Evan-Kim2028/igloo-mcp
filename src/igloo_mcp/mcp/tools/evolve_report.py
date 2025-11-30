@@ -99,9 +99,10 @@ class EvolveReportTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Evolve a living report with LLM assistance. "
-            "Use this tool to add insights, modify sections, or restructure an existing report. "
-            "Requires structured changes describing what to add, modify, or remove from the report outline."
+            "Add insights, sections, or content to an existing report—your primary tool for 'taking notes'. "
+            "Use AFTER execute_query to record findings with proper citations (execution_id). "
+            "Use response_mode='minimal' during iterative work, 'full' only for final review. "
+            "Think: 'I found something interesting in my data, let me record it.'"
         )
 
     @property

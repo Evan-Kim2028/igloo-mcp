@@ -53,12 +53,9 @@ class BuildCatalogTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Build comprehensive Snowflake catalog metadata from INFORMATION_SCHEMA. "
-            "Includes databases, schemas, tables, views, materialized views, dynamic tables, "
-            "tasks, user-defined functions, procedures, and columns. Only includes user-defined "
-            "functions (excludes built-in Snowflake operators). After building, use "
-            "get_catalog_summary for statistics or search_catalog to find specific objects. "
-            "This is the first step in the catalog workflow."
+            "Export Snowflake metadata to local catalog for fast offline search. "
+            "Run ONCE per database, then use search_catalog for discovery. "
+            "Use include_ddl=True for complete schema details."
         )
 
     @property

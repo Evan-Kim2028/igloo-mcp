@@ -3,15 +3,16 @@
 
 Critical modules (tools, services, validation) must have >= 90% coverage.
 """
+
 import argparse
 import sys
-import xml.etree.ElementTree as ET  # noqa: S314
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
 def parse_coverage_xml(coverage_file: Path) -> dict[str, float]:
     """Parse coverage.xml and extract per-file coverage."""
-    tree = ET.parse(coverage_file)  # noqa: S314
+    tree = ET.parse(coverage_file)
     root = tree.getroot()
 
     coverage_by_file = {}

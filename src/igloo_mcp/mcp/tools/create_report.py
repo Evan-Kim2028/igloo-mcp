@@ -51,12 +51,9 @@ class CreateReportTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Create a new living report with optional template and tags. "
-            "Use this tool to start a new report that can be evolved over time with insights and analysis. "
-            "Supports templates for common report types "
-            "(default, monthly_sales, quarterly_review, deep_dive, analyst_v1). "
-            "The analyst_v1 template provides standardized blockchain analysis reports "
-            "with citation enforcement."
+            "Initialize a new living report for accumulating insights over time. "
+            "Use AFTER running queries and gathering initial findings—the report is your 'notebook' for consolidating discoveries. "
+            "Start with template='default' for flexibility, or 'analyst_v1' when citations are mandatory."
         )
 
     @property

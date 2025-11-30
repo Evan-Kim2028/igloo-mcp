@@ -44,11 +44,9 @@ class GetReportSchemaTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Get JSON schema for Living Reports operations. Returns schema definitions "
-            "for evolve_report proposed_changes or individual model types (insight, section, outline). "
-            "Use this to understand valid structures before constructing evolve_report payloads. "
-            "Supports multiple formats: 'json_schema' for full JSON Schema, 'examples' for "
-            "copy-paste-ready examples, and 'compact' for quick reference."
+            "Discover valid report structures and get copy-paste examples. "
+            "Use when unsure how to structure proposed_changes for evolve_report. "
+            "format='examples' provides ready-to-use templates."
         )
 
     @property

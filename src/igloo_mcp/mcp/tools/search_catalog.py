@@ -47,11 +47,9 @@ class SearchCatalogTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Search the locally cached Snowflake catalog built via build_catalog. "
-            "Supports filtering by object type, database/schema, name, and column names. "
-            "Use this to find specific tables, views, or objects matching criteria. "
-            "Use get_catalog_summary for high-level statistics instead. Requires a catalog "
-            "built with build_catalog first."
+            "Search offline catalog for tables/columns without querying Snowflake. "
+            "Use for rapid schema discovery BEFORE writing queries. "
+            "Combine name_contains and column_contains for targeted searches."
         )
 
     @property

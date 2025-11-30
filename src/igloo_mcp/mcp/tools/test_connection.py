@@ -49,10 +49,9 @@ class ConnectionTestTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Quick lightweight Snowflake connection test. Verifies basic connectivity "
-            "and returns active warehouse/database/schema/role. Use this for simple "
-            "connectivity checks before running queries. For comprehensive health "
-            "validation including profile, Cortex, and catalog status, use health_check instead."
+            "Validate Snowflake authentication quickly. "
+            "Use when health_check shows connection issues. "
+            "Lightweight alternative to full health_check."
         )
 
     @property

@@ -66,10 +66,9 @@ class HealthCheckTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Comprehensive system health check including connection, profile validation, "
-            "Cortex availability, and catalog status. Use this for thorough diagnostics "
-            "or troubleshooting. For quick connectivity checks, use test_connection instead. "
-            "Supports optional checks via include_cortex, include_profile, and include_catalog parameters."
+            "Check server, Snowflake connection, and catalog health. "
+            "Use at session start or when queries fail unexpectedly. "
+            "Use response_mode='minimal' for quick status, 'full' for diagnostics."
         )
 
     @property

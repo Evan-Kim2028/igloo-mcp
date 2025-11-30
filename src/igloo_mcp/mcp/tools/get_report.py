@@ -47,11 +47,9 @@ class GetReportTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Get the structure and content of a living report with selective retrieval. "
-            "Supports multiple modes for token efficiency: 'summary' for overview, "
-            "'sections' for section details, 'insights' for insight details, and 'full' "
-            "for complete report. Use this before evolve_report to understand current state "
-            "and obtain section_ids/insight_ids for modifications."
+            "Read a report's structure or content with progressive disclosure. "
+            "Use BEFORE evolve_report to understand current state and obtain IDs for modifications. "
+            "Start with response_mode='minimal' (IDs only), drill down with 'standard' or 'full' only when needed."
         )
 
     @property

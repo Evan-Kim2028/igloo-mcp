@@ -194,7 +194,7 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
               - 'sample': Return first 10 rows in result order (~60-80% reduction)
 
     Returns:
-        Modified result dict. For non-'full' modes, adds:
+        Modified result dict. For non-'full' modes, includes:
             - result_mode: The mode that was applied
             - result_mode_info: Dict with filtering metadata including
               total_rows, rows_returned, sample_size, and hint
@@ -511,7 +511,12 @@ class ExecuteQueryTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return "Execute a SQL query against Snowflake"
+        return (
+            "Execute SQL queries against Snowflake with safety guardrails. "
+            "Use for data exploration, validation, and analysis—always capture execution_id for citations. "
+            "Start with response_mode='schema_only' for structure discovery, 'summary' for validation, "
+            "'full' only for final data export."
+        )
 
     @property
     def category(self) -> str:
@@ -652,7 +657,7 @@ class ExecuteQueryTool(MCPTool):
 
         execution_id = execution_id_override or uuid.uuid4().hex
         requested_ts = time.time()
-        sql_sha256 = sql_sha_override or hashlib.sha256(statement.encode("utf-8")).hexdigest()
+        sql_sha256 = sql_sha256 or hashlib.sha256(statement.encode("utf-8")).hexdigest()
         referenced_objects = extract_query_objects(statement)
         history_artifacts: dict[str, str] = {}
         artifact_path = self._persist_sql_artifact(sql_sha256, statement)
@@ -1479,9 +1484,11 @@ class ExecuteQueryTool(MCPTool):
                                 truncated_rows = processed_rows[:RESULT_KEEP_FIRST_ROWS]
                                 last_rows = processed_rows[-RESULT_KEEP_LAST_ROWS:]
 
-                                result_box["rows"] = (
-                                    [*truncated_rows, {"__truncated__": True, "__message__": "Large result set truncated"}, *last_rows]
-                                )
+                                result_box["rows"] = [
+                                    *truncated_rows,
+                                    {"__truncated__": True, "__message__": "Large result set truncated"},
+                                    *last_rows,
+                                ]
                                 result_box["truncated"] = True
                                 result_box["original_rowcount"] = original_count
                                 result_box["returned_rowcount"] = len(result_box["rows"])

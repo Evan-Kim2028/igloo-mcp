@@ -48,10 +48,9 @@ class GetCatalogSummaryTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Retrieve high-level summary statistics from an existing catalog built via build_catalog. "
-            "Returns aggregate counts (databases, schemas, tables, etc.) and metadata. "
-            "Use search_catalog to find specific objects or filter by name/column. "
-            "Use this tool to get overview statistics about a catalog directory."
+            "Get catalog statistics and coverage information. "
+            "Use to verify catalog is up-to-date before searching. "
+            "Use response_mode='minimal' for quick checks."
         )
 
     @property

@@ -125,9 +125,9 @@ class EvolveReportBatchTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Perform multiple report evolution operations atomically. "
-            "Supports adding/modifying/removing insights and sections in a single call. "
-            "All operations are validated before any are applied, ensuring consistency."
+            "Apply multiple report changes atomically in a single operation. "
+            "Use for complex restructuring or bulk insight addition. "
+            "Prefer over multiple evolve_report calls for related changes—ensures consistency and better performance."
         )
 
     @property

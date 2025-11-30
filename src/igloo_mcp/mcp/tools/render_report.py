@@ -47,9 +47,9 @@ class RenderReportTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Render a living report to human-readable formats (HTML, PDF, markdown, docx) using Quarto. "
-            "Use this tool to generate final output from a report outline. Converts structured report data "
-            "into formatted documents suitable for sharing or presentation."
+            "Export a report to shareable formats (HTML, PDF, Markdown)—the 'finals week study guide'. "
+            "Use AFTER report is complete and reviewed. "
+            "Use dry_run=True to preview, include_preview=True for inline content sampling."
         )
 
     @property

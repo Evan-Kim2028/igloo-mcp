@@ -41,9 +41,9 @@ class BuildDependencyGraphTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Build object dependency graph from Snowflake metadata. "
-            "Use this tool when you need to understand relationships between tables, views, and other objects, "
-            "or to trace data lineage. Returns a graph structure showing dependencies between database objects."
+            "Visualize table lineage and dependencies. "
+            "Use after catalog is built to understand data flow. "
+            "Returns DOT format for graph visualization."
         )
 
     @property

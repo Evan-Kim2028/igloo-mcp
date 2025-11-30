@@ -157,9 +157,7 @@ class TestDocumentationAccuracy:
 
                 error_msg = str(exc_info.value)
                 # Should mention available profiles or setup instructions
-                assert any(
-                    keyword in error_msg.lower() for keyword in ["profile", "snowflake", "connection", "setup"]
-                )
+                assert any(keyword in error_msg.lower() for keyword in ["profile", "snowflake", "connection", "setup"])
 
 
 class TestNewUserExperience:
