@@ -1,9 +1,30 @@
-"""Report selector resolution with deterministic behavior and structured errors."""
+"""Report selector resolution for fuzzy matching and lookup.
+
+Resolves report identifiers from UUIDs, exact titles, or fuzzy title
+matches. Provides intelligent fallback with candidate suggestions when
+exact matches fail, enabling natural language report references.
+
+Key Classes:
+- ReportSelector: Main resolution engine with fuzzy matching
+- SelectorResolutionError: Raised when no suitable match found
+
+Usage:
+    from igloo_mcp.living_reports.selector import ReportSelector
+    from igloo_mcp.living_reports.index import ReportIndex
+
+    index = ReportIndex(path)
+    selector = ReportSelector(index)
+
+    # Exact UUID match
+    report_id = selector.resolve("rpt_550e8400e29b11d4a716446655440000")
+
+    # Fuzzy title match
+    report_id = selector.resolve("Q1 Revenue")  # Finds "Q1 Revenue Analysis"
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 from .index import ReportIndex
 
@@ -14,9 +35,9 @@ class SelectorResolutionError(ValueError):
 
     selector: str
     error_type: str  # "not_found", "ambiguous", "invalid_format"
-    candidates: Optional[List[str]] = None
-    message: Optional[str] = None
-    candidate_details: Optional[List[Dict[str, str]]] = None  # List of {title, id} dicts
+    candidates: list[str] | None = None
+    message: str | None = None
+    candidate_details: list[dict[str, str]] | None = None  # List of {title, id} dicts
 
     def to_dict(self):
         result = {

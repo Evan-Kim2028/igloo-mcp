@@ -15,7 +15,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from io import StringIO
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .config import get_config
 
@@ -39,15 +39,15 @@ class QueryOutput:
     raw_stderr: str
     returncode: int
     # Optional parsed forms
-    rows: Optional[List[Dict[str, Any]]] = None
-    columns: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    rows: list[dict[str, Any]] | None = None
+    columns: list[str] | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class SnowCLI:
     """Runner for Snowflake CLI commands."""
 
-    def __init__(self, profile: Optional[str] = None):
+    def __init__(self, profile: str | None = None):
         cfg = get_config()
         self.profile = profile or cfg.snowflake.profile
         self.default_ctx = {
@@ -57,7 +57,7 @@ class SnowCLI:
             "role": cfg.snowflake.role,
         }
 
-    def _base_args(self, ctx_overrides: Optional[Dict[str, Optional[str]]] = None) -> List[str]:
+    def _base_args(self, ctx_overrides: dict[str, str | None] | None = None) -> list[str]:
         # Use --connection/-c to select the configured connection name
         args = ["snow", "sql", "--connection", self.profile]
         ctx = {**self.default_ctx}
@@ -73,9 +73,9 @@ class SnowCLI:
         self,
         query: str,
         *,
-        output_format: Optional[str] = None,  # "csv" or "json" if supported
-        ctx_overrides: Optional[Dict[str, Optional[str]]] = None,
-        timeout: Optional[int] = None,
+        output_format: str | None = None,  # "csv" or "json" if supported
+        ctx_overrides: dict[str, str | None] | None = None,
+        timeout: int | None = None,
     ) -> QueryOutput:
         """Execute an inline SQL statement using Snowflake CLI.
 
@@ -150,9 +150,9 @@ class SnowCLI:
         self,
         file_path: str,
         *,
-        output_format: Optional[str] = None,
-        ctx_overrides: Optional[Dict[str, Optional[str]]] = None,
-        timeout: Optional[int] = None,
+        output_format: str | None = None,
+        ctx_overrides: dict[str, str | None] | None = None,
+        timeout: int | None = None,
     ) -> QueryOutput:
         _ensure_snow_available()
         args = self._base_args(ctx_overrides)
@@ -193,7 +193,7 @@ class SnowCLI:
             return False
 
     # Connection management helpers
-    def list_connections(self) -> List[Dict[str, Any]]:
+    def list_connections(self) -> list[dict[str, Any]]:
         _ensure_snow_available()
         proc = subprocess.run(
             ["snow", "connection", "list", "--format", "JSON"],
@@ -223,10 +223,10 @@ class SnowCLI:
         account: str,
         user: str,
         private_key_file: str,
-        role: Optional[str] = None,
-        warehouse: Optional[str] = None,
-        database: Optional[str] = None,
-        schema: Optional[str] = None,
+        role: str | None = None,
+        warehouse: str | None = None,
+        database: str | None = None,
+        schema: str | None = None,
         make_default: bool = False,
     ) -> None:
         _ensure_snow_available()

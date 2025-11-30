@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -154,7 +154,7 @@ class TestOutline:
 
     def test_valid_outline(self) -> None:
         """Test creating a valid outline."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         outline = Outline(
             report_id="550e8400-e29b-41d4-a716-446655440000",
             title="Test Report",
@@ -182,7 +182,7 @@ class TestOutline:
 
     def test_invalid_report_id(self) -> None:
         """Test outline with invalid report ID raises ValueError."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with pytest.raises(ValueError, match="report_id must be valid ReportId"):
             Outline(
                 report_id="not-a-uuid",
@@ -193,7 +193,7 @@ class TestOutline:
 
     def test_get_insight(self) -> None:
         """Test getting insight by ID."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         insight_id = str(uuid.uuid4())
         outline = Outline(
             report_id=str(ReportId.new()),
@@ -217,7 +217,7 @@ class TestOutline:
 
     def test_get_section(self) -> None:
         """Test getting section by ID."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         section_id = str(uuid.uuid4())
         outline = Outline(
             report_id=str(ReportId.new()),
@@ -245,7 +245,7 @@ class TestAuditEvent:
 
     def test_valid_audit_event(self) -> None:
         """Test creating a valid audit event."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         event = AuditEvent(
             action_id=str(uuid.uuid4()),
             report_id=str(ReportId.new()),
@@ -259,7 +259,7 @@ class TestAuditEvent:
 
     def test_invalid_actor(self) -> None:
         """Test audit event with invalid actor raises ValueError."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with pytest.raises(ValueError):
             AuditEvent(
                 action_id=str(uuid.uuid4()),
@@ -271,7 +271,7 @@ class TestAuditEvent:
 
     def test_invalid_action_type(self) -> None:
         """Test audit event with invalid action type raises ValueError."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with pytest.raises(ValueError):
             AuditEvent(
                 action_id=str(uuid.uuid4()),
@@ -287,7 +287,7 @@ class TestIndexEntry:
 
     def test_valid_index_entry(self) -> None:
         """Test creating a valid index entry."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         entry = IndexEntry(
             report_id=str(ReportId.new()),
             current_title="Test Report",
@@ -301,7 +301,7 @@ class TestIndexEntry:
 
     def test_invalid_report_id(self) -> None:
         """Test index entry with invalid report ID raises ValueError."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with pytest.raises(ValueError, match="report_id must be valid ReportId"):
             IndexEntry(
                 report_id="not-a-uuid",
@@ -313,7 +313,7 @@ class TestIndexEntry:
 
     def test_status_validation(self) -> None:
         """Test status field validation."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Valid statuses
         IndexEntry(

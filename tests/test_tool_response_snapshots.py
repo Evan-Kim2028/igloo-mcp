@@ -51,6 +51,7 @@ class TestExecuteQueryResponseSchema:
         result = await tool.execute(
             statement="SELECT 1",
             reason="Snapshot test",
+            response_mode="full",
         )
 
         # Verify response schema stability
@@ -76,6 +77,7 @@ class TestExecuteQueryResponseSchema:
                 "artifact_root",
                 "artifacts",
                 "cache",
+                "cache_hit",
                 "execution_id",
                 "history_enabled",
                 "history_path",

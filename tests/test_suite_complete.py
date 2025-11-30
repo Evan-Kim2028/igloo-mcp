@@ -143,7 +143,7 @@ def test_selector_resolution():
         # Should handle non-existent selectors gracefully
         try:
             selector.resolve("nonexistent")
-            assert False, "Should have raised SelectorResolutionError"
+            raise AssertionError("Should have raised SelectorResolutionError")
         except SelectorResolutionError as e:
             assert e.error_type == "not_found"
 

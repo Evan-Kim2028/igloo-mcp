@@ -74,9 +74,42 @@ Get comprehensive health status for the MCP server and Snowflake connection.
 
 - **`request_id`**: UUID4 correlation ID for distributed tracing
 - **`timing`**: Performance metrics with `total_duration_ms` only
+
+- `system` now reflects the consolidated `get_comprehensive_health` response with `healthy`, `error_count`, `metrics.uptime_seconds`, and recent errors populated. Older monitors that only expose `get_health_status()` are still supported.
+
+### Storage Paths Diagnostics (Full Mode Only)
+
+When `response_mode="full"`, the response includes a `diagnostics.storage_paths` object showing where igloo-mcp stores data:
+
+```json
+{
+  "diagnostics": {
+    "storage_paths": {
+      "scope": "global",
+      "base_directory": "/Users/username/.igloo_mcp",
+      "query_history": "/Users/username/.igloo_mcp/logs/doc.jsonl",
+      "artifacts": "/Users/username/.igloo_mcp/logs/artifacts",
+      "cache": "/Users/username/.igloo_mcp/logs/artifacts/cache",
+      "reports": "/Users/username/.igloo_mcp/reports",
+      "catalogs": "/Users/username/.igloo_mcp/catalogs",
+      "namespaced": false
+    }
+  }
+}
 ```
 
-- `system` now reflects the consolidated `get_comprehensive_health` response (v0.2.5) with `healthy`, `error_count`, `metrics.uptime_seconds`, and recent errors populated. Older monitors that only expose `get_health_status()` are still supported.
+**Storage Scope Modes:**
+- `global`: All data stored in `~/.igloo_mcp/` (default, persistent across projects)
+- `repo`: Data stored in current repository under `./logs/` (project-specific)
+
+**Path Configuration:**
+- Set scope via `IGLOO_MCP_LOG_SCOPE` environment variable
+- Enable namespacing via `IGLOO_MCP_NAMESPACED_LOGS=true`
+- Override individual paths via `IGLOO_MCP_QUERY_HISTORY`, `IGLOO_MCP_REPORTS_ROOT`, etc.
+
+**Related Documentation:**
+- [Environment Variables Reference](../../configuration/ENVIRONMENT_VARIABLES.md)
+- [Living Reports Storage](../../living-reports/user-guide.md#storage)
 
 ## Examples
 

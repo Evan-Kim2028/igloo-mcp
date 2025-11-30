@@ -1,8 +1,13 @@
-# search_report - Find Living Reports
+# search_report
 
-Search for living reports by title, ID, tags, or status with intelligent fallback behavior.
+Search for living reports with intelligent fallback behavior.
 
-**Enhanced in v0.3.2** with `fields` parameter for selective field retrieval (30-50% token reduction).
+**Features**:
+- Exact report ID matching
+- Fuzzy title search (case-insensitive)
+- Tag-based filtering (AND logic)
+- Status filtering (active/archived/deleted)
+- **Selective fields**: Request only the fields you need
 
 ## Overview
 
@@ -12,7 +17,7 @@ The `search_report` tool enables agents to discover reports in the igloo-mcp ins
 - **ID lookup**: Direct report ID resolution
 - **Tag filtering**: Find reports with specific tags
 - **Status filtering**: Filter by active/archived reports
-- **Selective fields** ✨ v0.3.2: Request only the fields you need
+- **Selective fields**: Request only the fields you need
 
 ## Parameters
 
@@ -24,10 +29,10 @@ The `search_report` tool enables agents to discover reports in the igloo-mcp ins
 | `title` | string | null | Search by title (exact or partial match, case-insensitive) |
 | `tags` | array[string] | null | Filter by tags (reports must have ALL specified tags) |
 | `status` | string | "active" | Filter by status: `active` or `archived` |
-| `fields` | array[string] | null | **✨ v0.3.2** - Specific fields to return (defaults to all) |
+| `fields` | array[string] | null | Specific fields to return (defaults to all) |
 | `limit` | integer | 20 | Maximum results to return (1-50) |
 
-## Field Selection (New in v0.3.2)
+## Field Selection
 
 The `fields` parameter allows you to request only specific fields, significantly reducing token usage.
 
@@ -52,11 +57,11 @@ The `fields` parameter allows you to request only specific fields, significantly
 
 | Request Type | Tokens (All Fields) | Tokens (Minimal Fields) | Savings |
 |-------------|---------------------|-------------------------|---------|
-| Single report | ~150 tokens | ~50 tokens | 67% |
-| 10 reports | ~1,200 tokens | ~400 tokens | 67% |
-| 20 reports | ~2,400 tokens | ~800 tokens | 67% |
+| Single report | ~150 tokens | ~50 tokens | Significant reduction |
+| 10 reports | ~1,200 tokens | ~400 tokens | Substantial reduction |
+| 20 reports | ~2,400 tokens | ~800 tokens | Substantial reduction |
 
-**Average Savings**: 30-50% when using selective fields
+**Average Savings**: Significant token reduction when using selective fields
 
 ---
 
@@ -101,7 +106,7 @@ The `fields` parameter allows you to request only specific fields, significantly
 
 ---
 
-### Example 2: Minimal Fields (Token Efficient) ✨ v0.3.2
+### Example 2: Minimal Fields (Token Efficient)
 
 ```json
 {
@@ -129,7 +134,7 @@ The `fields` parameter allows you to request only specific fields, significantly
 }
 ```
 
-**Token Savings**: ~70% reduction (400 tokens → 120 tokens)
+**Token Savings**: Substantial reduction vs. full fields
 
 ---
 
@@ -212,7 +217,7 @@ The `fields` parameter allows you to request only specific fields, significantly
 }
 ```
 
-**Token Savings**: ~85% reduction vs. full fields
+**Token Savings**: Substantial reduction vs. full fields
 
 ---
 
@@ -262,7 +267,7 @@ report_id = results["reports"][0]["report_id"]
 details = get_report(report_selector=report_id, mode="summary")
 ```
 
-**Token Savings**: ~70% vs. searching with all fields
+**Token Savings**: Significant reduction vs. searching with all fields
 
 ---
 
@@ -301,7 +306,7 @@ for report in reports["reports"]:
     # Analyze summary...
 ```
 
-**Token Savings**: ~60% vs. full field retrieval + full report reads
+**Token Savings**: Substantial reduction vs. full field retrieval + full report reads
 
 ---
 
@@ -415,10 +420,10 @@ archived = search_report(status="archived", fields=["report_id", "title", "updat
 
 | Search Pattern | Without `fields` | With `fields` | Savings |
 |---------------|-----------------|---------------|---------|
-| Find 1 report | 150 tokens | 50 tokens | 67% |
-| Find 5 reports | 650 tokens | 220 tokens | 66% |
-| Find 20 reports | 2,400 tokens | 800 tokens | 67% |
-| List all IDs (50 reports) | 6,000 tokens | 500 tokens | 92% |
+| Find 1 report | 150 tokens | 50 tokens | Significant reduction |
+| Find 5 reports | 650 tokens | 220 tokens | Substantial reduction |
+| Find 20 reports | 2,400 tokens | 800 tokens | Substantial reduction |
+| List all IDs (50 reports) | 6,000 tokens | 500 tokens | Maximum reduction |
 
 **Recommendation**: Always use `fields` parameter when you know what you need.
 
@@ -434,6 +439,4 @@ archived = search_report(status="archived", fields=["report_id", "title", "updat
 
 ---
 
-**Version**: Enhanced in v0.3.2 with `fields` parameter
-**Category**: Living Reports
-**Token Efficiency**: 30-50% reduction with selective field retrieval
+**Version**: Complete API documentation available

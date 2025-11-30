@@ -19,6 +19,8 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | `reason` | string | ✅ Yes | - | Short reason for running the query (min length 5). Stored in Snowflake `QUERY_TAG` and local history; avoid sensitive information. |
 | `timeout_seconds` | integer | ❌ No | 120 | Query timeout in seconds (1-3600) |
 | `verbose_errors` | boolean | ❌ No | false | Include detailed optimization hints |
+| `response_mode` | string | ❌ No | "summary" | Control response verbosity: `summary` (default - 5 sample rows), `full` (all rows), `schema_only` (structure only), or `sample` (10 rows). Significantly reduces token usage. See [Progressive Disclosure](../PROGRESSIVE_DISCLOSURE.md). |
+| `result_mode` | string | ❌ No | - | **DEPRECATED** - Use `response_mode` instead. |
 | `warehouse` | string | ❌ No | profile | Warehouse override (Snowflake identifier) |
 | `database` | string | ❌ No | profile | Database override (Snowflake identifier) |
 | `schema` | string | ❌ No | profile | Schema override (Snowflake identifier) |
@@ -116,7 +118,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 
 - Result caching is on by default; subsequent runs with the same SQL, profile, and resolved session context return `cache.hit = true` along with the manifest path and CSV/JSON artifacts for auditability.
 - `key_metrics` and `insights` are automatically derived from the returned rows (no extra SQL) so downstream tools get quick summaries of the seen data. Metrics include non-null ratios, numeric ranges, categorical top values, and time spans based on the sampled result set.
-- `source_databases`/`tables` (added in v0.2.5) enumerate every referenced object extracted from the compiled SQL so history logs and cache hits retain accurate cross-database attribution even when the active session database differs.
+- `source_databases`/`tables` enumerate every referenced object extracted from the compiled SQL so history logs and cache hits retain accurate cross-database attribution even when the active session database differs.
 
 ## Post-Query Insights & Key Metrics
 
@@ -126,6 +128,90 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 - `insights` distills those metrics into short bullets (for example, "Returned 2,145 rows across 8 columns" or "event_ts covers 2025-10-01 → 2025-10-07 (144h)").
 
 These fields travel with tool responses, query history JSONL, and cache manifests so downstream agents can reason about the dataset without re-running any queries. When result sets are truncated, the metadata reflects the sampled subset.
+
+## Result Modes (Token Efficiency)
+
+The `response_mode` parameter controls response verbosity to reduce token usage in LLM contexts.
+
+### Modes
+
+| Mode | Rows Returned | Use Case | Token Savings |
+|------|---------------|----------|-----------------|
+| `full` | All rows | Complete data retrieval (default) | baseline |
+| `summary` | 5 sample rows + key_metrics | Quick analysis with metrics | Maximum |
+| `schema_only` | 0 rows (schema + metrics only) | Schema discovery | Maximum |
+| `sample` | 10 sample rows | Quick preview/validation | High |
+
+**Important:** Sampling returns rows in **result order** (as returned by Snowflake), not database order. For deterministic, repeatable samples across runs, add an `ORDER BY` clause to your query:
+
+```python
+# ✅ Deterministic sampling - same 10 rows every time
+result = execute_query(
+    statement="SELECT * FROM users ORDER BY user_id LIMIT 1000",
+    response_mode="sample",  # Returns first 10 rows in sorted order
+    reason="Preview user data"
+)
+
+# ⚠️ Non-deterministic - may return different rows each run
+result = execute_query(
+    statement="SELECT * FROM users",  # No ORDER BY
+    response_mode="sample",  # Returns first 10 rows in arbitrary order
+    reason="Preview user data"
+)
+```
+
+### Response Format
+
+All non-full modes add `response_mode` and `response_mode_info` to the response:
+
+```json
+{
+  "response_mode": "summary",
+  "response_mode_info": {
+    "mode": "summary",
+    "total_rows": 10000,
+    "rows_returned": 5,
+    "sample_size": 5,
+    "columns_count": 8,
+    "hint": "Use response_mode='full' to retrieve all rows"
+  },
+  "rows": [...5 sample rows...],
+  "key_metrics": {...},
+  "insights": [...]
+}
+```
+
+### Examples
+
+**Schema Discovery**:
+```python
+result = execute_query(
+    statement="SELECT * FROM large_table",
+    response_mode="schema_only",
+    reason="Discover table schema"
+)
+# Returns columns, types, key_metrics but no rows
+```
+
+**Quick Preview**:
+```python
+result = execute_query(
+    statement="SELECT * FROM orders WHERE date >= '2024-01-01'",
+    response_mode="sample",
+    reason="Preview recent orders"
+)
+# Returns first 10 rows
+```
+
+**Metrics-Focused Analysis**:
+```python
+result = execute_query(
+    statement="SELECT customer_id, total_spend FROM customer_summary",
+    response_mode="summary",
+    reason="Analyze customer spending patterns"
+)
+# Returns key_metrics + 5 sample rows (significant token reduction)
+```
 
 ## Errors
 

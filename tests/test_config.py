@@ -127,7 +127,7 @@ class TestConfig:
             config.save_to_yaml(config_path)
 
             # Verify the file was created and contains expected data
-            with open(config_path, "r", encoding="utf-8") as f:
+            with open(config_path, encoding="utf-8") as f:
                 saved_data = yaml.safe_load(f)
 
             assert saved_data["snowflake"]["profile"] == "test_profile"
@@ -175,7 +175,7 @@ class TestSnowflakeConfig:
 class TestProfileValidation:
     """Test profile validation functionality."""
 
-    def test_profile_validation_with_valid_profile(self, mock_config_with_profiles):  # noqa: F811
+    def test_profile_validation_with_valid_profile(self, mock_config_with_profiles):
         """Test validation succeeds with valid profile."""
         with mock_config_with_profiles(["dev", "prod"], default="dev"):
             result = validate_profile("dev")
@@ -232,10 +232,9 @@ class TestProfileResolution:
 
     def test_resolve_profile_falls_back_to_default(self, mock_config_with_profiles):
         """Test fallback to default profile when no env var."""
-        with mock_config_with_profiles(["dev", "prod"], default="prod"):
-            with patch.dict(os.environ, {}, clear=True):
-                result = validate_and_resolve_profile()
-                assert result == "prod"
+        with mock_config_with_profiles(["dev", "prod"], default="prod"), patch.dict(os.environ, {}, clear=True):
+            result = validate_and_resolve_profile()
+            assert result == "prod"
 
     def test_resolve_profile_strips_whitespace_from_env(self, mock_config_with_profiles):
         """Test that whitespace is stripped from environment variable."""

@@ -157,22 +157,23 @@ class TestGetReportTool:
         assert result["filtered_by"]["min_importance"] == 8
 
     async def test_get_report_invalid_mode(self, tmp_path: Path):
-        """Test that invalid mode raises validation error."""
+        """Test get_report with invalid mode raises validation error."""
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test Report", template="default")
 
         from igloo_mcp.mcp.exceptions import MCPValidationError
 
         with pytest.raises(MCPValidationError) as exc_info:
             await tool.execute(
                 report_selector=report_id,
-                mode="invalid_mode",
+                mode="invalid_mode",  # Legacy parameter, will be validated
             )
 
-        assert "Invalid mode" in str(exc_info.value)
+        # Should validate the mode value even when using legacy parameter
+        assert "Invalid" in str(exc_info.value) or "invalid_mode" in str(exc_info.value).lower()
 
     async def test_get_report_not_found(self, tmp_path: Path):
         """Test that non-existent report raises selector error."""

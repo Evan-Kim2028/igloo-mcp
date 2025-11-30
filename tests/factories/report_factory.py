@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-from typing import List, Tuple
 
 from igloo_mcp.living_reports.models import Insight, Section
 from igloo_mcp.living_reports.service import ReportService
@@ -30,9 +29,9 @@ class ReportFactory:
         *,
         title: str = "Test Report",
         skip_citations: bool = True,
-        importance_range: Tuple[int, int] = (5, 9),
+        importance_range: tuple[int, int] = (5, 9),
         template: str = "default",
-    ) -> Tuple[str, List[str]]:
+    ) -> tuple[str, list[str]]:
         """Generate report with N insights for testing.
 
         Args:
@@ -78,7 +77,7 @@ class ReportFactory:
         title: str = "Test Report",
         with_content: bool = True,
         template: str = "default",
-    ) -> Tuple[str, List[str]]:
+    ) -> tuple[str, list[str]]:
         """Generate report with N sections for testing.
 
         Args:
@@ -120,7 +119,7 @@ class ReportFactory:
         title: str = "Complex Test Report",
         skip_citations: bool = True,
         template: str = "default",
-    ) -> Tuple[str, List[str], List[str]]:
+    ) -> tuple[str, list[str], list[str]]:
         """Generate report with sections and insights linked together.
 
         Args:
@@ -181,7 +180,7 @@ class ReportFactory:
         insight_count: int = 20,
         title: str = "Large Test Report",
         template: str = "default",
-    ) -> Tuple[str, List[str], List[str]]:
+    ) -> tuple[str, list[str], list[str]]:
         """Create a large report for performance and token efficiency testing.
 
         Args:

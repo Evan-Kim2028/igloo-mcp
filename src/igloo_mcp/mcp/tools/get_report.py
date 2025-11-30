@@ -7,7 +7,7 @@ with multiple modes for progressive disclosure and token efficiency.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
@@ -15,9 +15,9 @@ from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.exceptions import (
     MCPExecutionError,
     MCPSelectorError,
-    MCPValidationError,
 )
 from igloo_mcp.mcp.tools.base import MCPTool, ensure_request_id, tool_error_handler
+from igloo_mcp.mcp.validation_helpers import validate_response_mode
 
 try:
     from fastmcp.utilities.logging import get_logger
@@ -47,11 +47,9 @@ class GetReportTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Get the structure and content of a living report with selective retrieval. "
-            "Supports multiple modes for token efficiency: 'summary' for overview, "
-            "'sections' for section details, 'insights' for insight details, and 'full' "
-            "for complete report. Use this before evolve_report to understand current state "
-            "and obtain section_ids/insight_ids for modifications."
+            "Read a report's structure or content with progressive disclosure. "
+            "Use BEFORE evolve_report to understand current state and obtain IDs for modifications. "
+            "Start with response_mode='minimal' (IDs only), drill down with 'standard' or 'full' only when needed."
         )
 
     @property
@@ -63,7 +61,7 @@ class GetReportTool(MCPTool):
         return ["reports", "read", "retrieval", "inspection"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Get lightweight summary of report structure",
@@ -102,22 +100,28 @@ class GetReportTool(MCPTool):
     async def execute(
         self,
         report_selector: str,
-        mode: str = "summary",
-        section_ids: Optional[List[str]] = None,
-        section_titles: Optional[List[str]] = None,
-        insight_ids: Optional[List[str]] = None,
-        min_importance: Optional[int] = None,
+        response_mode: str | None = None,
+        mode: str | None = None,  # DEPRECATED in v0.3.5
+        section_ids: list[str] | None = None,
+        section_titles: list[str] | None = None,
+        insight_ids: list[str] | None = None,
+        min_importance: int | None = None,
         limit: int = 50,
         offset: int = 0,
         include_content: bool = False,
         include_audit: bool = False,
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute report retrieval with selective filtering.
 
         Args:
             report_selector: Report ID or title to retrieve
-            mode: Retrieval mode ('summary', 'sections', 'insights', 'full')
+            response_mode: Retrieval mode (STANDARD: 'minimal', 'standard', 'full')
+                - 'minimal': Lightweight overview (metadata only)
+                - 'standard': Section/insight structure (default)
+                - 'full': Complete report with all details
+            mode: DEPRECATED - use response_mode instead
+                Legacy values: 'summary' → 'minimal', 'sections'/'insights' → 'standard', 'full' → 'full'
             section_ids: Filter to specific section IDs
             section_titles: Filter to sections matching titles (fuzzy)
             insight_ids: Filter to specific insight IDs
@@ -129,7 +133,7 @@ class GetReportTool(MCPTool):
             request_id: Optional request correlation ID
 
         Returns:
-            Report data formatted according to mode
+            Report data formatted according to response_mode
 
         Raises:
             MCPValidationError: If parameters are invalid
@@ -139,20 +143,29 @@ class GetReportTool(MCPTool):
         start_time = time.time()
         request_id = ensure_request_id(request_id)
 
-        # Validate mode
-        valid_modes = ("summary", "sections", "insights", "full")
-        if mode not in valid_modes:
-            raise MCPValidationError(
-                f"Invalid mode '{mode}'. Must be one of: {', '.join(valid_modes)}",
-                validation_errors=[f"Invalid mode: {mode}"],
-                hints=[
-                    "Use mode='summary' for lightweight overview",
-                    "Use mode='sections' for section details",
-                    "Use mode='insights' for insight details",
-                    "Use mode='full' for complete report",
-                ],
-                context={"request_id": request_id, "report_selector": report_selector},
-            )
+        # Validate response_mode with backward compatibility
+        # Map legacy values to standard values for response structure
+        effective_mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="mode",
+            legacy_param_value=mode,
+            valid_modes=("minimal", "standard", "full", "summary", "sections", "insights"),
+            default="minimal",
+        )
+
+        # Keep track of original mode for routing decisions
+        original_mode = effective_mode
+
+        # Map legacy values to standard values for response structure
+        mode_mapping = {
+            "summary": "minimal",
+            "sections": "standard",
+            "insights": "standard",
+            "full": "full",
+            "minimal": "minimal",
+            "standard": "standard",
+        }
+        mode = mode_mapping.get(effective_mode, effective_mode)
 
         # Validate limit and offset
         if limit < 1:
@@ -209,33 +222,67 @@ class GetReportTool(MCPTool):
         except ValueError as e:
             retrieval_duration = (time.time() - retrieval_start) * 1000
             raise MCPExecutionError(
-                f"Failed to load report: {str(e)}",
+                f"Failed to load report: {e!s}",
                 operation="get_report",
                 hints=["Verify the report exists and is accessible"],
                 context={"request_id": request_id, "report_id": report_id},
             ) from e
 
         # Build response based on mode
-        if mode == "summary":
+        if mode == "minimal":
             response = self._build_summary_response(outline, include_audit, report_id)
-        elif mode == "sections":
-            response = self._build_sections_response(
-                outline,
-                section_ids,
-                section_titles,
-                include_content,
-                limit,
-                offset,
-            )
-        elif mode == "insights":
-            response = self._build_insights_response(
-                outline,
-                insight_ids,
-                min_importance,
-                section_ids,
-                limit,
-                offset,
-            )
+        elif mode == "standard":
+            # For standard mode, decide based on original mode (for backward compat) first, then filters
+            if original_mode == "insights":
+                # Legacy 'insights' mode - always use insights response
+                response = self._build_insights_response(
+                    outline,
+                    insight_ids,
+                    min_importance,
+                    section_ids,  # Can filter insights by section
+                    limit,
+                    offset,
+                )
+            elif original_mode == "sections":
+                # Legacy 'sections' mode - always use sections response
+                response = self._build_sections_response(
+                    outline,
+                    section_ids,
+                    section_titles,
+                    include_content,
+                    limit,
+                    offset,
+                )
+            elif insight_ids or min_importance is not None:
+                # New response_mode with insight filters
+                response = self._build_insights_response(
+                    outline,
+                    insight_ids,
+                    min_importance,
+                    section_ids,
+                    limit,
+                    offset,
+                )
+            elif section_ids or section_titles:
+                # New response_mode with section filters
+                response = self._build_sections_response(
+                    outline,
+                    section_ids,
+                    section_titles,
+                    include_content,
+                    limit,
+                    offset,
+                )
+            else:
+                # Default to sections view if no specific mode or filters
+                response = self._build_sections_response(
+                    outline,
+                    section_ids,
+                    section_titles,
+                    include_content,
+                    limit,
+                    offset,
+                )
         elif mode == "full":
             response = self._build_full_response(outline, include_content, include_audit, limit, offset)
 
@@ -244,11 +291,16 @@ class GetReportTool(MCPTool):
 
         # Add common fields
         response["request_id"] = request_id
-        response["timing"] = {
-            "selector_duration_ms": round((time.time() - selector_start) * 1000, 2),
-            "retrieval_duration_ms": round(retrieval_duration, 2),
-            "total_duration_ms": round(total_duration, 2),
-        }
+
+        # Condense timing based on mode
+        if mode == "minimal":
+            response["duration_ms"] = round(total_duration, 2)
+        else:
+            response["timing"] = {
+                "selector_duration_ms": round((time.time() - selector_start) * 1000, 2),
+                "retrieval_duration_ms": round(retrieval_duration, 2),
+                "total_duration_ms": round(total_duration, 2),
+            }
 
         logger.info(
             "get_report_completed",
@@ -263,7 +315,7 @@ class GetReportTool(MCPTool):
 
         return response
 
-    def _build_summary_response(self, outline: Any, include_audit: bool, report_id: str) -> Dict[str, Any]:
+    def _build_summary_response(self, outline: Any, include_audit: bool, report_id: str) -> dict[str, Any]:
         """Build summary mode response (lightweight overview)."""
         return {
             "status": "success",
@@ -293,12 +345,12 @@ class GetReportTool(MCPTool):
     def _build_sections_response(
         self,
         outline: Any,
-        section_ids: Optional[List[str]],
-        section_titles: Optional[List[str]],
+        section_ids: list[str] | None,
+        section_titles: list[str] | None,
         include_content: bool,
         limit: int,
         offset: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build sections mode response."""
         # Filter sections
         sections = outline.sections
@@ -346,12 +398,12 @@ class GetReportTool(MCPTool):
     def _build_insights_response(
         self,
         outline: Any,
-        insight_ids: Optional[List[str]],
-        min_importance: Optional[int],
-        section_ids: Optional[List[str]],
+        insight_ids: list[str] | None,
+        min_importance: int | None,
+        section_ids: list[str] | None,
         limit: int,
         offset: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build insights mode response."""
         # Build section ownership map
         section_map = {}
@@ -391,7 +443,7 @@ class GetReportTool(MCPTool):
             }
             insights_data.append(insight_dict)
 
-        filters_applied: Dict[str, Any] = {}
+        filters_applied: dict[str, Any] = {}
         if min_importance is not None:
             filters_applied["min_importance"] = min_importance
         if section_ids:
@@ -415,7 +467,7 @@ class GetReportTool(MCPTool):
         include_audit: bool,
         limit: int,
         offset: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build full mode response (complete report)."""
         # Paginate sections and insights
         sections = sorted(outline.sections, key=lambda x: x.order)
@@ -482,7 +534,7 @@ class GetReportTool(MCPTool):
             "offset": offset,
         }
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Get Report Parameters",

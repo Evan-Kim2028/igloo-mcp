@@ -8,18 +8,19 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-from ..path_utils import find_repo_root
+from igloo_mcp.path_utils import find_repo_root
+
 from .models import DatasetSource, ResolvedDataset
 
 
-def _load_jsonl(path: Path) -> List[Dict[str, Any]]:
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     """Load JSON objects from a JSONL file."""
 
     if not path.exists():
         return []
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -49,9 +50,9 @@ class HistoryIndex:
 
     def __init__(self, history_path: Path) -> None:
         self.history_path = history_path
-        self._records: List[Dict[str, Any]] = list(_load_jsonl(history_path))
-        self._by_execution_id: Dict[str, Dict[str, Any]] = {}
-        self._by_sql_sha: Dict[str, Dict[str, Any]] = {}
+        self._records: list[dict[str, Any]] = list(_load_jsonl(history_path))
+        self._by_execution_id: dict[str, dict[str, Any]] = {}
+        self._by_sql_sha: dict[str, dict[str, Any]] = {}
         for record in self._records:
             exec_id = record.get("execution_id")
             if isinstance(exec_id, str) and exec_id not in self._by_execution_id:
@@ -61,10 +62,10 @@ class HistoryIndex:
                 self._by_sql_sha[sha] = record
 
     @property
-    def records(self) -> List[Dict[str, Any]]:
+    def records(self) -> list[dict[str, Any]]:
         return list(self._records)
 
-    def _resolve_history_record(self, source: DatasetSource) -> Optional[Dict[str, Any]]:
+    def _resolve_history_record(self, source: DatasetSource) -> dict[str, Any] | None:
         if source.execution_id and source.execution_id in self._by_execution_id:
             return self._by_execution_id[source.execution_id]
         if source.sql_sha256 and source.sql_sha256 in self._by_sql_sha:
@@ -72,7 +73,7 @@ class HistoryIndex:
         return None
 
     @staticmethod
-    def _resolve_manifest_path(cache_manifest: str, repo_root: Optional[Path]) -> Path:
+    def _resolve_manifest_path(cache_manifest: str, repo_root: Path | None) -> Path:
         candidate = Path(cache_manifest).expanduser()
         if candidate.is_absolute():
             return candidate
@@ -82,7 +83,7 @@ class HistoryIndex:
     @staticmethod
     def _load_cache_manifest(
         manifest_path: Path,
-    ) -> Tuple[Dict[str, Any], Path, Optional[Path]]:
+    ) -> tuple[dict[str, Any], Path, Path | None]:
         if not manifest_path.exists():
             raise DatasetResolutionError(f"Cache manifest not found: {manifest_path}")
         raw = manifest_path.read_text(encoding="utf-8")
@@ -96,7 +97,7 @@ class HistoryIndex:
         if not rows_path.exists():
             raise DatasetResolutionError(f"Cache rows file declared in manifest not found: {rows_path}")
         result_csv_rel = data.get("result_csv")
-        result_csv_path: Optional[Path] = None
+        result_csv_path: Path | None = None
         if isinstance(result_csv_rel, str) and result_csv_rel:
             candidate = manifest_path.parent / result_csv_rel
             if candidate.exists():
@@ -104,8 +105,8 @@ class HistoryIndex:
         return data, rows_path, result_csv_path
 
     @staticmethod
-    def _load_rows(rows_path: Path) -> List[Dict[str, Any]]:
-        rows: List[Dict[str, Any]] = []
+    def _load_rows(rows_path: Path) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
         for entry in _load_jsonl(rows_path):
             rows.append(entry)
         return rows
@@ -115,7 +116,7 @@ class HistoryIndex:
         dataset_name: str,
         source: DatasetSource,
         *,
-        repo_root: Optional[Path] = None,
+        repo_root: Path | None = None,
     ) -> ResolvedDataset:
         """Resolve a single dataset reference into concrete rows + metadata.
 
@@ -127,8 +128,8 @@ class HistoryIndex:
 
         repo_root = repo_root or find_repo_root()
 
-        manifest_path: Optional[Path] = None
-        history_record: Optional[Dict[str, Any]] = None
+        manifest_path: Path | None = None
+        history_record: dict[str, Any] | None = None
 
         if source.cache_manifest:
             manifest_path = self._resolve_manifest_path(source.cache_manifest, repo_root)
@@ -146,7 +147,7 @@ class HistoryIndex:
         manifest_data, rows_path, _ = self._load_cache_manifest(manifest_path)
         rows = self._load_rows(rows_path)
 
-        columns: List[str] = []
+        columns: list[str] = []
         raw_columns = manifest_data.get("columns")
         if isinstance(raw_columns, list):
             columns = [str(col) for col in raw_columns]
@@ -155,9 +156,9 @@ class HistoryIndex:
         if key_metrics is not None and not isinstance(key_metrics, dict):
             key_metrics = None
         insights_raw = manifest_data.get("insights") or []
-        insights: List[Any] = list(insights_raw) if isinstance(insights_raw, list) else []
+        insights: list[Any] = list(insights_raw) if isinstance(insights_raw, list) else []
 
-        provenance: Dict[str, Any] = {
+        provenance: dict[str, Any] = {
             "dataset": dataset_name,
             "cache_manifest_path": str(manifest_path),
             "rows_path": str(rows_path),

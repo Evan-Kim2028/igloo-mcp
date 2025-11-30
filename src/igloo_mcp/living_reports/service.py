@@ -12,9 +12,10 @@ import json
 import uuid
 import webbrowser
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from ..path_utils import resolve_history_path
+from igloo_mcp.path_utils import resolve_history_path
+
 from . import models as living_reports_models
 from .history_index import HistoryIndex, ResolvedDataset
 from .index import ReportIndex
@@ -26,14 +27,14 @@ from .storage import GlobalStorage, ReportStorage
 class ReportService:
     """High-level service for living reports operations."""
 
-    def __init__(self, reports_root: Optional[Path] = None) -> None:
+    def __init__(self, reports_root: Path | None = None) -> None:
         """Initialize report service.
 
         Args:
             reports_root: Root directory for reports (defaults to global/repo based on IGLOO_MCP_LOG_SCOPE)
         """
         if reports_root is None:
-            from ..path_utils import resolve_reports_root
+            from igloo_mcp.path_utils import resolve_reports_root
 
             reports_root = resolve_reports_root()
 
@@ -42,7 +43,7 @@ class ReportService:
         self.index = ReportIndex(reports_root / "index.jsonl")
 
         # Initialize HistoryIndex lazily
-        self._history_index: Optional[HistoryIndex] = None
+        self._history_index: HistoryIndex | None = None
 
     @property
     def history_index(self) -> HistoryIndex:
@@ -57,7 +58,7 @@ class ReportService:
         title: str,
         template: str = "default",
         actor: str = "cli",
-        initial_sections: Optional[List[Dict[str, Any]]] = None,
+        initial_sections: list[dict[str, Any]] | None = None,
         **metadata: Any,
     ) -> str:
         """Create a new report.
@@ -99,13 +100,13 @@ class ReportService:
             actor = "cli"
 
         report_id = ReportId.new()
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.UTC).isoformat()
 
         insights: list[Any] = []
         if initial_sections:
             sections: list[Any] = []
 
-            def _ensure_supporting(payload: Dict[str, Any]) -> None:
+            def _ensure_supporting(payload: dict[str, Any]) -> None:
                 if "supporting_queries" not in payload or payload["supporting_queries"] is None:
                     payload["supporting_queries"] = []
                 if "citations" in payload and payload["citations"] is not None and not payload["supporting_queries"]:
@@ -127,7 +128,7 @@ class ReportService:
                     raw_insights = data["insights"]
                     if not isinstance(raw_insights, list):
                         raise ValueError("initial_sections.insights must be a list of insight dicts")
-                    for insight_idx, raw_insight in enumerate(raw_insights):
+                    for _insight_idx, raw_insight in enumerate(raw_insights):
                         if not isinstance(raw_insight, dict):
                             raise ValueError("Each insight must be a dict")
                         payload = dict(raw_insight)
@@ -231,10 +232,10 @@ class ReportService:
         report_id: str,
         status: str,
         actor: str = "agent",
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
     ) -> None:
         """Update report status in index and audit log."""
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.UTC).isoformat()
         entry = self.index.get_entry(report_id)
         if entry:
             entry.status = status
@@ -262,8 +263,8 @@ class ReportService:
         report_id: str,
         outline: Outline,
         actor: str = "cli",
-        expected_version: Optional[int] = None,
-        request_id: Optional[str] = None,
+        expected_version: int | None = None,
+        request_id: str | None = None,
     ) -> None:
         """Update a report's outline with optional version check.
 
@@ -278,7 +279,7 @@ class ReportService:
             ValueError: If version mismatch (concurrent modification detected)
         """
         storage = self.global_storage.get_report_storage(report_id)
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.UTC).isoformat()
 
         # Normalize actor to a valid value for AuditEvent
         if actor not in {"cli", "agent", "human"}:
@@ -289,13 +290,12 @@ class ReportService:
             old_outline = storage.load_outline()
 
             # Version check for optimistic locking
-            if expected_version is not None:
-                if old_outline.outline_version != expected_version:
-                    raise ValueError(
-                        f"Version mismatch: expected {expected_version}, "
-                        f"got {old_outline.outline_version}. "
-                        f"Report was modified concurrently."
-                    )
+            if expected_version is not None and old_outline.outline_version != expected_version:
+                raise ValueError(
+                    f"Version mismatch: expected {expected_version}, "
+                    f"got {old_outline.outline_version}. "
+                    f"Report was modified concurrently."
+                )
 
             # Increment version
             outline.outline_version = old_outline.outline_version + 1
@@ -389,9 +389,9 @@ class ReportService:
 
     def list_reports(
         self,
-        status: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
+        status: str | None = None,
+        tags: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """List reports with optional filtering.
 
         Args:
@@ -418,7 +418,7 @@ class ReportService:
 
         return reports
 
-    def revert_report(self, report_id: str, action_id: str, actor: str = "cli") -> Dict[str, Any]:
+    def revert_report(self, report_id: str, action_id: str, actor: str = "cli") -> dict[str, Any]:
         """Revert a report to a previous state.
 
         Args:
@@ -482,7 +482,7 @@ class ReportService:
             shutil.copy2(backup_path, storage.outline_path)
 
             # Log revert audit event
-            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            now = datetime.datetime.now(datetime.UTC).isoformat()
             revert_audit_event = AuditEvent(
                 action_id=str(uuid.uuid4()),
                 report_id=report_id,
@@ -519,7 +519,7 @@ class ReportService:
             "backup_filename": backup_filename,
         }
 
-    def validate_report(self, report_id: str) -> List[str]:
+    def validate_report(self, report_id: str) -> list[str]:
         """Validate a report's consistency.
 
         Args:
@@ -554,7 +554,7 @@ class ReportService:
 
         return errors
 
-    def resolve_insight_datasets(self, report_id: str) -> Dict[str, ResolvedDataset]:
+    def resolve_insight_datasets(self, report_id: str) -> dict[str, ResolvedDataset]:
         """Resolve all insight datasets for a report.
 
         Args:
@@ -591,7 +591,7 @@ class ReportService:
             actor: Who is archiving the report
         """
         storage = self.global_storage.get_report_storage(report_id)
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.UTC).isoformat()
 
         with storage.lock():
             outline = storage.load_outline()
@@ -645,7 +645,7 @@ class ReportService:
         trash_dir.mkdir(exist_ok=True)
 
         # Generate trash location with timestamp
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.UTC).isoformat()
         timestamp_clean = now.replace(":", "").replace("-", "").split(".")[0]
         trash_location = trash_dir / f"{report_id}_{timestamp_clean}"
 
@@ -677,8 +677,8 @@ class ReportService:
     def tag_report(
         self,
         report_id: str,
-        tags_to_add: Optional[List[str]] = None,
-        tags_to_remove: Optional[List[str]] = None,
+        tags_to_add: list[str] | None = None,
+        tags_to_remove: list[str] | None = None,
         actor: str = "cli",
     ) -> None:
         """Add or remove tags from report.
@@ -690,7 +690,7 @@ class ReportService:
             actor: Who is modifying tags
         """
         storage = self.global_storage.get_report_storage(report_id)
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.UTC).isoformat()
 
         with storage.lock():
             outline = storage.load_outline()
@@ -701,7 +701,7 @@ class ReportService:
             if tags_to_remove:
                 current_tags.difference_update(tags_to_remove)
 
-            outline.metadata["tags"] = sorted(list(current_tags))
+            outline.metadata["tags"] = sorted(current_tags)
             outline.updated_at = now
             backup_filename = storage._save_outline_atomic(outline)
 
@@ -770,7 +770,7 @@ class ReportService:
         # Load and update outline
         with new_storage.lock():
             outline = new_storage.load_outline()
-            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            now = datetime.datetime.now(datetime.UTC).isoformat()
 
             # Update IDs and metadata
             outline.report_id = str(new_id)
@@ -812,7 +812,7 @@ class ReportService:
 
         return str(new_id)
 
-    def synthesize_reports(self, source_ids: List[str], title: str, actor: str = "cli") -> str:
+    def synthesize_reports(self, source_ids: list[str], title: str, actor: str = "cli") -> str:
         """Create new report combining insights from multiple sources.
 
         Copies all sections and insights from source reports into a new report.
@@ -868,7 +868,7 @@ class ReportService:
         new_outline.insights = all_insights
         # Preserve "synthesized" tag and add source tags
         all_tags.add("synthesized")
-        new_outline.metadata["tags"] = sorted(list(all_tags))
+        new_outline.metadata["tags"] = sorted(all_tags)
         new_outline.metadata["synthesized_from"] = source_ids
         new_outline.metadata["synthesis_note"] = (
             f"Synthesized from {len(source_ids)} source reports. "
@@ -879,7 +879,7 @@ class ReportService:
 
         return new_id
 
-    def _build_citation_map(self, outline: Outline) -> Dict[str, int]:
+    def _build_citation_map(self, outline: Outline) -> dict[str, int]:
         """Build stable mapping of execution_id to citation number.
 
         Scans all insights in the outline and creates a mapping from execution_id
@@ -891,7 +891,7 @@ class ReportService:
         Returns:
             Dictionary mapping execution_id to citation number
         """
-        citation_map: Dict[str, int] = {}
+        citation_map: dict[str, int] = {}
         citation_number = 1
 
         # Iterate through sections in order, then insights within each section
@@ -916,12 +916,12 @@ class ReportService:
         self,
         report_id: str,
         format: str = "html",
-        options: Optional[Dict[str, Any]] = None,
+        options: dict[str, Any] | None = None,
         open_browser: bool = False,
         include_preview: bool = False,
         preview_max_chars: int = 2000,
         dry_run: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Render a living report to the specified format using Quarto.
 
         Args:
@@ -988,7 +988,7 @@ class ReportService:
             datasets = {}
             dataset_sources_path = report_dir / "dataset_sources.json"
             if dataset_sources_path.exists():
-                with open(dataset_sources_path, "r", encoding="utf-8") as f:
+                with open(dataset_sources_path, encoding="utf-8") as f:
                     datasets = json.load(f)
 
             # Resolve query history for traceability
@@ -1030,7 +1030,7 @@ class ReportService:
             if outline.metadata.get("template") == "analyst_v1":
                 citation_map = self._build_citation_map(outline)
                 # Build citation_details dict with provenance info for appendix
-                for exec_id, citation_num in citation_map.items():
+                for exec_id, _citation_num in citation_map.items():
                     if exec_id in query_provenance:
                         citation_details[exec_id] = query_provenance[exec_id]
                     else:
@@ -1105,7 +1105,7 @@ class ReportService:
                 }
 
         # Create audit event
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        now = datetime.datetime.now(datetime.UTC).isoformat()
         outline_sha256 = hashlib.sha256(json.dumps(outline.model_dump(), sort_keys=True).encode()).hexdigest()
 
         audit_event = AuditEvent(
@@ -1130,7 +1130,7 @@ class ReportService:
 
         # Prepare response
         primary_output_path = result.output_paths[0] if result.output_paths else None
-        rendered_output_path: Optional[str] = None
+        rendered_output_path: str | None = None
         qmd_output_path = str(qmd_path.resolve()) if qmd_path.exists() else None
 
         if result.output_paths:
@@ -1193,7 +1193,7 @@ class ReportService:
 
         return response
 
-    def _generate_preview(self, output_path: str, max_chars: int = 2000) -> Optional[str]:
+    def _generate_preview(self, output_path: str, max_chars: int = 2000) -> str | None:
         """Generate a truncated preview of the rendered output.
 
         Args:
@@ -1208,7 +1208,7 @@ class ReportService:
             if not path.exists():
                 return None
 
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 content = f.read()
 
             # Truncate and add indicator if needed

@@ -6,7 +6,7 @@ import sys
 import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import pytest
 
@@ -18,13 +18,13 @@ from igloo_mcp.profile_utils import ProfileValidationError
 
 class _StubCursor:
     def __init__(self) -> None:
-        self._current: Dict[str, Any] = {}
+        self._current: dict[str, Any] = {}
 
     def execute(self, query: str) -> None:
         key = query.split("CURRENT_", 1)[-1].split("()")[0].lower()
         self._current = {key: key.upper()}
 
-    def fetchone(self) -> Dict[str, Any]:
+    def fetchone(self) -> dict[str, Any]:
         return self._current
 
 
@@ -40,13 +40,13 @@ class _StubConnection:
 
 
 class StubSnowflakeService:
-    def __init__(self, cursor: Optional[_StubCursor] = None) -> None:
+    def __init__(self, cursor: _StubCursor | None = None) -> None:
         self._cursor = cursor or _StubCursor()
 
-    def get_query_tag_param(self) -> Dict[str, Any]:
+    def get_query_tag_param(self) -> dict[str, Any]:
         return {}
 
-    def get_connection(self, **kwargs: Any) -> _StubConnection:  # noqa: ANN401
+    def get_connection(self, **kwargs: Any) -> _StubConnection:
         return _StubConnection(self._cursor)
 
 
@@ -57,7 +57,7 @@ class StubProfileHealth:
     config_path: Path = Path("/tmp/config.toml")
     available_profiles: list[str] = None  # type: ignore[assignment]
     config_exists: bool = True
-    validation_error: Optional[str] = None
+    validation_error: str | None = None
 
     def __post_init__(self) -> None:
         if self.available_profiles is None:
@@ -70,7 +70,7 @@ class StubSystemStatus:
     is_healthy: bool = True
     error_count: int = 0
     warning_count: int = 0
-    metrics: Dict[str, int] = None  # type: ignore[assignment]
+    metrics: dict[str, int] = None  # type: ignore[assignment]
     recent_errors: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -156,14 +156,14 @@ async def test_health_check_tool_success(monkeypatch: pytest.MonkeyPatch) -> Non
         resource_manager=resource_manager,
     )
 
-    result = await tool.execute(include_cortex=True, include_catalog=True)
+    result = await tool.execute(include_cortex=True, include_catalog=True, response_mode="full")
 
-    assert result["connection"]["status"] == "connected"
-    assert result["profile"]["status"] == "valid"
-    assert result["cortex"]["available"] is True
-    assert result["catalog"]["status"] == "available"
-    assert result["system"]["healthy"] is True
-    assert result["overall_status"] == "healthy"
+    assert result["checks"]["connection"]["status"] == "connected"
+    assert result["checks"]["profile"]["status"] == "valid"
+    assert result["checks"]["cortex"]["available"] is True
+    assert result["checks"]["catalog"]["status"] == "available"
+    assert result["checks"]["system"]["healthy"] is True
+    assert result["status"] == "healthy"
 
 
 @pytest.mark.asyncio
@@ -171,7 +171,7 @@ async def test_health_check_handles_failures(monkeypatch: pytest.MonkeyPatch) ->
     config = Config.from_env()
 
     class FailingService(StubSnowflakeService):
-        def get_connection(self, **kwargs: Any) -> _StubConnection:  # noqa: ANN401
+        def get_connection(self, **kwargs: Any) -> _StubConnection:
             raise RuntimeError("connection refused")
 
     failing_monitor = StubHealthMonitor(
@@ -211,11 +211,138 @@ async def test_health_check_handles_failures(monkeypatch: pytest.MonkeyPatch) ->
         resource_manager=FailingResourceManager(),
     )
 
-    result = await tool.execute(include_cortex=True, include_catalog=True)
+    result = await tool.execute(include_cortex=True, include_catalog=True, response_mode="full")
 
-    assert result["connection"]["connected"] is False
-    assert result["profile"]["status"] in {"invalid", "error"}
-    assert result["catalog"]["status"] == "error"
-    assert result["cortex"]["available"] is False
-    assert result["system"]["status"] == "error"
-    assert result["overall_status"] == "unhealthy"
+    assert result["checks"]["connection"]["connected"] is False
+    assert result["checks"]["profile"]["status"] in {"invalid", "error"}
+    assert result["checks"]["catalog"]["status"] == "error"
+    assert result["checks"]["cortex"]["available"] is False
+    assert result["checks"]["system"]["status"] == "error"
+    assert result["status"] == "unhealthy"
+
+
+@pytest.mark.asyncio
+async def test_health_check_full_mode_includes_storage_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that full mode includes storage paths diagnostics."""
+    config = Config.from_env()
+    service = StubSnowflakeService()
+    monitor = StubHealthMonitor(
+        profile_health=StubProfileHealth(is_valid=True),
+        system_status=StubSystemStatus(),
+    )
+
+    # Mock profile validation to avoid dependency on real profile
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.validate_and_resolve_profile",
+        lambda: "DEFAULT",
+    )
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.get_profile_summary",
+        lambda: SummaryStub(),
+    )
+
+    tool = HealthCheckTool(
+        config=config,
+        snowflake_service=service,
+        health_monitor=monitor,
+    )
+
+    result = await tool.execute(response_mode="full", include_profile=True, include_cortex=False, include_catalog=False)
+
+    # Verify storage_paths is present in diagnostics
+    assert "diagnostics" in result
+    assert "storage_paths" in result["diagnostics"]
+
+    storage = result["diagnostics"]["storage_paths"]
+
+    # Verify required fields
+    assert "scope" in storage
+    assert "base_directory" in storage
+    assert "query_history" in storage
+    assert "artifacts" in storage
+    assert "cache" in storage
+    assert "reports" in storage
+    assert "catalogs" in storage
+    assert "namespaced" in storage
+
+    # Verify scope value is valid
+    assert storage["scope"] in ["global", "repo"]
+
+    # Verify all paths are strings and non-empty
+    assert isinstance(storage["base_directory"], str)
+    assert storage["base_directory"]
+    assert isinstance(storage["query_history"], str)
+    assert storage["query_history"]
+    assert isinstance(storage["artifacts"], str)
+    assert storage["artifacts"]
+    assert isinstance(storage["cache"], str)
+    assert storage["cache"]
+    assert isinstance(storage["reports"], str)
+    assert storage["reports"]
+    assert isinstance(storage["catalogs"], str)
+    assert storage["catalogs"]
+
+    # Verify namespaced is boolean
+    assert isinstance(storage["namespaced"], bool)
+
+
+@pytest.mark.asyncio
+async def test_health_check_minimal_mode_excludes_storage_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that minimal mode does NOT include storage paths (token efficiency)."""
+    config = Config.from_env()
+    service = StubSnowflakeService()
+
+    tool = HealthCheckTool(
+        config=config,
+        snowflake_service=service,
+    )
+
+    result = await tool.execute(response_mode="minimal", include_profile=False, include_cortex=False)
+
+    # Minimal mode should not have diagnostics at all
+    assert "diagnostics" not in result
+    # Double-check storage_paths is not in the result anywhere
+    assert "storage_paths" not in result.get("diagnostics", {})
+
+
+@pytest.mark.asyncio
+async def test_storage_paths_reflect_repo_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test storage paths correctly reflect repo scope configuration."""
+    config = Config.from_env()
+    service = StubSnowflakeService()
+    monitor = StubHealthMonitor(
+        profile_health=StubProfileHealth(is_valid=True),
+        system_status=StubSystemStatus(),
+    )
+
+    # Mock profile validation
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.validate_and_resolve_profile",
+        lambda: "DEFAULT",
+    )
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.get_profile_summary",
+        lambda: SummaryStub(),
+    )
+
+    # Mock repo scope environment
+    monkeypatch.setenv("IGLOO_MCP_LOG_SCOPE", "repo")
+
+    tool = HealthCheckTool(
+        config=config,
+        snowflake_service=service,
+        health_monitor=monitor,
+    )
+
+    result = await tool.execute(response_mode="full", include_profile=True, include_cortex=False, include_catalog=False)
+
+    storage = result["diagnostics"]["storage_paths"]
+
+    # Verify scope is repo
+    assert storage["scope"] == "repo"
+
+    # Repo scope paths should NOT start with ~/.igloo_mcp
+    home_igloo = str(Path.home() / ".igloo_mcp")
+    assert not storage["base_directory"].startswith(home_igloo), (
+        f"Repo scope should not use global base: {storage['base_directory']}"
+    )

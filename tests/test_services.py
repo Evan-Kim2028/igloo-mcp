@@ -1,5 +1,6 @@
 """Tests for service layer functionality."""
 
+import contextlib
 from unittest.mock import Mock, patch
 
 import pytest
@@ -130,10 +131,8 @@ def test_get_health_status_unhealthy(mock_cli_class):
 
     service = RobustSnowflakeService()
     # Set up the error state
-    try:
+    with contextlib.suppress(SnowCLIError):
         service.test_connection()
-    except SnowCLIError:
-        pass
 
     status = service.get_health_status()
 

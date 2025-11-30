@@ -7,7 +7,7 @@ allowing agents to discover valid structures before constructing payloads.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.changes_schema import (
@@ -44,11 +44,9 @@ class GetReportSchemaTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Get JSON schema for Living Reports operations. Returns schema definitions "
-            "for evolve_report proposed_changes or individual model types (insight, section, outline). "
-            "Use this to understand valid structures before constructing evolve_report payloads. "
-            "Supports multiple formats: 'json_schema' for full JSON Schema, 'examples' for "
-            "copy-paste-ready examples, and 'compact' for quick reference."
+            "Discover valid report structures and get copy-paste examples. "
+            "Use when unsure how to structure proposed_changes for evolve_report. "
+            "format='examples' provides ready-to-use templates."
         )
 
     @property
@@ -60,7 +58,7 @@ class GetReportSchemaTool(MCPTool):
         return ["reports", "schema", "introspection", "documentation"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Get JSON Schema for evolve_report proposed_changes",
@@ -90,8 +88,8 @@ class GetReportSchemaTool(MCPTool):
         self,
         schema_type: str = "proposed_changes",
         format: str = "json_schema",
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute schema introspection.
 
         Args:
@@ -173,7 +171,7 @@ class GetReportSchemaTool(MCPTool):
 
         return response
 
-    def _build_json_schema_response(self, schema_type: str) -> Dict[str, Any]:
+    def _build_json_schema_response(self, schema_type: str) -> dict[str, Any]:
         """Build JSON Schema format response."""
         schemas = {
             "proposed_changes": ProposedChanges.model_json_schema(),
@@ -197,7 +195,7 @@ class GetReportSchemaTool(MCPTool):
                 "json_schema": schemas[schema_type],
             }
 
-    def _build_examples_response(self, schema_type: str) -> Dict[str, Any]:
+    def _build_examples_response(self, schema_type: str) -> dict[str, Any]:
         """Build examples format response."""
         examples = {
             "proposed_changes": {
@@ -346,7 +344,7 @@ class GetReportSchemaTool(MCPTool):
                 },
             }
 
-    def _build_compact_response(self, schema_type: str) -> Dict[str, Any]:
+    def _build_compact_response(self, schema_type: str) -> dict[str, Any]:
         """Build compact format response (quick reference)."""
         compact_refs = {
             "proposed_changes": {
@@ -408,7 +406,7 @@ class GetReportSchemaTool(MCPTool):
                 },
             }
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Get Report Schema Parameters",

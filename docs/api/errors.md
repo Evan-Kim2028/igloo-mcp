@@ -88,7 +88,7 @@ This document provides a comprehensive catalog of errors that can occur when usi
 
 ### Compact Mode (Default)
 - Shows essential error information
-- Saves 70% tokens for AI assistants
+- Significantly reduces tokens for AI assistants
 - Focuses on actionable solutions
 
 ### Verbose Mode

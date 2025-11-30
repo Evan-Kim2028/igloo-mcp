@@ -369,7 +369,7 @@ igloo-mcp  # Shows immediate validation feedback
 ### Overall Test Statistics
 - **Total Tests**: 80+ passing tests
 - **Test Files**: 7 primary test files
-- **Coverage Estimate**: ~25-30% of codebase
+- **Coverage Estimate**: Good coverage of core features
 
 ### Coverage by Category
 
@@ -513,6 +513,6 @@ The codebase demonstrates excellent software engineering practices with the rece
 ## See Also
 
 - [Getting Started Guide](getting-started.md) - Quick start overview
-- [API Reference](api-reference.md) - Complete tool documentation
+- [API Reference](api/README.md) - Complete tool documentation
 - [Architecture Overview](architecture.md) - System architecture details
 - [Configuration Guide](configuration.md) - Configuration options

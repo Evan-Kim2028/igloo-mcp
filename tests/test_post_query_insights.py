@@ -72,7 +72,7 @@ class TestCoerceNumeric:
     """Test numeric value coercion."""
 
     @pytest.mark.parametrize(
-        "input_value,expected",
+        ("input_value", "expected"),
         [
             (42, 42.0),
             (42.5, 42.5),
@@ -104,7 +104,7 @@ class TestCoerceDatetime:
     """Test datetime value coercion."""
 
     @pytest.mark.parametrize(
-        "input_value,expected_type",
+        ("input_value", "expected_type"),
         [
             (datetime(2023, 1, 1), datetime),
             (date(2023, 1, 1), datetime),
@@ -131,7 +131,7 @@ class TestIsTimeHint:
     """Test time hint detection in column names."""
 
     @pytest.mark.parametrize(
-        "column_name,expected",
+        ("column_name", "expected"),
         [
             ("timestamp", True),
             ("created_ts", True),
@@ -157,7 +157,7 @@ class TestStringify:
     """Test string conversion of values."""
 
     @pytest.mark.parametrize(
-        "input_value,expected_contains",
+        ("input_value", "expected_contains"),
         [
             ("string", "string"),
             (42, "42"),
@@ -395,7 +395,7 @@ class TestBuildDefaultInsights:
                 "created": datetime(2023, 1, 3),
             },
         ]
-        metrics, insights = build_default_insights(rows, columns=None, total_rows=3, truncated=False)
+        metrics, _insights = build_default_insights(rows, columns=None, total_rows=3, truncated=False)
         assert metrics is not None
         assert len(metrics["columns"]) == 5
 
@@ -413,7 +413,7 @@ class TestBuildDefaultInsights:
             {"country": "🇺🇸", "city": "Los Angeles", "temperature": 30.0},
             {"country": "🇩🇪", "city": "Berlin", "temperature": 18.0},
         ]
-        metrics, insights = build_default_insights(rows, columns=None, total_rows=4, truncated=False)
+        metrics, _insights = build_default_insights(rows, columns=None, total_rows=4, truncated=False)
         assert metrics is not None
         assert len(metrics["columns"]) == 3
 
@@ -436,7 +436,7 @@ class TestBuildDefaultInsights:
             {"a": 3, "c": 4},  # Missing b, has c
             {"b": 5, "c": 6},  # Missing a
         ]
-        metrics, insights = build_default_insights(rows, columns=None, total_rows=3, truncated=False)
+        metrics, _insights = build_default_insights(rows, columns=None, total_rows=3, truncated=False)
         assert metrics is not None
         # Should handle missing columns gracefully - only includes columns from first row
         assert metrics["num_columns"] == 2  # a, b (c is missing from first row)
@@ -447,7 +447,7 @@ class TestBuildDefaultInsights:
             {"value": Decimal("1" + "0" * 50)},  # Very large decimal
             {"value": Decimal("0.0000000000000000000000000000001")},  # Very small decimal
         ]
-        metrics, insights = build_default_insights(rows, columns=None, total_rows=2, truncated=False)
+        metrics, _insights = build_default_insights(rows, columns=None, total_rows=2, truncated=False)
         assert metrics is not None
         # Should handle decimal conversion gracefully
         value_col = next(col for col in metrics["columns"] if col["name"] == "value")

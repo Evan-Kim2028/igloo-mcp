@@ -22,11 +22,11 @@ warn(
 )
 
 __all__ = [
-    "SnowCLI",
+    "Config",
     "ParallelQueryConfig",
     "ParallelQueryExecutor",
-    "query_multiple_objects",
-    "Config",
+    "SnowCLI",
     "get_config",
+    "query_multiple_objects",
     "set_config",
 ]

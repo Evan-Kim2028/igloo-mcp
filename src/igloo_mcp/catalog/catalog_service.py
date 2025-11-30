@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
-from ..path_utils import resolve_catalog_path, resolve_catalog_root
-from ..snow_cli import SnowCLI
+from igloo_mcp.path_utils import resolve_catalog_path, resolve_catalog_root
+from igloo_mcp.snow_cli import SnowCLI
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class CatalogResult:
     totals: CatalogTotals
     output_dir: str
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class CatalogService:
@@ -57,7 +57,7 @@ class CatalogService:
     - Account-wide or database-specific catalog building
     """
 
-    def __init__(self, context: Optional[Any] = None):
+    def __init__(self, context: Any | None = None):
         """Initialize catalog service.
 
         Args:
@@ -73,7 +73,7 @@ class CatalogService:
     def build(
         self,
         output_dir: str = "./data_catalogue",
-        database: Optional[str] = None,
+        database: str | None = None,
         account_scope: bool = False,
         output_format: str = "json",
         include_ddl: bool = True,
@@ -114,7 +114,7 @@ class CatalogService:
             output_path.mkdir(parents=True, exist_ok=True)
 
             # Build basic catalog structure
-            build_timestamp = datetime.now(timezone.utc).isoformat()
+            build_timestamp = datetime.now(UTC).isoformat()
             catalog_data = {
                 "metadata": {
                     "database": database or "current",
@@ -215,8 +215,8 @@ class CatalogService:
 
     def _build_real_catalog(
         self,
-        catalog_data: Dict[str, Any],
-        database: Optional[str],
+        catalog_data: dict[str, Any],
+        database: str | None,
         account_scope: bool,
     ) -> CatalogTotals:
         """Build real catalog by querying Snowflake INFORMATION_SCHEMA.
@@ -452,7 +452,7 @@ class CatalogService:
 
         return totals
 
-    def load_summary(self, catalog_dir: str) -> Dict[str, Any]:
+    def load_summary(self, catalog_dir: str) -> dict[str, Any]:
         """Load catalog summary from directory.
 
         Args:
@@ -473,14 +473,14 @@ class CatalogService:
         if not summary_file.exists():
             raise FileNotFoundError(f"Catalog summary not found: {summary_file}")
 
-        with open(summary_file, "r") as f:
+        with open(summary_file) as f:
             return json.load(f)
 
 
 def build_catalog(
     output_dir: str = "./data_catalogue",
-    database: Optional[str] = None,
-    profile: Optional[str] = None,
+    database: str | None = None,
+    profile: str | None = None,
 ) -> CatalogResult:
     """Build catalog with default settings.
 

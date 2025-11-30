@@ -75,25 +75,24 @@ class TestMCPServerProfileIntegration:
 
     def test_server_startup_fails_with_no_profiles(self, mock_empty_config):
         """Test server startup fails when no profiles exist."""
-        with mock_empty_config():
-            with patch.dict(os.environ, {}, clear=True):
-                from igloo_mcp.mcp_server import main
+        with mock_empty_config(), patch.dict(os.environ, {}, clear=True):
+            from igloo_mcp.mcp_server import main
 
-                with patch("igloo_mcp.mcp_server.parse_arguments") as mock_args:
-                    with patch("igloo_mcp.mcp_server.configure_logging"):
-                        mock_args.return_value = Mock(
-                            log_level="INFO",
-                            snowcli_config=None,
-                            profile=None,
-                            name="test-server",
-                            instructions="test",
-                            transport="stdio",
-                        )
+            with patch("igloo_mcp.mcp_server.parse_arguments") as mock_args:
+                with patch("igloo_mcp.mcp_server.configure_logging"):
+                    mock_args.return_value = Mock(
+                        log_level="INFO",
+                        snowcli_config=None,
+                        profile=None,
+                        name="test-server",
+                        instructions="test",
+                        transport="stdio",
+                    )
 
-                        with pytest.raises(SystemExit) as exc_info:
-                            main()
+                    with pytest.raises(SystemExit) as exc_info:
+                        main()
 
-                        assert exc_info.value.code == 1
+                    assert exc_info.value.code == 1
 
     def test_profile_override_from_command_line(self, mock_config_with_profiles):
         """Test that command line profile override works."""

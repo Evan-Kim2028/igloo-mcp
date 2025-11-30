@@ -72,6 +72,18 @@ AI: "Give me a health report for the snowflake server"
   "system": {
     "timestamp": 1673524800.0,
     "server_uptime": 3600.5
+  },
+  "diagnostics": {
+    "storage_paths": {
+      "scope": "global",
+      "base_directory": "/Users/user/.igloo_mcp",
+      "query_history": "/Users/user/.igloo_mcp/logs/doc.jsonl",
+      "artifacts": "/Users/user/.igloo_mcp/logs/artifacts",
+      "cache": "/Users/user/.igloo_mcp/logs/artifacts/cache",
+      "reports": "/Users/user/.igloo_mcp/reports",
+      "catalogs": "/Users/user/.igloo_mcp/catalogs",
+      "namespaced": false
+    }
   }
 }
 ```

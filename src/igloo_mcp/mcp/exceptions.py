@@ -6,7 +6,7 @@ structured, machine-readable error responses that follow MCP protocol standards.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class MCPToolError(Exception):
@@ -30,9 +30,9 @@ class MCPToolError(Exception):
         self,
         message: str,
         *,
-        error_code: Optional[str] = None,
-        hints: Optional[List[str]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        error_code: str | None = None,
+        hints: list[str] | None = None,
+        context: dict[str, Any] | None = None,
         verbose: bool = True,  # Default True for backward compatibility
     ):
         """Initialize MCP tool error.
@@ -52,7 +52,7 @@ class MCPToolError(Exception):
         self.verbose = verbose
 
     @property
-    def hints(self) -> List[str]:
+    def hints(self) -> list[str]:
         """Return hints based on verbosity setting.
 
         Returns:
@@ -62,13 +62,13 @@ class MCPToolError(Exception):
             return self._all_hints
         return self._all_hints[: self.DEFAULT_MAX_HINTS]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary for JSON serialization.
 
         Returns:
             Dictionary representation of the error
         """
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "message": self.message,
             "error_type": self.__class__.__name__,
         }
@@ -99,9 +99,9 @@ class MCPValidationError(MCPToolError):
         self,
         message: str,
         *,
-        validation_errors: Optional[List[str]] = None,
-        hints: Optional[List[str]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        validation_errors: list[str] | None = None,
+        hints: list[str] | None = None,
+        context: dict[str, Any] | None = None,
         verbose: bool = True,  # Default True for backward compatibility
     ):
         """Initialize validation error.
@@ -122,7 +122,7 @@ class MCPValidationError(MCPToolError):
         )
         self.validation_errors = validation_errors or []
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary for JSON serialization.
 
         Returns:
@@ -150,10 +150,10 @@ class MCPExecutionError(MCPToolError):
         self,
         message: str,
         *,
-        operation: Optional[str] = None,
-        original_error: Optional[Exception] = None,
-        hints: Optional[List[str]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        operation: str | None = None,
+        original_error: Exception | None = None,
+        hints: list[str] | None = None,
+        context: dict[str, Any] | None = None,
         verbose: bool = True,  # Default True for backward compatibility
     ):
         """Initialize execution error.
@@ -176,7 +176,7 @@ class MCPExecutionError(MCPToolError):
         self.operation = operation
         self.original_error = original_error
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary for JSON serialization.
 
         Returns:
@@ -206,11 +206,11 @@ class MCPSelectorError(MCPToolError):
         self,
         message: str,
         *,
-        selector: Optional[str] = None,
-        error: Optional[str] = None,
-        candidates: Optional[List[str]] = None,
-        hints: Optional[List[str]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        selector: str | None = None,
+        error: str | None = None,
+        candidates: list[str] | None = None,
+        hints: list[str] | None = None,
+        context: dict[str, Any] | None = None,
         verbose: bool = True,  # Default True for backward compatibility
     ):
         """Initialize selector error.
@@ -235,7 +235,7 @@ class MCPSelectorError(MCPToolError):
         self.error = error or "not_found"
         self.candidates = candidates or []
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert exception to dictionary for JSON serialization.
 
         Returns:

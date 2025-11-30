@@ -1,11 +1,17 @@
 """Schema definitions for report evolution changes with versioning."""
 
 import uuid
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 CURRENT_CHANGES_SCHEMA_VERSION = "1.0"
+
+# Merge mode constants (matching merge_utils.py)
+MERGE_MODE_REPLACE = "replace"
+MERGE_MODE_MERGE = "merge"
+MERGE_MODE_APPEND = "append"
+MERGE_MODE_PREPEND = "prepend"
 
 
 class ValidationErrorDetail(BaseModel):
@@ -14,7 +20,7 @@ class ValidationErrorDetail(BaseModel):
     field: str  # Field path (e.g., "insights_to_modify[0].insight_id")
     value: Any  # Actual value that failed
     error: str  # Error message
-    available_ids: Optional[List[str]] = None  # Available IDs for "not found" errors
+    available_ids: list[str] | None = None  # Available IDs for "not found" errors
 
     def to_string(self) -> str:
         """Convert to human-readable error message with structural hints."""
@@ -61,25 +67,24 @@ class InsightChange(BaseModel):
     insight_id is required for modifications.
     """
 
-    insight_id: Optional[str] = None
-    importance: Optional[int] = Field(None, ge=0, le=10)
-    summary: Optional[str] = None
-    supporting_queries: Optional[List[Dict[str, Any]]] = None
-    citations: Optional[List[Dict[str, Any]]] = None
-    status: Optional[Literal["active", "archived", "killed"]] = None
+    insight_id: str | None = None
+    importance: int | None = Field(None, ge=0, le=10)
+    summary: str | None = None
+    supporting_queries: list[dict[str, Any]] | None = None
+    citations: list[dict[str, Any]] | None = None
+    status: Literal["active", "archived", "killed"] | None = None
 
     @model_validator(mode="before")
     @classmethod
     def generate_uuid_if_missing(cls, data: Any) -> Any:
         """Auto-generate UUID if insight_id is None or missing."""
-        if isinstance(data, dict):
-            if data.get("insight_id") is None:
-                data["insight_id"] = str(uuid.uuid4())
+        if isinstance(data, dict) and data.get("insight_id") is None:
+            data["insight_id"] = str(uuid.uuid4())
         return data
 
     @field_validator("insight_id")
     @classmethod
-    def validate_uuid(cls, v: Optional[str]) -> Optional[str]:
+    def validate_uuid(cls, v: str | None) -> str | None:
         """Validate UUID format if provided."""
         if v is None:
             return v
@@ -99,25 +104,34 @@ class SectionChange(BaseModel):
     insights: Optional list of insight dictionaries for inline creation.
     When provided, insights are created atomically with the section and automatically linked.
     Mutually exclusive with insight_ids_to_add.
+
+    content_merge_mode: Controls how content field is merged with existing content.
+    - 'replace' (default): Replace existing content entirely
+    - 'merge': Use placeholder-based merging (supports // ... existing ... patterns)
+    - 'append': Append new content after existing
+    - 'prepend': Prepend new content before existing
     """
 
-    section_id: Optional[str] = None
-    title: Optional[str] = None
-    order: Optional[int] = Field(None, ge=0)
-    notes: Optional[str] = None
-    content: Optional[str] = None
-    content_format: Optional[Literal["markdown", "html", "plain"]] = "markdown"
-    insight_ids_to_add: Optional[List[str]] = None
-    insight_ids_to_remove: Optional[List[str]] = None
-    insights: Optional[List[Dict[str, Any]]] = None
+    section_id: str | None = None
+    title: str | None = None
+    order: int | None = Field(None, ge=0)
+    notes: str | None = None
+    content: str | None = None
+    content_format: Literal["markdown", "html", "plain"] | None = "markdown"
+    content_merge_mode: Literal["replace", "merge", "append", "prepend"] | None = Field(
+        default="replace",
+        description="How to merge content with existing: replace, merge (placeholder-based), append, prepend",
+    )
+    insight_ids_to_add: list[str] | None = None
+    insight_ids_to_remove: list[str] | None = None
+    insights: list[dict[str, Any]] | None = None
 
     @model_validator(mode="before")
     @classmethod
     def generate_uuid_if_missing(cls, data: Any) -> Any:
         """Auto-generate UUID if section_id is None or missing."""
-        if isinstance(data, dict):
-            if data.get("section_id") is None:
-                data["section_id"] = str(uuid.uuid4())
+        if isinstance(data, dict) and data.get("section_id") is None:
+            data["section_id"] = str(uuid.uuid4())
         return data
 
     @model_validator(mode="after")
@@ -132,7 +146,7 @@ class SectionChange(BaseModel):
 
     @field_validator("section_id")
     @classmethod
-    def validate_uuid(cls, v: Optional[str]) -> Optional[str]:
+    def validate_uuid(cls, v: str | None) -> str | None:
         """Validate UUID format if provided."""
         if v is None:
             return v
@@ -150,20 +164,20 @@ class ProposedChanges(BaseModel):
         default=CURRENT_CHANGES_SCHEMA_VERSION,
         description="Schema version for forward compatibility",
     )
-    insights_to_add: List[InsightChange] = Field(default_factory=list)
-    insights_to_modify: List[InsightChange] = Field(default_factory=list)
-    insights_to_remove: List[str] = Field(default_factory=list)
-    sections_to_add: List[SectionChange] = Field(default_factory=list)
-    sections_to_modify: List[SectionChange] = Field(default_factory=list)
-    sections_to_remove: List[str] = Field(default_factory=list)
-    title_change: Optional[str] = None
-    metadata_updates: Dict[str, Any] = Field(default_factory=dict)
-    status_change: Optional[Literal["active", "archived", "deleted"]] = Field(
+    insights_to_add: list[InsightChange] = Field(default_factory=list)
+    insights_to_modify: list[InsightChange] = Field(default_factory=list)
+    insights_to_remove: list[str] = Field(default_factory=list)
+    sections_to_add: list[SectionChange] = Field(default_factory=list)
+    sections_to_modify: list[SectionChange] = Field(default_factory=list)
+    sections_to_remove: list[str] = Field(default_factory=list)
+    title_change: str | None = None
+    metadata_updates: dict[str, Any] = Field(default_factory=dict)
+    status_change: Literal["active", "archived", "deleted"] | None = Field(
         default=None,
         description="Optional status change for the report",
     )
 
-    def validate_against_outline(self, outline) -> List[ValidationErrorDetail]:
+    def validate_against_outline(self, outline) -> list[ValidationErrorDetail]:
         """Validate changes against current outline state.
 
         Returns:
@@ -248,7 +262,7 @@ class ProposedChanges(BaseModel):
                 # Check that at least one non-ID field is provided for modification
                 non_id_fields = [
                     k
-                    for k in change.model_dump(exclude={"insight_id"}).keys()
+                    for k in change.model_dump(exclude={"insight_id"})
                     if change.model_dump(exclude={"insight_id"}).get(k) is not None
                 ]
                 if not non_id_fields:
@@ -395,7 +409,7 @@ class ProposedChanges(BaseModel):
                 # Check that at least one non-ID field is provided for modification
                 non_id_fields = [
                     k
-                    for k in section_change.model_dump(exclude={"section_id"}).keys()
+                    for k in section_change.model_dump(exclude={"section_id"})
                     if section_change.model_dump(exclude={"section_id"}).get(k) is not None
                 ]
                 if not non_id_fields:

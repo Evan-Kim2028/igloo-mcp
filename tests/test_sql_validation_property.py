@@ -86,7 +86,7 @@ class TestSQLValidationProperties:
                 results.append(("error", type(e).__name__))
 
         # All results should be the same (case-insensitive)
-        assert len(set(str(r) for r in results)) == 1, "Case variations should validate consistently"
+        assert len({str(r) for r in results}) == 1, "Case variations should validate consistently"
 
     @given(st.integers(min_value=0, max_value=1000))
     def test_whitespace_handling(self, num_spaces: int):

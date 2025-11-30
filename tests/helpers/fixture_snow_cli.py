@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Optional
 
 from igloo_mcp.snow_cli import QueryOutput, SnowCLIError
 
@@ -30,7 +30,7 @@ class FixtureSnowCLI:
         self,
         fixture_dir: str | Path,
         *,
-        raise_on: Optional[Dict[str, Exception]] = None,
+        raise_on: dict[str, Exception] | None = None,
     ) -> None:
         self.fixture_dir = Path(fixture_dir)
         self.raise_on = {key.upper(): exc for key, exc in (raise_on or {}).items()}
@@ -41,9 +41,9 @@ class FixtureSnowCLI:
         self,
         query: str,
         *,
-        output_format: Optional[str] = None,  # noqa: ARG002 - unused
-        ctx_overrides: Optional[Dict[str, Optional[str]]] = None,  # noqa: ARG002
-        timeout: Optional[int] = None,  # noqa: ARG002
+        output_format: str | None = None,
+        ctx_overrides: dict[str, str | None] | None = None,
+        timeout: int | None = None,
     ) -> QueryOutput:
         key = self._key_for_query(query)
         self.call_log.append(RecordedCall(query=query, key=key))
@@ -54,7 +54,7 @@ class FixtureSnowCLI:
 
         data = self._load_fixture(key)
 
-        rows: list[Dict[str, object]] = data.get("rows", [])  # type: ignore[assignment]
+        rows: list[dict[str, object]] = data.get("rows", [])  # type: ignore[assignment]
         stdout = data.get("stdout")
         if stdout is None:
             stdout = json.dumps(rows)
@@ -69,11 +69,11 @@ class FixtureSnowCLI:
 
     def run_file(
         self,
-        file_path: str,  # noqa: ARG002
+        file_path: str,
         *,
-        output_format: Optional[str] = None,  # noqa: ARG002
-        ctx_overrides: Optional[Dict[str, Optional[str]]] = None,  # noqa: ARG002
-        timeout: Optional[int] = None,  # noqa: ARG002
+        output_format: str | None = None,
+        ctx_overrides: dict[str, str | None] | None = None,
+        timeout: int | None = None,
     ) -> QueryOutput:
         raise SnowCLIError("FixtureSnowCLI.run_file is not implemented for tests")
 
@@ -81,7 +81,7 @@ class FixtureSnowCLI:
         return True
 
     # --- Internal helpers -----------------------------------------------
-    def _load_fixture(self, key: str) -> Dict[str, object]:
+    def _load_fixture(self, key: str) -> dict[str, object]:
         path = self.fixture_dir / f"{key}.json"
         if not path.exists():
             raise SnowCLIError(f"No fixture found for query key '{key}'. Expected file at {path}.")
