@@ -347,7 +347,7 @@ class TestAuditTrailIdTracking:
         # Get last audit entry
         import json
 
-        with open(audit_file, "r") as f:
+        with open(audit_file) as f:
             lines = f.readlines()
             last_entry = json.loads(lines[-1])
 
@@ -395,7 +395,7 @@ class TestAuditTrailIdTracking:
         # Get last audit entry
         import json
 
-        with open(audit_file, "r") as f:
+        with open(audit_file) as f:
             lines = f.readlines()
             last_entry = json.loads(lines[-1])
 

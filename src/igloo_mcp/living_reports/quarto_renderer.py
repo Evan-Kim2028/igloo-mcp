@@ -14,11 +14,11 @@ import shutil
 import subprocess
 from collections import namedtuple
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 
-from ..path_utils import find_repo_root
+from igloo_mcp.path_utils import find_repo_root
 
 # Define the RenderResult namedtuple
 RenderResult = namedtuple("RenderResult", ["output_paths", "stdout", "stderr", "warnings"])
@@ -49,8 +49,8 @@ class QuartoRenderer:
     """
 
     # Class-level cache for Quarto version to avoid repeated subprocess calls
-    _cached_version: Optional[str] = None
-    _cached_bin_path: Optional[str] = None
+    _cached_version: str | None = None
+    _cached_bin_path: str | None = None
 
     @classmethod
     def detect(cls) -> QuartoRenderer:
@@ -129,10 +129,10 @@ class QuartoRenderer:
         self,
         report_dir: str | Path,
         format: str,
-        options: Optional[Dict[str, Any]] = None,
-        outline: Optional[Any] = None,
-        datasets: Optional[Dict[str, Any]] = None,
-        hints: Optional[Dict[str, Any]] = None,
+        options: dict[str, Any] | None = None,
+        outline: Any | None = None,
+        datasets: dict[str, Any] | None = None,
+        hints: dict[str, Any] | None = None,
     ) -> RenderResult:
         """Render a living report using Quarto.
 
@@ -160,7 +160,7 @@ class QuartoRenderer:
             outline_path = report_dir / "outline.json"
             if not outline_path.exists():
                 raise ValueError(f"Outline file not found: {outline_path}")
-            with open(outline_path, "r", encoding="utf-8") as f:
+            with open(outline_path, encoding="utf-8") as f:
                 outline_data = json.load(f)
                 # Convert back to Outline object if needed
                 from .models import Outline
@@ -170,7 +170,7 @@ class QuartoRenderer:
         if datasets is None:
             datasets_path = report_dir / "dataset_sources.json"
             if datasets_path.exists():
-                with open(datasets_path, "r", encoding="utf-8") as f:
+                with open(datasets_path, encoding="utf-8") as f:
                     datasets = json.load(f)
             else:
                 datasets = {}
@@ -250,10 +250,10 @@ class QuartoRenderer:
         self,
         report_dir: Path,
         format: str,
-        options: Dict[str, Any],
+        options: dict[str, Any],
         outline: Any,
-        datasets: Dict[str, Any],
-        hints: Dict[str, Any],
+        datasets: dict[str, Any],
+        hints: dict[str, Any],
     ) -> None:
         """Generate the report.qmd file from the outline.
 
@@ -266,9 +266,9 @@ class QuartoRenderer:
             hints: Render hints
         """
         # Find the template directory - try multiple strategies
-        template_dir: Optional[Path] = None
+        template_dir: Path | None = None
         repo_root = find_repo_root()
-        attempted_paths: List[str] = []
+        attempted_paths: list[str] = []
 
         # Strategy 1: Use importlib.resources (works when installed as package)
         try:

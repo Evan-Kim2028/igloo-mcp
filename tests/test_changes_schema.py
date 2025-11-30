@@ -220,7 +220,8 @@ def test_new_insight_validation():
 
     errors = changes.validate_against_outline(outline)
     assert len(errors) == 1
-    assert "must have importance" in errors[0].error and "summary" in errors[0].error
+    assert "must have importance" in errors[0].error
+    assert "summary" in errors[0].error
 
 
 def test_new_section_validation():

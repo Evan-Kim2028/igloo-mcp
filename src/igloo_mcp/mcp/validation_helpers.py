@@ -1,12 +1,29 @@
-"""Validation helpers for MCP tool parameter validation.
+"""Parameter validation utilities for MCP tools.
 
-This module provides standardized validation error formatting for common
-parameter validation scenarios, extracted from mcp_server.py.
+Provides reusable validation functions for common parameter types including
+strings, enums, and numeric ranges. All validators raise MCPValidationError
+with structured error messages and actionable hints.
+
+Key Functions:
+- validate_required_string(): String validation with length constraints
+- validate_numeric_range(): Numeric bounds checking
+- validate_enum_value(): Enum membership validation
+- format_pydantic_validation_error(): Convert Pydantic errors to MCP format
+
+Usage:
+    from igloo_mcp.mcp.validation_helpers import validate_required_string
+
+    validate_required_string(
+        value=reason,
+        field_name="reason",
+        min_length=5,
+        max_length=500
+    )
 """
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import ValidationError
 
@@ -32,8 +49,8 @@ def format_pydantic_validation_error(
         MCPValidationError with formatted validation errors and hints
     """
     errors = error.errors()
-    validation_errors: List[str] = []
-    hints: List[str] = []
+    validation_errors: list[str] = []
+    hints: list[str] = []
 
     for err in errors:
         field = err["loc"][0] if err["loc"] else None
@@ -138,7 +155,7 @@ def format_parameter_type_error(
     field: str,
     expected_type: str,
     received_type: str,
-    examples: Optional[List[Any]] = None,
+    examples: list[Any] | None = None,
 ) -> MCPValidationError:
     """Format parameter type error with helpful examples.
 
@@ -169,14 +186,14 @@ def format_parameter_type_error(
     )
 
 
-# New validation helper functions for v0.3.4
+# Validation helper functions for standardized parameter validation
 
 
 def validate_required_string(
     value: Any,
     field_name: str,
     min_length: int = 1,
-    max_length: Optional[int] = None,
+    max_length: int | None = None,
 ) -> str:
     """Validate required string parameter.
 
@@ -227,10 +244,10 @@ def validate_required_string(
 def validate_numeric_range(
     value: Any,
     field_name: str,
-    min_value: Optional[float] = None,
-    max_value: Optional[float] = None,
+    min_value: float | None = None,
+    max_value: float | None = None,
     allow_none: bool = False,
-) -> Optional[float]:
+) -> float | None:
     """Validate numeric parameter within range.
 
     Args:
@@ -284,9 +301,9 @@ def validate_numeric_range(
 def validate_enum_value(
     value: Any,
     field_name: str,
-    allowed_values: List[str],
+    allowed_values: list[str],
     allow_none: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """Validate string is one of allowed values.
 
     Args:
@@ -318,3 +335,216 @@ def validate_enum_value(
         )
 
     return value
+
+
+def validate_text_field(
+    value: str,
+    field_name: str,
+    min_length: int = 1,
+    max_length: int = 200,
+    pattern: str | None = None,
+    allow_empty: bool = False,
+) -> None:
+    r"""Validate a text field with consistent error messages.
+
+    Raises MCPValidationError if validation fails.
+
+    Args:
+        value: The text value to validate
+        field_name: Name of the field (for error messages)
+        min_length: Minimum length (default: 1)
+        max_length: Maximum length (default: 200)
+        pattern: Optional regex pattern to match
+        allow_empty: Whether to allow empty strings (default: False)
+
+    Raises:
+        MCPValidationError: If validation fails
+
+    Example:
+        validate_text_field(
+            title,
+            "title",
+            min_length=3,
+            max_length=100,
+            pattern=r'^[a-zA-Z0-9\s\-_]+$'
+        )
+    """
+    if value is None or (not allow_empty and not value.strip()):
+        raise MCPValidationError(
+            f"Missing or empty {field_name}",
+            validation_errors=[f"{field_name} is required and cannot be empty"],
+            hints=[
+                f"Provide a {field_name} with at least {min_length} characters",
+                f"Use descriptive {field_name} that explains the purpose",
+            ],
+        )
+
+    value_clean = value.strip()
+
+    if len(value_clean) < min_length:
+        raise MCPValidationError(
+            f"{field_name} too short",
+            validation_errors=[f"{field_name} must be at least {min_length} characters (got {len(value_clean)})"],
+            hints=[
+                f"Current: '{value_clean}'",
+                f"Minimum length: {min_length} characters",
+                "Be more descriptive to meet minimum length requirement",
+            ],
+        )
+
+    if len(value_clean) > max_length:
+        raise MCPValidationError(
+            f"{field_name} too long",
+            validation_errors=[f"{field_name} must be at most {max_length} characters (got {len(value_clean)})"],
+            hints=[
+                f"Current length: {len(value_clean)} characters",
+                f"Maximum length: {max_length} characters",
+                f"Reduce {field_name} by {len(value_clean) - max_length} characters",
+            ],
+        )
+
+    if pattern:
+        import re
+
+        if not re.match(pattern, value_clean):
+            raise MCPValidationError(
+                f"Invalid {field_name} format",
+                validation_errors=[f"{field_name} contains invalid characters or format"],
+                hints=[
+                    f"Current: '{value_clean}'",
+                    "Use only alphanumeric characters, spaces, hyphens, and underscores",
+                    "Avoid special characters like @, #, $, %, etc.",
+                ],
+            )
+
+
+def validate_path_field(
+    value: str,
+    field_name: str,
+    must_exist: bool = False,
+    create_if_missing: bool = False,
+) -> None:
+    """Validate a file/directory path field.
+
+    Args:
+        value: The path value to validate
+        field_name: Name of the field (for error messages)
+        must_exist: Whether path must already exist (default: False)
+        create_if_missing: Whether to create directory if missing (default: False)
+
+    Raises:
+        MCPValidationError: If validation fails
+    """
+    from pathlib import Path
+
+    if not value or not value.strip():
+        raise MCPValidationError(
+            f"Missing {field_name}",
+            validation_errors=[f"{field_name} is required"],
+            hints=[f"Provide a valid file or directory path for {field_name}"],
+        )
+
+    path = Path(value.strip())
+
+    if must_exist and not path.exists():
+        raise MCPValidationError(
+            f"{field_name} not found",
+            validation_errors=[f"Path does not exist: {value}"],
+            hints=[
+                f"Check that {value} exists",
+                "Verify spelling and path structure",
+                "Create the directory first or use create_if_missing=True" if not create_if_missing else "",
+            ],
+        )
+
+    if create_if_missing and not path.exists():
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            raise MCPValidationError(
+                f"Cannot create {field_name}",
+                validation_errors=[f"Failed to create directory: {e}"],
+                hints=[
+                    f"Check permissions for {value}",
+                    "Verify parent directories exist",
+                ],
+            )
+
+
+def validate_response_mode(
+    response_mode: str | None,
+    legacy_param_name: str | None = None,
+    legacy_param_value: str | None = None,
+    valid_modes: tuple = ("minimal", "standard", "full"),
+    default: str = "standard",
+) -> str:
+    """Validate response_mode parameter with backward compatibility for legacy names.
+
+    This helper standardizes progressive disclosure across all tools, allowing smooth
+    migration from legacy parameter names (result_mode, detail_level, mode, response_detail)
+    to the unified response_mode parameter.
+
+    Args:
+        response_mode: New standard parameter name (preferred)
+        legacy_param_name: Name of deprecated parameter (for warning message)
+        legacy_param_value: Value of deprecated parameter (fallback if response_mode not set)
+        valid_modes: Tuple of valid mode values for this tool
+        default: Default mode if neither parameter is provided
+
+    Returns:
+        Validated mode value (lowercase)
+
+    Raises:
+        MCPValidationError: If mode value is not in valid_modes
+
+    Example:
+        # In execute_query tool
+        mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="result_mode",
+            legacy_param_value=result_mode,
+            valid_modes=("minimal", "sample", "summary", "full"),
+            default="full",
+        )
+
+        # User gets deprecation warning if using old parameter:
+        # "result_mode is deprecated, use response_mode instead (deprecated in v0.3.5)"
+    """
+    try:
+        from fastmcp.utilities.logging import get_logger
+    except ImportError:
+        from mcp.server.fastmcp.utilities.logging import get_logger
+
+    logger = get_logger(__name__)
+
+    # Prefer new parameter, fall back to legacy
+    if response_mode is not None:
+        mode = response_mode.lower()
+    elif legacy_param_value is not None:
+        mode = legacy_param_value.lower()
+        # Log deprecation warning
+        if legacy_param_name:
+            logger.warning(
+                f"{legacy_param_name} is deprecated, use response_mode instead",
+                extra={
+                    "deprecated_param": legacy_param_name,
+                    "deprecated_value": legacy_param_value,
+                    "deprecation_version": "v0.3.5",
+                    "removal_planned": "v0.5.0",
+                },
+            )
+    else:
+        mode = default
+
+    # Validate mode value
+    if mode not in valid_modes:
+        raise MCPValidationError(
+            f"Invalid response_mode '{mode}'",
+            validation_errors=[f"response_mode must be one of: {', '.join(valid_modes)} (got: {mode})"],
+            hints=[
+                f"Use response_mode='{default}' for the default behavior",
+                f"Valid modes: {', '.join(valid_modes)}",
+            ],
+        )
+
+    return mode

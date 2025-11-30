@@ -2,10 +2,10 @@
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
-from ..snow_cli import QueryOutput, SnowCLI
-from ..snow_rest import SnowRestClient
+from igloo_mcp.snow_cli import QueryOutput, SnowCLI
+from igloo_mcp.snow_rest import SnowRestClient
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class QueryService:
     """Service for executing Snowflake queries."""
 
-    def __init__(self, context: Optional[Any] = None, *, driver: Optional[str] = None):
+    def __init__(self, context: Any | None = None, *, driver: str | None = None):
         """Initialize query service.
 
         Args:
@@ -26,8 +26,8 @@ class QueryService:
         else:
             self.profile = None
         self.driver = driver_name
-        self.cli: Optional[SnowCLI] = None
-        self.rest_client: Optional[SnowRestClient] = None
+        self.cli: SnowCLI | None = None
+        self.rest_client: SnowRestClient | None = None
         if driver_name == "rest":
             default_ctx = {}
             if context is not None and hasattr(context, "config") and hasattr(context.config, "snowflake"):
@@ -48,9 +48,9 @@ class QueryService:
     def execute(
         self,
         query: str,
-        output_format: Optional[str] = None,
-        timeout: Optional[int] = None,
-        session: Optional[Dict[str, Any]] = None,
+        output_format: str | None = None,
+        timeout: int | None = None,
+        session: dict[str, Any] | None = None,
         **kwargs,
     ) -> QueryOutput:
         """Execute a query.
@@ -78,7 +78,7 @@ class QueryService:
 
         return self.cli.run_query(query, output_format=output_format, timeout=timeout, ctx_overrides=session)
 
-    def session_from_mapping(self, mapping: Dict[str, Any]) -> Dict[str, Any]:
+    def session_from_mapping(self, mapping: dict[str, Any]) -> dict[str, Any]:
         """Create session context from mapping."""
         return {
             "warehouse": mapping.get("warehouse"),

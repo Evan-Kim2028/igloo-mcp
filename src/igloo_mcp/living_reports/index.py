@@ -7,10 +7,10 @@ report directories.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
 
 from .models import IndexEntry, Outline
 
@@ -37,8 +37,8 @@ class ReportIndex:
             index_path: Path to the index.jsonl file
         """
         self.index_path = index_path
-        self._entries: Dict[str, IndexEntry] = {}
-        self._title_to_id: Dict[str, str] = {}
+        self._entries: dict[str, IndexEntry] = {}
+        self._title_to_id: dict[str, str] = {}
         self._load_index()
 
     def _load_index(self) -> None:
@@ -91,7 +91,7 @@ class ReportIndex:
                 self.rebuild_from_filesystem()
                 return
 
-        except (json.JSONDecodeError, IOError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             raise IndexCorruptionError(f"Failed to load index: {e}") from e
 
         self._entries = entries
@@ -112,8 +112,8 @@ class ReportIndex:
             self._title_to_id = {}
             return
 
-        new_entries: Dict[str, IndexEntry] = {}
-        title_to_id: Dict[str, str] = {}
+        new_entries: dict[str, IndexEntry] = {}
+        title_to_id: dict[str, str] = {}
 
         for report_dir in by_id_dir.iterdir():
             if not report_dir.is_dir():
@@ -177,10 +177,8 @@ class ReportIndex:
                 pass
 
         except Exception as e:
-            try:
+            with contextlib.suppress(Exception):
                 temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
             raise IndexError(f"Failed to save index: {e}") from e
 
     def add_entry(self, entry: IndexEntry) -> None:
@@ -209,7 +207,7 @@ class ReportIndex:
 
         self._save_index()
 
-    def get_entry(self, report_id: str) -> Optional[IndexEntry]:
+    def get_entry(self, report_id: str) -> IndexEntry | None:
         """Get index entry by report ID.
 
         Args:
@@ -220,7 +218,7 @@ class ReportIndex:
         """
         return self._entries.get(report_id)
 
-    def resolve_title(self, title: str, allow_partial: bool = True) -> Optional[str]:
+    def resolve_title(self, title: str, allow_partial: bool = True) -> str | None:
         """Resolve a title to a report ID.
 
         Args:
@@ -260,11 +258,11 @@ class ReportIndex:
 
     def list_entries(
         self,
-        status: Optional[str] = None,
-        tags: Optional[List[str]] = None,
+        status: str | None = None,
+        tags: list[str] | None = None,
         sort_by: str = "updated_at",
         reverse: bool = True,
-    ) -> List[IndexEntry]:
+    ) -> list[IndexEntry]:
         """List index entries with optional filtering.
 
         Args:
@@ -304,7 +302,7 @@ class ReportIndex:
 
         return entries
 
-    def validate_consistency(self) -> List[str]:
+    def validate_consistency(self) -> list[str]:
         """Validate index consistency with filesystem.
 
         Returns:
@@ -315,7 +313,7 @@ class ReportIndex:
         by_id_dir = reports_root / "by_id"
 
         # Check that all indexed reports exist on disk
-        for report_id, entry in self._entries.items():
+        for report_id, _entry in self._entries.items():
             report_dir = by_id_dir / report_id
             if not report_dir.exists():
                 errors.append(f"Indexed report {report_id} not found on disk")

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -23,13 +24,13 @@ class FakeQueryPlan:
     """Plan describing how the fake cursor should behave for a single query."""
 
     statement: str
-    rows: Optional[List[Dict[str, Any]]] = None
-    rowcount: Optional[int] = None
+    rows: list[dict[str, Any]] | None = None
+    rowcount: int | None = None
     duration: float = 0.05
     sfqid: str = "FAKE_QID_123"
-    error: Optional[Exception] = None
+    error: Exception | None = None
 
-    def clone(self) -> "FakeQueryPlan":
+    def clone(self) -> FakeQueryPlan:
         rows_copy = None
         if self.rows is not None:
             rows_copy = []
@@ -57,19 +58,19 @@ class FakeSnowflakeService:
         self,
         plans: Iterable[FakeQueryPlan],
         *,
-        session_defaults: Optional[FakeSessionDefaults] = None,
-        query_tag_param: Optional[Dict[str, Any]] = None,
+        session_defaults: FakeSessionDefaults | None = None,
+        query_tag_param: dict[str, Any] | None = None,
     ) -> None:
         self._plans = [plan.clone() for plan in plans]
         if not self._plans:
             raise ValueError("FakeSnowflakeService requires at least one query plan.")
         self._plan_index = 0
         self.session_defaults = session_defaults or FakeSessionDefaults()
-        self.cursors: List[FakeSnowflakeCursor] = []
+        self.cursors: list[FakeSnowflakeCursor] = []
         self._snowcli_session_lock = threading.Lock()
         self._query_tag_param = dict(query_tag_param or {})
 
-    def get_query_tag_param(self) -> Dict[str, Any]:
+    def get_query_tag_param(self) -> dict[str, Any]:
         return dict(self._query_tag_param)
 
     def add_query_plan(self, plan: FakeQueryPlan) -> None:
@@ -80,7 +81,7 @@ class FakeSnowflakeService:
         """
         self._plans.append(plan.clone())
 
-    def get_connection(self, **_: Any) -> "FakeSnowflakeConnection":
+    def get_connection(self, **_: Any) -> FakeSnowflakeConnection:
         plan = self._consume_plan()
         cursor = FakeSnowflakeCursor(plan, self.session_defaults)
         self.cursors.append(cursor)
@@ -98,13 +99,13 @@ class FakeSnowflakeService:
 class FakeSnowflakeConnection:
     """Context manager returning the prepared fake cursor."""
 
-    def __init__(self, cursor: "FakeSnowflakeCursor") -> None:
+    def __init__(self, cursor: FakeSnowflakeCursor) -> None:
         self.cursor = cursor
 
-    def __enter__(self) -> tuple[None, "FakeSnowflakeCursor"]:
+    def __enter__(self) -> tuple[None, FakeSnowflakeCursor]:
         return None, self.cursor
 
-    def __exit__(self, exc_type, exc, tb) -> bool:  # noqa: D401 - standard protocol
+    def __exit__(self, exc_type, exc, tb) -> bool:
         return False
 
 
@@ -118,19 +119,19 @@ class FakeSnowflakeCursor:
     ) -> None:
         self.plan = plan
         self.session_defaults = session_defaults
-        self.sfqid: Optional[str] = None
-        self.description: Optional[List[tuple[str]]] = None
+        self.sfqid: str | None = None
+        self.description: list[tuple[str]] | None = None
         self.rowcount: int = 0
-        self._rows: List[Dict[str, Any]] = []
+        self._rows: list[dict[str, Any]] = []
         self._cancelled: bool = False
         self._main_executed: bool = False
-        self._fetchone_map: Dict[str, Any] = {}
-        self._session_parameters: Dict[str, Optional[str]] = {
+        self._fetchone_map: dict[str, Any] = {}
+        self._session_parameters: dict[str, str | None] = {
             "QUERY_TAG": None,
             "STATEMENT_TIMEOUT_IN_SECONDS": "0",
         }
-        self.query_tags_seen: List[Optional[str]] = []
-        self.statement_timeouts_seen: List[Optional[str]] = []
+        self.query_tags_seen: list[str | None] = []
+        self.statement_timeouts_seen: list[str | None] = []
 
     # -- DB-API subset ---------------------------------------------------
     def execute(self, query: str) -> None:
@@ -219,10 +220,10 @@ class FakeSnowflakeCursor:
 
         raise RuntimeError(f"Unexpected extra execute call in fake cursor: {query}")
 
-    def fetchall(self) -> List[Dict[str, Any]]:
+    def fetchall(self) -> list[dict[str, Any]]:
         return list(self._rows)
 
-    def fetchone(self) -> Dict[str, Any]:
+    def fetchone(self) -> dict[str, Any]:
         return dict(self._fetchone_map)
 
     def cancel(self) -> None:
@@ -262,7 +263,7 @@ class FakeSnowflakeCursor:
             self._rows = []
             self.rowcount = int(self.plan.rowcount or 0)
 
-    def _infer_column_names(self, rows: List[Dict[str, Any]]) -> List[str]:
+    def _infer_column_names(self, rows: list[dict[str, Any]]) -> list[str]:
         if not rows:
             return []
         first = rows[0]
@@ -271,7 +272,7 @@ class FakeSnowflakeCursor:
         return [f"column_{idx}" for idx in range(len(first))]
 
     @staticmethod
-    def _extract_assignment_value(normalized: str) -> Optional[str]:
+    def _extract_assignment_value(normalized: str) -> str | None:
         if "=" not in normalized:
             return None
         _, value = normalized.split("=", 1)

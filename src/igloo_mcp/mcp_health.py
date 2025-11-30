@@ -10,7 +10,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 try:
     from fastmcp.utilities.logging import get_logger
@@ -60,19 +60,17 @@ class ProfileHealthStatus:
     """Detailed health status for Snowflake profile configuration."""
 
     status: HealthStatus
-    profile_name: Optional[str]
+    profile_name: str | None
     is_valid: bool
     config_exists: bool
     config_path: str
-    available_profiles: List[str]
-    default_profile: Optional[str]
-    validation_error: Optional[str]
+    available_profiles: list[str]
+    default_profile: str | None
+    validation_error: str | None
     last_checked: float
 
     @classmethod
-    def from_profile_check(
-        cls, profile_name: Optional[str] = None, force_validation: bool = True
-    ) -> "ProfileHealthStatus":
+    def from_profile_check(cls, profile_name: str | None = None, force_validation: bool = True) -> ProfileHealthStatus:
         """Create profile health status from current configuration."""
         timestamp = time.time()
         profile_summary = get_profile_summary()
@@ -106,11 +104,7 @@ class ProfileHealthStatus:
             )
 
         # Determine overall status
-        if not config_exists:
-            status = HealthStatus.UNHEALTHY
-        elif not available_profiles:
-            status = HealthStatus.UNHEALTHY
-        elif not is_valid:
+        if not config_exists or not available_profiles or not is_valid:
             status = HealthStatus.UNHEALTHY
         elif validation_error:
             status = HealthStatus.DEGRADED
@@ -136,14 +130,14 @@ class MCPServerHealth:
 
     overall_status: HealthStatus
     profile_health: ProfileHealthStatus
-    connection_status: Optional[HealthStatus]
-    resource_availability: Dict[str, bool]
-    last_error: Optional[str]
+    connection_status: HealthStatus | None
+    resource_availability: dict[str, bool]
+    last_error: str | None
     error_count: int
     uptime_seconds: float
-    version: Optional[str]
+    version: str | None
 
-    def to_mcp_response(self) -> Dict[str, Any]:
+    def to_mcp_response(self) -> dict[str, Any]:
         """Convert to MCP-compliant health response."""
         return {
             "status": self.overall_status.value,
@@ -179,11 +173,11 @@ class MCPServerHealth:
 class MCPHealthMonitor:
     """Health monitoring system for MCP server with Snowflake integration."""
 
-    def __init__(self, server_start_time: Optional[float] = None):
+    def __init__(self, server_start_time: float | None = None):
         self.server_start_time = server_start_time or time.time()
         self.error_count = 0
-        self.last_error: Optional[str] = None
-        self.cached_profile_health: Optional[ProfileHealthStatus] = None
+        self.last_error: str | None = None
+        self.cached_profile_health: ProfileHealthStatus | None = None
         self.cache_ttl = 30.0  # Cache profile health for 30 seconds
 
     def record_error(self, error: str) -> None:
@@ -192,9 +186,7 @@ class MCPHealthMonitor:
         self.last_error = error
         logger.error(f"MCP Health Monitor recorded error: {error}")
 
-    def get_profile_health(
-        self, profile_name: Optional[str] = None, force_refresh: bool = False
-    ) -> ProfileHealthStatus:
+    def get_profile_health(self, profile_name: str | None = None, force_refresh: bool = False) -> ProfileHealthStatus:
         """Get current profile health status with caching."""
         now = time.time()
 
@@ -244,38 +236,33 @@ class MCPHealthMonitor:
             self.record_error(f"Connection health check failed: {e}")
             return HealthStatus.UNHEALTHY
 
-    def check_resource_availability(self, server_resources: List[str]) -> Dict[str, bool]:
+    def check_resource_availability(self, server_resources: list[str]) -> dict[str, bool]:
         """Check availability of MCP server resources."""
         # In a real implementation, this would check each resource
         # For now, we'll assume resources are available if profile is valid
         profile_health = self.get_profile_health()
         is_available = profile_health.is_valid
 
-        return {resource: is_available for resource in server_resources}
+        return dict.fromkeys(server_resources, is_available)
 
     def get_comprehensive_health(
         self,
-        profile_name: Optional[str] = None,
+        profile_name: str | None = None,
         snowflake_service=None,
-        server_resources: Optional[List[str]] = None,
-        version: Optional[str] = None,
-        connection_health_override: Optional[HealthStatus] = None,
+        server_resources: list[str] | None = None,
+        version: str | None = None,
+        connection_health_override: HealthStatus | None = None,
     ) -> MCPServerHealth:
         """Get comprehensive health status for the MCP server."""
         profile_health = self.get_profile_health(profile_name)
 
-        if connection_health_override:
-            connection_status = connection_health_override
-        else:
-            connection_status = self.check_connection_health(snowflake_service)
+        connection_status = connection_health_override or self.check_connection_health(snowflake_service)
 
         resources = server_resources or []
         resource_availability = self.check_resource_availability(resources)
 
         # Determine overall status
-        if profile_health.status == HealthStatus.UNHEALTHY:
-            overall_status = HealthStatus.UNHEALTHY
-        elif connection_status == HealthStatus.UNHEALTHY:
+        if profile_health.status == HealthStatus.UNHEALTHY or connection_status == HealthStatus.UNHEALTHY:
             overall_status = HealthStatus.UNHEALTHY
         elif (
             profile_health.status == HealthStatus.DEGRADED
@@ -301,7 +288,7 @@ class MCPHealthMonitor:
 
     def create_mcp_error_response(
         self, error_code: MCPErrorCode, message: str, **additional_data: Any
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create MCP-compliant error response."""
         error_data = {
             "error_type": error_code.name.lower(),
@@ -325,8 +312,8 @@ class MCPHealthMonitor:
 
 
 def create_profile_validation_error_response(
-    monitor: MCPHealthMonitor, profile_name: Optional[str], validation_error: str
-) -> Dict[str, Any]:
+    monitor: MCPHealthMonitor, profile_name: str | None, validation_error: str
+) -> dict[str, Any]:
     """Create a standardized MCP error response for profile validation failures."""
     return monitor.create_mcp_error_response(
         error_code=MCPErrorCode.PROFILE_ERROR,
@@ -337,7 +324,7 @@ def create_profile_validation_error_response(
     )
 
 
-def create_configuration_error_response(monitor: MCPHealthMonitor, config_issue: str, **context: Any) -> Dict[str, Any]:
+def create_configuration_error_response(monitor: MCPHealthMonitor, config_issue: str, **context: Any) -> dict[str, Any]:
     """Create a standardized MCP error response for configuration issues."""
     return monitor.create_mcp_error_response(
         error_code=MCPErrorCode.CONFIGURATION_ERROR,

@@ -7,7 +7,7 @@ using Quarto as an optional dependency.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
@@ -47,9 +47,9 @@ class RenderReportTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Render a living report to human-readable formats (HTML, PDF, markdown, docx) using Quarto. "
-            "Use this tool to generate final output from a report outline. Converts structured report data "
-            "into formatted documents suitable for sharing or presentation."
+            "Export a report to shareable formats (HTML, PDF, Markdown)—the 'finals week study guide'. "
+            "Use AFTER report is complete and reviewed. "
+            "Use dry_run=True to preview, include_preview=True for inline content sampling."
         )
 
     @property
@@ -61,7 +61,7 @@ class RenderReportTool(MCPTool):
         return ["reports", "rendering", "quarto", "html", "pdf", "export"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Render quarterly sales report to HTML",
@@ -97,9 +97,9 @@ class RenderReportTool(MCPTool):
         include_preview: bool = False,
         preview_max_chars: int = 2000,
         dry_run: bool = False,
-        options: Optional[Dict[str, Any]] = None,
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        options: dict[str, Any] | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute report rendering.
 
         Args:
@@ -134,13 +134,15 @@ class RenderReportTool(MCPTool):
         )
 
         # Validate format parameter
-        if format not in ("html", "pdf", "markdown", "docx"):
+        valid_formats = ("html", "pdf", "markdown", "docx", "html_standalone")
+        if format not in valid_formats:
             raise MCPValidationError(
-                f"Invalid format '{format}'. Must be one of: html, pdf, markdown, docx",
+                f"Invalid format '{format}'. Must be one of: {', '.join(valid_formats)}",
                 validation_errors=[f"Invalid format: {format}"],
                 hints=[
-                    "Use format='html' for web output",
-                    "Use format='pdf' for document output",
+                    "Use format='html' for Quarto HTML output",
+                    "Use format='html_standalone' for single self-contained HTML (no Quarto required)",
+                    "Use format='pdf' for PDF document output",
                     "Use format='markdown' for markdown output",
                     "Use format='docx' for Word document output",
                 ],
@@ -181,14 +183,24 @@ class RenderReportTool(MCPTool):
 
         # Note: regenerate_outline_view is currently ignored as rendering always regenerates QMD
         render_start = time.time()
-        result = self.report_service.render_report(
-            report_id=resolved_report_id,
-            format=format,
-            options=options,
-            include_preview=include_preview,
-            preview_max_chars=preview_max_chars,
-            dry_run=dry_run,
-        )
+
+        # Handle html_standalone separately - doesn't require Quarto
+        if format == "html_standalone":
+            result = self._render_standalone_html(
+                report_id=resolved_report_id,
+                options=options or {},
+                include_preview=include_preview,
+                preview_max_chars=preview_max_chars,
+            )
+        else:
+            result = self.report_service.render_report(
+                report_id=resolved_report_id,
+                format=format,
+                options=options,
+                include_preview=include_preview,
+                preview_max_chars=preview_max_chars,
+                dry_run=dry_run,
+            )
         render_duration = (time.time() - render_start) * 1000
         total_duration = (time.time() - start_time) * 1000
 
@@ -264,7 +276,7 @@ class RenderReportTool(MCPTool):
 
         return result
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Render Report Parameters",
@@ -330,6 +342,114 @@ class RenderReportTool(MCPTool):
                 },
             },
         }
+
+    def _render_standalone_html(
+        self,
+        report_id: str,
+        options: dict[str, Any],
+        include_preview: bool = False,
+        preview_max_chars: int = 2000,
+    ) -> dict[str, Any]:
+        """Render report to standalone HTML without Quarto.
+
+        Args:
+            report_id: Report ID to render
+            options: Rendering options (theme, toc, etc.)
+            include_preview: Include truncated preview in response
+            preview_max_chars: Maximum characters for preview
+
+        Returns:
+            Rendering result dictionary
+        """
+        from igloo_mcp.living_reports.renderers import HTMLStandaloneRenderer
+
+        try:
+            # Load outline and prepare data
+            outline = self.report_service.get_report_outline(report_id)
+            storage = self.report_service.global_storage.get_report_storage(report_id)
+            report_dir = storage.report_dir
+
+            # Build hints (citation_map, query_provenance)
+            hints: dict[str, Any] = {}
+            try:
+                citation_map = self.report_service._build_citation_map(outline)
+                hints["citation_map"] = citation_map
+
+                # Build citation_details from query provenance
+                query_provenance: dict[str, Any] = {}
+                for insight in outline.insights:
+                    references = insight.citations or insight.supporting_queries
+                    for query in references:
+                        if query.execution_id:
+                            try:
+                                from igloo_mcp.living_reports.models import DatasetSource
+
+                                source = DatasetSource(
+                                    execution_id=query.execution_id,
+                                    sql_sha256=query.sql_sha256,
+                                )
+                                history_record = self.report_service.history_index._resolve_history_record(source)
+                                if history_record:
+                                    query_provenance[query.execution_id] = {
+                                        "execution_id": query.execution_id,
+                                        "timestamp": history_record.get("timestamp") or history_record.get("ts"),
+                                        "duration_ms": history_record.get("duration_ms"),
+                                        "rowcount": history_record.get("rowcount"),
+                                        "status": history_record.get("status"),
+                                        "statement_preview": history_record.get("statement_preview"),
+                                    }
+                            except Exception:
+                                pass
+                hints["query_provenance"] = query_provenance
+                hints["citation_details"] = query_provenance
+            except Exception:
+                pass
+
+            # Render using standalone renderer
+            renderer = HTMLStandaloneRenderer()
+            render_result = renderer.render(
+                report_dir=report_dir,
+                outline=outline,
+                datasets={},
+                hints=hints,
+                options=options,
+            )
+
+            # Build response
+            result: dict[str, Any] = {
+                "status": "success",
+                "report_id": report_id,
+                "output": {
+                    "format": "html_standalone",
+                    "output_path": render_result["output_path"],
+                    "size_bytes": render_result["size_bytes"],
+                },
+                "warnings": render_result.get("warnings", []),
+            }
+
+            # Include preview if requested
+            if include_preview:
+                try:
+                    from pathlib import Path
+
+                    output_path = Path(render_result["output_path"])
+                    if output_path.exists():
+                        content = output_path.read_text(encoding="utf-8")
+                        if len(content) > preview_max_chars:
+                            content = content[:preview_max_chars] + "\n\n[Content truncated]"
+                        result["preview"] = content
+                        result["output"]["preview"] = content
+                except Exception:
+                    pass
+
+            return result
+
+        except Exception as e:
+            return {
+                "status": "render_failed",
+                "report_id": report_id,
+                "error": str(e),
+            }
 
 
 __all__ = ["RenderReportTool"]

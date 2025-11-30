@@ -107,7 +107,7 @@ class _CursorCtx:
             cursor.fetchone.return_value = {"1": "1"}
         else:
 
-            def _raise(_):  # noqa: ANN001
+            def _raise(_):
                 raise RuntimeError("boom")
 
             cursor.execute.side_effect = _raise
@@ -121,7 +121,7 @@ class _Service:
     def __init__(self, succeed: bool):
         self.succeed = succeed
 
-    def get_connection(self, **kwargs):  # noqa: ANN401
+    def get_connection(self, **kwargs):
         return _CursorCtx(self.succeed)
 
 

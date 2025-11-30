@@ -5,7 +5,7 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import anyio
 
@@ -41,9 +41,9 @@ class BuildDependencyGraphTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Build object dependency graph from Snowflake metadata. "
-            "Use this tool when you need to understand relationships between tables, views, and other objects, "
-            "or to trace data lineage. Returns a graph structure showing dependencies between database objects."
+            "Visualize table lineage and dependencies. "
+            "Use after catalog is built to understand data flow. "
+            "Returns DOT format for graph visualization."
         )
 
     @property
@@ -55,7 +55,7 @@ class BuildDependencyGraphTool(MCPTool):
         return ["dependencies", "lineage", "graph", "metadata"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Visualize dependencies across entire account",
@@ -78,13 +78,13 @@ class BuildDependencyGraphTool(MCPTool):
     @tool_error_handler("build_dependency_graph")
     async def execute(
         self,
-        database: Optional[str] = None,
-        schema: Optional[str] = None,
+        database: str | None = None,
+        schema: str | None = None,
         account: bool = False,
         format: str = "json",
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build dependency graph.
 
         Args:
@@ -140,7 +140,7 @@ class BuildDependencyGraphTool(MCPTool):
 
         return graph
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Dependency Graph Parameters",

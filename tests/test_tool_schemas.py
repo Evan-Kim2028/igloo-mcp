@@ -20,7 +20,7 @@ from igloo_mcp.mcp.tools.schema_utils import IDENTIFIER_PATTERN
 from igloo_mcp.mcp.tools.test_connection import ConnectionTestTool
 
 
-@pytest.fixture()
+@pytest.fixture
 def base_config() -> Config:
     """Provide a minimal config for tool instantiation."""
     return Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))

@@ -43,7 +43,7 @@ async def test_timeout_cancels_and_logs_history(tmp_path, monkeypatch):
     event = json.loads(data[-1])
     assert event["status"] == "timeout"
     assert event.get("statement_preview", "").startswith("SELECT LONG_RUNNING")
-    expected_sha = hashlib.sha256("SELECT LONG_RUNNING".encode("utf-8")).hexdigest()
+    expected_sha = hashlib.sha256(b"SELECT LONG_RUNNING").hexdigest()
     assert event["sql_sha256"] == expected_sha
     sql_path = event.get("artifacts", {}).get("sql_path")
     assert sql_path
@@ -85,7 +85,7 @@ async def test_success_returns_query_id_and_logs(tmp_path, monkeypatch):
     event = json.loads(data[-1])
     assert event["status"] == "success"
     assert event.get("query_id") == "FAKE_QID_123"
-    expected_sha = hashlib.sha256("SELECT QUICK".encode("utf-8")).hexdigest()
+    expected_sha = hashlib.sha256(b"SELECT QUICK").hexdigest()
     assert event["sql_sha256"] == expected_sha
     sql_path = event.get("artifacts", {}).get("sql_path")
     assert sql_path

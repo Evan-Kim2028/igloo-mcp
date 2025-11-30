@@ -1,8 +1,6 @@
-# get_report - Progressive Report Disclosure
+# get_report
 
-**New in v0.3.2** ✨
-
-Read living reports with selective retrieval for token efficiency. Supports 4 retrieval modes and flexible filtering options for progressive disclosure workflows.
+Read living reports with progressive disclosure for token-efficient inspection.
 
 ## Overview
 
@@ -10,7 +8,8 @@ The `get_report` tool enables agents to read report structure and content effici
 
 - **Multi-turn workflows**: Get section_ids/insight_ids before calling `evolve_report`
 - **Token efficiency**: Load only what you need (60-80% reduction vs. full reports)
-- **Progressive disclosure**: Start with summary, drill down as needed
+- **Progressive disclosure**: Only load what you need (summary/sections/insights/full modes)
+- **Selective retrieval**: Filter by sections, importance, or specific IDs
 - **Content inspection**: Understand report structure before modifications
 
 ## Parameters
@@ -90,7 +89,7 @@ Returns high-level report metadata and section overview. **Most token-efficient*
 }
 ```
 
-**Token Savings**: ~75% reduction vs. full report
+**Token Savings**: Significant reduction vs. full report
 
 ---
 
@@ -144,7 +143,7 @@ Returns detailed section information with optional prose content. Supports filte
 }
 ```
 
-**Token Savings**: ~50-70% reduction vs. full report (depending on filtering)
+**Token Savings**: Substantial reduction vs. full report (depending on filtering)
 
 ---
 
@@ -208,7 +207,7 @@ Returns detailed insight information. Supports filtering by importance, section,
 }
 ```
 
-**Token Savings**: ~60-75% reduction vs. full report (depending on filtering)
+**Token Savings**: Substantial reduction vs. full report (depending on filtering)
 
 ---
 
@@ -258,6 +257,125 @@ All modes support pagination via `limit` and `offset` parameters:
 
 ---
 
+## Mode Selection Guide
+
+Choose the right mode based on your needs to optimize token usage:
+
+### Quick Comparison
+
+| Mode | Rows Returned | Token Cost | Use Case |
+|------|---------------|------------|----------|
+| `summary` | Metadata only | ~50 tokens | List reports, check status |
+| `insights` | Key findings | ~200 tokens | Review conclusions without reading |
+| `sections` | Structure + content | ~500+ tokens | Read report prose |
+| `full` | Everything | ~1000+ tokens | Complete audit trail, exports |
+
+### When to Use Each Mode
+
+**`summary` mode** - Minimal metadata
+```python
+# Use when: Browsing reports, checking existence
+get_report(report_selector="Q1 Revenue", mode="summary")
+
+# Returns:
+# - report_id, title, created_at, updated_at
+# - tags, status, path
+# - Section count, insight count
+# - NO prose content, NO insights, NO citations
+```
+
+**`insights` mode** - Key findings only
+```python
+# Use when: Quick review of conclusions
+get_report(report_selector="Q1 Revenue", mode="insights")
+
+# Returns:
+# - All insights with summaries and importance
+# - Supporting query IDs
+# - Citations
+# - NO section prose content
+```
+
+**`sections` mode** - Structure and prose
+```python
+# Use when: Reading the report narrative
+get_report(report_selector="Q1 Revenue", mode="sections")
+
+# Returns:
+# - All section titles, order, prose content
+# - Section-to-insight mappings
+# - NO detailed insight metadata
+# - NO full citation details
+```
+
+**`full` mode** - Complete data
+```python
+# Use when: Exporting, auditing, or modifying
+get_report(report_selector="Q1 Revenue", mode="full")
+
+# Returns:
+# - EVERYTHING: metadata, sections, insights, citations
+# - Audit trail information
+# - Ready for render_report or evolve_report
+```
+
+### Recommended Workflow
+
+```
+1. Start with summary → See available reports
+   ↓
+2. Use insights → Review key findings
+   ↓
+3. Drill into sections → Read specific content
+   ↓
+4. Use full → Export or modify
+```
+
+### Token Efficiency Tips
+
+**Bad** (wastes tokens):
+```python
+# Getting full mode just to check if report exists
+result = get_report("Q1 Revenue", mode="full")  # 1000+ tokens
+if result["status"] == "success":
+    print("Report exists")
+```
+
+**Good** (token efficient):
+```python
+# Use summary mode for existence checks
+result = get_report("Q1 Revenue", mode="summary")  # 50 tokens
+if result["status"] == "success":
+    print("Report exists")
+```
+
+### Progressive Disclosure Pattern
+
+**Efficient multi-step workflow**:
+```python
+# Step 1: List all reports (summary mode)
+reports = search_report(tags=["quarterly"], fields=["report_id", "title"])
+
+# Step 2: Get insights for relevant report (insights mode)
+insights = get_report("Q1 Revenue", mode="insights")
+print(f"Found {len(insights['insights'])} key findings")
+
+# Step 3: Read specific sections if needed (sections mode)
+content = get_report(
+    "Q1 Revenue",
+    mode="sections",
+    section_titles=["Executive Summary"]  # Filter to specific section
+)
+
+# Step 4: Full mode only when modifying or exporting
+full_report = get_report("Q1 Revenue", mode="full")
+render_report(full_report["report_id"], format="pdf")
+```
+
+**Efficient retrieval**: Progressive disclosure reduces token usage significantly vs. always loading full reports.
+
+---
+
 ## Common Workflows
 
 ### Workflow 1: Progressive Disclosure
@@ -265,28 +383,26 @@ All modes support pagination via `limit` and `offset` parameters:
 Start lightweight, drill down as needed:
 
 ```python
-# Step 1: Get overview (100 tokens)
+# Step 1: Get overview
 summary = get_report(
     report_selector="Q1 Analysis",
     mode="summary"
 )
 
-# Step 2: Get specific section details (200 tokens)
+# Step 2: Get specific section details
 section = get_report(
     report_selector="Q1 Analysis",
     mode="sections",
     section_titles=["Revenue Analysis"]
 )
 
-# Step 3: Get high-priority insights (300 tokens)
+# Step 3: Get high-priority insights
 insights = get_report(
     report_selector="Q1 Analysis",
     mode="insights",
     section_ids=["sec_revenue..."],
     min_importance=7
 )
-
-# Total: ~600 tokens vs. 2000+ for full report (70% savings)
 ```
 
 ### Workflow 2: Prepare for Evolution
@@ -336,14 +452,7 @@ for section in sections["sections"]:
 
 ## Token Efficiency Comparison
 
-| Operation | Tokens (Before v0.3.2) | Tokens (With get_report) | Savings |
-|-----------|------------------------|--------------------------|---------|
-| Get report overview | 2000 (full report) | 150 (summary mode) | 92% |
-| Get section structure | 2000 (full report) | 400 (sections mode) | 80% |
-| Get insights only | 2000 (full report) | 600 (insights mode) | 70% |
-| Multi-turn workflow | 6000 (3x full reports) | 1200 (progressive) | 80% |
-
-**Real-World Impact**: A typical 3-step analysis workflow drops from ~6,000 tokens to ~1,200 tokens.
+| Operation | Tokens (Previously) | Tokens (With get_report) | Savings |
 
 ---
 
@@ -416,6 +525,4 @@ Reserve `mode="full"` for final reviews or comprehensive analysis. Use filtered 
 
 ---
 
-**Version**: Added in v0.3.2
-**Category**: Living Reports
-**Token Efficiency**: 60-92% reduction vs. full report retrieval
+**Version**: Complete API documentation available

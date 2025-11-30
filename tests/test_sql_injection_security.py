@@ -134,10 +134,11 @@ class TestSessionParameterSQLInjection:
             # Escape single quotes and wrap in quotes
             return f"'{value_str.replace(chr(39), chr(39) + chr(39))}'"
 
-        for input_val, expected_prefix in injection_patterns:
+        for input_val, _expected_prefix in injection_patterns:
             escaped = escape_sql_value(input_val)
             # Should be wrapped in quotes
-            assert escaped.startswith("'") and escaped.endswith("'")
+            assert escaped.startswith("'")
+            assert escaped.endswith("'")
             # All single quotes inside should be escaped
             inner = escaped[1:-1]  # Remove outer quotes
             assert inner.count("''") == input_val.count("'")

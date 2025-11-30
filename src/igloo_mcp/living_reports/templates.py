@@ -5,12 +5,11 @@ giving LLM agents a clear structure to populate with content.
 """
 
 import uuid
-from typing import List
 
 from .models import Section
 
 
-def monthly_sales() -> List[Section]:
+def monthly_sales() -> list[Section]:
     """Monthly sales report template.
 
     Sections:
@@ -43,7 +42,7 @@ def monthly_sales() -> List[Section]:
     ]
 
 
-def quarterly_review() -> List[Section]:
+def quarterly_review() -> list[Section]:
     """Quarterly business review template.
 
     Sections:
@@ -84,7 +83,7 @@ def quarterly_review() -> List[Section]:
     ]
 
 
-def deep_dive() -> List[Section]:
+def deep_dive() -> list[Section]:
     """Single-topic deep dive template.
 
     Sections:
@@ -117,7 +116,7 @@ def deep_dive() -> List[Section]:
     ]
 
 
-def analyst_v1() -> List[Section]:
+def analyst_v1() -> list[Section]:
     """Analyst report template with standard blockchain analysis sections.
 
     Sections:
@@ -162,7 +161,7 @@ def analyst_v1() -> List[Section]:
     ]
 
 
-def default() -> List[Section]:
+def default() -> list[Section]:
     """Default template - empty report.
 
     Returns empty section list for maximum flexibility.
@@ -180,7 +179,7 @@ TEMPLATES = {
 }
 
 
-def get_template(name: str) -> List[Section]:
+def get_template(name: str) -> list[Section]:
     """Get template sections by name.
 
     Args:

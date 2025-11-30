@@ -6,11 +6,13 @@ Part of v1.9.0 Phase 1 - consolidates health_check, check_profile_config, and ge
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 import anyio
 
 from igloo_mcp.config import Config
+from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.profile_utils import (
     ProfileValidationError,
     get_profile_summary,
@@ -41,8 +43,8 @@ class HealthCheckTool(MCPTool):
         self,
         config: Config,
         snowflake_service: Any,
-        health_monitor: Optional[Any] = None,
-        resource_manager: Optional[Any] = None,
+        health_monitor: Any | None = None,
+        resource_manager: Any | None = None,
     ):
         """Initialize health check tool.
 
@@ -64,10 +66,9 @@ class HealthCheckTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Comprehensive system health check including connection, profile validation, "
-            "Cortex availability, and catalog status. Use this for thorough diagnostics "
-            "or troubleshooting. For quick connectivity checks, use test_connection instead. "
-            "Supports optional checks via include_cortex, include_profile, and include_catalog parameters."
+            "Check server, Snowflake connection, and catalog health. "
+            "Use at session start or when queries fail unexpectedly. "
+            "Use response_mode='minimal' for quick status, 'full' for diagnostics."
         )
 
     @property
@@ -79,7 +80,7 @@ class HealthCheckTool(MCPTool):
         return ["health", "profile", "cortex", "catalog", "diagnostics"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Full health check including Cortex availability",
@@ -100,26 +101,42 @@ class HealthCheckTool(MCPTool):
     @tool_error_handler("health_check")
     async def execute(
         self,
+        response_mode: str | None = None,
+        detail_level: str | None = None,  # DEPRECATED in v0.3.5
         include_cortex: bool = True,
         include_profile: bool = True,
         include_catalog: bool = False,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
         **kwargs: Any,
-    ) -> Dict[str, Any]:
-        """Execute comprehensive health check.
+    ) -> dict[str, Any]:
+        """Comprehensive health check of system components.
 
         Args:
+            response_mode: Response verbosity level (STANDARD):
+                - "minimal": Just overall status and component health (~50 tokens)
+                - "standard": + Remediation guidance (~200 tokens, default)
+                - "full": + Diagnostic details (~400 tokens)
+            detail_level: DEPRECATED - use response_mode instead
             include_cortex: Check Cortex AI services availability
             include_profile: Validate profile configuration
             include_catalog: Check catalog availability
-            request_id: Optional request correlation ID for tracing (auto-generated if not provided)
+            request_id: Optional request ID for tracing
 
         Returns:
-            Comprehensive health status
+            Health check results with optional detail levels
         """
         # Timing and request correlation
         start_time = time.time()
         request_id = ensure_request_id(request_id)
+
+        # Validate response_mode parameter with backward compatibility
+        mode = validate_response_mode(
+            response_mode,
+            legacy_param_name="detail_level",
+            legacy_param_value=detail_level,
+            valid_modes=("minimal", "standard", "full"),
+            default="minimal",
+        )
 
         logger.info(
             "health_check_started",
@@ -131,7 +148,7 @@ class HealthCheckTool(MCPTool):
             },
         )
 
-        results: Dict[str, Any] = {}
+        results: dict[str, Any] = {}
 
         # Always test basic connection
         results["connection"] = await self._test_connection()
@@ -162,12 +179,6 @@ class HealthCheckTool(MCPTool):
         # Calculate total duration
         total_duration = (time.time() - start_time) * 1000
 
-        # Add metadata
-        results["request_id"] = request_id
-        results["timing"] = {
-            "total_duration_ms": round(total_duration, 2),
-        }
-
         logger.info(
             "health_check_completed",
             extra={
@@ -177,9 +188,108 @@ class HealthCheckTool(MCPTool):
             },
         )
 
-        return results
+        # Determine overall status
+        overall_status = results.get("overall_status", "unknown")
 
-    async def _test_connection(self) -> Dict[str, Any]:
+        # Determine component statuses for summary mode
+        snowflake_health = results.get("connection", {}).get("status", "unknown")
+        catalog_health = results.get("catalog", {}).get("status", "unknown")
+        profile_health = results.get("profile", {}).get("status", "unknown")
+
+        # Build response based on response_mode
+        if mode == "minimal":
+            # Minimal response - just statuses
+            return {
+                "status": overall_status,
+                "request_id": request_id,
+                "components": {
+                    "snowflake": snowflake_health,
+                    "catalog": catalog_health,
+                    "profile": profile_health,
+                },
+                "timestamp": datetime.now(UTC).isoformat(),
+                "timing": {
+                    "total_duration_ms": round(total_duration, 2),
+                },
+            }
+
+        # Standard and full modes
+        response = {
+            "status": overall_status,
+            "request_id": request_id,
+            "checks": results,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "timing": {
+                "total_duration_ms": round(total_duration, 2),
+            },
+        }
+
+        # Add remediation for standard and full modes
+        if mode in ("standard", "full"):
+            # Add remediation guidance for degraded/unhealthy components
+            remediation: dict[str, Any] = {}
+
+            # Catalog health remediation
+            catalog_health = results.get("catalog", {}).get("status", "unknown")
+            catalog_age_days = results.get("catalog", {}).get("age_days")
+            catalog_exists = results.get("catalog", {}).get("exists")
+            if catalog_health != "healthy":
+                if catalog_age_days and catalog_age_days > 7:
+                    remediation["catalog"] = (
+                        f"Catalog is {catalog_age_days} days old. "
+                        "Run build_catalog to refresh metadata and improve search accuracy"
+                    )
+                elif not catalog_exists:
+                    remediation["catalog"] = "No catalog found. Run build_catalog to enable offline object search"
+
+            # Snowflake connection remediation
+            snowflake_health = results.get("connection", {}).get("status", "unknown")
+            if snowflake_health != "healthy":
+                remediation["snowflake"] = (
+                    "Snowflake connection failed. Run test_connection for detailed diagnostics, "
+                    "or check SNOWFLAKE_PROFILE environment variable"
+                )
+
+            # Profile health remediation
+            profile_health = results.get("profile", {}).get("status", "unknown")
+            profile_name = results.get("profile", {}).get("name")
+            if profile_health != "healthy":
+                remediation["profile"] = (
+                    f"Profile '{profile_name}' configuration issues detected. "
+                    "Check ~/.snowflake/config.toml or run test_connection"
+                )
+
+            if remediation:
+                response["remediation"] = remediation
+                response["next_steps"] = "Address remediation items to improve system health"
+
+        # Add full diagnostics for full mode
+        if mode == "full":
+            # Add diagnostic details
+            diagnostics = {}
+
+            if "profile" in results:
+                diagnostics["profile"] = {
+                    "config_path": "~/.snowflake/config.toml",
+                    "active_profile": results.get("profile", {}).get("name"),
+                }
+
+            if "catalog" in results and results["catalog"].get("exists"):
+                diagnostics["catalog"] = {
+                    "path": results["catalog"].get("path"),
+                    "object_count": results["catalog"].get("object_count", 0),
+                    "last_build": results["catalog"].get("created_at"),
+                }
+
+            # Add storage paths information
+            diagnostics["storage_paths"] = self._get_storage_paths()
+
+            if diagnostics:
+                response["diagnostics"] = diagnostics
+
+        return response
+
+    async def _test_connection(self) -> dict[str, Any]:
         """Test basic Snowflake connectivity."""
         try:
             result = await anyio.to_thread.run_sync(self._test_connection_sync)
@@ -200,7 +310,7 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    def _test_connection_sync(self) -> Dict[str, Any]:
+    def _test_connection_sync(self) -> dict[str, Any]:
         """Test connection synchronously."""
         with self.snowflake_service.get_connection(
             use_dict_cursor=True,
@@ -219,7 +329,7 @@ class HealthCheckTool(MCPTool):
             cursor.execute("SELECT CURRENT_ROLE() as role")
             role_result = cursor.fetchone()
 
-            def _pick(d: Dict[str, Any] | None, lower: str, upper: str) -> Any:
+            def _pick(d: dict[str, Any] | None, lower: str, upper: str) -> Any:
                 if not isinstance(d, dict):
                     return None
                 return d.get(lower) if lower in d else d.get(upper)
@@ -231,7 +341,7 @@ class HealthCheckTool(MCPTool):
                 "role": _pick(role_result, "role", "ROLE"),
             }
 
-    async def _check_profile(self) -> Dict[str, Any]:
+    async def _check_profile(self) -> dict[str, Any]:
         """Validate profile configuration."""
         profile = self.config.snowflake.profile
 
@@ -244,7 +354,7 @@ class HealthCheckTool(MCPTool):
 
             # Derive authenticator details for troubleshooting
             auth = summary.current_profile_authenticator
-            auth_info: Dict[str, Any] = {
+            auth_info: dict[str, Any] = {
                 "authenticator": auth,
                 "is_externalbrowser": (auth == "externalbrowser"),
                 "is_okta_url": (isinstance(auth, str) and auth.startswith("http")),
@@ -280,14 +390,14 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    async def _check_cortex_availability(self) -> Dict[str, Any]:
+    async def _check_cortex_availability(self) -> dict[str, Any]:
         """Check if Cortex AI services are available."""
         try:
             # Test Cortex Complete with minimal query
             async def test_cortex():
                 try:
                     # Import inline to avoid dependency issues
-                    from mcp_server_snowflake.cortex_services.tools import (
+                    from mcp_server_snowflake.cortex_services.tools import (  # type: ignore[import-untyped]
                         complete_cortex,
                     )
 
@@ -324,7 +434,7 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    async def _check_catalog_exists(self) -> Dict[str, Any]:
+    async def _check_catalog_exists(self) -> dict[str, Any]:
         """Check if catalog resources are available."""
         if not self.resource_manager:
             return {
@@ -345,7 +455,7 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    def _get_system_health(self) -> Dict[str, Any]:
+    def _get_system_health(self) -> dict[str, Any]:
         """Get system health metrics from monitor."""
         if not self.health_monitor:
             return {
@@ -393,7 +503,64 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def _get_storage_paths(self) -> dict[str, Any]:
+        """Get unified storage location information.
+
+        Returns resolved paths for all igloo-mcp storage locations including
+        query history, artifacts, cache, reports, and catalogs.
+
+        Returns:
+            Dictionary with storage configuration and resolved paths:
+            - scope: Storage scope ("global" or "repo")
+            - base_directory: Base directory for storage
+            - query_history: Path to query history JSONL file
+            - artifacts: Path to artifacts directory
+            - cache: Path to cache directory
+            - reports: Path to living reports directory
+            - catalogs: Path to catalog metadata directory
+            - namespaced: Whether namespaced logging is enabled
+        """
+        from igloo_mcp.path_utils import (
+            _get_log_scope,
+            _is_namespaced_logs,
+            get_global_base,
+            resolve_artifact_root,
+            resolve_cache_root,
+            resolve_catalog_root,
+            resolve_history_path,
+            resolve_reports_root,
+        )
+
+        scope = _get_log_scope()
+        namespaced = _is_namespaced_logs()
+
+        # Resolve all paths
+        history_path = resolve_history_path()
+        artifact_root = resolve_artifact_root()
+        cache_root = resolve_cache_root()
+        reports_root = resolve_reports_root()
+        catalog_root = resolve_catalog_root()
+
+        # Determine base directory
+        if scope == "global":
+            base_dir = str(get_global_base())
+        else:
+            # Repo scope - extract from one of the resolved paths
+            # history_path is logs/doc.jsonl, parent.parent gives repo root
+            base_dir = str(history_path.parent.parent)
+
+        return {
+            "scope": scope,
+            "base_directory": base_dir,
+            "query_history": str(history_path),
+            "artifacts": str(artifact_root),
+            "cache": str(cache_root),
+            "reports": str(reports_root),
+            "catalogs": str(catalog_root),
+            "namespaced": namespaced,
+        }
+
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Health Check Parameters",

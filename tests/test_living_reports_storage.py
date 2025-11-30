@@ -49,9 +49,8 @@ class TestReportLock:
                 lock_path.write_text("existing")
 
                 lock = ReportLock(lock_path)
-                with pytest.raises(RuntimeError, match="Lock file exists"):
-                    with lock:
-                        pass
+                with pytest.raises(RuntimeError, match="Lock file exists"), lock:
+                    pass
 
 
 class TestReportStorage:

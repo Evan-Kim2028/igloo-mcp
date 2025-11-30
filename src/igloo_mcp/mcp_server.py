@@ -14,11 +14,10 @@ import argparse
 import os
 import string
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any
 
 import anyio
 from pydantic import Field, ValidationError
-from typing_extensions import Annotated
 
 # NOTE: For typing, import from the fastmcp package; fallback handled at runtime.
 try:  # Prefer the standalone fastmcp package when available
@@ -58,6 +57,7 @@ from .mcp.tools import (
     BuildDependencyGraphTool,
     ConnectionTestTool,
     CreateReportTool,
+    EvolveReportBatchTool,
     EvolveReportTool,
     ExecuteQueryTool,
     GetCatalogSummaryTool,
@@ -66,6 +66,7 @@ from .mcp.tools import (
     HealthCheckTool,
     RenderReportTool,
     SearchCatalogTool,
+    SearchCitationsTool,
     SearchReportTool,
 )
 from .mcp.validation_helpers import format_pydantic_validation_error
@@ -91,9 +92,9 @@ from .session_utils import (
 logger = get_logger(__name__)
 
 # Global health monitor and resource manager instances
-_health_monitor: Optional[MCPHealthMonitor] = None
-_resource_manager: Optional[MCPResourceManager] = None
-_catalog_service: Optional[CatalogService] = None
+_health_monitor: MCPHealthMonitor | None = None
+_resource_manager: MCPResourceManager | None = None
+_catalog_service: CatalogService | None = None
 
 # Non-SQL tools that should not be subject to SQL validation
 # These tools operate on file system, metadata, or other non-SQL resources
@@ -161,8 +162,7 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
         is_sql_validation = (
             "CheckQueryType" in middleware_type_name
             or "QueryType" in middleware_type_name
-            or "sql" in middleware_str.lower()
-            and "validation" in middleware_str.lower()
+            or ("sql" in middleware_str.lower() and "validation" in middleware_str.lower())
             or "statement type" in middleware_str.lower()
         )
 
@@ -181,7 +181,7 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
                 # (call_next, name, arguments). Detect signature dynamically.
                 message = None
                 tool_name = None
-                arguments: Dict[str, Any] | None = None
+                arguments: dict[str, Any] | None = None
                 call_next = None
 
                 # Prefer kwargs to avoid duplicate values when both are provided
@@ -255,7 +255,7 @@ def read_sql_artifact_by_sha(sql_sha256: str) -> str:
     return artifact_path.read_text(encoding="utf-8")
 
 
-def _get_catalog_summary_sync(catalog_dir: str) -> Dict[str, Any]:
+def _get_catalog_summary_sync(catalog_dir: str) -> dict[str, Any]:
     service = _catalog_service
     if service is None:
         context = create_service_context(existing_config=get_config())
@@ -266,27 +266,29 @@ def _get_catalog_summary_sync(catalog_dir: str) -> Dict[str, Any]:
 def _execute_query_sync(
     snowflake_service: Any,
     statement: str,
-    overrides: Dict[str, Optional[str]] | SessionContext,
-) -> Dict[str, Any]:
+    overrides: dict[str, str | None] | SessionContext,
+) -> dict[str, Any]:
     lock = ensure_session_lock(snowflake_service)
-    with lock:
-        with snowflake_service.get_connection(  # type: ignore[attr-defined]
+    with (
+        lock,
+        snowflake_service.get_connection(  # type: ignore[attr-defined]
             use_dict_cursor=True,
             session_parameters=snowflake_service.get_query_tag_param(),  # type: ignore[attr-defined]
-        ) as (_, cursor):
-            original = snapshot_session(cursor)
-            try:
-                if overrides:
-                    apply_session_context(cursor, overrides)
-                cursor.execute(statement)
-                rows = cursor.fetchall()
-                return {
-                    "statement": statement,
-                    "rowcount": cursor.rowcount,
-                    "rows": rows,
-                }
-            finally:
-                restore_session_context(cursor, original)
+        ) as (_, cursor),
+    ):
+        original = snapshot_session(cursor)
+        try:
+            if overrides:
+                apply_session_context(cursor, overrides)
+            cursor.execute(statement)
+            rows = cursor.fetchall()
+            return {
+                "statement": statement,
+                "rowcount": cursor.rowcount,
+                "rows": rows,
+            }
+        finally:
+            restore_session_context(cursor, original)
 
 
 def register_igloo_mcp(
@@ -304,7 +306,7 @@ def register_igloo_mcp(
 
     if getattr(server, "_igloo_mcp_registered", False):  # pragma: no cover - safety
         return
-    setattr(server, "_igloo_mcp_registered", True)
+    server._igloo_mcp_registered = True  # type: ignore[attr-defined]
 
     config = get_config()
     context = create_service_context(existing_config=config)
@@ -330,10 +332,12 @@ def register_igloo_mcp(
     report_service = ReportService()
     create_report_inst = CreateReportTool(config, report_service)
     evolve_report_inst = EvolveReportTool(config, report_service)
+    evolve_report_batch_inst = EvolveReportBatchTool(config, report_service)
     render_report_inst = RenderReportTool(config, report_service)
     search_report_inst = SearchReportTool(config, report_service)
     get_report_inst = GetReportTool(config, report_service)
     get_report_schema_inst = GetReportSchemaTool(config)
+    search_citations_inst = SearchCitationsTool(config, report_service)
 
     @server.tool(name="execute_query", description="Execute a SQL query against Snowflake")
     async def execute_query_tool(
@@ -348,12 +352,12 @@ def register_igloo_mcp(
                 min_length=5,
             ),
         ],
-        warehouse: Annotated[Optional[str], Field(description="Warehouse override", default=None)] = None,
-        database: Annotated[Optional[str], Field(description="Database override", default=None)] = None,
-        schema: Annotated[Optional[str], Field(description="Schema override", default=None)] = None,
-        role: Annotated[Optional[str], Field(description="Role override", default=None)] = None,
+        warehouse: Annotated[str | None, Field(description="Warehouse override", default=None)] = None,
+        database: Annotated[str | None, Field(description="Database override", default=None)] = None,
+        schema: Annotated[str | None, Field(description="Schema override", default=None)] = None,
+        role: Annotated[str | None, Field(description="Role override", default=None)] = None,
         timeout_seconds: Annotated[
-            Optional[int | str],
+            int | str | None,
             Field(
                 description=(
                     "Query timeout in seconds (default: 30s from config). "
@@ -373,7 +377,7 @@ def register_igloo_mcp(
             ),
         ] = False,
         post_query_insight: Annotated[
-            Optional[Dict[str, Any] | str],
+            dict[str, Any] | str | None,
             Field(
                 description=(
                     "Optional insights or key findings from query results. Metadata-only; no extra compute. "
@@ -382,11 +386,24 @@ def register_igloo_mcp(
                 default=None,
             ),
         ] = None,
+        result_mode: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Control response verbosity to reduce token usage. Options: "
+                    "'full' (default) - return all rows; "
+                    "'summary' - return key_metrics + 5 sample rows only; "
+                    "'schema_only' - return column names/types only, no rows; "
+                    "'sample' - return first 10 rows only."
+                ),
+                default=None,
+            ),
+        ] = None,
         ctx: Context | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Execute a SQL query against Snowflake - delegates to ExecuteQueryTool."""
         # Coerce timeout_seconds from string to int if needed
-        timeout_int: Optional[int] = None
+        timeout_int: int | None = None
         if timeout_seconds is not None:
             if isinstance(timeout_seconds, str):
                 try:
@@ -407,6 +424,7 @@ def register_igloo_mcp(
                 timeout_seconds=timeout_int,
                 verbose_errors=verbose_errors,
                 post_query_insight=post_query_insight,
+                result_mode=result_mode,
                 ctx=ctx,
             )
         except (MCPValidationError, MCPExecutionError, MCPToolError):
@@ -428,16 +446,16 @@ def register_igloo_mcp(
             Field(description="Natural language evolution instruction for audit trail"),
         ],
         proposed_changes: Annotated[
-            Dict[str, Any],
+            dict[str, Any],
             Field(description="Structured changes generated by LLM based on instruction and current outline"),
         ],
         constraints: Annotated[
-            Optional[Dict[str, Any]],
+            dict[str, Any] | None,
             Field(description="Optional evolution constraints", default=None),
         ] = None,
         dry_run: Annotated[bool, Field(description="Validate without applying changes", default=False)] = False,
         status_change: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Optional status change for the report",
                 default=None,
@@ -452,7 +470,7 @@ def register_igloo_mcp(
                 pattern="^(minimal|standard|full)$",
             ),
         ] = "standard",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Evolve report - delegates to EvolveReportTool."""
         return await evolve_report_inst.execute(
             report_selector=report_selector,
@@ -465,6 +483,48 @@ def register_igloo_mcp(
         )
 
     @server.tool(
+        name="evolve_report_batch",
+        description="Perform multiple report evolution operations atomically",
+    )
+    async def evolve_report_batch_tool(
+        report_selector: Annotated[str, Field(description="Report ID or title to evolve")],
+        instruction: Annotated[
+            str,
+            Field(description="Natural language description of batch operation for audit trail"),
+        ],
+        operations: Annotated[
+            list[dict[str, Any]],
+            Field(
+                description=(
+                    "List of operations to perform atomically. Each operation has a 'type' field "
+                    "(add_insight, modify_insight, remove_insight, add_section, modify_section, "
+                    "remove_section, update_title, update_metadata, attach_chart) and type-specific fields."
+                )
+            ),
+        ],
+        dry_run: Annotated[
+            bool,
+            Field(description="Validate without applying changes", default=False),
+        ] = False,
+        response_detail: Annotated[
+            str,
+            Field(
+                description="Response verbosity level",
+                default="standard",
+                pattern="^(minimal|standard|full)$",
+            ),
+        ] = "standard",
+    ) -> dict[str, Any]:
+        """Batch evolve report - delegates to EvolveReportBatchTool."""
+        return await evolve_report_batch_inst.execute(
+            report_selector=report_selector,
+            instruction=instruction,
+            operations=operations,
+            dry_run=dry_run,
+            response_detail=response_detail,
+        )
+
+    @server.tool(
         name="render_report",
         description="Render a living report to human-readable formats (HTML, PDF, etc.) using Quarto",
     )
@@ -473,9 +533,9 @@ def register_igloo_mcp(
         format: Annotated[
             str,
             Field(
-                description="Output format",
+                description="Output format. Use 'html_standalone' for self-contained HTML without Quarto.",
                 default="html",
-                pattern="^(html|pdf|markdown|docx)$",
+                pattern="^(html|pdf|markdown|docx|html_standalone)$",
             ),
         ] = "html",
         regenerate_outline_view: Annotated[
@@ -503,10 +563,10 @@ def register_igloo_mcp(
             ),
         ] = False,
         options: Annotated[
-            Optional[Dict[str, Any]],
+            dict[str, Any] | None,
             Field(description="Additional Quarto options", default=None),
         ] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Render report - delegates to RenderReportTool."""
         return await render_report_inst.execute(
             report_selector=report_selector,
@@ -538,20 +598,20 @@ def register_igloo_mcp(
             ),
         ] = "default",
         tags: Annotated[
-            Optional[List[str]],
+            list[str] | None,
             Field(
                 description="Optional tags for categorization and filtering",
                 default=None,
             ),
         ] = None,
         description: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Optional description of the report (stored in metadata)",
                 default=None,
             ),
         ] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create report - delegates to CreateReportTool.
 
         Note: This is a non-SQL tool that operates on file system, not Snowflake.
@@ -573,25 +633,25 @@ def register_igloo_mcp(
     )
     async def search_report_tool(
         title: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Search for reports by title (exact or partial match, case-insensitive)",
                 default=None,
             ),
         ] = None,
         tags: Annotated[
-            Optional[List[str]],
+            list[str] | None,
             Field(
                 description="Filter reports by tags (reports must have all specified tags)",
                 default=None,
             ),
         ] = None,
         report_id: Annotated[
-            Optional[str],
+            str | None,
             Field(description="Exact report ID to search for", default=None),
         ] = None,
         status: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Filter by report status",
                 default="active",
@@ -608,7 +668,7 @@ def register_igloo_mcp(
             ),
         ] = 20,
         fields: Annotated[
-            Optional[List[str]],
+            list[str] | None,
             Field(
                 description=(
                     "Optional list of fields to return (default: all fields). "
@@ -618,7 +678,7 @@ def register_igloo_mcp(
                 default=None,
             ),
         ] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Search report - delegates to SearchReportTool."""
         return await search_report_inst.execute(
             title=title,
@@ -644,28 +704,28 @@ def register_igloo_mcp(
             ),
         ] = "summary",
         section_ids: Annotated[
-            Optional[List[str]],
+            list[str] | None,
             Field(
                 description="Filter to specific section IDs (mode='sections' or mode='insights')",
                 default=None,
             ),
         ] = None,
         section_titles: Annotated[
-            Optional[List[str]],
+            list[str] | None,
             Field(
                 description="Filter to sections matching titles (fuzzy, case-insensitive)",
                 default=None,
             ),
         ] = None,
         insight_ids: Annotated[
-            Optional[List[str]],
+            list[str] | None,
             Field(
                 description="Filter to specific insight IDs (mode='insights')",
                 default=None,
             ),
         ] = None,
         min_importance: Annotated[
-            Optional[int],
+            int | None,
             Field(
                 description="Filter insights with importance >= this value (mode='insights')",
                 default=None,
@@ -704,7 +764,7 @@ def register_igloo_mcp(
                 default=False,
             ),
         ] = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get report - delegates to GetReportTool."""
         return await get_report_inst.execute(
             report_selector=report_selector,
@@ -740,11 +800,62 @@ def register_igloo_mcp(
                 pattern="^(json_schema|examples|compact)$",
             ),
         ] = "json_schema",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get report schema - delegates to GetReportSchemaTool."""
         return await get_report_schema_inst.execute(
             schema_type=schema_type,
             format=format,
+        )
+
+    @server.tool(
+        name="search_citations",
+        description="Search citations across all living reports by source type, provider, URL, etc.",
+    )
+    async def search_citations_tool(
+        source_type: Annotated[
+            str | None,
+            Field(
+                description="Filter by source type (query, api, url, observation, document)",
+                default=None,
+                pattern="^(query|api|url|observation|document)$",
+            ),
+        ] = None,
+        provider: Annotated[
+            str | None,
+            Field(description="Filter by provider (snowflake, allium, defillama, etc.)", default=None),
+        ] = None,
+        url_contains: Annotated[
+            str | None,
+            Field(description="Substring search in URL field (case-insensitive)", default=None),
+        ] = None,
+        description_contains: Annotated[
+            str | None,
+            Field(description="Substring search in description field (case-insensitive)", default=None),
+        ] = None,
+        execution_id: Annotated[
+            str | None,
+            Field(description="Exact match on execution_id (for query sources)", default=None),
+        ] = None,
+        limit: Annotated[
+            int,
+            Field(description="Maximum results to return (default: 50, max: 200)", default=50, ge=1, le=200),
+        ] = 50,
+        group_by: Annotated[
+            str | None,
+            Field(
+                description="Group results by field (source or provider)", default=None, pattern="^(source|provider)$"
+            ),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Search citations across all reports - delegates to SearchCitationsTool."""
+        return await search_citations_inst.execute(
+            source_type=source_type,
+            provider=provider,
+            url_contains=url_contains,
+            description_contains=description_contains,
+            execution_id=execution_id,
+            limit=limit,
+            group_by=group_by,
         )
 
     @server.tool(name="build_catalog", description="Build Snowflake catalog metadata")
@@ -754,20 +865,20 @@ def register_igloo_mcp(
             Field(description="Catalog output directory", default="./data_catalogue"),
         ] = "./data_catalogue",
         database: Annotated[
-            Optional[str],
+            str | None,
             Field(description="Specific database to introspect", default=None),
         ] = None,
         account: Annotated[bool, Field(description="Include entire account", default=False)] = False,
         format: Annotated[str, Field(description="Output format (json/jsonl)", default="json")] = "json",
         include_ddl: Annotated[bool, Field(description="Include object DDL", default=True)] = True,
         request_id: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Optional request correlation ID for tracing",
                 default=None,
             ),
         ] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build catalog metadata - delegates to BuildCatalogTool."""
         return await build_catalog_inst.execute(
             output_dir=output_dir,
@@ -780,11 +891,11 @@ def register_igloo_mcp(
 
     @server.tool(name="build_dependency_graph", description="Build object dependency graph")
     async def build_dependency_graph_tool(
-        database: Annotated[Optional[str], Field(description="Specific database", default=None)] = None,
-        schema: Annotated[Optional[str], Field(description="Specific schema", default=None)] = None,
+        database: Annotated[str | None, Field(description="Specific database", default=None)] = None,
+        schema: Annotated[str | None, Field(description="Specific schema", default=None)] = None,
         account: Annotated[bool, Field(description="Include account-level metadata", default=False)] = False,
         format: Annotated[str, Field(description="Output format (json/dot)", default="json")] = "json",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build dependency graph - delegates to BuildDependencyGraphTool."""
         return await build_dependency_graph_inst.execute(
             database=database,
@@ -796,26 +907,26 @@ def register_igloo_mcp(
     @server.tool(name="test_connection", description="Validate Snowflake connectivity")
     async def test_connection_tool(
         request_id: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Optional request correlation ID for tracing",
                 default=None,
             ),
         ] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Test Snowflake connection - delegates to TestConnectionTool."""
         return await test_connection_inst.execute(request_id=request_id)
 
     @server.tool(name="health_check", description="Get comprehensive health status")
     async def health_check_tool(
         request_id: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Optional request correlation ID for tracing",
                 default=None,
             ),
         ] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get health status - delegates to HealthCheckTool."""
         return await health_check_inst.execute(request_id=request_id)
 
@@ -826,13 +937,13 @@ def register_igloo_mcp(
             Field(description="Catalog directory", default="./data_catalogue"),
         ] = "./data_catalogue",
         request_id: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Optional request correlation ID for tracing",
                 default=None,
             ),
         ] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get catalog summary - delegates to GetCatalogSummaryTool."""
         return await get_catalog_summary_inst.execute(catalog_dir=catalog_dir, request_id=request_id)
 
@@ -846,26 +957,26 @@ def register_igloo_mcp(
             ),
         ] = "./data_catalogue",
         object_types: Annotated[
-            Optional[List[str]],
+            list[str] | None,
             Field(description="Optional list of object types to include", default=None),
         ] = None,
         database: Annotated[
-            Optional[str],
+            str | None,
             Field(description="Filter results to a specific database", default=None),
         ] = None,
         schema: Annotated[
-            Optional[str],
+            str | None,
             Field(description="Filter results to a specific schema", default=None),
         ] = None,
         name_contains: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Substring search on object name (case-insensitive)",
                 default=None,
             ),
         ] = None,
         column_contains: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Substring search on column name (case-insensitive)",
                 default=None,
@@ -881,13 +992,13 @@ def register_igloo_mcp(
             ),
         ] = 20,
         request_id: Annotated[
-            Optional[str],
+            str | None,
             Field(
                 description="Optional request correlation ID for tracing",
                 default=None,
             ),
         ] = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return await search_catalog_inst.execute(
             catalog_dir=catalog_dir,
             object_types=object_types,

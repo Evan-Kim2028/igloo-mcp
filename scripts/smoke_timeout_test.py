@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 import anyio
 
@@ -12,12 +12,12 @@ from igloo_mcp.service_layer.query_service import QueryService
 
 class FakeCursor:
     def __init__(self, work_seconds: float = 10.0) -> None:
-        self._last_query: Optional[str] = None
-        self._fetchone_result: Optional[Dict[str, Any]] = None
-        self._rows: Optional[list[dict[str, Any]]] = None
+        self._last_query: str | None = None
+        self._fetchone_result: dict[str, Any] | None = None
+        self._rows: list[dict[str, Any]] | None = None
         self._cancelled = False
         self._work_seconds = work_seconds
-        self.sfqid: Optional[str] = None
+        self.sfqid: str | None = None
 
     def execute(self, query: str) -> None:
         self._last_query = query
@@ -79,7 +79,7 @@ class FakeService:
         self,
         *,
         use_dict_cursor: bool = True,
-        session_parameters: Optional[dict[str, Any]] = None,
+        session_parameters: dict[str, Any] | None = None,
     ):
         return FakeConnection(self._cursor)
 

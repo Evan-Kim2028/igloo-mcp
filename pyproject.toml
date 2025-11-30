@@ -1,6 +1,6 @@
 [project]
  name = "igloo_mcp"
-version = "0.3.5"
+version = "0.3.6"
 description = "Igloo MCP - Snowflake MCP Server for agentic native workflows"
 readme = "README.md"
 authors = [
@@ -58,6 +58,8 @@ dev-dependencies = [
     "pytest-cov>=7.0.0",
     "trio>=0.26.0",
     "hypothesis>=6.90.0",
+    # Phase 2: Import linting
+    "import-linter>=2.0",
 ]
 
 [tool.ruff]
@@ -65,9 +67,56 @@ line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-# Enable pycodestyle (`E`), Pyflakes (`F`), and isort (`I`) codes by default
-select = ["E", "F", "I"]
-ignore = []
+# Phase 1: Baseline + Security + Code Quality
+select = [
+    "E",    # pycodestyle errors
+    "F",    # Pyflakes
+    "I",    # isort
+    # Phase 1: Security
+    "S",    # flake8-bandit (security)
+    "UP",   # pyupgrade (modernize Python syntax)
+    "SIM",  # flake8-simplify
+    "RUF",  # Ruff-specific rules
+    "B",    # flake8-bugbear (bug detection)
+    "C4",   # flake8-comprehensions
+    "PT",   # flake8-pytest-style
+    # Phase 2: Import organization
+    "TID",  # flake8-tidy-imports (ban relative imports)
+]
+
+ignore = [
+    "S101",  # assert statements allowed in tests
+    "S603",  # subprocess without shell validation (manually validated)
+    "S607",  # partial executable paths (quarto, etc.)
+    "S110",  # try-except-pass - used for best-effort error handling
+    "S112",  # try-except-continue - used for robust iteration
+    "S608",  # SQL injection - false positives for Snowflake metadata queries
+    "S701",  # Jinja autoescape - templates are code-generated, not user input
+    "S314",  # XML parsing - coverage.xml is trusted build artifact
+    "S108",  # Hardcoded temp files - test fixtures and cache paths
+    "S104",  # Hardcoded bind-all-interfaces - localhost binding for tests
+    "S310",  # Suspicious URL open - urllib usage is intentional for Snowflake REST API
+    "SIM105", # Suppressible exceptions - contextlib.suppress not always clearer
+    "SIM117", # Multiple with statements - nested withs more readable
+    "B023",  # Loop variable in function - false positives in middleware wrapping
+    "B904",  # Exception chaining - some re-raised exceptions intentionally hide internal details
+    "SIM102", # Nested ifs - sometimes more readable than combined conditions
+    "SIM108", # Ternary - explicit if/else more readable in complex cases
+    "SIM115", # Context manager - lock file needs explicit control
+    "UP031", # String formatting - % format intentional for compatibility
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "S101", "S105", "S106",  # Asserts and hardcoded test data
+    "PT011", "PT012", "PT017",  # Pytest patterns
+    "B017",  # assert-raises-exception allowed in tests
+]
+"scripts/*" = ["S603", "S607"]  # Allow subprocess in scripts
+
+# Phase 2: Ban relative parent imports (allow same-package imports)
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings
@@ -94,6 +143,16 @@ markers = [
     "system: marks system tests (end-to-end workflows)",
     "unit: marks unit tests (fast, isolated)",
     "performance: marks performance and scale tests",
+    # Phase 3.6: Integration test categories
+    "integration_catalog: marks catalog integration tests (build + search workflow)",
+    "integration_reports: marks living reports integration tests (create + evolve + render)",
+    "integration_query: marks query execution integration tests (execute + cache + history)",
+    # Phase 3.6: System test categories
+    "system_discovery: marks data discovery system tests (test → catalog → query)",
+    "system_reporting: marks reporting system tests (create → evolve → search → render)",
+    # Phase 3.6: Test quality markers
+    "regression: marks regression tests for specific bug fixes",
+    "property_based: marks property-based tests (Hypothesis)",
 ]
 # Default options (can override with CLI flags)
 addopts = [
@@ -122,6 +181,7 @@ omit = [
 precision = 2
 show_missing = true
 skip_covered = false
+fail_under = 80  # Phase 3.6: Require 80% minimum coverage
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -138,3 +198,29 @@ directory = "htmlcov"
 
 [tool.coverage.json]
 output = "coverage.json"
+
+# Phase 2: Import-linter - Enforce layer architecture
+[tool.importlinter]
+root_packages = ["igloo_mcp"]
+
+# Layer architecture contract commented out due to shared descendants
+# We'll enforce via forbidden contracts instead
+# [[tool.importlinter.contracts]]
+# name = "Layer architecture"
+# type = "layers"
+# layers = [...]
+
+[[tool.importlinter.contracts]]
+name = "No circular dependencies between living_reports and mcp"
+type = "forbidden"
+source_modules = ["igloo_mcp.living_reports"]
+forbidden_modules = ["igloo_mcp.mcp.tools"]
+
+[[tool.importlinter.contracts]]
+name = "Service layer isolation"
+type = "independence"
+modules = [
+    "igloo_mcp.service_layer.catalog_service",
+    "igloo_mcp.service_layer.query_service",
+    "igloo_mcp.service_layer.dependency_service",
+]

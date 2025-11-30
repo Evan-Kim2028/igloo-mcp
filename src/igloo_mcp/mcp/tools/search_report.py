@@ -9,7 +9,7 @@ available reports.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.index import IndexCorruptionError
@@ -46,10 +46,9 @@ class SearchReportTool(MCPTool):
     @property
     def description(self) -> str:
         return (
-            "Search for living reports by title, tags, report ID, or status. "
-            "If no reports match the search criteria, returns the most recent report "
-            "or the top 5 most recently modified reports to help discover available reports. "
-            "Use this tool to find specific reports or explore what reports are available."
+            "Find existing reports by title or tags. "
+            "Use BEFORE create_report to avoid duplicates, or to locate a report for evolution. "
+            "Use fields=['report_id', 'title'] for minimal token usage."
         )
 
     @property
@@ -61,7 +60,7 @@ class SearchReportTool(MCPTool):
         return ["reports", "search", "discovery", "fallback"]
 
     @property
-    def usage_examples(self) -> list[Dict[str, Any]]:
+    def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
                 "description": "Search for reports with 'revenue' in the title",
@@ -90,14 +89,14 @@ class SearchReportTool(MCPTool):
     @tool_error_handler("search_report")
     async def execute(
         self,
-        title: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        report_id: Optional[str] = None,
-        status: Optional[str] = None,
+        title: str | None = None,
+        tags: list[str] | None = None,
+        report_id: str | None = None,
+        status: str | None = None,
         limit: int = 20,
-        fields: Optional[List[str]] = None,
-        request_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        fields: list[str] | None = None,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
         """Execute report search with fallback behavior.
 
         Args:
@@ -166,7 +165,7 @@ class SearchReportTool(MCPTool):
             index_duration = (time.time() - index_start) * 1000
 
             index = self.report_service.index
-            results: List[IndexEntry] = []
+            results: list[IndexEntry] = []
 
             # If report_id is provided, do exact lookup first
             if report_id:
@@ -298,7 +297,7 @@ class SearchReportTool(MCPTool):
         except IndexCorruptionError as e:
             total_duration = (time.time() - start_time) * 1000
             raise MCPExecutionError(
-                f"Report index is corrupted: {str(e)}",
+                f"Report index is corrupted: {e!s}",
                 operation="search_report",
                 original_error=e,
                 hints=[
@@ -309,7 +308,7 @@ class SearchReportTool(MCPTool):
                 context={"request_id": request_id},
             ) from e
 
-    def get_parameter_schema(self) -> Dict[str, Any]:
+    def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""
         return {
             "title": "Search Report Parameters",

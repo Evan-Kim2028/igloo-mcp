@@ -57,25 +57,23 @@ class TestQuartoRenderer:
 
     def test_detect_with_path(self):
         """Test detection using PATH."""
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("shutil.which", return_value="/usr/bin/quarto"):
-                with patch("subprocess.run") as mock_run:
-                    mock_run.return_value = MagicMock(stdout="1.3.0\n", returncode=0)
+        with patch.dict(os.environ, {}, clear=True), patch("shutil.which", return_value="/usr/bin/quarto"):
+            with patch("subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(stdout="1.3.0\n", returncode=0)
 
-                    renderer = QuartoRenderer.detect()
+                renderer = QuartoRenderer.detect()
 
-                    assert isinstance(renderer, QuartoRenderer)
-                    assert QuartoRenderer._cached_bin_path == "/usr/bin/quarto"
-                    assert QuartoRenderer._cached_version == "1.3.0"
+                assert isinstance(renderer, QuartoRenderer)
+                assert QuartoRenderer._cached_bin_path == "/usr/bin/quarto"
+                assert QuartoRenderer._cached_version == "1.3.0"
 
     def test_detect_quarto_not_found(self):
         """Test detection when Quarto is not found."""
-        with patch.dict(os.environ, {}, clear=True):
-            with patch("shutil.which", return_value=None):
-                with pytest.raises(QuartoNotFoundError) as exc_info:
-                    QuartoRenderer.detect()
+        with patch.dict(os.environ, {}, clear=True), patch("shutil.which", return_value=None):
+            with pytest.raises(QuartoNotFoundError) as exc_info:
+                QuartoRenderer.detect()
 
-                assert "Quarto not found" in str(exc_info.value)
+            assert "Quarto not found" in str(exc_info.value)
 
     def test_detect_invalid_env_path(self):
         """Test detection with invalid IGLOO_QUARTO_BIN path."""
@@ -164,7 +162,7 @@ class TestQuartoRenderer:
                 mock_run.assert_called_once()
                 args = mock_run.call_args[0][0]
                 assert args[0] == "/mock/quarto"
-                assert "render report.qmd --to html --toc" == " ".join(args[1:])
+                assert " ".join(args[1:]) == "render report.qmd --to html --toc"
 
     def test_render_quarto_failure(self):
         """Test rendering when Quarto fails."""

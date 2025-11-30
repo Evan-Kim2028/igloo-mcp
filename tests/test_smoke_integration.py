@@ -154,6 +154,7 @@ class TestSmokeIntegration:
                     warehouse="ANALYTICS_WH",
                     timeout_seconds=120,
                     reason="Q4 2023 revenue analysis with customer cohort breakdown",
+                    response_mode="full",
                     post_query_insight={
                         "summary": (
                             "Q4 showed record performance with 23% revenue growth and improved customer acquisition"
@@ -304,7 +305,7 @@ class TestSmokeIntegration:
         ]
 
         for pattern in snowflake_patterns:
-            stmt_type, is_valid, error_msg = validate_sql_statement(pattern, ["Select"], [])
+            _stmt_type, is_valid, error_msg = validate_sql_statement(pattern, ["Select"], [])
 
             assert is_valid is True, f"Complex Snowflake pattern should be valid: {pattern[:100]}..."
             assert error_msg is None, f"Complex pattern should not have error: {error_msg}"
@@ -385,7 +386,7 @@ class TestSmokeIntegration:
             LIMIT 100"""
 
             # Test validation (should work)
-            stmt_type, is_valid, error_msg = validate_sql_statement(complex_lateral_query, ["Select"], [])
+            stmt_type, is_valid, _error_msg = validate_sql_statement(complex_lateral_query, ["Select"], [])
 
             assert is_valid is True, "Complex integration query should validate"
             assert stmt_type == "Select"

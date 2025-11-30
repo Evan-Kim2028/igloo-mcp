@@ -1,0 +1,792 @@
+"""HTML standalone renderer for living reports.
+
+Generates self-contained HTML files with embedded CSS and no external dependencies.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from html import escape
+from pathlib import Path
+from typing import Any
+
+from igloo_mcp.living_reports.models import Outline
+
+
+class HTMLStandaloneRenderer:
+    """Renderer that produces self-contained HTML files.
+
+    Unlike the Quarto renderer, this produces a single HTML file
+    with all assets embedded, making it ideal for sharing.
+    """
+
+    def render(
+        self,
+        report_dir: Path,
+        outline: Outline,
+        datasets: dict[str, Any] | None = None,
+        hints: dict[str, Any] | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Render report to standalone HTML.
+
+        Args:
+            report_dir: Directory containing report data
+            outline: Report outline object
+            datasets: Optional dataset sources
+            hints: Render hints (citation_map, query_provenance, etc.)
+            options: Additional options (theme, toc, etc.)
+
+        Returns:
+            Dictionary with:
+            - output_path: Path to generated HTML file
+            - size_bytes: File size
+            - warnings: List of warnings
+        """
+        datasets = datasets or {}
+        hints = hints or {}
+        options = options or {}
+
+        warnings: list[str] = []
+
+        # Collect and embed charts
+        embedded_charts = self._collect_and_embed_charts(outline, warnings)
+
+        # Generate HTML content
+        html_content = self._generate_html(
+            outline=outline,
+            datasets=datasets,
+            hints=hints,
+            options=options,
+            warnings=warnings,
+            embedded_charts=embedded_charts,
+        )
+
+        # Write to file
+        output_path = report_dir / "report_standalone.html"
+        output_path.write_text(html_content, encoding="utf-8")
+
+        # Check file size and warn if large
+        size_bytes = output_path.stat().st_size
+        if size_bytes > 10 * 1024 * 1024:  # 10MB
+            warnings.append(
+                f"Generated HTML is large ({size_bytes / 1024 / 1024:.1f}MB). Consider optimizing embedded assets."
+            )
+
+        return {
+            "output_path": str(output_path),
+            "size_bytes": size_bytes,
+            "warnings": warnings,
+        }
+
+    def _generate_html(
+        self,
+        outline: Outline,
+        datasets: dict[str, Any],
+        hints: dict[str, Any],
+        options: dict[str, Any],
+        warnings: list[str],
+        embedded_charts: dict[str, str],
+    ) -> str:
+        """Generate the complete HTML document.
+
+        Args:
+            outline: Report outline
+            datasets: Dataset sources
+            hints: Render hints
+            options: Render options
+            warnings: List to append warnings to
+            embedded_charts: Dict mapping chart_id to base64 data URI
+
+        Returns:
+            Complete HTML document as string
+        """
+        # Extract hints
+        citation_map = hints.get("citation_map", {})
+        citation_details = hints.get("citation_details", {})
+        query_provenance = hints.get("query_provenance", {})
+
+        # Get options
+        theme = options.get("theme", "default")
+        include_toc = options.get("toc", True)
+
+        # Build sections HTML
+        sections_html = self._render_sections(outline, citation_map, embedded_charts)
+
+        # Build citations appendix
+        citations_html = self._render_citations_appendix(citation_map, citation_details, query_provenance)
+
+        # Build table of contents
+        toc_html = self._render_toc(outline) if include_toc else ""
+
+        # Get CSS
+        css = self._get_css(theme)
+
+        # Build complete HTML
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="igloo-mcp HTML Standalone Renderer">
+    <meta name="created" content="{outline.created_at}">
+    <meta name="updated" content="{outline.updated_at}">
+    <title>{escape(outline.title)}</title>
+    <style>
+{css}
+    </style>
+</head>
+<body>
+    <header class="report-header">
+        <h1>{escape(outline.title)}</h1>
+        <div class="report-meta">
+            <span class="meta-item">Report ID: <code>{outline.report_id}</code></span>
+            <span class="meta-item">Generated: {datetime.now().strftime("%Y-%m-%d %H:%M UTC")}</span>
+            <span class="meta-item">Version: {outline.outline_version}</span>
+        </div>
+    </header>
+
+    <main class="report-content">
+        {toc_html}
+        {sections_html}
+        {citations_html}
+    </main>
+
+    <footer class="report-footer">
+        <p>Generated by <a href="https://github.com/yourusername/igloo-mcp">igloo-mcp</a></p>
+    </footer>
+</body>
+</html>"""
+
+        return html
+
+    def _collect_and_embed_charts(
+        self,
+        outline: Outline,
+        warnings: list[str],
+    ) -> dict[str, str]:
+        """Collect charts from outline metadata and convert to base64 data URIs.
+
+        Args:
+            outline: Report outline with chart metadata
+            warnings: List to append warnings to
+
+        Returns:
+            Dictionary mapping chart_id to base64-encoded data URI
+        """
+        import base64
+
+        embedded_charts: dict[str, str] = {}
+        charts_metadata = outline.metadata.get("charts", {})
+
+        for chart_id, chart_meta in charts_metadata.items():
+            chart_path = Path(chart_meta.get("path", ""))
+
+            # Validate chart file exists
+            if not chart_path.exists():
+                warnings.append(f"Chart file not found: {chart_path}")
+                continue
+
+            # Check file size
+            size_bytes = chart_meta.get("size_bytes", 0)
+            if size_bytes > 5 * 1024 * 1024:  # 5MB
+                warnings.append(
+                    f"Chart {chart_id} is large ({size_bytes / 1024 / 1024:.1f}MB). "
+                    "Consider optimizing before attaching."
+                )
+
+            # Hard limit: 50MB
+            if size_bytes > 50 * 1024 * 1024:
+                warnings.append(f"Chart {chart_id} exceeds 50MB limit. Skipping embedding.")
+                continue
+
+            # Read and encode chart
+            try:
+                chart_data = chart_path.read_bytes()
+                base64_data = base64.b64encode(chart_data).decode("utf-8")
+
+                # Detect MIME type from format
+                chart_format = chart_meta.get("format", "png").lower()
+                mime_types = {
+                    "png": "image/png",
+                    "jpg": "image/jpeg",
+                    "jpeg": "image/jpeg",
+                    "gif": "image/gif",
+                    "svg": "image/svg+xml",
+                    "webp": "image/webp",
+                }
+                mime_type = mime_types.get(chart_format, "image/png")
+
+                # Create data URI
+                data_uri = f"data:{mime_type};base64,{base64_data}"
+                embedded_charts[chart_id] = data_uri
+
+            except Exception as e:
+                warnings.append(f"Failed to embed chart {chart_id}: {e}")
+                continue
+
+        return embedded_charts
+
+    def _render_sections(self, outline: Outline, citation_map: dict[str, int], embedded_charts: dict[str, str]) -> str:
+        """Render all sections as HTML.
+
+        Args:
+            outline: Report outline
+            citation_map: Mapping of execution_id to citation number
+            embedded_charts: Dict of chart_id to base64 data URI
+
+        Returns:
+            HTML string for all sections
+        """
+        sections_html = []
+
+        # Sort sections by order
+        sorted_sections = sorted(outline.sections, key=lambda s: s.order)
+
+        for section in sorted_sections:
+            section_html = self._render_section(section, outline, citation_map, embedded_charts)
+            sections_html.append(section_html)
+
+        return "\n".join(sections_html)
+
+    def _render_section(
+        self,
+        section,
+        outline: Outline,
+        citation_map: dict[str, int],
+        embedded_charts: dict[str, str],
+    ) -> str:
+        """Render a single section.
+
+        Args:
+            section: Section object
+            outline: Full outline (to look up insights)
+            citation_map: Citation number mapping
+            embedded_charts: Dict of chart_id to base64 data URI
+
+        Returns:
+            HTML for the section
+        """
+        # Section header
+        html = f"""
+        <section id="section-{section.section_id}" class="report-section">
+            <h2>{escape(section.title)}</h2>
+"""
+
+        # Section notes
+        if section.notes:
+            html += f"""            <div class="section-notes">{escape(section.notes)}</div>
+"""
+
+        # Section content (prose)
+        if section.content:
+            # Convert markdown to HTML (basic conversion)
+            content_html = self._markdown_to_html(section.content)
+            html += f"""            <div class="section-content">{content_html}</div>
+"""
+
+        # Insights
+        if section.insight_ids:
+            html += """            <div class="insights-list">
+"""
+            for insight_id in section.insight_ids:
+                try:
+                    insight = outline.get_insight(insight_id)
+
+                    # Render chart if insight has one
+                    chart_id = insight.metadata.get("chart_id") if insight.metadata else None
+                    if chart_id and chart_id in embedded_charts:
+                        chart_meta = outline.metadata.get("charts", {}).get(chart_id, {})
+                        chart_desc = chart_meta.get("description", "Chart")
+                        data_uri = embedded_charts[chart_id]
+                        html += f"""                <div class="insight-chart">
+                    <img src="{data_uri}" alt="{escape(chart_desc)}" loading="lazy" />
+                    <p class="chart-caption">{escape(chart_desc)}</p>
+                </div>
+"""
+
+                    insight_html = self._render_insight(insight, citation_map)
+                    html += insight_html
+                except ValueError:
+                    html += (
+                        f'                <div class="insight insight-missing">Insight not found: {insight_id}</div>\n'
+                    )
+            html += """            </div>
+"""
+
+        html += """        </section>
+"""
+        return html
+
+    def _render_insight(self, insight, citation_map: dict[str, int]) -> str:
+        """Render a single insight.
+
+        Args:
+            insight: Insight object
+            citation_map: Citation number mapping
+
+        Returns:
+            HTML for the insight
+        """
+        # Get citation reference
+        citation_ref = ""
+        references = insight.citations or insight.supporting_queries
+        if references and len(references) > 0:
+            exec_id = references[0].execution_id
+            if exec_id and exec_id in citation_map:
+                citation_num = citation_map[exec_id]
+                citation_ref = f'<sup class="citation-ref">[{citation_num}]</sup>'
+
+        # Importance indicator
+        if insight.importance >= 8:
+            importance_class = "high"
+        elif insight.importance >= 5:
+            importance_class = "medium"
+        else:
+            importance_class = "low"
+
+        stars = "★" * min(insight.importance, 5)
+        summary_escaped = escape(insight.summary)
+
+        html = f"""                <div class="insight insight-{importance_class}" \
+data-importance="{insight.importance}">
+                    <span class="insight-summary">{summary_escaped}{citation_ref}</span>
+                    <span class="insight-importance" title="Importance: {insight.importance}/10">{stars}</span>
+                </div>
+"""
+        return html
+
+    def _render_citations_appendix(
+        self,
+        citation_map: dict[str, int],
+        citation_details: dict[str, Any],
+        query_provenance: dict[str, Any],
+    ) -> str:
+        """Render the citations appendix.
+
+        Args:
+            citation_map: Mapping of execution_id to citation number
+            citation_details: Details for each citation
+            query_provenance: Query provenance information
+
+        Returns:
+            HTML for citations appendix
+        """
+        if not citation_map:
+            return ""
+
+        html = """
+        <section id="citations" class="citations-appendix">
+            <h2>Data Sources</h2>
+            <ol class="citations-list">
+"""
+
+        # Sort by citation number
+        sorted_citations = sorted(citation_map.items(), key=lambda x: x[1])
+
+        for exec_id, citation_num in sorted_citations:
+            details = citation_details.get(exec_id, {}) or query_provenance.get(exec_id, {})
+            timestamp = details.get("timestamp", "Unknown")
+            statement = details.get("statement_preview", "")
+            rowcount = details.get("rowcount", "N/A")
+            duration = details.get("duration_ms", "N/A")
+
+            html += f"""                <li id="citation-{citation_num}" class="citation-item">
+                    <span class="citation-id">Query: <code>{exec_id[:12]}...</code></span>
+                    <span class="citation-time">Executed: {timestamp}</span>
+"""
+            if statement:
+                stmt_escaped = escape(statement[:100])
+                html += f'                    <div class="citation-sql"><code>{stmt_escaped}...</code></div>\n'
+            html += f"""                    <span class="citation-stats">Rows: {rowcount}, Duration: {duration}ms</span>
+                </li>
+"""
+
+        html += """            </ol>
+        </section>
+"""
+        return html
+
+    def _render_toc(self, outline: Outline) -> str:
+        """Render table of contents.
+
+        Args:
+            outline: Report outline
+
+        Returns:
+            HTML for table of contents
+        """
+        sorted_sections = sorted(outline.sections, key=lambda s: s.order)
+
+        html = """        <nav class="table-of-contents">
+            <h2>Contents</h2>
+            <ul>
+"""
+        for section in sorted_sections:
+            title_escaped = escape(section.title)
+            html += f'                <li><a href="#section-{section.section_id}">{title_escaped}</a></li>\n'
+
+        if any((insight.citations or insight.supporting_queries) for insight in outline.insights):
+            html += """                <li><a href="#citations">Data Sources</a></li>
+"""
+
+        html += """            </ul>
+        </nav>
+"""
+        return html
+
+    def _get_css(self, theme: str = "default") -> str:
+        """Get CSS styles for the report.
+
+        Args:
+            theme: Theme name (default, dark, minimal)
+
+        Returns:
+            CSS styles as string
+        """
+        # Base styles
+        css = """
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --background: #ffffff;
+            --surface: #f8fafc;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background: var(--background);
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .report-header {
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .report-header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .report-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .meta-item code {
+            background: var(--surface);
+            padding: 0.125rem 0.375rem;
+            border-radius: 0.25rem;
+            font-size: 0.8125rem;
+        }
+
+        .table-of-contents {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .table-of-contents h2 {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .table-of-contents ul {
+            list-style: none;
+        }
+
+        .table-of-contents li {
+            margin: 0.375rem 0;
+        }
+
+        .table-of-contents a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .table-of-contents a:hover {
+            text-decoration: underline;
+        }
+
+        .report-section {
+            margin-bottom: 2.5rem;
+        }
+
+        .report-section h2 {
+            font-size: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .section-notes {
+            background: var(--surface);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            font-style: italic;
+            color: var(--text-muted);
+        }
+
+        .section-content {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-content p {
+            margin-bottom: 1rem;
+        }
+
+        .insights-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .insight {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border-left: 4px solid;
+        }
+
+        .insight-high {
+            background: #fef3c7;
+            border-color: var(--warning);
+        }
+
+        .insight-medium {
+            background: var(--surface);
+            border-color: var(--primary-color);
+        }
+
+        .insight-low {
+            background: var(--surface);
+            border-color: var(--secondary-color);
+        }
+
+        .insight-summary {
+            flex: 1;
+        }
+
+        .insight-importance {
+            color: var(--warning);
+            margin-left: 1rem;
+            white-space: nowrap;
+        }
+
+        .insight-chart {
+            margin: 1rem 0;
+            text-align: center;
+        }
+
+        .insight-chart img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-caption {
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .citation-ref {
+            color: var(--primary-color);
+            font-size: 0.75rem;
+            margin-left: 0.25rem;
+        }
+
+        .citation-ref a {
+            text-decoration: none;
+        }
+
+        .citations-appendix {
+            margin-top: 3rem;
+            padding-top: 2rem;
+            border-top: 2px solid var(--border);
+        }
+
+        .citations-appendix h2 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .citations-list {
+            padding-left: 1.5rem;
+        }
+
+        .citation-item {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background: var(--surface);
+            border-radius: 0.375rem;
+        }
+
+        .citation-id {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .citation-id code {
+            font-weight: normal;
+            background: var(--background);
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+        }
+
+        .citation-time, .citation-stats {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .citation-sql {
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 0.25rem;
+            overflow-x: auto;
+            font-size: 0.8125rem;
+        }
+
+        .report-footer {
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .report-footer a {
+            color: var(--primary-color);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --background: #0f172a;
+                --surface: #1e293b;
+                --text: #f1f5f9;
+                --text-muted: #94a3b8;
+                --border: #334155;
+            }
+
+            .insight-high {
+                background: #422006;
+            }
+
+            .citation-sql {
+                background: #0f172a;
+            }
+        }
+
+        @media print {
+            body {
+                max-width: none;
+                padding: 0;
+            }
+
+            .table-of-contents {
+                display: none;
+            }
+        }
+"""
+
+        if theme == "dark":
+            css += """
+        :root {
+            --background: #0f172a;
+            --surface: #1e293b;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+"""
+        elif theme == "minimal":
+            css += """
+        .insight {
+            border-left: none;
+            border-bottom: 1px solid var(--border);
+            border-radius: 0;
+        }
+"""
+
+        return css
+
+    def _escape_html(self, text: str) -> str:
+        """Escape HTML special characters using standard library.
+
+        Args:
+            text: Text to escape
+
+        Returns:
+            Escaped text safe for HTML
+        """
+        return escape(text) if text else ""
+
+    def _markdown_to_html(self, markdown: str) -> str:
+        """Convert basic markdown to HTML.
+
+        This is a simple converter for common patterns.
+        For full markdown support, use a dedicated library.
+
+        Args:
+            markdown: Markdown text
+
+        Returns:
+            HTML string
+        """
+        import re
+
+        html = self._escape_html(markdown)
+
+        # Headers
+        html = re.sub(r"^### (.+)$", r"<h4>\1</h4>", html, flags=re.MULTILINE)
+        html = re.sub(r"^## (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+        html = re.sub(r"^# (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+
+        # Bold and italic
+        html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
+        html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
+
+        # Code
+        html = re.sub(r"`(.+?)`", r"<code>\1</code>", html)
+
+        # Line breaks -> paragraphs
+        paragraphs = html.split("\n\n")
+        html = "".join(f"<p>{p}</p>" for p in paragraphs if p.strip())
+
+        return html
+
+
+__all__ = ["HTMLStandaloneRenderer"]

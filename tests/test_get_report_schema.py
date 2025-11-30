@@ -168,7 +168,7 @@ class TestGetReportSchemaTool:
         # Verify examples can be validated against schema
         from igloo_mcp.living_reports.changes_schema import ProposedChanges
 
-        for example_name, example_data in examples_result["examples"].items():
+        for _example_name, example_data in examples_result["examples"].items():
             if "proposed_changes" in example_data:
                 # This should not raise validation errors
                 ProposedChanges(**example_data["proposed_changes"])
