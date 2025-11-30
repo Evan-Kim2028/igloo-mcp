@@ -7,7 +7,7 @@ from collections.abc import Mapping, MutableMapping
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, ClassVar
 
 import yaml  # type: ignore[import-untyped]
 
@@ -221,7 +221,7 @@ class ConfigOverrides:
 
 
 class ConfigLoader:
-    _ENV_SNOWFLAKE_KEYS: dict[str, str] = {
+    _ENV_SNOWFLAKE_KEYS: ClassVar[dict[str, str]] = {
         "SNOWFLAKE_PROFILE": "profile",
         "SNOWFLAKE_WAREHOUSE": "warehouse",
         "SNOWFLAKE_DATABASE": "database",
@@ -229,7 +229,7 @@ class ConfigLoader:
         "SNOWFLAKE_ROLE": "role",
     }
 
-    _ENV_RUNTIME_KEYS: dict[str, tuple[str, type]] = {
+    _ENV_RUNTIME_KEYS: ClassVar[dict[str, tuple[str, type]]] = {
         "MAX_CONCURRENT_QUERIES": ("max_concurrent_queries", int),
         "CONNECTION_POOL_SIZE": ("connection_pool_size", int),
         "RETRY_ATTEMPTS": ("retry_attempts", int),
@@ -238,7 +238,7 @@ class ConfigLoader:
         "LOG_LEVEL": ("log_level", str),
     }
 
-    _RUNTIME_CASTERS: dict[str, type] = {
+    _RUNTIME_CASTERS: ClassVar[dict[str, type]] = {
         "max_concurrent_queries": int,
         "connection_pool_size": int,
         "retry_attempts": int,

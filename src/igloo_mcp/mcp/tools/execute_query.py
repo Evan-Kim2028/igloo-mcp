@@ -478,35 +478,54 @@ class ExecuteQueryTool(MCPTool):
         cache_hit_metadata: dict[str, Any] | None = None,
         session_context: dict[str, str | None] | None = None,
         columns: list[str] | None = None,
+        include_full: bool = False,
     ) -> dict[str, Any]:
+        """Build audit info with optional full details.
+        
+        Args:
+            include_full: If True, include all details. If False, only essentials.
+        """
+        # Essential fields (always included)
         info: dict[str, Any] = {
             "execution_id": execution_id,
-            "history_enabled": self.history.enabled and not self.history.disabled,
-            "history_path": str(self.history.path) if self.history.path else None,
-            "artifact_root": str(self._artifact_root) if self._artifact_root else None,
-            "cache": {
-                "mode": self._cache_mode,
-                "root": str(self.cache.root) if self.cache.root else None,
-                "key": cache_key,
-                "hit": cache_hit_metadata is not None,
-            },
-            "artifacts": dict(history_artifacts),
         }
+        
         if sql_sha256:
             info["sql_sha256"] = sql_sha256
-        if session_context:
-            info["session_context"] = dict(session_context)
-        if columns:
-            info["columns"] = list(columns)
-        if cache_hit_metadata:
-            manifest_path = cache_hit_metadata.get("manifest_path")
-            if manifest_path:
-                info["cache"]["manifest"] = str(manifest_path)
-            if cache_hit_metadata.get("created_at"):
-                info["cache"]["created_at"] = cache_hit_metadata["created_at"]
+        
+        # Cache hit status (always minimal)
+        info["cache_hit"] = cache_hit_metadata is not None
+        
+        # Full details only when requested
+        if include_full:
+            info.update({
+                "history_enabled": self.history.enabled and not self.history.disabled,
+                "history_path": str(self.history.path) if self.history.path else None,
+                "artifact_root": str(self._artifact_root) if self._artifact_root else None,
+                "cache": {
+                    "mode": self._cache_mode,
+                    "root": str(self.cache.root) if self.cache.root else None,
+                    "key": cache_key,
+                    "hit": cache_hit_metadata is not None,
+                },
+                "artifacts": dict(history_artifacts),
+            })
+            
+            if session_context:
+                info["session_context"] = dict(session_context)
+            if columns:
+                info["columns"] = list(columns)
+            if cache_hit_metadata:
+                manifest_path = cache_hit_metadata.get("manifest_path")
+                if manifest_path:
+                    info["cache"]["manifest"] = str(manifest_path)
+                if cache_hit_metadata.get("created_at"):
+                    info["cache"]["created_at"] = cache_hit_metadata["created_at"]
+        
         warnings = self._collect_audit_warnings()
         if warnings:
             info["warnings"] = warnings
+        
         return info
 
     @property

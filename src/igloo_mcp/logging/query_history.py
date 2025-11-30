@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from datetime import UTC
 from pathlib import Path
 from threading import Lock
-from typing import Any, TypedDict, cast
+from typing import Any, ClassVar, TypedDict, cast
 
 from igloo_mcp.path_utils import (
     DEFAULT_HISTORY_PATH,
@@ -93,7 +93,7 @@ class QueryHistory:
     Writes one JSON object per line with minimal fields for auditing.
     """
 
-    _DISABLE_SENTINELS = {"", "disabled", "off", "false", "0"}
+    _DISABLE_SENTINELS: ClassVar[set[str]] = {"", "disabled", "off", "false", "0"}
 
     def __init__(
         self,

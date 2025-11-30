@@ -40,7 +40,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from igloo_mcp.path_utils import (
     DEFAULT_ARTIFACT_ROOT,
@@ -67,8 +67,8 @@ class QueryResultCache:
     """Simple filesystem-backed cache for query results."""
 
     DEFAULT_MODE = "enabled"
-    VALID_MODES = {"enabled", "disabled", "read_only", "refresh"}
-    DISABLE_SENTINELS = {"disabled", "off", "false", "0"}
+    VALID_MODES: ClassVar[set[str]] = {"enabled", "disabled", "read_only", "refresh"}
+    DISABLE_SENTINELS: ClassVar[set[str]] = {"disabled", "off", "false", "0"}
     DEFAULT_MAX_ROWS = 5_000
 
     def __init__(
