@@ -558,7 +558,7 @@ async def test_render_html_standalone_with_citations(report_service, render_tool
                         {
                             "summary": "Key finding",
                             "importance": 8,
-                            "citations": [{"execution_id": "exec-test-001"}],
+                            "citations": [{"source": "query", "execution_id": "exec-test-001"}],
                         }
                     ],
                 }

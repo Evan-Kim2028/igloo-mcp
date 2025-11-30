@@ -837,7 +837,22 @@ class EvolveReportTool(MCPTool):
             # Keep citations aligned for backward compatibility
             if "citations" in payload and payload["citations"] is not None:
                 if not payload.get("supporting_queries"):
-                    payload["supporting_queries"] = payload["citations"]
+                    # Convert citations to supporting_queries (for backward compat)
+                    # Only extract fields that DatasetSource accepts
+                    converted_queries = []
+                    for cit in payload["citations"]:
+                        if isinstance(cit, dict):
+                            # Extract only DatasetSource fields from Citation dict
+                            ds_data = {}
+                            for field in ["execution_id", "sql_sha256", "cache_manifest"]:
+                                if field in cit:
+                                    ds_data[field] = cit[field]
+                            if ds_data:  # Only add if at least one field is present
+                                converted_queries.append(ds_data)
+                        else:
+                            # Already a DatasetSource object
+                            converted_queries.append(cit)
+                    payload["supporting_queries"] = converted_queries
             elif payload.get("supporting_queries"):
                 payload["citations"] = payload["supporting_queries"]
 

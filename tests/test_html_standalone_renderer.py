@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from igloo_mcp.living_reports.models import DatasetSource, Insight, Outline, Section
+from igloo_mcp.living_reports.models import Citation, Insight, Outline, Section
 from igloo_mcp.living_reports.renderers.html_standalone import HTMLStandaloneRenderer
 
 
@@ -70,14 +70,14 @@ def full_outline():
                 summary="Revenue increased 25% YoY",
                 importance=9,
                 supporting_queries=[],
-                citations=[DatasetSource(execution_id="exec-001")],
+                citations=[Citation(source="query", execution_id="exec-001")],
             ),
             Insight(
                 insight_id=insight_id_2,
                 summary="Customer retention rate improved to 95%",
                 importance=7,
                 supporting_queries=[],
-                citations=[DatasetSource(execution_id="exec-002")],
+                citations=[Citation(source="query", execution_id="exec-002")],
             ),
         ],
         metadata={"tags": ["quarterly", "revenue"]},
