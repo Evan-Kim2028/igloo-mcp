@@ -93,10 +93,20 @@ ignore = [
     "S608",  # SQL injection - false positives for Snowflake metadata queries
     "S701",  # Jinja autoescape - templates are code-generated, not user input
     "S314",  # XML parsing - coverage.xml is trusted build artifact
+    "S108",  # Hardcoded temp files - test fixtures and cache paths
+    "S104",  # Hardcoded bind-all-interfaces - localhost binding for tests
+    "S310",  # Suspicious URL open - urllib usage is intentional for Snowflake REST API
+    "SIM105", # Suppressible exceptions - contextlib.suppress not always clearer
+    "SIM117", # Multiple with statements - nested withs more readable
+    "B023",  # Loop variable in function - false positives in middleware wrapping
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "S105", "S106"]  # Allow asserts and hardcoded test data
+"tests/*" = [
+    "S101", "S105", "S106",  # Asserts and hardcoded test data
+    "PT011", "PT012", "PT017",  # Pytest patterns
+    "B017",  # assert-raises-exception allowed in tests
+]
 "scripts/*" = ["S603", "S607"]  # Allow subprocess in scripts
 
 # Phase 2: Ban relative parent imports (allow same-package imports)
