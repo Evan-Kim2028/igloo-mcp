@@ -49,34 +49,27 @@ export IGLOO_MCP_CATALOG_ROOT=~/.igloo-mcp/catalogs  # Optional: Root directory 
 
 ---
 
-## Query Result Truncation Limits (Breaking Change in v0.3.2) 💥
+## Query Result Truncation Limits
 
-**Important**: Default truncation limits were significantly reduced in v0.3.2 to prevent context window overflow and optimize token usage.
+**Important**: Default truncation limits have been significantly reduced to prevent context window overflow and optimize token usage.
 
-### New Defaults (v0.3.2)
+### Current Defaults
 
-| Setting | v0.3.1 | v0.3.2 | Change | Impact |
-|---------|--------|--------|--------|--------|
-| `IGLOO_MCP_RESULT_SIZE_LIMIT_MB` | 100 MB | **1 MB** | 100x reduction | Max result file size |
-| `IGLOO_MCP_RESULT_KEEP_FIRST_ROWS` | 1000 | **500** | 2x reduction | Rows shown from start |
-| `IGLOO_MCP_RESULT_KEEP_LAST_ROWS` | 1000 | **50** | 20x reduction | Rows shown from end |
-| `IGLOO_MCP_RESULT_TRUNCATION_THRESHOLD` | 10000 | **1000** | 10x reduction | When truncation starts |
+| Setting | Description | Current Value |
+|---------|-------------|---------------|
+| `RESULT_SIZE_LIMIT_MB` | Maximum result size | 1 MB |
+| `RESULT_KEEP_FIRST_ROWS` | First N rows to keep | 500 rows |
+| `RESULT_KEEP_LAST_ROWS` | Last N rows to keep | 50 rows |
+| `RESULT_TRUNCATION_THRESHOLD` | Trigger truncation at N rows | 1000 rows |
 
-### Impact
-
-Large query results will be truncated more aggressively by default:
-
-- **Before v0.3.2**: Results up to 100 MB with 1000 first + 1000 last rows shown
-- **After v0.3.2**: Results up to 1 MB with 500 first + 50 last rows shown
-
-This prevents agents from receiving extremely large responses that exceed token limits.
+**Impact**: Results are now truncated more aggressively by default to prevent token overflow in LLM contexts.
 
 ### Migration
 
 If you need larger limits for your use case, configure via environment variables:
 
 ```bash
-# Restore v0.3.1 limits (if needed)
+# Restore previous limits if needed
 export IGLOO_MCP_RESULT_SIZE_LIMIT_MB=10
 export IGLOO_MCP_RESULT_KEEP_FIRST_ROWS=2000
 export IGLOO_MCP_RESULT_KEEP_LAST_ROWS=200

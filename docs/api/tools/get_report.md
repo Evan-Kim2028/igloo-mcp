@@ -1,8 +1,6 @@
-# get_report - Progressive Report Disclosure
+# get_report
 
-**New in v0.3.2** ✨
-
-Read living reports with selective retrieval for token efficiency. Supports 4 retrieval modes and flexible filtering options for progressive disclosure workflows.
+Read living reports with progressive disclosure for token-efficient inspection.
 
 ## Overview
 
@@ -336,14 +334,7 @@ for section in sections["sections"]:
 
 ## Token Efficiency Comparison
 
-| Operation | Tokens (Before v0.3.2) | Tokens (With get_report) | Savings |
-|-----------|------------------------|--------------------------|---------|
-| Get report overview | 2000 (full report) | 150 (summary mode) | 92% |
-| Get section structure | 2000 (full report) | 400 (sections mode) | 80% |
-| Get insights only | 2000 (full report) | 600 (insights mode) | 70% |
-| Multi-turn workflow | 6000 (3x full reports) | 1200 (progressive) | 80% |
-
-**Real-World Impact**: A typical 3-step analysis workflow drops from ~6,000 tokens to ~1,200 tokens.
+| Operation | Tokens (Previously) | Tokens (With get_report) | Savings |
 
 ---
 
@@ -416,6 +407,4 @@ Reserve `mode="full"` for final reviews or comprehensive analysis. Use filtered 
 
 ---
 
-**Version**: Added in v0.3.2
-**Category**: Living Reports
-**Token Efficiency**: 60-92% reduction vs. full report retrieval
+**Version**: Complete API documentation available

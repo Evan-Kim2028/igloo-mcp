@@ -160,13 +160,11 @@ Igloo MCP provides **13 focused tools** for Snowflake operations and Living Repo
 | `test_connection` | Test Snowflake connection | — |
 | `health_check` | Check MCP server health | — |
 | `create_report` | Create a new living report | title, template, tags, description |
-| `evolve_report` | Evolve living reports with LLM assistance | report_selector, instruction, constraints, dry_run, response_detail ✨ |
-| `render_report` | Render reports to various formats | report_selector, format, persist_output, preview_max_chars ✨ |
-| `search_report` | Search for living reports | report_selector, fields ✨ |
-| `get_report` **✨ v0.3.2** | Read reports with progressive disclosure | report_selector, mode, section_ids, filters |
-| `get_report_schema` **✨ v0.3.2** | API schema introspection | schema_type, format |
-
-**Note**: ✨ indicates new or enhanced features in v0.3.2.
+| `evolve_report` | Evolve living reports with LLM assistance | report_selector, instruction, constraints, dry_run, response_detail |
+| `render_report` | Render reports to various formats | report_selector, format, persist_output, preview_max_chars |
+| `search_report` | Search for living reports | report_selector, fields |
+| `get_report` | Read reports with progressive disclosure | report_selector, mode, section_ids, filters |
+| `get_report_schema` | API schema introspection | schema_type, format |
 
 **Catalog Storage**: `build_catalog` uses unified storage by default, saving catalogs to `~/.igloo_mcp/catalogs/{database}/`. See [Configuration Guide](configuration.md) for details on customizing catalog storage.
 
@@ -179,7 +177,7 @@ Igloo MCP provides **13 focused tools** for Snowflake operations and Living Repo
 
 ---
 
-## Token-Efficient Report Workflows (v0.3.2+) ✨
+## Token-Efficient Report Workflows
 
 Achieve **70% token reduction** in multi-turn Living Reports workflows with progressive disclosure:
 
@@ -212,11 +210,11 @@ result = evolve_report(
     response_detail="minimal"  # Token-efficient
 )  # ~150 tokens
 
-# Total: ~1,000 tokens (vs. 3,500+ tokens pre-v0.3.2)
+# Total: ~1,000 tokens (vs. 3,500+ tokens previously)
 # Savings: 71%
 ```
 
-**Key v0.3.2 Features**:
+**Key Features**:
 - **Progressive disclosure**: `get_report` with 4 modes (summary/sections/insights/full)
 - **Schema discovery**: `get_report_schema` for runtime API introspection
 - **Field filtering**: `search_report` with selective field retrieval

@@ -117,7 +117,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 
 - Result caching is on by default; subsequent runs with the same SQL, profile, and resolved session context return `cache.hit = true` along with the manifest path and CSV/JSON artifacts for auditability.
 - `key_metrics` and `insights` are automatically derived from the returned rows (no extra SQL) so downstream tools get quick summaries of the seen data. Metrics include non-null ratios, numeric ranges, categorical top values, and time spans based on the sampled result set.
-- `source_databases`/`tables` (added in v0.2.5) enumerate every referenced object extracted from the compiled SQL so history logs and cache hits retain accurate cross-database attribution even when the active session database differs.
+- `source_databases`/`tables` enumerate every referenced object extracted from the compiled SQL so history logs and cache hits retain accurate cross-database attribution even when the active session database differs.
 
 ## Post-Query Insights & Key Metrics
 

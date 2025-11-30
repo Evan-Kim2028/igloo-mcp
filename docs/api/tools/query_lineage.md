@@ -1,6 +1,6 @@
 # Tool: query_lineage
 
-> **⚠️ DEPRECATED**: This tool has been removed in v0.3.0+. Use `build_dependency_graph` instead for dependency analysis.
+> **⚠️ DEPRECATED**: This tool has been removed. Use `build_dependency_graph` instead for dependency analysis.
 
 ## Status
 

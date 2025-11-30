@@ -33,9 +33,9 @@ The official [Snowflake Labs MCP](https://github.com/Snowflake-Labs/mcp) is a po
 - **Simpler Setup**: SnowCLI-based – no YAML service configs. Just install, pick a profile, and go. Official requires detailed service listings and permission tuning.
 - **Dev Workflow Boosts**: Always-on query history (JSONL audits), result caching (instant replays, no re-hits on Snowflake), and auto-insights (row summaries for LLM reasoning – no extra SQL). Official emphasizes Cortex but lacks these for rapid iteration.
 - **Agent-Safe Defaults**: Blocks risky SQL (DDL/DML) out-of-box, with timeouts/cancellation. Official is flexible but needs config for guards.
-- **Lightweight Focus**: 13 focused MCP tools for querying, cataloging, lineage, and living reports – perfect for AI prototypes. Skip Cortex bloat if you don't need RAG/agents.
-- **Performance Edge**: Optimized for local/dev (CLI mode default; REST fallback added in v0.2.3). Official is container-heavy for prod.
-- **Transparent Attribution**: v0.2.5+ logs `source_databases` + fully-qualified `tables` for every query result/history entry so cross-database access is always auditable.
+- **Lightweight Focus**: 14 focused MCP tools for querying, cataloging, lineage, and living reports – perfect for AI prototypes. Skip Cortex bloat if you don't need RAG/agents.
+- **Performance Edge**: Optimized for local/dev (CLI mode default; REST fallback). Official is container-heavy for prod.
+- **Transparent Attribution**: Logs `source_databases` + fully-qualified `tables` for every query result/history entry so cross-database access is always auditable.
 
 In essence: Use official for production Snowflake AI ecosystems. Choose Igloo for agile agentic coding – faster auditing, caching, and safety to make your LLMs more productive with data.
 
@@ -105,7 +105,7 @@ updated = get_report(
     section_titles=["Revenue Analysis"]
 )
 
-# Total: ~1,200 tokens (vs. 3,500+ tokens pre-v0.3.2) - 65% reduction!
+# Total: ~1,200 tokens (vs. 3,500+ tokens previously) - 65% reduction!
 ```
 
 **For Administrators:**
@@ -124,7 +124,7 @@ See [docs/living-reports/user-guide.md](./docs/living-reports/user-guide.md) for
 ### Install (1 min)
 ```bash
 uv pip install igloo-mcp  # Or pip install igloo-mcp
-igloo --version  # Verify (v0.3.3+)
+igloo --version  # Verify installation
 ```
 
 ### Connect Snowflake Profile (2 min)
@@ -173,7 +173,7 @@ Full client guides: [docs/installation.md](./docs/installation.md).
 **Optional Configuration**: All history/artifact/report paths have sensible defaults. Only set these environment variables if you need custom paths or to disable features:
 - `IGLOO_MCP_QUERY_HISTORY` - Optional. Defaults to `~/.igloo_mcp/logs/doc.jsonl` (global) or `<repo>/logs/doc.jsonl` (repo scope). Set to `disabled` to turn off history.
 - `IGLOO_MCP_ARTIFACT_ROOT` - Optional. Defaults to `~/.igloo_mcp/logs/artifacts` (global) or `<repo>/logs/artifacts` (repo scope).
-- `IGLOO_MCP_REPORTS_ROOT` - Optional. Defaults to `~/.igloo_mcp/reports` (global) or `<repo>/reports` (repo scope). **Note**: In v0.3.0+, reports use unified storage at `~/.igloo_mcp/reports/` by default for cross-project access.
+- `IGLOO_MCP_REPORTS_ROOT` - Optional. Defaults to `~/.igloo_mcp/reports` (global) or `<repo>/reports` (repo scope). Reports use unified storage for cross-project access.
 
 See [Configuration Guide](./docs/configuration.md) for details.
 
@@ -182,7 +182,7 @@ See [Configuration Guide](./docs/configuration.md) for details.
 - [Full Docs](./docs/getting-started.md)
 - [API Reference](./docs/api/README.md)
 - [Examples](./examples/README.md) (e.g., catalog building, dep graphs)
-- [CHANGELOG](./CHANGELOG.md) for full release notes (0.2.3, 0.2.4, 0.2.5, 0.3.0, etc.)
+- [CHANGELOG](./CHANGELOG.md) for full release notes
 - Questions? Open an issue or discuss in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 Built for agentic efficiency – let's make Snowflake AI-native!

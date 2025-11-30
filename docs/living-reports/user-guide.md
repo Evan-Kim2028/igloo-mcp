@@ -179,7 +179,7 @@ evolve_report(
 
 ### MCP Tool Usage
 
-> **⚠️ EXPERIMENTAL**: The `evolve_report` tool currently uses sample change generation. Full LLM integration is planned for version 0.3.0. For now, manually edit `outline.json` files and use `dry_run=True` to validate changes.
+> **⚠️ EXPERIMENTAL**: The `evolve_report` tool currently uses sample change generation. Full LLM integration is in progress. For now, manually edit `outline.json` files and use `dry_run=True` to validate changes.
 
 The `evolve_report` MCP tool provides a framework for LLM-assisted report evolution:
 
@@ -586,7 +586,7 @@ A more flexible field supporting multiple source types beyond just Snowflake que
 ```
 
 - **Purpose**: Multi-source attribution (queries, docs, URLs, observations, APIs)
-- **Status**: Model-level field added in v0.3.2 for future multi-source support
+- **Status**: Model-level field added for future multi-source support
 - **Compatibility**: Backward compatible shim ensures existing code works
 
 ### When to Use Which?
@@ -609,10 +609,10 @@ Both fields are kept in sync automatically:
 - Existing reports continue working without changes
 - Full migration path planned for future version (see #62)
 
-**Current Status (v0.3.2):**
+**Current Status:**
 - ✅ `citations` field exists in models
 - ✅ Backward compatible shim in place
-- ⏳ Full rendering/migration support coming in v0.3.3+
+- ⏳ Full rendering/migration support in progress
 
 ## JSON Schema Reference
 
@@ -654,7 +654,7 @@ This section provides copy-paste-ready JSON examples for all `evolve_report` ope
 **Optional Fields:**
 - `order` (integer) - Display order (defaults to append)
 - `notes` (string) - Section metadata/notes
-- `content` (string) - Free-form markdown/text content (new in v0.3.2)
+- `content` (string) - Free-form markdown/text content
 - `content_format` (string) - Content format: "markdown" (default), "text", or "html"
 
 **Example:**
@@ -800,8 +800,8 @@ Use `dry_run: true` to validate changes without applying them:
 **Response includes:**
 - `validation_passed`: boolean
 - `planned_changes`: Preview of what would be applied
-- `validation_errors`: Array of errors if validation fails (new in v0.3.2)
-- `schema_examples`: Targeted examples for operations with errors (new in v0.3.2)
+- `validation_errors`: Array of errors if validation fails
+- `schema_examples`: Targeted examples for operations with errors
 
 ### Common Validation Errors
 
@@ -843,9 +843,9 @@ Use `dry_run: true` to validate changes without applying them:
 
 ---
 
-## Progressive Disclosure (v0.3.2+) ✨
+## Progressive Disclosure
 
-**New in v0.3.2**: Use `get_report` with selective retrieval modes for **60-80% token reduction**.
+Use `get_report` with selective retrieval modes for significant token reduction.
 
 ### Quick Start
 
@@ -874,9 +874,9 @@ See [get_report Tool Documentation](../api/tools/get_report.md) for complete det
 
 ---
 
-## API Discovery (v0.3.2+) ✨
+## API Discovery
 
-**New in v0.3.2**: Use `get_report_schema` to discover valid structures before constructing payloads.
+Use `get_report_schema` to discover valid structures before constructing payloads.
 
 ### Quick Start
 
@@ -902,7 +902,7 @@ See [get_report_schema Tool Documentation](../api/tools/get_report_schema.md) fo
 
 ---
 
-## Token Optimization Tips (v0.3.2+) ✨
+## Token Optimization Tips
 
 Achieve **70% token reduction** in multi-turn workflows:
 
@@ -969,7 +969,7 @@ get_report(
     section_titles=["Revenue"]
 )  # ~250 tokens
 
-# Total: ~650 tokens (vs. 3,500+ tokens before v0.3.2)
+# Total: ~650 tokens (vs. 3,500+ tokens previously)
 # Savings: 81%
 ```
 

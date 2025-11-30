@@ -45,7 +45,7 @@ The calling LLM is responsible for:
 |-----------|------|-------------|
 | `constraints` | object | Optional constraints on evolution (max_importance_delta, sections) |
 | `dry_run` | boolean | Validate changes without applying (default: false) |
-| `response_detail` | string | **✨ v0.3.2** - Response verbosity: `minimal`, `standard` (default), or `full` |
+| `response_detail` | string | Response verbosity: `minimal`, `standard` (default), or `full` |
 
 ## ProposedChanges Schema
 
@@ -189,7 +189,7 @@ The insights are created atomically with the section and automatically linked. U
 
 **Note**: The `insights` field is mutually exclusive with `insight_ids_to_add`. Use `insights` for inline creation or `insight_ids_to_add` for referencing existing insights.
 
-### Response Detail Control (v0.3.2) ✨
+### Response Detail Control
 
 The `response_detail` parameter controls response verbosity for **50-80% token reduction**.
 

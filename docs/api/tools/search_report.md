@@ -1,8 +1,13 @@
-# search_report - Find Living Reports
+# search_report
 
-Search for living reports by title, ID, tags, or status with intelligent fallback behavior.
+Search for living reports with intelligent fallback behavior.
 
-**Enhanced in v0.3.2** with `fields` parameter for selective field retrieval (30-50% token reduction).
+**Features**:
+- Exact report ID matching
+- Fuzzy title search (case-insensitive)
+- Tag-based filtering (AND logic)
+- Status filtering (active/archived/deleted)
+- **Selective fields**: Request only the fields you need
 
 ## Overview
 
@@ -12,7 +17,7 @@ The `search_report` tool enables agents to discover reports in the igloo-mcp ins
 - **ID lookup**: Direct report ID resolution
 - **Tag filtering**: Find reports with specific tags
 - **Status filtering**: Filter by active/archived reports
-- **Selective fields** ✨ v0.3.2: Request only the fields you need
+- **Selective fields**: Request only the fields you need
 
 ## Parameters
 
@@ -24,10 +29,10 @@ The `search_report` tool enables agents to discover reports in the igloo-mcp ins
 | `title` | string | null | Search by title (exact or partial match, case-insensitive) |
 | `tags` | array[string] | null | Filter by tags (reports must have ALL specified tags) |
 | `status` | string | "active" | Filter by status: `active` or `archived` |
-| `fields` | array[string] | null | **✨ v0.3.2** - Specific fields to return (defaults to all) |
+| `fields` | array[string] | null | Specific fields to return (defaults to all) |
 | `limit` | integer | 20 | Maximum results to return (1-50) |
 
-## Field Selection (New in v0.3.2)
+## Field Selection
 
 The `fields` parameter allows you to request only specific fields, significantly reducing token usage.
 
@@ -101,7 +106,7 @@ The `fields` parameter allows you to request only specific fields, significantly
 
 ---
 
-### Example 2: Minimal Fields (Token Efficient) ✨ v0.3.2
+### Example 2: Minimal Fields (Token Efficient)
 
 ```json
 {
@@ -434,6 +439,4 @@ archived = search_report(status="archived", fields=["report_id", "title", "updat
 
 ---
 
-**Version**: Enhanced in v0.3.2 with `fields` parameter
-**Category**: Living Reports
-**Token Efficiency**: 30-50% reduction with selective field retrieval
+**Version**: Complete API documentation available
