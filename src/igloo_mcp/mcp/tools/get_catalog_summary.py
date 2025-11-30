@@ -174,17 +174,25 @@ class GetCatalogSummaryTool(MCPTool):
                 # Minimal - just counts
                 return {
                     "status": "success",
+                    "request_id": request_id,
                     "total_objects": summary.get("total_objects"),
                     "databases": summary.get("databases"),
                     "timestamp": summary.get("created_at"),
+                    "timing": {
+                        "total_duration_ms": total_duration,
+                    },
                 }
 
             # Summary mode (current behavior)
             response = {
                 "status": "success",
+                "request_id": request_id,
                 "summary": summary,
                 "database_breakdown": summary.get("database_breakdown"),
                 "timestamp": summary.get("created_at"),
+                "timing": {
+                    "total_duration_ms": total_duration,
+                },
             }
 
             if effective_mode == "full":

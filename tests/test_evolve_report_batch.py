@@ -192,10 +192,10 @@ class TestEvolveReportBatchValidation:
                 report_selector=test_report_id,
                 instruction="Test invalid response_detail",
                 operations=[{"type": OP_ADD_SECTION, "title": "Test", "order": 0}],
-                response_detail="invalid_level",
+                response_mode="invalid_level",
             )
 
-        assert "response_detail" in str(exc_info.value).lower()
+        assert "response_mode" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
     async def test_report_not_found_error(self, batch_tool):
@@ -474,5 +474,5 @@ class TestOperationConstants:
         assert OP_UPDATE_METADATA in VALID_OPERATIONS
 
     def test_valid_operations_count(self):
-        """VALID_OPERATIONS should have exactly 8 operations."""
-        assert len(VALID_OPERATIONS) == 8
+        """VALID_OPERATIONS should have exactly 9 operations."""
+        assert len(VALID_OPERATIONS) == 9

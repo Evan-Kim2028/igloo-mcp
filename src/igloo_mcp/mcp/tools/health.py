@@ -180,12 +180,6 @@ class HealthCheckTool(MCPTool):
         # Calculate total duration
         total_duration = (time.time() - start_time) * 1000
 
-        # Add metadata
-        results["request_id"] = request_id
-        results["timing"] = {
-            "total_duration_ms": round(total_duration, 2),
-        }
-
         logger.info(
             "health_check_completed",
             extra={
@@ -208,19 +202,27 @@ class HealthCheckTool(MCPTool):
             # Minimal response - just statuses
             return {
                 "status": overall_status,
+                "request_id": request_id,
                 "components": {
                     "snowflake": snowflake_health,
                     "catalog": catalog_health,
                     "profile": profile_health,
                 },
                 "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timing": {
+                    "total_duration_ms": round(total_duration, 2),
+                },
             }
 
         # Standard and full modes
         response = {
             "status": overall_status,
+            "request_id": request_id,
             "checks": results,
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timing": {
+                "total_duration_ms": round(total_duration, 2),
+            },
         }
 
         # Add remediation for standard and full modes
