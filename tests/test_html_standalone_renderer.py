@@ -418,10 +418,10 @@ class TestHTMLStandaloneRendererHelpers:
     def test_markdown_to_html_headers(self, renderer):
         """Test basic markdown header conversion."""
         result = renderer._markdown_to_html("# Header 1")
-        assert "<h3>" in result
+        assert "<h1>" in result
 
         result = renderer._markdown_to_html("## Header 2")
-        assert "<h3>" in result
+        assert "<h2>" in result
 
         result = renderer._markdown_to_html("### Header 3")
         assert "<h3>" in result
