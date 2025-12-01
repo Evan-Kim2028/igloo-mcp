@@ -31,6 +31,7 @@ If index.jsonl becomes inconsistent:
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import json
 import os
@@ -47,7 +48,11 @@ try:
 except ImportError:
     HAS_PORTALOCKER = False
 
+import logging
+
 from .models import AuditEvent, Outline
+
+logger = logging.getLogger(__name__)
 
 
 class StorageError(RuntimeError):
@@ -95,7 +100,7 @@ class ReportLock:
             return
 
         try:
-            self._lock_file = open(self.lock_path, "w")
+            self._lock_file = open(self.lock_path, "w")  # noqa: SIM115 - Need to keep file open for locking
             portalocker.lock(
                 self._lock_file,
                 portalocker.LOCK_EX | portalocker.LOCK_NB,
@@ -113,10 +118,9 @@ class ReportLock:
         """Release the lock."""
         if not HAS_PORTALOCKER:
             if self._lock_file and self._lock_file.exists():
-                try:
+                with contextlib.suppress(Exception):
+                    # Best effort cleanup
                     self._lock_file.unlink()
-                except Exception:
-                    pass  # Best effort cleanup
             self._lock_file = None
             return
 
@@ -224,11 +228,9 @@ class ReportStorage:
             with temp_path.open("w", encoding="utf-8") as f:
                 f.write(raw)
                 f.flush()
-                try:
-                    os.fsync(f.fileno())
-                except OSError:
+                with contextlib.suppress(OSError):
                     # Best-effort fsync; some filesystems may not support it
-                    pass
+                    os.fsync(f.fileno())
 
             # Atomic rename
             temp_path.replace(self.outline_path)
@@ -375,8 +377,9 @@ class ReportStorage:
                         data = json.loads(line)
                         event = AuditEvent(**data)
                         events.append(event)
-                    except Exception:
+                    except Exception as e:
                         # Skip malformed lines but continue
+                        logger.debug(f"Skipping malformed audit log line: {e}")
                         continue
         except Exception:
             # Return what we could parse

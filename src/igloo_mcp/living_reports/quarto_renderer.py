@@ -203,7 +203,7 @@ class QuartoRenderer:
                 timeout=300,  # 5 minute timeout
             )
         except subprocess.TimeoutExpired:
-            raise RuntimeError("Quarto render timed out after 5 minutes")
+            raise RuntimeError("Quarto render timed out after 5 minutes") from None
 
         # Parse results
         warnings = []
@@ -319,7 +319,7 @@ class QuartoRenderer:
             raise RuntimeError(error_msg)
 
         # Set up Jinja2 environment
-        env = Environment(loader=FileSystemLoader(str(template_dir)))
+        env = Environment(loader=FileSystemLoader(str(template_dir)))  # noqa: S701 - QMD template, not HTML
         template = env.get_template("report.qmd.j2")
 
         # Prepare template context

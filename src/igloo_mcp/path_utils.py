@@ -221,20 +221,19 @@ def resolve_reports_root(
             try:
                 # Expand and resolve the path
                 expanded = Path(instance_path).expanduser()
-                if expanded.is_absolute():
+                if expanded.is_absolute() and ("logs" in expanded.parts or "artifacts" in expanded.parts):
                     # Extract the base directory (parent of logs/artifacts)
                     # E.g., ~/.igloo-mcp-experimental/logs/query_history.jsonl -> ~/.igloo-mcp-experimental
-                    if "logs" in expanded.parts or "artifacts" in expanded.parts:
-                        # Find the base igloo-mcp directory
-                        parts = expanded.parts
-                        for i, part in enumerate(parts):
-                            if part in ["logs", "artifacts"]:
-                                base_parts = parts[:i]
-                                if base_parts:
-                                    base_name = base_parts[-1]
-                                    if base_name.startswith(".igloo-mcp") or base_name.startswith(".igloo_mcp"):
-                                        base_path = Path(*base_parts)
-                                        return (base_path / DEFAULT_REPORTS_SUBDIR).resolve()
+                    # Find the base igloo-mcp directory
+                    parts = expanded.parts
+                    for i, part in enumerate(parts):
+                        if part in ["logs", "artifacts"]:
+                            base_parts = parts[:i]
+                            if base_parts:
+                                base_name = base_parts[-1]
+                                if base_name.startswith(".igloo-mcp") or base_name.startswith(".igloo_mcp"):
+                                    base_path = Path(*base_parts)
+                                    return (base_path / DEFAULT_REPORTS_SUBDIR).resolve()
             except (ValueError, OSError):
                 pass  # Invalid path, continue to fallback
 
@@ -283,22 +282,20 @@ def resolve_catalog_root(
     for instance_path in [history_path, artifact_path]:
         if instance_path:
             try:
-                # Expand and resolve the path
+                # Expand and resolve the path for catalog
                 expanded = Path(instance_path).expanduser()
-                if expanded.is_absolute():
+                if expanded.is_absolute() and ("logs" in expanded.parts or "artifacts" in expanded.parts):
                     # Extract the base directory (parent of logs/artifacts)
-                    # E.g., ~/.igloo-mcp-experimental/logs/query_history.jsonl -> ~/.igloo-mcp-experimental
-                    if "logs" in expanded.parts or "artifacts" in expanded.parts:
-                        # Find the base igloo-mcp directory
-                        parts = expanded.parts
-                        for i, part in enumerate(parts):
-                            if part in ["logs", "artifacts"]:
-                                base_parts = parts[:i]
-                                if base_parts:
-                                    base_name = base_parts[-1]
-                                    if base_name.startswith(".igloo-mcp") or base_name.startswith(".igloo_mcp"):
-                                        base_path = Path(*base_parts)
-                                        return (base_path / DEFAULT_CATALOG_SUBDIR).resolve()
+                    # Find the base igloo-mcp directory
+                    parts = expanded.parts
+                    for i, part in enumerate(parts):
+                        if part in ["logs", "artifacts"]:
+                            base_parts = parts[:i]
+                            if base_parts:
+                                base_name = base_parts[-1]
+                                if base_name.startswith(".igloo-mcp") or base_name.startswith(".igloo_mcp"):
+                                    base_path = Path(*base_parts)
+                                    return (base_path / DEFAULT_CATALOG_SUBDIR).resolve()
             except (ValueError, OSError):
                 pass  # Invalid path, continue to fallback
 
@@ -447,7 +444,7 @@ def validate_safe_path(
                             f"Base directory: {base_resolved}",
                         ],
                         hints=["Ensure the path stays within the base directory"],
-                    )
+                    ) from None
         except (OSError, ValueError) as e:
             # Path might not exist yet, which is okay for validation
             # But if it's a clear traversal attempt, we should catch it

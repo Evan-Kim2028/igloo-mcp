@@ -174,7 +174,9 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
             # Create a wrapper that only applies to execute_query
             original_middleware = middleware
 
-            async def conditional_sql_validation_middleware(*args: Any, **kwargs: Any) -> Any:
+            async def conditional_sql_validation_middleware(
+                *args: Any, _original=original_middleware, **kwargs: Any
+            ) -> Any:
                 """Middleware wrapper that only applies SQL validation to execute_query."""
 
                 # FastMCP 2.13+ passes (context, call_next); legacy path passes
@@ -204,15 +206,15 @@ def _patch_sql_validation_middleware(server: FastMCP) -> None:
 
                 # If we still couldn't resolve, fall back to original middleware
                 if tool_name is None or call_next is None:
-                    return await original_middleware(*args, **kwargs)
+                    return await _original(*args, **kwargs)
 
                 if tool_name == "execute_query":
                     # Let the original middleware handle execute_query
                     try:
-                        return await original_middleware(*args, **kwargs)
+                        return await _original(*args, **kwargs)
                     except TypeError:
                         # Legacy signature fallback
-                        return await original_middleware(call_next, tool_name, arguments)
+                        return await _original(call_next, tool_name, arguments)
 
                 logger.debug(
                     "Skipping SQL validation for non-SQL tool: %s",
@@ -409,7 +411,9 @@ def register_igloo_mcp(
                 try:
                     timeout_int = int(timeout_seconds)
                 except ValueError:
-                    raise MCPValidationError(f"timeout_seconds must be a valid integer, got: {timeout_seconds}")
+                    raise MCPValidationError(
+                        f"timeout_seconds must be a valid integer, got: {timeout_seconds}"
+                    ) from None
             else:
                 timeout_int = timeout_seconds
 
@@ -781,7 +785,7 @@ def register_igloo_mcp(
 
     @server.tool(
         name="get_report_schema",
-        description="Get JSON schema for Living Reports operations - self-documenting API",
+        description="Get JSON schema for Living Reports operations - self-documentinging API",
     )
     async def get_report_schema_tool(
         schema_type: Annotated[
@@ -1291,7 +1295,7 @@ def main(argv: list[str] | None = None) -> None:
             endpoint = os.environ.get("SNOWFLAKE_MCP_ENDPOINT", args.endpoint)
             server.run(
                 transport=args.transport,
-                host="0.0.0.0",
+                host="0.0.0.0",  # noqa: S104 - MCP server needs to bind to all interfaces
                 port=9000,
                 path=endpoint,
             )

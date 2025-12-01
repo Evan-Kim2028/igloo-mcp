@@ -31,6 +31,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import hashlib
 import json
@@ -154,11 +155,9 @@ class QueryResultCache:
 
         fallback_root = Path.home() / ".igloo_mcp" / DEFAULT_ARTIFACT_ROOT / DEFAULT_CACHE_SUBDIR
 
-        try:
-            fallback_root.mkdir(parents=True, exist_ok=True)
-        except Exception:
+        with contextlib.suppress(Exception):
             # Best effort; main constructor will surface if used.
-            pass
+            fallback_root.mkdir(parents=True, exist_ok=True)
 
         max_rows_env = os.environ.get("IGLOO_MCP_CACHE_MAX_ROWS")
         max_rows = cls.DEFAULT_MAX_ROWS
@@ -335,11 +334,7 @@ class QueryResultCache:
         if self._mode == "read_only":
             return None
         if len(rows) > self._max_rows:
-            warning = "Skipping cache store for %s (rows=%d exceeds limit %d)" % (
-                cache_key,
-                len(rows),
-                self._max_rows,
-            )
+            warning = f"Skipping cache store for {cache_key} (rows={len(rows)} exceeds limit {self._max_rows})"
             self._warnings.append(warning)
             logger.info(warning)
             return None

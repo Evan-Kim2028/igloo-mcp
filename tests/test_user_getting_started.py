@@ -39,50 +39,54 @@ class TestGettingStartedProcess:
 
     def test_mcp_server_startup_with_valid_profile(self, mock_config_with_profiles):
         """Test that MCP server can start with a valid profile."""
-        with mock_config_with_profiles(["dev", "prod"], default="dev"):
-            with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "dev"}):
-                # Mock the FastMCP server to avoid actual startup
-                with patch("igloo_mcp.mcp_server.FastMCP") as mock_fastmcp:
-                    with patch("igloo_mcp.mcp_server.parse_arguments") as mock_args:
-                        with patch("igloo_mcp.mcp_server.configure_logging"):
-                            # Configure mocks
-                            mock_args.return_value = Mock(
-                                log_level="INFO",
-                                snowcli_config=None,
-                                profile=None,
-                                name="test-server",
-                                instructions="test",
-                                transport="stdio",
-                            )
-                            mock_server = Mock()
-                            mock_fastmcp.return_value = mock_server
+        with (
+            mock_config_with_profiles(["dev", "prod"], default="dev"),
+            patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "dev"}),
+            patch("igloo_mcp.mcp_server.FastMCP") as mock_fastmcp,
+            patch("igloo_mcp.mcp_server.parse_arguments") as mock_args,
+            patch("igloo_mcp.mcp_server.configure_logging"),
+        ):
+            # Configure mocks
+            mock_args.return_value = Mock(
+                log_level="INFO",
+                snowcli_config=None,
+                profile=None,
+                name="test-server",
+                instructions="test",
+                transport="stdio",
+            )
+            mock_server = Mock()
+            mock_fastmcp.return_value = mock_server
 
-                            # Should not raise SystemExit
-                            try:
-                                main()
-                                assert True  # If we get here, startup succeeded
-                            except SystemExit:
-                                pytest.fail("MCP server should start with valid profile")
+            # Should not raise SystemExit
+            try:
+                main()
+                assert True  # If we get here, startup succeeded
+            except SystemExit:
+                pytest.fail("MCP server should start with valid profile")
 
     def test_mcp_server_startup_fails_without_profile(self, mock_empty_config):
         """Test that MCP server fails gracefully without profiles."""
-        with mock_empty_config(), patch.dict(os.environ, {}, clear=True):
-            with patch("igloo_mcp.mcp_server.parse_arguments") as mock_args:
-                with patch("igloo_mcp.mcp_server.configure_logging"):
-                    mock_args.return_value = Mock(
-                        log_level="INFO",
-                        snowcli_config=None,
-                        profile=None,
-                        name="test-server",
-                        instructions="test",
-                        transport="stdio",
-                    )
+        with (
+            mock_empty_config(),
+            patch.dict(os.environ, {}, clear=True),
+            patch("igloo_mcp.mcp_server.parse_arguments") as mock_args,
+            patch("igloo_mcp.mcp_server.configure_logging"),
+        ):
+            mock_args.return_value = Mock(
+                log_level="INFO",
+                snowcli_config=None,
+                profile=None,
+                name="test-server",
+                instructions="test",
+                transport="stdio",
+            )
 
-                    # Should raise SystemExit with code 1
-                    with pytest.raises(SystemExit) as exc_info:
-                        main()
+            # Should raise SystemExit with code 1
+            with pytest.raises(SystemExit) as exc_info:
+                main()
 
-                    assert exc_info.value.code == 1
+            assert exc_info.value.code == 1
 
     def test_snowflake_cli_wrapper_functionality(self):
         """Test that SnowCLI wrapper works as expected."""
@@ -115,11 +119,13 @@ class TestDocumentationAccuracy:
         """Test that examples in README actually work."""
         from igloo_mcp.profile_utils import validate_and_resolve_profile
 
-        with mock_config_with_profiles(["quickstart"], default="quickstart"):
+        with (
+            mock_config_with_profiles(["quickstart"], default="quickstart"),
+            patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "quickstart"}),
+        ):
             # Test the basic profile setup example
-            with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "quickstart"}):
-                profile = validate_and_resolve_profile()
-                assert profile == "quickstart"
+            profile = validate_and_resolve_profile()
+            assert profile == "quickstart"
 
     def test_mcp_json_configuration_format(self):
         """Test that MCP JSON configuration format is valid."""
@@ -179,14 +185,16 @@ class TestNewUserExperience:
         """Test experience when user specifies invalid profile."""
         from igloo_mcp.profile_utils import validate_and_resolve_profile
 
-        with mock_config_with_profiles(["dev", "prod"], default="dev"):
-            with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "invalid"}):
-                with pytest.raises(Exception) as exc_info:
-                    validate_and_resolve_profile()
+        with (
+            mock_config_with_profiles(["dev", "prod"], default="dev"),
+            patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "invalid"}),
+        ):
+            with pytest.raises(Exception) as exc_info:
+                validate_and_resolve_profile()
 
-                error_msg = str(exc_info.value)
-                # Should list available profiles
-                assert "dev" in error_msg or "prod" in error_msg
+            error_msg = str(exc_info.value)
+            # Should list available profiles
+            assert "dev" in error_msg or "prod" in error_msg
 
     def test_new_user_without_default_profile(self, mock_config_with_profiles):
         """Test experience when no default profile is set."""

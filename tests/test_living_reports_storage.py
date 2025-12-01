@@ -30,27 +30,31 @@ class TestReportLock:
 
     def test_lock_context_manager_without_portalocker(self) -> None:
         """Test lock context manager when portalocker is not available."""
-        with patch("igloo_mcp.living_reports.storage.HAS_PORTALOCKER", False):
-            with tempfile.TemporaryDirectory() as tmpdir:
-                lock_path = Path(tmpdir) / "test.lock"
-                lock = ReportLock(lock_path)
+        with (
+            patch("igloo_mcp.living_reports.storage.HAS_PORTALOCKER", False),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            lock_path = Path(tmpdir) / "test.lock"
+            lock = ReportLock(lock_path)
 
-                with lock:
-                    assert lock_path.exists()
+            with lock:
+                assert lock_path.exists()
 
-                # Lock file should be removed after context
-                assert not lock_path.exists()
+            # Lock file should be removed after context
+            assert not lock_path.exists()
 
     def test_lock_fallback_on_existing_file(self) -> None:
         """Test fallback lock raises error when file exists."""
-        with patch("igloo_mcp.living_reports.storage.HAS_PORTALOCKER", False):
-            with tempfile.TemporaryDirectory() as tmpdir:
-                lock_path = Path(tmpdir) / "test.lock"
-                lock_path.write_text("existing")
+        with (
+            patch("igloo_mcp.living_reports.storage.HAS_PORTALOCKER", False),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
+            lock_path = Path(tmpdir) / "test.lock"
+            lock_path.write_text("existing")
 
-                lock = ReportLock(lock_path)
-                with pytest.raises(RuntimeError, match="Lock file exists"), lock:
-                    pass
+            lock = ReportLock(lock_path)
+            with pytest.raises(RuntimeError, match="Lock file exists"), lock:
+                pass
 
 
 class TestReportStorage:

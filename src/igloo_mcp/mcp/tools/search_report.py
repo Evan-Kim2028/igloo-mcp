@@ -170,15 +170,8 @@ class SearchReportTool(MCPTool):
             # If report_id is provided, do exact lookup first
             if report_id:
                 entry = index.get_entry(report_id)
-                if entry:
-                    # Apply status filter if specified
-                    if status and entry.status != status:
-                        # Report exists but doesn't match status filter
-                        results = []
-                    else:
-                        results = [entry]
-                else:
-                    results = []
+                # Apply status filter if specified
+                results = ([] if status and entry.status != status else [entry]) if entry else []
             # If title is provided, search all entries for title matches
             elif title:
                 title_lower = title.lower()

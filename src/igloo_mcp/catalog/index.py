@@ -82,9 +82,10 @@ class CatalogIndex:
 
                 columns = column_index.get((entry.database or "", entry.schema or "", entry.name))
 
-                if column_filter:
-                    if not columns or not any(column_filter in (col.get("name") or "").lower() for col in columns):
-                        continue
+                if column_filter and (
+                    not columns or not any(column_filter in (col.get("name") or "").lower() for col in columns)
+                ):
+                    continue
 
                 total_matches += 1
                 if len(results) >= limit:
