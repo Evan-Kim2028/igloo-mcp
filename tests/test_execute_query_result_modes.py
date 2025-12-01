@@ -157,7 +157,7 @@ class TestApplyResultMode:
 
         # Should indicate truncation with row counts
         assert "Showing first 10 of 100 rows" in result["result_mode_info"]["hint"]
-        assert "result_mode='full'" in result["result_mode_info"]["hint"]
+        assert "response_mode='full'" in result["result_mode_info"]["hint"]
 
 
 class TestResultModeConstants:
