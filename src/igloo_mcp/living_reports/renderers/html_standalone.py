@@ -167,6 +167,22 @@ class HTMLStandaloneRenderer:
     ) -> dict[str, str]:
         """Collect charts from outline metadata and convert to base64 data URIs.
 
+        BEST PRACTICE: Charts should be stored in the report's `report_files/` directory
+        to ensure portability and proper access control.
+
+        Example structure:
+            ~/.igloo_mcp/reports/by_id/<report-id>/
+                ├── outline.json
+                ├── metadata.json
+                └── report_files/
+                    ├── chart1_infrastructure.png
+                    ├── chart2_trading_volume.png
+                    └── chart3_wallet_distribution.png
+
+        Charts stored outside the report directory (e.g., in ~/Documents/) may not
+        be accessible when the report is moved or shared. The report_files/ directory
+        is the canonical location for all report-associated assets.
+
         Args:
             outline: Report outline with chart metadata
             warnings: List to append warnings to
@@ -285,8 +301,8 @@ class HTMLStandaloneRenderer:
             html += f"""            <div class="section-content">{content_html}</div>
 """
 
-        # Insights
-        if section.insight_ids:
+        # Insights (only show if no prose content - avoid redundancy)
+        elif section.insight_ids:
             html += """            <div class="insights-list">
 """
             for insight_id in section.insight_ids:
@@ -755,10 +771,12 @@ data-importance="{insight.importance}">
         return escape(text) if text else ""
 
     def _markdown_to_html(self, markdown: str) -> str:
-        """Convert basic markdown to HTML.
+        """Convert markdown to HTML using standard markdown library.
 
-        This is a simple converter for common patterns.
-        For full markdown support, use a dedicated library.
+        This uses the Python markdown library with extensions for:
+        - Extra features (tables, fenced code blocks, etc.)
+        - Newline to <br> conversion
+        - Sane list handling
 
         Args:
             markdown: Markdown text
@@ -766,27 +784,13 @@ data-importance="{insight.importance}">
         Returns:
             HTML string
         """
-        import re
+        import markdown as md
 
-        html = self._escape_html(markdown)
-
-        # Headers
-        html = re.sub(r"^### (.+)$", r"<h4>\1</h4>", html, flags=re.MULTILINE)
-        html = re.sub(r"^## (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
-        html = re.sub(r"^# (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
-
-        # Bold and italic
-        html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
-        html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
-
-        # Code
-        html = re.sub(r"`(.+?)`", r"<code>\1</code>", html)
-
-        # Line breaks -> paragraphs
-        paragraphs = html.split("\n\n")
-        html = "".join(f"<p>{p}</p>" for p in paragraphs if p.strip())
-
-        return html
+        return md.markdown(
+            markdown,
+            extensions=["extra", "nl2br", "sane_lists"],
+            output_format="html",
+        )
 
 
 __all__ = ["HTMLStandaloneRenderer"]

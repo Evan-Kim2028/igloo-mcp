@@ -61,8 +61,6 @@ def ensure_request_id(request_id: str | None = None) -> str:
 class MCPToolSchema(BaseModel):
     """Base schema for MCP tool parameters."""
 
-    pass
-
 
 class MCPTool(ABC):
     """Base class for MCP tools implementing command pattern.
@@ -82,7 +80,6 @@ class MCPTool(ABC):
         Returns:
             The unique name of the tool (e.g., "execute_query")
         """
-        pass
 
     @property
     @abstractmethod
@@ -92,7 +89,6 @@ class MCPTool(ABC):
         Returns:
             Human-readable description of what the tool does
         """
-        pass
 
     @abstractmethod
     async def execute(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -109,7 +105,6 @@ class MCPTool(ABC):
             ValueError: For validation errors
             RuntimeError: For execution errors
         """
-        pass
 
     @abstractmethod
     def get_parameter_schema(self) -> dict[str, Any]:
@@ -118,7 +113,6 @@ class MCPTool(ABC):
         Returns:
             JSON schema dictionary compatible with MCP specification
         """
-        pass
 
     @property
     def category(self) -> str:
@@ -197,7 +191,7 @@ def tool_error_handler(
             request_id = kwargs.get("request_id")
 
             try:
-                return await cast(Callable[P, Awaitable[T]], func)(*args, **kwargs)
+                return await cast("Callable[P, Awaitable[T]]", func)(*args, **kwargs)
             except (MCPValidationError, MCPExecutionError, MCPToolError) as mcp_error:
                 handle_mcp_exception_decorator(mcp_error, request_id, kwargs)
             except TypeError:
@@ -228,7 +222,6 @@ def tool_error_handler(
 
         if inspect.iscoroutinefunction(func):
             return async_wrapper
-        else:
-            return sync_wrapper
+        return sync_wrapper
 
     return decorator

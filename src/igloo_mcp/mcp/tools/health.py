@@ -542,12 +542,7 @@ class HealthCheckTool(MCPTool):
         catalog_root = resolve_catalog_root()
 
         # Determine base directory
-        if scope == "global":
-            base_dir = str(get_global_base())
-        else:
-            # Repo scope - extract from one of the resolved paths
-            # history_path is logs/doc.jsonl, parent.parent gives repo root
-            base_dir = str(history_path.parent.parent)
+        base_dir = str(get_global_base()) if scope == "global" else str(history_path.parent.parent)
 
         return {
             "scope": scope,

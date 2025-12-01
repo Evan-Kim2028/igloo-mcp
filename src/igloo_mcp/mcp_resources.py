@@ -94,18 +94,17 @@ class MCPResourceManager:
                     },
                     last_checked=time.time(),
                 )
-            else:
-                return ResourceAvailability(
-                    name="profile",
-                    state=ResourceState.UNAVAILABLE,
-                    reason=profile_health.validation_error or "Profile validation failed",
-                    metadata={
-                        "profile_name": profile_health.profile_name,
-                        "available_profiles": profile_health.available_profiles,
-                        "config_exists": profile_health.config_exists,
-                    },
-                    last_checked=time.time(),
-                )
+            return ResourceAvailability(
+                name="profile",
+                state=ResourceState.UNAVAILABLE,
+                reason=profile_health.validation_error or "Profile validation failed",
+                metadata={
+                    "profile_name": profile_health.profile_name,
+                    "available_profiles": profile_health.available_profiles,
+                    "config_exists": profile_health.config_exists,
+                },
+                last_checked=time.time(),
+            )
         except Exception as e:
             logger.error(f"Failed to check profile dependency: {e}")
             return ResourceAvailability(
@@ -134,20 +133,19 @@ class MCPResourceManager:
                     state=ResourceState.AVAILABLE,
                     last_checked=time.time(),
                 )
-            elif connection_health == HealthStatus.DEGRADED:
+            if connection_health == HealthStatus.DEGRADED:
                 return ResourceAvailability(
                     name="connection",
                     state=ResourceState.DEGRADED,
                     reason="Connection issues detected",
                     last_checked=time.time(),
                 )
-            else:
-                return ResourceAvailability(
-                    name="connection",
-                    state=ResourceState.UNAVAILABLE,
-                    reason="Connection health check failed",
-                    last_checked=time.time(),
-                )
+            return ResourceAvailability(
+                name="connection",
+                state=ResourceState.UNAVAILABLE,
+                reason="Connection health check failed",
+                last_checked=time.time(),
+            )
         except Exception as e:
             logger.error(f"Failed to check connection dependency: {e}")
             return ResourceAvailability(

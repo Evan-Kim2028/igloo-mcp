@@ -4,6 +4,7 @@
 
 import os
 import tempfile
+import tomllib
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -11,7 +12,7 @@ from unittest.mock import Mock, patch
 import pytest
 import yaml  # type: ignore[import-untyped]
 
-import igloo_mcp.profile_utils as profile_utils
+from igloo_mcp import profile_utils
 from igloo_mcp.config import Config, SnowflakeConfig, get_config, set_config
 from igloo_mcp.profile_utils import (
     ProfileSummary,
@@ -225,10 +226,12 @@ class TestProfileResolution:
 
     def test_resolve_profile_uses_environment_variable(self, mock_config_with_profiles):
         """Test that SNOWFLAKE_PROFILE env var takes precedence."""
-        with mock_config_with_profiles(["dev", "prod"], default="prod"):
-            with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "dev"}):
-                result = validate_and_resolve_profile()
-                assert result == "dev"
+        with (
+            mock_config_with_profiles(["dev", "prod"], default="prod"),
+            patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "dev"}),
+        ):
+            result = validate_and_resolve_profile()
+            assert result == "dev"
 
     def test_resolve_profile_falls_back_to_default(self, mock_config_with_profiles):
         """Test fallback to default profile when no env var."""
@@ -238,10 +241,12 @@ class TestProfileResolution:
 
     def test_resolve_profile_strips_whitespace_from_env(self, mock_config_with_profiles):
         """Test that whitespace is stripped from environment variable."""
-        with mock_config_with_profiles(["dev", "prod"], default="prod"):
-            with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "  dev  "}):
-                result = validate_and_resolve_profile()
-                assert result == "dev"
+        with (
+            mock_config_with_profiles(["dev", "prod"], default="prod"),
+            patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "  dev  "}),
+        ):
+            result = validate_and_resolve_profile()
+            assert result == "dev"
 
 
 class TestProfileInfo:
@@ -290,20 +295,22 @@ class TestProfileSummary:
 
     def test_profile_summary_complete_config(self, mock_config_with_profiles):
         """Test profile summary with complete configuration."""
-        with mock_config_with_profiles(["dev", "staging", "prod"], default="dev"):
-            with patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "staging"}):
-                summary = get_profile_summary()
+        with (
+            mock_config_with_profiles(["dev", "staging", "prod"], default="dev"),
+            patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "staging"}),
+        ):
+            summary = get_profile_summary()
 
-                assert isinstance(summary, ProfileSummary)
-                assert summary.config_exists is True
-                assert summary.available_profiles == [
-                    "dev",
-                    "prod",
-                    "staging",
-                ]  # sorted
-                assert summary.profile_count == 3
-                assert summary.default_profile == "dev"
-                assert summary.current_profile == "staging"
+            assert isinstance(summary, ProfileSummary)
+            assert summary.config_exists is True
+            assert summary.available_profiles == [
+                "dev",
+                "prod",
+                "staging",
+            ]  # sorted
+            assert summary.profile_count == 3
+            assert summary.default_profile == "dev"
+            assert summary.current_profile == "staging"
 
     def test_profile_summary_no_config(self, mock_no_config):
         """Test profile summary when no config exists."""
@@ -499,7 +506,7 @@ def mock_corrupted_config():
         return patch.multiple(
             profile_utils,
             get_snowflake_config_path=Mock(return_value=mock_path),
-            _load_snowflake_config=Mock(side_effect=Exception("Corrupted file")),
+            _load_snowflake_config=Mock(side_effect=tomllib.TOMLDecodeError("Corrupted file", "", 0)),
         )
 
     return _mock

@@ -28,7 +28,7 @@ def _read_history_entries(history_path: Path) -> list[dict[str, Any]]:
                 continue
             try:
                 entries.append(json.loads(line))
-            except Exception:
+            except (json.JSONDecodeError, ValueError):
                 continue
     return entries
 
@@ -63,7 +63,7 @@ def _load_manifest(entry: dict[str, Any]) -> dict[str, Any]:
         return {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError):
         return {}
 
 
@@ -80,7 +80,7 @@ def _load_sql_text(entry: dict[str, Any]) -> str | None:
         return None
     try:
         return path.read_text(encoding="utf-8")
-    except Exception:
+    except (FileNotFoundError, PermissionError, OSError):
         return None
 
 

@@ -153,8 +153,9 @@ class TestSmokeIntegration:
                     statement=complex_query,
                     warehouse="ANALYTICS_WH",
                     timeout_seconds=120,
+                    verbose_errors=True,
                     reason="Q4 2023 revenue analysis with customer cohort breakdown",
-                    response_mode="full",
+                    response_mode="full",  # Explicitly request full mode (default changed to 'summary' in v0.3.7)
                     post_query_insight={
                         "summary": (
                             "Q4 showed record performance with 23% revenue growth and improved customer acquisition"
@@ -194,13 +195,14 @@ class TestSmokeIntegration:
                     warehouse="ANALYTICS_WH",
                     timeout_seconds=120,
                     reason="Q4 2023 revenue analysis with customer cohort breakdown",
+                    response_mode="full",  # Explicitly request full mode (default changed to 'summary' in v0.3.7)
                 )
 
                 executed_cursors = [cursor for cursor in service.cursors if cursor._main_executed]
                 assert len(executed_cursors) == 1
                 assert service.cursors[-1]._main_executed is False
                 assert cached_result["cache"]["hit"] is True
-                assert cached_result["audit_info"]["cache"]["hit"] is True
+                assert cached_result["audit_info"]["cache_hit"] is True
                 assert cached_result["rowcount"] == 1500
 
                 lines = history_file.read_text().strip().splitlines()

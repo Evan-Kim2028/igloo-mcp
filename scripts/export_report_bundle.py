@@ -119,7 +119,7 @@ def _ts_from_iso8601(raw: str | None) -> float | None:
     try:
         return datetime.fromisoformat(raw).timestamp()
     except ValueError:
-        raise ValueError(f"Invalid ISO 8601 timestamp: {raw}")
+        raise ValueError(f"Invalid ISO 8601 timestamp: {raw}") from None
 
 
 def _select_entries(
@@ -184,7 +184,7 @@ def main() -> int:
     try:
         doc_path = _resolve_doc_path(args.doc)
         artifact_root = _resolve_artifact_root(args.artifact_root)
-    except Exception as exc:
+    except (ValueError, OSError, RuntimeError) as exc:
         print(f"Failed to resolve paths: {exc}", file=sys.stderr)
         return 1
 

@@ -105,15 +105,14 @@ def _command_report_evolve(args: argparse.Namespace) -> int:
             for issue in result["validation_issues"]:
                 print(f"  - {issue}", file=sys.stderr)
             return 1
-        elif result["status"] == "dry_run_success":
+        if result["status"] == "dry_run_success":
             print("Dry run successful - changes would be applied")
             return 0
-        elif result["status"] == "success":
+        if result["status"] == "success":
             print(f"Report evolved successfully: {result['report_id']}")
             return 0
-        else:
-            print(f"Unexpected result: {result}", file=sys.stderr)
-            return 1
+        print(f"Unexpected result: {result}", file=sys.stderr)
+        return 1
 
     except Exception as e:
         print(f"Failed to evolve report: {e}", file=sys.stderr)

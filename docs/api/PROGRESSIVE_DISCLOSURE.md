@@ -63,7 +63,7 @@ Legacy mode values mapped to standard:
 
 ## Usage Examples
 
-### Quick Checks (Default Behavior - v0.3.5+)
+### Quick Checks (Default Behavior)
 
 ```python
 # Execute query - defaults to 'summary' (5 sample rows + metrics)

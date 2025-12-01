@@ -53,25 +53,17 @@ class ErrorContext:
 class SnowflakeConnectionError(Exception):
     """Raised when Snowflake connection issues occur."""
 
-    pass
-
 
 class SnowflakePermissionError(Exception):
     """Raised when insufficient permissions are detected."""
-
-    pass
 
 
 class SnowflakeTimeoutError(Exception):
     """Raised when operations timeout."""
 
-    pass
-
 
 class SnowflakeError(Exception):
     """Base class for all Snowflake-related errors."""
-
-    pass
 
 
 class ProfileConfigurationError(SnowflakeError):
@@ -174,9 +166,8 @@ def handle_snowflake_errors(
 
                 if reraise:
                     raise categorized_error from e
-                else:
-                    logger.warning(f"Returning fallback value for {context.operation}")
-                    return fallback_value
+                logger.warning(f"Returning fallback value for {context.operation}")
+                return fallback_value
             except Exception as e:
                 logger.error(
                     f"Unexpected error in {context.operation}: {e}",
@@ -184,8 +175,7 @@ def handle_snowflake_errors(
                 )
                 if reraise:
                     raise
-                else:
-                    return fallback_value
+                return fallback_value
 
         return wrapper
 

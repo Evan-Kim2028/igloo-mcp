@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import igloo_mcp.profile_utils as profile_utils
+from igloo_mcp import profile_utils
 from igloo_mcp.profile_utils import get_profile_summary
 
 

@@ -1,31 +1,43 @@
 # Igloo MCP
-**Lightweight Snowflake MCP server for AI-powered data workflows**
 
 [![PyPI version](https://badge.fury.io/py/igloo-mcp.svg)](https://pypi.org/project/igloo-mcp/)
 [![GitHub Release](https://img.shields.io/github/v/release/Evan-Kim2028/igloo-mcp)](https://github.com/Evan-Kim2028/igloo-mcp/releases)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-Connect your AI assistant (Cursor, Claude) to Snowflake with built-in safety, caching, and auditing. Query databases, build catalogs, and create living reports—all through natural language.
+A lightweight Snowflake MCP server that connects your AI assistant to Snowflake with built-in safety, caching, and auditing. Query databases, build catalogs, and create living reports—all through natural language.
 
 ## Why Igloo MCP?
 
-✅ **Query Safely** — Blocks DDL/DML by default, auto-cancels slow queries, logs every execution
+### 🔒 Query Safely
+Block dangerous DDL/DML by default, auto-cancel slow queries, and log every execution. Use `execute_query` with configurable guardrails and `test_connection` to validate authentication before running queries.
 
-✅ **Work Faster** — Minimizes token usage through progressive disclosure and smart caching
+### ⚡ Work Faster
+Minimize token usage through progressive disclosure and smart result caching. Tools like `get_report` support multiple retrieval modes (summary/sections/insights/full), and `search_catalog` lets you find tables without hitting Snowflake.
 
-✅ **Stay Audited** — Complete query history with source attribution for compliance tracking
+### 📋 Stay Audited
+Maintain complete query history with source attribution for compliance tracking. Every `execute_query` call logs to history, and Living Reports track all modifications with full audit trails via `evolve_report`.
+
+### 📊 Build Living Reports
+Create auditable, evolving business reports with `create_report`, modify them safely with `evolve_report`, attach charts to insights, and export to HTML/PDF/Markdown via `render_report`.
 
 ## Quick Start
 
+### Prerequisites
+
 ```bash
-# Install
+# Install igloo-mcp
 uv pip install igloo-mcp
 
-# Configure Snowflake (uses your existing Snowflake CLI profile)
+# Configure Snowflake connection (uses Snowflake CLI)
 snow connection add --name quickstart --account <account> --user <user> --authenticator externalbrowser --warehouse <warehouse>
+```
 
-# Add to ~/.cursor/mcp.json
+### Cursor Setup
+
+Add to `~/.cursor/mcp.json`:
+
+```json
 {
   "mcpServers": {
     "igloo-mcp": {
@@ -36,44 +48,71 @@ snow connection add --name quickstart --account <account> --user <user> --authen
 }
 ```
 
-Restart your MCP client and ask: *"Preview the customers table"*
+Restart Cursor and ask: *"Preview the customers table"*
+
+### Claude Code Setup
+
+Run from terminal:
+
+```bash
+claude mcp add igloo-mcp --scope user -- igloo-mcp --profile quickstart
+```
+
+Or add to `~/.claude.json` manually:
+
+```json
+{
+  "mcpServers": {
+    "igloo-mcp": {
+      "command": "igloo-mcp",
+      "args": ["--profile", "quickstart"]
+    }
+  }
+}
+```
+
+Restart Claude Code and ask: *"Show me the schema for my database"*
 
 **Full setup guide**: [docs/installation.md](./docs/installation.md)
 
-## Core Capabilities
+## Core Tools
 
 ### 🔍 Query & Explore
-- **`execute_query`** — Run safe SQL with guardrails, timeouts, and auto-insights
-- **`build_catalog`** — Export Snowflake metadata for offline search
-- **`search_catalog`** — Find tables/columns without querying Snowflake
-- **`build_dependency_graph`** — Visualize table lineage and dependencies
+| Tool | Description |
+|------|-------------|
+| `execute_query` | Run SQL with guardrails, timeouts, and auto-insights |
+| `build_catalog` | Export Snowflake metadata for offline search |
+| `search_catalog` | Find tables/columns without querying Snowflake |
+| `build_dependency_graph` | Visualize table lineage and dependencies |
 
 ### 📊 Living Reports
-- **`create_report`** — Initialize auditable JSON-backed business reports
-- **`evolve_report`** — Modify reports safely with LLM assistance and full audit trail
-- **`evolve_report_batch`** — Perform multiple report operations atomically (add insights, attach charts)
-- **`render_report`** — Export to HTML, PDF, or Markdown via Quarto
-- **`get_report`** — Read reports efficiently with progressive disclosure (summary/sections/insights/full modes)
-- **`search_report`** — Find reports by title or tags
-- **`search_citations`** — Search citations across reports by source type, provider, or URL
-- **`get_report_schema`** — Discover valid report structures at runtime
-
-Attach charts to insights, cite multiple source types (query, API, URL, observation, document), and search citations across all reports.
+| Tool | Description |
+|------|-------------|
+| `create_report` | Initialize auditable JSON-backed reports |
+| `evolve_report` | Modify reports with LLM assistance and audit trail |
+| `evolve_report_batch` | Perform multiple operations atomically |
+| `render_report` | Export to HTML, PDF, or Markdown via Quarto |
+| `get_report` | Read reports with progressive disclosure modes |
+| `search_report` | Find reports by title or tags |
+| `search_citations` | Search citations by source type or provider |
+| `get_report_schema` | Discover valid report structures at runtime |
 
 ### 🏥 Health & Diagnostics
-- **`test_connection`** — Validate Snowflake authentication
-- **`health_check`** — Monitor server, profile, and catalog status
+| Tool | Description |
+|------|-------------|
+| `test_connection` | Validate Snowflake authentication |
+| `health_check` | Monitor server, profile, and catalog status |
 
 **View all 15 tools**: [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md)
 
 ## When to Use Igloo MCP
 
-| **Choose Igloo if you want:** | **Choose Snowflake Labs MCP if you need:** |
-|---|---|
-| ✅ AI assistant for dev/analytics workflows | ❌ Production Cortex AI integration |
-| ✅ Simple SnowCLI-based setup | ❌ Enterprise service architecture |
-| ✅ Query safety + automatic caching | ❌ Full Snowflake object management |
-| ✅ Built-in auditing and compliance tracking | ❌ Container-based deployment |
+| Choose Igloo MCP | Choose Snowflake Labs MCP |
+|------------------|---------------------------|
+| AI assistant for dev/analytics workflows | Production Cortex AI integration |
+| Simple SnowCLI-based setup | Enterprise service architecture |
+| Query safety + automatic caching | Full Snowflake object management |
+| Built-in auditing and compliance | Container-based deployment |
 
 ## Resources
 

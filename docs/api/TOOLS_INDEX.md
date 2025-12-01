@@ -14,7 +14,7 @@ Explore your Snowflake environment, query safely, and build offline catalogs for
 
 1. **[test_connection](tools/test_connection.md)** — Verify Snowflake authentication and profile setup
 2. **[execute_query](tools/execute_query.md)** — Run safe SQL with guardrails, timeouts, and auto-insights
-   - Use `result_mode` parameter for significant token reduction
+   - Use `response_mode` parameter for significant token reduction
    - Automatically blocks DDL/DML operations
 3. **[build_catalog](tools/build_catalog.md)** — Export metadata (tables, views, columns) to offline catalog
 4. **[search_catalog](tools/search_catalog.md)** — Find objects by name/column without querying Snowflake

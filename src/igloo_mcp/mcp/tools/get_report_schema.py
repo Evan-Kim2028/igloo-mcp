@@ -187,13 +187,12 @@ class GetReportSchemaTool(MCPTool):
                 "schema_version": CURRENT_CHANGES_SCHEMA_VERSION,
                 "schemas": schemas,
             }
-        else:
-            return {
-                "status": "success",
-                "schema_type": schema_type,
-                "schema_version": CURRENT_CHANGES_SCHEMA_VERSION,
-                "json_schema": schemas[schema_type],
-            }
+        return {
+            "status": "success",
+            "schema_type": schema_type,
+            "schema_version": CURRENT_CHANGES_SCHEMA_VERSION,
+            "json_schema": schemas[schema_type],
+        }
 
     def _build_examples_response(self, schema_type: str) -> dict[str, Any]:
         """Build examples format response."""
@@ -327,22 +326,21 @@ class GetReportSchemaTool(MCPTool):
                 "schema_type": "all",
                 "examples": examples,
             }
-        elif schema_type in examples:
+        if schema_type in examples:
             return {
                 "status": "success",
                 "schema_type": schema_type,
                 "examples": examples[schema_type],
             }
-        else:
-            # For outline, provide minimal example
-            return {
-                "status": "success",
-                "schema_type": schema_type,
-                "examples": {
-                    "note": f"Schema type '{schema_type}' is primarily used internally. "
-                    "Use 'proposed_changes' for evolve_report operations."
-                },
-            }
+        # For outline, provide minimal example
+        return {
+            "status": "success",
+            "schema_type": schema_type,
+            "examples": {
+                "note": f"Schema type '{schema_type}' is primarily used internally. "
+                "Use 'proposed_changes' for evolve_report operations."
+            },
+        }
 
     def _build_compact_response(self, schema_type: str) -> dict[str, Any]:
         """Build compact format response (quick reference)."""
@@ -391,20 +389,19 @@ class GetReportSchemaTool(MCPTool):
                 "schema_type": "all",
                 "quick_reference": compact_refs,
             }
-        elif schema_type in compact_refs:
+        if schema_type in compact_refs:
             return {
                 "status": "success",
                 "schema_type": schema_type,
                 "quick_reference": compact_refs[schema_type],
             }
-        else:
-            return {
-                "status": "success",
-                "schema_type": schema_type,
-                "quick_reference": {
-                    "note": f"Schema type '{schema_type}' is complex. Use format='json_schema' for complete definition."
-                },
-            }
+        return {
+            "status": "success",
+            "schema_type": schema_type,
+            "quick_reference": {
+                "note": f"Schema type '{schema_type}' is complex. Use format='json_schema' for complete definition."
+            },
+        }
 
     def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""

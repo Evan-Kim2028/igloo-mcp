@@ -62,9 +62,9 @@ def ensure_session_lock(service: SnowflakeServiceProtocol) -> threading.Lock:
             setattr(service, _LOCK_ATTR, lock)
         return lock
     except AttributeError as e:
-        raise ValueError(f"Failed to access Snowflake service attributes: {e}")
-    except Exception as e:
-        raise ValueError(f"Unexpected error creating session lock: {e}")
+        raise ValueError(f"Failed to access Snowflake service attributes: {e}") from e
+    except (TypeError, RuntimeError, ConnectionError) as e:
+        raise ValueError(f"Unexpected error creating session lock: {e}") from e
 
 
 def validate_session_lock(service: SnowflakeServiceProtocol) -> bool:

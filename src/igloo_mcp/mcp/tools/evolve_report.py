@@ -343,21 +343,20 @@ class EvolveReportTool(MCPTool):
                         error="not_found",
                         candidates=[],
                     ) from e
-                else:
-                    logger.error(
-                        "evolve_report_outline_load_failed",
-                        extra={
-                            "report_id": report_id,
-                            "error": error_msg,
-                            "request_id": request_id,
-                            "outline_duration_ms": outline_duration,
-                        },
-                    )
-                    raise MCPExecutionError(
-                        f"Failed to load report outline: {error_msg}",
-                        operation="evolve_report",
-                        hints=["Verify the report exists and is accessible"],
-                    ) from e
+                logger.error(
+                    "evolve_report_outline_load_failed",
+                    extra={
+                        "report_id": report_id,
+                        "error": error_msg,
+                        "request_id": request_id,
+                        "outline_duration_ms": outline_duration,
+                    },
+                )
+                raise MCPExecutionError(
+                    f"Failed to load report outline: {error_msg}",
+                    operation="evolve_report",
+                    hints=["Verify the report exists and is accessible"],
+                ) from e
 
             # Step 3: Parse and validate proposed changes
             validation_start = time.time()

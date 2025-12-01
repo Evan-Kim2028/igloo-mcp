@@ -137,8 +137,8 @@ The `response_mode` parameter controls response verbosity to reduce token usage 
 
 | Mode | Rows Returned | Use Case | Token Savings |
 |------|---------------|----------|-----------------|
-| `full` | All rows | Complete data retrieval (default) | baseline |
-| `summary` | 5 sample rows + key_metrics | Quick analysis with metrics | Maximum |
+| `full` | All rows | Complete data retrieval | baseline |
+| `summary` | 5 sample rows + key_metrics | Quick analysis with metrics (default) | Maximum |
 | `schema_only` | 0 rows (schema + metrics only) | Schema discovery | Maximum |
 | `sample` | 10 sample rows | Quick preview/validation | High |
 

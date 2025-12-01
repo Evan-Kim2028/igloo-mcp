@@ -43,29 +43,34 @@ class TestQuartoRenderer:
 
     def test_detect_with_env_var(self):
         """Test detection using IGLOO_QUARTO_BIN environment variable."""
-        with patch.dict(os.environ, {"IGLOO_QUARTO_BIN": "/custom/quarto"}):
-            with patch("os.path.isfile", return_value=True):
-                with patch("os.access", return_value=True):
-                    with patch("subprocess.run") as mock_run:
-                        mock_run.return_value = MagicMock(stdout="1.4.0\n", returncode=0)
+        with (
+            patch.dict(os.environ, {"IGLOO_QUARTO_BIN": "/custom/quarto"}),
+            patch("os.path.isfile", return_value=True),
+            patch("os.access", return_value=True),
+            patch("subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(stdout="1.4.0\n", returncode=0)
 
-                        renderer = QuartoRenderer.detect()
+            renderer = QuartoRenderer.detect()
 
-                        assert isinstance(renderer, QuartoRenderer)
-                        assert QuartoRenderer._cached_bin_path == "/custom/quarto"
-                        assert QuartoRenderer._cached_version == "1.4.0"
+            assert isinstance(renderer, QuartoRenderer)
+            assert QuartoRenderer._cached_bin_path == "/custom/quarto"
+            assert QuartoRenderer._cached_version == "1.4.0"
 
     def test_detect_with_path(self):
         """Test detection using PATH."""
-        with patch.dict(os.environ, {}, clear=True), patch("shutil.which", return_value="/usr/bin/quarto"):
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value = MagicMock(stdout="1.3.0\n", returncode=0)
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("shutil.which", return_value="/usr/bin/quarto"),
+            patch("subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = MagicMock(stdout="1.3.0\n", returncode=0)
 
-                renderer = QuartoRenderer.detect()
+            renderer = QuartoRenderer.detect()
 
-                assert isinstance(renderer, QuartoRenderer)
-                assert QuartoRenderer._cached_bin_path == "/usr/bin/quarto"
-                assert QuartoRenderer._cached_version == "1.3.0"
+            assert isinstance(renderer, QuartoRenderer)
+            assert QuartoRenderer._cached_bin_path == "/usr/bin/quarto"
+            assert QuartoRenderer._cached_version == "1.3.0"
 
     def test_detect_quarto_not_found(self):
         """Test detection when Quarto is not found."""
@@ -77,22 +82,26 @@ class TestQuartoRenderer:
 
     def test_detect_invalid_env_path(self):
         """Test detection with invalid IGLOO_QUARTO_BIN path."""
-        with patch.dict(os.environ, {"IGLOO_QUARTO_BIN": "/invalid/path"}):
-            with patch("os.path.isfile", return_value=False):
-                with pytest.raises(QuartoNotFoundError) as exc_info:
-                    QuartoRenderer.detect()
+        with (
+            patch.dict(os.environ, {"IGLOO_QUARTO_BIN": "/invalid/path"}),
+            patch("os.path.isfile", return_value=False),
+        ):
+            with pytest.raises(QuartoNotFoundError) as exc_info:
+                QuartoRenderer.detect()
 
-                assert "does not exist" in str(exc_info.value)
+            assert "does not exist" in str(exc_info.value)
 
     def test_detect_non_executable_env_path(self):
         """Test detection with non-executable IGLOO_QUARTO_BIN path."""
-        with patch.dict(os.environ, {"IGLOO_QUARTO_BIN": "/not/executable"}):
-            with patch("os.path.isfile", return_value=True):
-                with patch("os.access", return_value=False):
-                    with pytest.raises(QuartoNotFoundError) as exc_info:
-                        QuartoRenderer.detect()
+        with (
+            patch.dict(os.environ, {"IGLOO_QUARTO_BIN": "/not/executable"}),
+            patch("os.path.isfile", return_value=True),
+            patch("os.access", return_value=False),
+        ):
+            with pytest.raises(QuartoNotFoundError) as exc_info:
+                QuartoRenderer.detect()
 
-                    assert "not executable" in str(exc_info.value)
+            assert "not executable" in str(exc_info.value)
 
     def test_render_success(self):
         """Test successful rendering."""

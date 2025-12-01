@@ -522,10 +522,11 @@ def _is_select_like_statement(statement: str, parsed: exp.Expression | None = No
                         in_single = not in_single
                     elif char == '"' and not in_single:
                         in_double = not in_double
-                    elif char == "-" and not in_single and not in_double:
-                        if idx + 1 < len(line) and line[idx + 1] == "-":
-                            line = line[:idx]
-                            break
+                    elif (
+                        char == "-" and not in_single and not in_double and idx + 1 < len(line) and line[idx + 1] == "-"
+                    ):
+                        line = line[:idx]
+                        break
                     idx += 1
                 lines.append(line)
             return "\n".join(lines)

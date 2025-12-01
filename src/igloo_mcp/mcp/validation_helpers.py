@@ -279,7 +279,7 @@ def validate_numeric_range(
             f"{field_name} must be a number",
             validation_errors=[f"Cannot convert {value!r} to number"],
             hints=[f"Provide {field_name} as a number (e.g., 480.0)"],
-        )
+        ) from None
 
     if min_value is not None and numeric_value < min_value:
         raise MCPValidationError(
@@ -468,7 +468,7 @@ def validate_path_field(
                     f"Check permissions for {value}",
                     "Verify parent directories exist",
                 ],
-            )
+            ) from e
 
 
 def validate_response_mode(
@@ -508,7 +508,7 @@ def validate_response_mode(
         )
 
         # User gets deprecation warning if using old parameter:
-        # "result_mode is deprecated, use response_mode instead (deprecated in v0.3.5)"
+        # "result_mode is deprecated, use response_mode instead"
     """
     try:
         from fastmcp.utilities.logging import get_logger
@@ -529,7 +529,6 @@ def validate_response_mode(
                 extra={
                     "deprecated_param": legacy_param_name,
                     "deprecated_value": legacy_param_value,
-                    "deprecation_version": "v0.3.5",
                     "removal_planned": "v0.5.0",
                 },
             )

@@ -2,15 +2,18 @@
 
 This module provides the global index that tracks all reports in the system,
 enabling fast lookup by ID or title, and maintaining consistency across
-report directories.
+the file system storage.
 """
 
 from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from .models import IndexEntry, Outline
 
@@ -128,8 +131,28 @@ class ReportIndex:
                 raw = outline_path.read_text(encoding="utf-8")
                 data = json.loads(raw)
                 outline = Outline(**data)
-            except Exception:
-                # Skip corrupted outlines but continue with others
+            except ValidationError as e:
+                # Log validation errors but continue indexing other reports
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Skipping report {report_dir.name} due to validation error: {e}",
+                    extra={
+                        "report_id": report_dir.name,
+                        "error_type": type(e).__name__,
+                        "error_message": str(e),
+                    },
+                )
+                continue
+            except Exception as e:
+                # Log unexpected errors
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Skipping report {report_dir.name} due to unexpected error: {e}",
+                    extra={
+                        "report_id": report_dir.name,
+                        "error_type": type(e).__name__,
+                    },
+                )
                 continue
 
             report_id = report_dir.name

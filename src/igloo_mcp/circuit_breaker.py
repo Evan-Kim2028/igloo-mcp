@@ -35,8 +35,6 @@ class CircuitBreakerConfig:
 class CircuitBreakerError(Exception):
     """Raised when circuit breaker is open."""
 
-    pass
-
 
 class CircuitBreaker:
     """Circuit breaker implementation with exponential backoff."""

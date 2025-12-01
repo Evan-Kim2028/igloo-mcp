@@ -6,9 +6,11 @@ coordinating between storage, index, and external integrations.
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import hashlib
 import json
+import logging
 import uuid
 import webbrowser
 from pathlib import Path
@@ -22,6 +24,8 @@ from .index import ReportIndex
 from .models import AuditEvent, IndexEntry, Insight, Outline, ReportId, Section
 from .quarto_renderer import QuartoNotFoundError, QuartoRenderer, RenderResult
 from .storage import GlobalStorage, ReportStorage
+
+logger = logging.getLogger(__name__)
 
 
 class ReportService:
@@ -577,8 +581,9 @@ class ReportService:
                             source=dataset_source,
                         )
                         resolved_datasets[insight_id] = resolved
-                    except Exception:
+                    except Exception as e:
                         # Skip unresolvable datasets for now
+                        logger.debug(f"Could not resolve dataset for insight {insight_id}: {e}")
                         continue
 
         return resolved_datasets
@@ -1185,11 +1190,9 @@ class ReportService:
 
         # Open in browser if requested and it's HTML
         if open_browser and format == "html" and result.output_paths:
-            try:
-                webbrowser.open(f"file://{result.output_paths[0]}")
-            except Exception:
+            with contextlib.suppress(Exception):
                 # Don't fail if browser opening fails
-                pass
+                webbrowser.open(f"file://{result.output_paths[0]}")
 
         return response
 

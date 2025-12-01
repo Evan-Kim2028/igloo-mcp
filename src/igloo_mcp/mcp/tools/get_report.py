@@ -172,8 +172,7 @@ class GetReportTool(MCPTool):
             limit = 1
         elif limit > 100:
             limit = 100
-        if offset < 0:
-            offset = 0
+        offset = max(offset, 0)
 
         logger.info(
             "get_report_started",

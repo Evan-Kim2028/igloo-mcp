@@ -118,8 +118,8 @@ def _write_sql_artifact(artifact_root: Path, sql_sha256: str, sql: str) -> Path 
         if not artifact_path.exists():
             artifact_path.write_text(sql, encoding="utf-8")
         return artifact_path
-    except Exception:
-        logger.debug("Failed to persist SQL artifact", exc_info=True)
+    except (OSError, PermissionError, UnicodeEncodeError) as e:
+        logger.debug(f"Failed to persist SQL artifact: {e}", exc_info=True)
         return None
 
 
@@ -148,7 +148,8 @@ def _relative_sql_path(repo_root: Path, artifact_path: Path | None) -> str | Non
         return None
     try:
         return artifact_path.resolve().relative_to(repo_root.resolve()).as_posix()
-    except Exception:
+    except (ValueError, OSError):
+        # Path is not relative to repo_root, return absolute path
         return artifact_path.resolve().as_posix()
 
 
@@ -175,7 +176,7 @@ def _build_hint(rowcount: int, sample_size: int) -> str | None:
         return None
     if rowcount <= sample_size:
         return f"All {rowcount} rows returned"
-    return f"Showing first {sample_size} of {rowcount} rows. Use result_mode='full' to retrieve all rows"
+    return f"Showing first {sample_size} of {rowcount} rows. Use response_mode='full' to retrieve all rows"
 
 
 def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
@@ -225,7 +226,7 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
             "mode": "schema_only",
             "total_rows": rowcount,
             "rows_returned": 0,
-            "hint": "Use result_mode='full' to retrieve all rows",
+            "hint": "Use response_mode='full' to retrieve all rows",
         }
         return result
 
@@ -247,6 +248,29 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
         # Return key_metrics + small sample only
         sample_rows = rows[:RESULT_MODE_SUMMARY_SAMPLE_SIZE]
         result["rows"] = sample_rows
+
+        # DATA INTEGRITY: Warn when truncating results to prevent silent data loss
+        if rowcount > RESULT_MODE_SUMMARY_SAMPLE_SIZE:
+            truncation_pct = (1 - RESULT_MODE_SUMMARY_SAMPLE_SIZE / rowcount) * 100
+
+            logger.warning(
+                f"Result truncated: {rowcount} rows → {RESULT_MODE_SUMMARY_SAMPLE_SIZE} rows "
+                f"({truncation_pct:.1f}% data loss). Use result_mode='full' for all data.",
+                extra={
+                    "total_rows": rowcount,
+                    "returned_rows": RESULT_MODE_SUMMARY_SAMPLE_SIZE,
+                    "truncation_percentage": truncation_pct,
+                    "result_mode": mode,
+                },
+            )
+
+            # CRITICAL: Warn for catastrophic data loss on large datasets
+            if rowcount > 1000:
+                logger.error(
+                    f"LARGE DATASET TRUNCATION: {rowcount} rows truncated to "
+                    f"{RESULT_MODE_SUMMARY_SAMPLE_SIZE}. This may cause data loss in downstream processing!",
+                    extra={"severity": "high", "rowcount": rowcount, "sample_size": RESULT_MODE_SUMMARY_SAMPLE_SIZE},
+                )
 
         result["result_mode_info"] = {
             "mode": "summary",
@@ -309,7 +333,7 @@ class ExecuteQueryTool(MCPTool):
         raw = os.environ.get("IGLOO_MCP_ARTIFACT_ROOT")
         try:
             primary = resolve_artifact_root(raw=raw)
-        except Exception as exc:
+        except (ValueError, OSError, TypeError) as exc:
             primary = None
             warnings.append(f"Failed to resolve artifact root from environment: {exc}")
 
@@ -326,7 +350,7 @@ class ExecuteQueryTool(MCPTool):
                 if index > 0:
                     warnings.append(f"Artifact root unavailable; using fallback: {candidate}")
                 return candidate, warnings
-            except Exception as exc:
+            except (OSError, PermissionError) as exc:
                 warnings.append(f"Failed to initialise artifact root {candidate}: {exc}")
 
         warnings.append("Artifact root unavailable; SQL artifacts and cache will be disabled.")
@@ -368,7 +392,8 @@ class ExecuteQueryTool(MCPTool):
                 "role": snapshot.role,
             }
             success = True
-        except Exception:
+        except (AttributeError, KeyError, TypeError) as e:
+            logger.debug(f"Failed to snapshot session defaults: {e}", exc_info=True)
             self._transient_audit_warnings.append(
                 "Failed to snapshot session defaults; skipping cache for this execution."
             )
@@ -631,7 +656,7 @@ class ExecuteQueryTool(MCPTool):
         verbose_errors: bool = False,
         reason: str | None = None,
         normalized_insight: Insight | None = None,
-        result_mode: str = "full",
+        result_mode: str = "summary",
         ctx: Context | None = None,
         *,
         execution_id_override: str | None = None,
@@ -701,9 +726,9 @@ class ExecuteQueryTool(MCPTool):
                     effective_context=effective_context,
                 )
                 cache_hit = self.cache.lookup(cache_key)
-            except Exception:
+            except (OSError, PermissionError, ValueError, KeyError) as e:
                 cache_hit = None
-                logger.debug("Query cache lookup failed", exc_info=True)
+                logger.debug(f"Query cache lookup failed: {e}", exc_info=True)
                 self._transient_audit_warnings.append("Query cache lookup failed; continuing with live execution.")
 
             if cache_hit:
@@ -821,8 +846,8 @@ class ExecuteQueryTool(MCPTool):
             self._enrich_payload_with_objects(payload, referenced_objects)
             try:
                 self.history.record(payload)
-            except Exception:
-                logger.debug("Failed to record cache hit in history", exc_info=True)
+            except (OSError, PermissionError, ValueError) as e:
+                logger.debug(f"Failed to record cache hit in history: {e}", exc_info=True)
 
             result["audit_info"] = self._build_audit_info(
                 execution_id=execution_id,
@@ -882,8 +907,8 @@ class ExecuteQueryTool(MCPTool):
                         rows=result.get("rows") or [],
                         metadata=cache_metadata,
                     )
-                except Exception:
-                    logger.debug("Failed to persist query cache", exc_info=True)
+                except (OSError, PermissionError, ValueError) as e:
+                    logger.debug(f"Failed to persist query cache: {e}", exc_info=True)
                     self._transient_audit_warnings.append("Failed to persist query cache entry.")
 
             if manifest_path is not None:
@@ -934,8 +959,8 @@ class ExecuteQueryTool(MCPTool):
                     payload["insights"] = derived_insights
                 self._enrich_payload_with_objects(payload, referenced_objects)
                 self.history.record(payload)
-            except Exception:
-                pass
+            except (OSError, PermissionError, ValueError) as e:
+                logger.debug(f"Failed to record query success in history: {e}", exc_info=True)
 
             result.setdefault(
                 "cache",
@@ -997,8 +1022,8 @@ class ExecuteQueryTool(MCPTool):
                     payload["cache_key"] = cache_key
                 self._enrich_payload_with_objects(payload, referenced_objects)
                 self.history.record(payload)
-            except Exception:
-                pass
+            except (OSError, PermissionError, ValueError) as e:
+                logger.debug(f"Failed to record timeout in history: {e}", exc_info=True)
 
             # Use standardized timeout error wrapper
             context = {
@@ -1018,7 +1043,7 @@ class ExecuteQueryTool(MCPTool):
                 self.health_monitor.record_error(str(timeout_error))
             self._collect_audit_warnings()
             raise timeout_error
-        except Exception as e:
+        except Exception as e:  # Broad catch-all for any query execution failure
             error_message = str(e)
 
             if self.health_monitor:
@@ -1051,8 +1076,8 @@ class ExecuteQueryTool(MCPTool):
                     payload["cache_key"] = cache_key
                 self._enrich_payload_with_objects(payload, referenced_objects)
                 self.history.record(payload)
-            except Exception:
-                pass
+            except (OSError, PermissionError, ValueError) as history_err:
+                logger.debug(f"Failed to record error in history: {history_err}", exc_info=True)
 
             # Use standardized execution error wrapper
             context = {
@@ -1130,12 +1155,12 @@ class ExecuteQueryTool(MCPTool):
                    Stored in Snowflake QUERY_TAG and local history.
             post_query_insight: Optional summary or structured JSON describing results.
                               Stored in history and cache artifacts.
-            response_mode: Control response verbosity for token efficiency (STANDARD, default: "summary")
-                        - "summary": Return key_metrics + 5 sample rows (default)
-                        - "full": Return all rows (no filtering)
-                        - "schema_only": Return column schema only, no rows
-                        - "sample": Return first 10 rows only
-            result_mode: DEPRECATED in v0.3.5 - use response_mode instead
+            response_mode: Control response verbosity for token efficiency.
+                          "summary" (default): Return key_metrics + 5 sample rows (~90% reduction).
+                          "full": Return all rows.
+                          "schema_only": Return column schema only, no rows (~95% reduction).
+                          "sample": Return first 10 rows only (~60-80% reduction).
+            result_mode: DEPRECATED - use response_mode instead
             ctx: Optional MCP context for request correlation
             **kwargs: Additional arguments (for backward compatibility)
 
@@ -1166,7 +1191,7 @@ class ExecuteQueryTool(MCPTool):
             legacy_param_name="result_mode",
             legacy_param_value=result_mode,
             valid_modes=("full", "summary", "schema_only", "sample"),
-            default="full",
+            default="summary",
         )
 
         coerced_timeout: int | None = None
@@ -1240,7 +1265,7 @@ class ExecuteQueryTool(MCPTool):
         # Include igloo query tag from the upstream service if available
         try:
             params = dict(self.snowflake_service.get_query_tag_param())
-        except Exception:
+        except (AttributeError, KeyError, TypeError):
             params = {}
 
         # If a reason is provided, append it to the Snowflake QUERY_TAG for auditability.
@@ -1259,7 +1284,7 @@ class ExecuteQueryTool(MCPTool):
                         if isinstance(obj, dict):
                             obj.update({"tool": "execute_query", "reason": reason_clean})
                             merged = json.dumps(obj, ensure_ascii=False)
-                    except Exception:
+                    except (TypeError, ValueError):
                         merged = None
 
                 # Fallback to concatenated string tag
@@ -1269,7 +1294,7 @@ class ExecuteQueryTool(MCPTool):
                     merged = f"{base}{sep}tool:execute_query; reason:{reason_clean}"
 
                 params["QUERY_TAG"] = merged
-            except Exception:
+            except (TypeError, ValueError, KeyError):
                 # Never fail query execution on tag manipulation
                 pass
 
@@ -1362,7 +1387,7 @@ class ExecuteQueryTool(MCPTool):
                     if value in (None, ""):
                         return None
                     return str(value)
-                except Exception:
+                except (AttributeError, TypeError):
                     logger.debug(f"Failed to get session parameter {name}", exc_info=True)
                     return None
 
@@ -1392,10 +1417,9 @@ class ExecuteQueryTool(MCPTool):
                         # For other parameters, escape both name and value
                         escaped_value = _escape_sql_value(value)
                         cursor.execute(f"ALTER SESSION SET {name_upper} = {escaped_value}")
-                except Exception:
+                except (AttributeError, TypeError, ValueError):
                     # Session parameter adjustments are best-effort; ignore failures.
                     logger.debug(f"Failed to set session parameter {name}", exc_info=True)
-                    pass
 
             def _restore_session_parameters(
                 previous: dict[str, str | None],
@@ -1409,12 +1433,11 @@ class ExecuteQueryTool(MCPTool):
                             cursor.execute(f"ALTER SESSION SET QUERY_TAG = '{escaped}'")
                         else:
                             cursor.execute("ALTER SESSION UNSET QUERY_TAG")
-                except Exception:
+                except (AttributeError, TypeError):
                     logger.debug(
                         "Failed to restore QUERY_TAG session parameter",
                         exc_info=True,
                     )
-                    pass
 
                 try:
                     prev_timeout = previous.get("STATEMENT_TIMEOUT_IN_SECONDS")
@@ -1423,8 +1446,8 @@ class ExecuteQueryTool(MCPTool):
                             cursor.execute(f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {int(prev_timeout)}")
                         else:
                             cursor.execute("ALTER SESSION UNSET STATEMENT_TIMEOUT_IN_SECONDS")
-                except Exception:
-                    pass
+                except (AttributeError, TypeError, ValueError) as e:
+                    logger.debug(f"Failed to restore STATEMENT_TIMEOUT_IN_SECONDS: {e}", exc_info=True)
 
             def run_query() -> None:
                 try:
@@ -1447,7 +1470,7 @@ class ExecuteQueryTool(MCPTool):
                     # Capture Snowflake query id when available
                     try:
                         qid = getattr(cursor, "sfqid", None)
-                    except Exception:
+                    except (AttributeError, TypeError):
                         qid = None
                     query_id_box["id"] = qid
                     # Only fetch rows if a result set is present
@@ -1525,17 +1548,17 @@ class ExecuteQueryTool(MCPTool):
                         try:
                             # Normalize negative/None to 0
                             rc = int(rc) if rc and int(rc) >= 0 else 0
-                        except Exception:
+                        except (ValueError, TypeError):
                             rc = 0
                         result_box["rows"] = []
                         result_box["rowcount"] = rc
-                except Exception as exc:  # capture to re-raise on main thread
+                except Exception as exc:  # Broad catch required: thread error propagation to main thread
                     result_box["error"] = exc
                 finally:
                     try:
                         session_snapshot = snapshot_session(cursor)
                         result_box["session"] = session_snapshot.to_mapping()
-                    except Exception:
+                    except (AttributeError, TypeError):
                         result_box["session"] = None
                     with contextlib.suppress(Exception):
                         _restore_session_parameters(previous_parameters)
@@ -1551,7 +1574,7 @@ class ExecuteQueryTool(MCPTool):
                 # Local timeout: cancel the running statement server-side
                 try:
                     cursor.cancel()
-                except Exception:
+                except (AttributeError, TypeError):
                     # Best-effort. If cancel fails, we still time out.
                     pass
 
@@ -1744,13 +1767,16 @@ class ExecuteQueryTool(MCPTool):
                 "response_mode": {
                     "title": "Response Mode",
                     "type": "string",
-                    "enum": ["auto", "sync"],
-                    "default": "auto",
+                    "enum": ["schema_only", "summary", "sample", "full"],
+                    "default": "summary",
                     "description": (
-                        "Controls how the tool responds: 'auto' and 'sync' both use synchronous execution. "
-                        "This parameter is maintained for backward compatibility."
+                        "Control response verbosity for token efficiency. "
+                        "'summary' (default): 5 sample rows + key_metrics (90% token savings). "
+                        "'full': all rows. "
+                        "'schema_only': columns only (95% savings). "
+                        "'sample': 10 rows (60-80% savings)."
                     ),
-                    "examples": ["auto", "sync"],
+                    "examples": ["summary", "full", "schema_only", "sample"],
                 },
             },
         }

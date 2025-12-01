@@ -12,7 +12,7 @@ from pathlib import Path
 
 def parse_coverage_xml(coverage_file: Path) -> dict[str, float]:
     """Parse coverage.xml and extract per-file coverage."""
-    tree = ET.parse(coverage_file)
+    tree = ET.parse(coverage_file)  # noqa: S314 - Parsing trusted local coverage.xml from pytest-cov
     root = tree.getroot()
 
     coverage_by_file = {}

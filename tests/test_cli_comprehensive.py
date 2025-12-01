@@ -204,21 +204,23 @@ class TestCLIReportEvolve:
 
         mock_tool.execute = mock_execute
 
-        with patch("igloo_mcp.mcp.tools.evolve_report.EvolveReportTool", return_value=mock_tool):
-            with patch("igloo_mcp.cli.get_config"):
-                with patch("igloo_mcp.cli.ReportService"):
-                    args = argparse.Namespace(
-                        selector="test-report",
-                        instruction="Add summary",
-                        proposed_changes=None,
-                        dry_run=True,
-                    )
+        with (
+            patch("igloo_mcp.mcp.tools.evolve_report.EvolveReportTool", return_value=mock_tool),
+            patch("igloo_mcp.cli.get_config"),
+            patch("igloo_mcp.cli.ReportService"),
+        ):
+            args = argparse.Namespace(
+                selector="test-report",
+                instruction="Add summary",
+                proposed_changes=None,
+                dry_run=True,
+            )
 
-                    # Act
-                    result = _command_report_evolve(args)
+            # Act
+            result = _command_report_evolve(args)
 
-                    # Assert
-                    assert result == 0
+            # Assert
+            assert result == 0
 
     def test_report_evolve_with_instruction(self, tmp_path):
         """Evolve report with instruction."""
@@ -231,21 +233,23 @@ class TestCLIReportEvolve:
 
         mock_tool.execute = mock_execute
 
-        with patch("igloo_mcp.mcp.tools.evolve_report.EvolveReportTool", return_value=mock_tool):
-            with patch("igloo_mcp.cli.get_config"):
-                with patch("igloo_mcp.cli.ReportService"):
-                    args = argparse.Namespace(
-                        selector="rpt_123",
-                        instruction="Add new section",
-                        proposed_changes={},
-                        dry_run=False,
-                    )
+        with (
+            patch("igloo_mcp.mcp.tools.evolve_report.EvolveReportTool", return_value=mock_tool),
+            patch("igloo_mcp.cli.get_config"),
+            patch("igloo_mcp.cli.ReportService"),
+        ):
+            args = argparse.Namespace(
+                selector="rpt_123",
+                instruction="Add new section",
+                proposed_changes={},
+                dry_run=False,
+            )
 
-                    # Act
-                    result = _command_report_evolve(args)
+            # Act
+            result = _command_report_evolve(args)
 
-                    # Assert
-                    assert result == 0
+            # Assert
+            assert result == 0
 
 
 class TestCLIArgumentParsing:

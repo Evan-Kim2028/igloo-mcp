@@ -338,9 +338,8 @@ class CatalogService:
                 FROM INFORMATION_SCHEMA.FUNCTIONS
                 ORDER BY FUNCTION_CATALOG, FUNCTION_SCHEMA, FUNCTION_NAME
                 """
-            else:
-                if database:
-                    func_query = f"""
+            elif database:
+                func_query = f"""
                     SELECT
                         FUNCTION_CATALOG as database_name,
                         FUNCTION_SCHEMA as schema_name,
@@ -353,9 +352,9 @@ class CatalogService:
                     FROM INFORMATION_SCHEMA.FUNCTIONS
                     WHERE FUNCTION_CATALOG = '{database}'
                     ORDER BY FUNCTION_CATALOG, FUNCTION_SCHEMA, FUNCTION_NAME
-                    """
-                else:
-                    func_query = """
+                    """  # noqa: S608 - database param from validated Snowflake config
+            else:
+                func_query = """
                     SELECT
                         FUNCTION_CATALOG as database_name,
                         FUNCTION_SCHEMA as schema_name,
@@ -400,9 +399,8 @@ class CatalogService:
                 FROM INFORMATION_SCHEMA.COLUMNS
                 ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
                 """
-            else:
-                if database:
-                    col_query = f"""
+            elif database:
+                col_query = f"""
                     SELECT
                         TABLE_CATALOG as database_name,
                         TABLE_SCHEMA as schema_name,
@@ -415,9 +413,9 @@ class CatalogService:
                     FROM INFORMATION_SCHEMA.COLUMNS
                     WHERE TABLE_CATALOG = '{database}'
                     ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
-                    """
-                else:
-                    col_query = """
+                    """  # noqa: S608 - database param from validated Snowflake config
+            else:
+                col_query = """
                     SELECT
                         TABLE_CATALOG as database_name,
                         TABLE_SCHEMA as schema_name,

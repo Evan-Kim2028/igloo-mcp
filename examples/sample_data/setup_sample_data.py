@@ -108,7 +108,7 @@ def create_sample_tables(snow_cli: SnowCLI, ddl_files: dict[str, str], logger: l
         logger.info("✅ Sample table structure created")
         return True
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         logger.error(f"Failed to create sample tables: {e}")
         return False
 
@@ -140,7 +140,7 @@ def generate_sample_catalog(snow_cli: SnowCLI, logger: logging.Logger) -> bool:
         logger.info(f"✅ Catalog generated successfully: {totals}")
         return True
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, ImportError) as e:
         logger.error(f"Failed to generate catalog: {e}")
         return False
 
@@ -187,7 +187,7 @@ def create_lineage_example(snow_cli: SnowCLI, logger: logging.Logger) -> bool:
 
         return True
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, ImportError) as e:
         logger.error(f"Failed to create lineage examples: {e}")
         return False
 
@@ -286,7 +286,7 @@ def main():
         logger.info("\n❌ Setup interrupted by user")
         return 1
 
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError) as e:
         logger.error(f"❌ Unexpected error during setup: {e}")
         return 1
 

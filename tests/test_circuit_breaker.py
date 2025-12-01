@@ -251,8 +251,8 @@ class TestCircuitBreakerConcurrentAccess:
                     if i < 7:  # First 7 calls fail to trigger open circuit
                         try:
 
-                            def failing_func():
-                                raise CircuitBreakerTestException(f"fail_{worker_id}_{i}")
+                            def failing_func(_i=i, _wid=worker_id):
+                                raise CircuitBreakerTestException(f"fail_{_wid}_{_i}")
 
                             breaker.call(failing_func)
                             results.append(f"unexpected_success_{worker_id}_{i}")
@@ -263,13 +263,13 @@ class TestCircuitBreakerConcurrentAccess:
                     else:
                         # Last 3 calls should succeed and reset failure count
                         try:
-                            result = breaker.call(lambda: f"success_{worker_id}_{i}")
+                            result = breaker.call(lambda _wid=worker_id, _i=i: f"success_{_wid}_{_i}")
                             results.append(result)
                         except CircuitBreakerError:
                             results.append(f"circuit_open_{worker_id}_{i}")
                         except CircuitBreakerTestException:
                             results.append(f"unexpected_exception_{worker_id}_{i}")
-            except Exception as e:
+            except (CircuitBreakerError, CircuitBreakerTestException, RuntimeError) as e:
                 errors.append(f"worker_{worker_id}_error: {e}")
 
         # Run 10 workers concurrently
@@ -319,8 +319,8 @@ class TestCircuitBreakerConcurrentAccess:
             for i in range(20):
                 try:
 
-                    def failing_func():
-                        raise CircuitBreakerTestException(f"fail_{i}")
+                    def failing_func(_i=i):
+                        raise CircuitBreakerTestException(f"fail_{_i}")
 
                     breaker.call(failing_func)
                 except CircuitBreakerError:
@@ -481,8 +481,8 @@ class TestCircuitBreakerTimingEdgeCases:
         for i in range(3):
             with pytest.raises(CircuitBreakerTestException):
 
-                def failing_func():
-                    raise CircuitBreakerTestException(f"fail_{i}")
+                def failing_func(_i=i):
+                    raise CircuitBreakerTestException(f"fail_{_i}")
 
                 breaker.call(failing_func)
 
@@ -490,8 +490,8 @@ class TestCircuitBreakerTimingEdgeCases:
         for i in range(2):
             with pytest.raises(CircuitBreakerError):
 
-                def failing_func():
-                    raise CircuitBreakerTestException(f"fail_{i + 3}")
+                def failing_func(_i=i):
+                    raise CircuitBreakerTestException(f"fail_{_i + 3}")
 
                 breaker.call(failing_func)
 
@@ -581,8 +581,8 @@ class TestCircuitBreakerTimingEdgeCases:
             for i in range(20):
                 try:
 
-                    def failing_func():
-                        raise CircuitBreakerTestException(f"fail_{i}")
+                    def failing_func(_i=i):
+                        raise CircuitBreakerTestException(f"fail_{_i}")
 
                     breaker.call(failing_func)
                     results.append(f"unexpected_success_{i}")
@@ -590,7 +590,7 @@ class TestCircuitBreakerTimingEdgeCases:
                     results.append(f"circuit_open_{i}")
                 except CircuitBreakerTestException:
                     results.append(f"expected_failure_{i}")
-                except Exception as e:
+                except RuntimeError as e:
                     errors.append(f"error_{i}: {e}")
 
         # Run rapid calls in separate thread

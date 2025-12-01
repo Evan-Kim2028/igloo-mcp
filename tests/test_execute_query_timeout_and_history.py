@@ -24,11 +24,17 @@ async def test_timeout_cancels_and_logs_history(tmp_path, monkeypatch):
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
     service = FakeSnowflakeService(
         [
+            # Session parameter queries that execute_query makes
             FakeQueryPlan(
                 statement="SELECT LONG_RUNNING",
                 rows=[{"A": 1}],
                 duration=2.0,
-            )
+            ),
+            # Restore parameter query
+            FakeQueryPlan(
+                statement="SHOW PARAMETERS LIKE 'STATEMENT\\_TIMEOUT\\_IN\\_SECONDS' IN SESSION",
+                rows=[],
+            ),
         ]
     )
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
@@ -217,7 +223,11 @@ async def test_large_result_triggers_truncation(tmp_path, monkeypatch):
     service = FakeSnowflakeService([plan])
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
 
-    result = await tool.execute(statement="SELECT BIG", timeout_seconds=120)
+    result = await tool.execute(
+        statement="SELECT BIG",
+        reason="Test large result truncation",
+        response_mode="full",  # Explicitly request full mode (default changed to 'summary' in v0.3.7)
+    )
 
     assert result["truncated"] is True
     assert result["original_rowcount"] == len(mock_rows)
@@ -231,7 +241,12 @@ async def test_large_result_triggers_truncation(tmp_path, monkeypatch):
     rows_path = manifest_path.parent / "rows.jsonl"
     assert rows_path.exists()
 
-    cached_result = await tool.execute(statement="SELECT BIG", timeout_seconds=120)
+    cached_result = await tool.execute(
+        statement="SELECT BIG",
+        reason="Test cache hit",
+        response_mode="full",
+        timeout_seconds=120,
+    )
     assert cached_result["cache"]["hit"] is True
     executed_cursors = [cursor for cursor in service.cursors if cursor._main_executed]
     assert len(executed_cursors) == 1

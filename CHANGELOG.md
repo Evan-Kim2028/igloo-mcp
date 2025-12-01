@@ -1,9 +1,77 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# [0.3.6] - 2025-11-30
+## [0.3.7] - 2025-12-01
+
+### 🔒 Security Fixes (P1)
+- **Path Traversal Vulnerability**: Fixed critical security vulnerability in `path_utils.py` where malicious environment variables could access sensitive system files
+  - Added path validation to ensure all resolved paths stay within safe boundaries (user home directory and current working directory)
+  - Added comprehensive security regression tests to prevent future vulnerabilities
+  - See: `todos/001-pending-p1-path-traversal-vulnerability.md`
+
+### ⚠️ Data Integrity (P1)
+- **Silent Data Truncation**: Added explicit warnings when `response_mode='summary'` truncates query results
+  - WARNING-level logs for all truncations with percentage of data loss
+  - ERROR-level logs for large datasets (>1000 rows) to prevent catastrophic data loss
+  - Comprehensive metadata in `result_mode_info` field
+  - See: `todos/002-pending-p1-silent-data-truncation-summary-mode.md`
+
+### 🔥 Critical Fixes
+- **#110**: Fixed execute_query schema showing wrong response_mode values (`auto`/`sync` → `schema_only`/`summary`/`sample`/`full`)
+- **#111**: Implemented v0.3.6 breaking change - execute_query now defaults to `response_mode='summary'` for 60-95% token savings
+- **#115**: Fixed silent report skipping bug - reports with extra fields (like top-level `status`/`tags`) now load correctly with warnings
+- **#109**: Fixed version string mismatch (__version__ now correctly shows 0.3.7)
+
+### 🐛 Bug Fixes
+- **#114**: Fixed HTML standalone renderer formatting issues
+  - Eliminated double rendering of sections (content + redundant insights list)
+  - Hidden star ratings in narrative sections (only show in insights-only lists)
+  - Improved markdown to HTML conversion for valid semantic structure
+  - Added documentation for chart storage best practices in `report_files/` directory
+
+### 🛠️ Enhancements
+- **#116**: Enabled Ruff BLE (blind-except) rules to catch silent failure bugs
+  - Reviewed 133 exception handling patterns across codebase
+  - Added per-file ignores for legitimate best-effort operations (cache, logging, CLI)
+  - Prevents future bugs like #115 (silent report skipping)
+- **#112**: Verified response_mode schema consistency across all 6 tools
+- **#113**: Added MCP integration test framework for schema validation (tests currently skipped pending service mocking)
+
+### 📚 Documentation
+- **#108**: Improved Claude Code MCP setup instructions
+  - Added CLI method (recommended): `claude mcp add --scope user --transport stdio igloo-mcp`
+  - Added project method for team sharing (`.mcp.json`)
+  - Clarified executable name (`igloo_mcp` not `igloo-mcp`)
+  - Clarified config location (`~/.claude.json`)
+
+### ⚠️ Breaking Changes
+- `execute_query` now defaults to `response_mode='summary'` (returns 5 sample rows + metadata) instead of `'full'` (all rows)
+  - This was documented in v0.3.6 CHANGELOG but not implemented in code
+  - Provides 60-95% token savings by default
+  - Users who need all rows should explicitly set `response_mode='full'`
+
+### Migration Guide
+If you relied on the default behavior getting all rows:
+```python
+# Before (implicit full mode)
+result = execute_query(statement="SELECT * FROM table", reason="test")
+
+# After v0.3.7 (explicit full mode)
+result = execute_query(statement="SELECT * FROM table", reason="test", response_mode="full")
+```
+
+Or use the new efficient default:
+```python
+# Get 5 sample rows + metadata (90% token savings)
+result = execute_query(statement="SELECT * FROM table", reason="test")
+# response_mode='summary' is now the default
+```
+
+## [0.3.6] - 2025-11-29
 
 ## Added
 

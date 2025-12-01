@@ -42,7 +42,8 @@ def _coerce_numeric(value: Any) -> float | None:
     if isinstance(value, Decimal):
         try:
             return float(value)
-        except Exception:
+        except (OverflowError, ValueError):
+            # Decimal too large or invalid for float conversion
             return None
     return None
 
