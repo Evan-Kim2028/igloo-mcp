@@ -167,6 +167,22 @@ class HTMLStandaloneRenderer:
     ) -> dict[str, str]:
         """Collect charts from outline metadata and convert to base64 data URIs.
 
+        BEST PRACTICE: Charts should be stored in the report's `report_files/` directory
+        to ensure portability and proper access control.
+
+        Example structure:
+            ~/.igloo_mcp/reports/by_id/<report-id>/
+                ├── outline.json
+                ├── metadata.json
+                └── report_files/
+                    ├── chart1_infrastructure.png
+                    ├── chart2_trading_volume.png
+                    └── chart3_wallet_distribution.png
+
+        Charts stored outside the report directory (e.g., in ~/Documents/) may not
+        be accessible when the report is moved or shared. The report_files/ directory
+        is the canonical location for all report-associated assets.
+
         Args:
             outline: Report outline with chart metadata
             warnings: List to append warnings to
@@ -285,8 +301,8 @@ class HTMLStandaloneRenderer:
             html += f"""            <div class="section-content">{content_html}</div>
 """
 
-        # Insights
-        if section.insight_ids:
+        # Insights (only show if no prose content - avoid redundancy)
+        elif section.insight_ids:
             html += """            <div class="insights-list">
 """
             for insight_id in section.insight_ids:
@@ -755,38 +771,85 @@ data-importance="{insight.importance}">
         return escape(text) if text else ""
 
     def _markdown_to_html(self, markdown: str) -> str:
-        """Convert basic markdown to HTML.
+        """Convert basic markdown to HTML with proper structure.
 
-        This is a simple converter for common patterns.
-        For full markdown support, use a dedicated library.
+        Handles:
+        - Headers (####, ###, ##, #)
+        - Lists (-, *)
+        - Bold and italic
+        - Code blocks
+        - Paragraphs
 
         Args:
             markdown: Markdown text
 
         Returns:
-            HTML string
+            HTML string with valid semantic structure
         """
         import re
 
-        html = self._escape_html(markdown)
+        html_lines = []
+        lines = markdown.split("\n")
+        in_list = False
 
-        # Headers
-        html = re.sub(r"^### (.+)$", r"<h4>\1</h4>", html, flags=re.MULTILINE)
-        html = re.sub(r"^## (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
-        html = re.sub(r"^# (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+        for line in lines:
+            line_stripped = line.strip()
+            if not line_stripped:
+                if in_list:
+                    html_lines.append("</ul>")
+                    in_list = False
+                continue
 
-        # Bold and italic
-        html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
-        html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
+            # Headers (must come before escaping for clean output)
+            if line_stripped.startswith("####"):
+                if in_list:
+                    html_lines.append("</ul>")
+                    in_list = False
+                html_lines.append(f"<h4>{escape(line_stripped[4:].strip())}</h4>")
+            elif line_stripped.startswith("###"):
+                if in_list:
+                    html_lines.append("</ul>")
+                    in_list = False
+                html_lines.append(f"<h3>{escape(line_stripped[3:].strip())}</h3>")
+            elif line_stripped.startswith("##"):
+                if in_list:
+                    html_lines.append("</ul>")
+                    in_list = False
+                html_lines.append(f"<h3>{escape(line_stripped[2:].strip())}</h3>")
+            elif line_stripped.startswith("#"):
+                if in_list:
+                    html_lines.append("</ul>")
+                    in_list = False
+                html_lines.append(f"<h3>{escape(line_stripped[1:].strip())}</h3>")
 
-        # Code
-        html = re.sub(r"`(.+?)`", r"<code>\1</code>", html)
+            # Lists
+            elif line_stripped.startswith("- ") or line_stripped.startswith("* "):
+                if not in_list:
+                    html_lines.append("<ul>")
+                    in_list = True
+                text = escape(line_stripped[2:].strip())
+                # Handle inline formatting
+                text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+                text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+                text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
+                html_lines.append(f"<li>{text}</li>")
 
-        # Line breaks -> paragraphs
-        paragraphs = html.split("\n\n")
-        html = "".join(f"<p>{p}</p>" for p in paragraphs if p.strip())
+            # Paragraphs
+            else:
+                if in_list:
+                    html_lines.append("</ul>")
+                    in_list = False
+                text = escape(line_stripped)
+                # Handle inline formatting
+                text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+                text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
+                text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
+                html_lines.append(f"<p>{text}</p>")
 
-        return html
+        if in_list:
+            html_lines.append("</ul>")
+
+        return "\n".join(html_lines)
 
 
 __all__ = ["HTMLStandaloneRenderer"]
