@@ -87,7 +87,13 @@ class QuartoRenderer:
         # Get and cache version (only once)
         if cls._cached_version is None:
             try:
-                result = subprocess.run([bin_path, "--version"], check=False, capture_output=True, text=True, timeout=10)
+                result = subprocess.run(
+                    [bin_path, "--version"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
                 if result.returncode == 0:
                     cls._cached_version = result.stdout.strip()
                 else:
@@ -197,7 +203,8 @@ class QuartoRenderer:
         try:
             result = subprocess.run(
                 cmd,
-                check=False, cwd=str(report_dir),
+                check=False,
+                cwd=str(report_dir),
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minute timeout
