@@ -1,6 +1,6 @@
 [project]
- name = "igloo_mcp"
-version = "0.3.6"
+name = "igloo_mcp"
+version = "0.3.7"
 description = "Igloo MCP - Snowflake MCP Server for agentic native workflows"
 readme = "README.md"
 authors = [
@@ -82,37 +82,37 @@ select = [
     "PT",   # flake8-pytest-style
     # Phase 2: Import organization
     "TID",  # flake8-tidy-imports (ban relative imports)
+    # v0.3.7: Exception handling
+    "BLE",  # flake8-blind-except (catch silent failures)
 ]
 
 ignore = [
     "S101",  # assert statements allowed in tests
     "S603",  # subprocess without shell validation (manually validated)
-    "S607",  # partial executable paths (quarto, etc.)
-    "S110",  # try-except-pass - used for best-effort error handling
-    "S112",  # try-except-continue - used for robust iteration
-    "S608",  # SQL injection - false positives for Snowflake metadata queries
-    "S701",  # Jinja autoescape - templates are code-generated, not user input
-    "S314",  # XML parsing - coverage.xml is trusted build artifact
-    "S108",  # Hardcoded temp files - test fixtures and cache paths
-    "S104",  # Hardcoded bind-all-interfaces - localhost binding for tests
-    "S310",  # Suspicious URL open - urllib usage is intentional for Snowflake REST API
-    "SIM105", # Suppressible exceptions - contextlib.suppress not always clearer
-    "SIM117", # Multiple with statements - nested withs more readable
-    "B023",  # Loop variable in function - false positives in middleware wrapping
-    "B904",  # Exception chaining - some re-raised exceptions intentionally hide internal details
-    "SIM102", # Nested ifs - sometimes more readable than combined conditions
-    "SIM108", # Ternary - explicit if/else more readable in complex cases
-    "SIM115", # Context manager - lock file needs explicit control
-    "UP031", # String formatting - % format intentional for compatibility
+    "S607",  # partial executable path (manually validated)
+    "B008",  # function call in argument defaults (FastMCP pattern)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = [
-    "S101", "S105", "S106",  # Asserts and hardcoded test data
-    "PT011", "PT012", "PT017",  # Pytest patterns
-    "B017",  # assert-raises-exception allowed in tests
-]
-"scripts/*" = ["S603", "S607"]  # Allow subprocess in scripts
+# Test files can use additional patterns
+"tests/**" = ["S101", "S105", "S106", "S108", "S301", "S608", "PT011", "PT012", "PT017", "B017"]
+# Best-effort operations that should not fail main workflow
+# These catch Exception for resilience but log warnings
+"src/igloo_mcp/cache/query_result_cache.py" = ["BLE001"]  # Cache failures shouldn't break queries
+"src/igloo_mcp/logging/query_history.py" = ["BLE001"]  # History logging is best-effort
+"src/igloo_mcp/cli.py" = ["BLE001"]  # CLI should show user-friendly errors, not crash
+"src/igloo_mcp/living_reports/storage.py" = ["BLE001"]  # File I/O failures logged but don't crash
+"src/igloo_mcp/error_handling.py" = ["BLE001"]  # Error handling itself must be resilient
+"src/igloo_mcp/living_reports/service.py" = ["BLE001"]  # Service layer has best-effort operations
+"src/igloo_mcp/catalog/catalog_service.py" = ["BLE001"]  # Catalog operations are best-effort
+"src/igloo_mcp/dependency/dependency_service.py" = ["BLE001"]  # Dependency graph is best-effort
+"src/igloo_mcp/living_reports/renderers/html_standalone.py" = ["BLE001"]  # Chart embedding is best-effort
+"src/igloo_mcp/living_reports/index.py" = ["BLE001"]  # Index operations are best-effort (already fixed #115 with logging)
+"src/igloo_mcp/mcp/tools/base.py" = ["BLE001"]  # Tool error handling must be resilient
+"src/igloo_mcp/mcp/tools/build_catalog.py" = ["BLE001"]  # Catalog building is best-effort
+"src/igloo_mcp/mcp/tools/evolve_report.py" = ["BLE001"]  # Report evolution has best-effort validations
+"src/igloo_mcp/mcp/tools/execute_query.py" = ["BLE001"]  # Query execution has resilient error paths
+"src/igloo_mcp/sql_validation.py" = ["BLE001"]  # SQL parsing failures are expected fallback behavior
 
 # Phase 2: Ban relative parent imports (allow same-package imports)
 [tool.ruff.lint.flake8-tidy-imports]
