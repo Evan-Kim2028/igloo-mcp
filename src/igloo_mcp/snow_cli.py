@@ -97,11 +97,14 @@ class SnowCLI:
                 # Log the command about to run (without printing sensitive env)
                 debug_cmd = " ".join(args)
                 logger.debug(f"Executing: {debug_cmd}")
-                # Also echo the SQL in a trimmed form for readability
-                trimmed = " ".join(query.split())
-                logger.debug(f"SQL: {trimmed}")
-            except Exception:
-                pass
+                # Log SQL query for debugging (best-effort, don't fail on logging errors)
+                try:
+                    trimmed = " ".join(query.split())
+                    logger.debug(f"SQL: {trimmed}")
+                except (AttributeError, ValueError):
+                    pass
+            except (AttributeError, TypeError, ValueError):  # Debug logging is best-effort
+                logger.debug("Failed to log SQL debug info", exc_info=True)
 
         proc = subprocess.run(
             args,
@@ -141,8 +144,8 @@ class SnowCLI:
                 reader = csv.DictReader(sio)
                 out.rows = list(reader)  # type: ignore
                 out.columns = list(reader.fieldnames or [])
-            except Exception:
-                pass
+            except (AttributeError, TypeError, ValueError):  # Debug logging is best-effort
+                logger.debug("Failed to log SQL debug info", exc_info=True)
 
         return out
 
@@ -165,8 +168,8 @@ class SnowCLI:
                 debug_cmd = " ".join(args)
                 logger.debug(f"Executing file: {debug_cmd}")
                 logger.debug(f"File: {file_path}")
-            except Exception:
-                pass
+            except (AttributeError, TypeError, ValueError):  # Debug logging is best-effort
+                logger.debug("Failed to log SQL debug info", exc_info=True)
 
         proc = subprocess.run(
             args,

@@ -24,11 +24,21 @@ async def test_timeout_cancels_and_logs_history(tmp_path, monkeypatch):
     cfg = Config(snowflake=SnowflakeConfig(profile="test"))
     service = FakeSnowflakeService(
         [
+            # Session parameter queries that execute_query makes
+            FakeQueryPlan(
+                statement="SHOW PARAMETERS LIKE 'STATEMENT\\_TIMEOUT\\_IN\\_SECONDS' IN SESSION",
+                rows=[],
+            ),
             FakeQueryPlan(
                 statement="SELECT LONG_RUNNING",
                 rows=[{"A": 1}],
                 duration=2.0,
-            )
+            ),
+            # Restore parameter query
+            FakeQueryPlan(
+                statement="SHOW PARAMETERS LIKE 'STATEMENT\\_TIMEOUT\\_IN\\_SECONDS' IN SESSION",
+                rows=[],
+            ),
         ]
     )
     tool = ExecuteQueryTool(cfg, service, QueryService(context=None))

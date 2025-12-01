@@ -108,7 +108,7 @@ class RobustSnowflakeService:
                 last_error=str(e),
                 circuit_breaker_state="open",
             )
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError, ConnectionError, RuntimeError) as e:
             return HealthStatus(healthy=False, snowflake_connection=False, last_error=str(e))
 
 

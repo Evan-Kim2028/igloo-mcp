@@ -34,7 +34,7 @@ class QueryService:
                 default_ctx = context.config.snowflake.session_defaults()
             try:
                 self.rest_client = SnowRestClient.from_env(default_context=default_ctx)
-            except Exception:
+            except (AttributeError, KeyError, TypeError, ValueError):
                 # Fall back to CLI driver if REST client setup fails for any reason
                 logger.warning(
                     "SnowREST initialization failed; falling back to SnowCLI driver",

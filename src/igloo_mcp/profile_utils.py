@@ -80,7 +80,7 @@ def _load_snowflake_config(config_path: Path, mtime: float) -> dict[str, Any]:
     try:
         with open(config_path, "rb") as f:
             return tomllib.load(f)
-    except Exception as e:
+    except (FileNotFoundError, PermissionError, tomllib.TOMLDecodeError) as e:
         logger.warning(f"Failed to load Snowflake config from {config_path}: {e}")
         return {}
 
@@ -105,7 +105,7 @@ def get_available_profiles() -> set[str]:
         profiles = set(connections.keys())
         logger.debug(f"Found {len(profiles)} profiles: {sorted(profiles)}")
         return profiles
-    except Exception as e:
+    except (FileNotFoundError, PermissionError, KeyError, tomllib.TOMLDecodeError) as e:
         logger.warning(f"Error reading profiles from {config_path}: {e}")
         return set()
 
@@ -127,7 +127,7 @@ def get_default_profile() -> str | None:
         default = config_data.get("default_connection_name")
         logger.debug(f"Default profile: {default}")
         return default
-    except Exception as e:
+    except (FileNotFoundError, PermissionError, KeyError, tomllib.TOMLDecodeError) as e:
         logger.warning(f"Error reading default profile from {config_path}: {e}")
         return None
 
@@ -271,7 +271,7 @@ def get_profile_summary() -> ProfileSummary:
                 if resolved_profile:
                     entry = connections.get(resolved_profile, {}) or {}
                     current_auth = entry.get("authenticator")
-    except Exception:
+    except (KeyError, TypeError, tomllib.TOMLDecodeError):
         # Non-fatal: leave authenticator as None if parsing fails
         current_auth = None
 

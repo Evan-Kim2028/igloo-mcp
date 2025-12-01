@@ -49,7 +49,7 @@ def extract_query_objects(sql: str) -> list[dict[str, str | None]]:
     seen: set[tuple[str | None, str | None, str]] = set()
     try:
         parsed = sqlglot.parse(sql, read="snowflake")
-    except Exception:
+    except (ValueError, TypeError, AttributeError, SyntaxError, KeyError):
         return objects
 
     for expression in parsed:
