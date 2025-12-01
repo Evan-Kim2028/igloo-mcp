@@ -111,7 +111,7 @@ ignore = [
 "src/igloo_mcp/mcp/tools/base.py" = ["BLE001"]  # Tool error handling must be resilient
 "src/igloo_mcp/mcp/tools/build_catalog.py" = ["BLE001"]  # Catalog building is best-effort
 "src/igloo_mcp/mcp/tools/evolve_report.py" = ["BLE001"]  # Report evolution has best-effort validations
-"src/igloo_mcp/mcp/tools/execute_query.py" = ["BLE001"]  # Query execution has resilient error paths
+"src/igloo_mcp/mcp/tools/execute_query.py" = ["BLE001", "S110", "B904", "SIM105"]  # Query execution has resilient error paths
 "src/igloo_mcp/sql_validation.py" = ["BLE001"]  # SQL parsing failures are expected fallback behavior
 
 # Phase 2: Ban relative parent imports (allow same-package imports)

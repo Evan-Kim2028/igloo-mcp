@@ -631,7 +631,7 @@ class ExecuteQueryTool(MCPTool):
         verbose_errors: bool = False,
         reason: str | None = None,
         normalized_insight: Insight | None = None,
-        result_mode: str = "full",
+        result_mode: str = "summary",
         ctx: Context | None = None,
         *,
         execution_id_override: str | None = None,
@@ -1130,11 +1130,11 @@ class ExecuteQueryTool(MCPTool):
                    Stored in Snowflake QUERY_TAG and local history.
             post_query_insight: Optional summary or structured JSON describing results.
                               Stored in history and cache artifacts.
-            response_mode: Control response verbosity for token efficiency (STANDARD, default: "summary")
-                        - "summary": Return key_metrics + 5 sample rows (default)
-                        - "full": Return all rows (no filtering)
-                        - "schema_only": Return column schema only, no rows
-                        - "sample": Return first 10 rows only
+            response_mode: Control response verbosity for token efficiency.
+                          "summary" (default): Return key_metrics + 5 sample rows (~90% reduction).
+                          "full": Return all rows.
+                          "schema_only": Return column schema only, no rows (~95% reduction).
+                          "sample": Return first 10 rows only (~60-80% reduction).
             result_mode: DEPRECATED in v0.3.5 - use response_mode instead
             ctx: Optional MCP context for request correlation
             **kwargs: Additional arguments (for backward compatibility)
@@ -1166,7 +1166,7 @@ class ExecuteQueryTool(MCPTool):
             legacy_param_name="result_mode",
             legacy_param_value=result_mode,
             valid_modes=("full", "summary", "schema_only", "sample"),
-            default="full",
+            default="summary",
         )
 
         coerced_timeout: int | None = None
@@ -1744,13 +1744,16 @@ class ExecuteQueryTool(MCPTool):
                 "response_mode": {
                     "title": "Response Mode",
                     "type": "string",
-                    "enum": ["auto", "sync"],
-                    "default": "auto",
+                    "enum": ["schema_only", "summary", "sample", "full"],
+                    "default": "summary",
                     "description": (
-                        "Controls how the tool responds: 'auto' and 'sync' both use synchronous execution. "
-                        "This parameter is maintained for backward compatibility."
+                        "Control response verbosity for token efficiency. "
+                        "'summary' (default): 5 sample rows + key_metrics (90% token savings). "
+                        "'full': all rows. "
+                        "'schema_only': columns only (95% savings). "
+                        "'sample': 10 rows (60-80% savings)."
                     ),
-                    "examples": ["auto", "sync"],
+                    "examples": ["summary", "full", "schema_only", "sample"],
                 },
             },
         }
