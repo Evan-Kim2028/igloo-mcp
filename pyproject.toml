@@ -113,6 +113,15 @@ ignore = [
 "src/igloo_mcp/mcp/tools/evolve_report.py" = ["BLE001"]  # Report evolution has best-effort validations
 "src/igloo_mcp/mcp/tools/execute_query.py" = ["BLE001", "S110", "B904", "SIM105"]  # Query execution has resilient error paths
 "src/igloo_mcp/sql_validation.py" = ["BLE001"]  # SQL parsing failures are expected fallback behavior
+"src/igloo_mcp/mcp/tools/get_catalog_summary.py" = ["BLE001"]  # Catalog operations are best-effort
+"src/igloo_mcp/mcp/tools/health.py" = ["BLE001"]  # Health checks are best-effort diagnostics
+"src/igloo_mcp/mcp/tools/render_report.py" = ["BLE001"]  # Report rendering is best-effort
+"src/igloo_mcp/mcp/tools/search_catalog.py" = ["BLE001"]  # Catalog search is best-effort
+"src/igloo_mcp/mcp/tools/search_citations.py" = ["BLE001"]  # Citation search is best-effort
+"src/igloo_mcp/mcp/validation_helpers.py" = ["BLE001"]  # Validation helpers have fallback behavior
+"src/igloo_mcp/mcp_health.py" = ["BLE001"]  # Health monitoring is best-effort
+"src/igloo_mcp/mcp_resources.py" = ["BLE001"]  # Resource loading is best-effort
+"src/igloo_mcp/mcp_server.py" = ["BLE001"]  # Server lifecycle has resilient error handling
 
 # Phase 2: Ban relative parent imports (allow same-package imports)
 [tool.ruff.lint.flake8-tidy-imports]
