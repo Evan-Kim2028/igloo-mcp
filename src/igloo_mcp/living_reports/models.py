@@ -379,7 +379,7 @@ class Outline(BaseModel):
     of truth that drives report generation and evolution.
     """
 
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+    model_config = ConfigDict(extra="ignore", validate_assignment=True)
 
     report_id: str = Field(
         ...,
