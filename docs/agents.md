@@ -110,7 +110,7 @@ Read(file_path="...")                                # Blind file reading
 
 ---
 
-## 💡 Progressive Disclosure Best Practices (v0.3.5+)
+## 💡 Progressive Disclosure Best Practices
 
 **Token Efficiency**: Use `response_mode` to control query result verbosity and save 60-95% tokens.
 
@@ -184,7 +184,7 @@ print(result['result_mode_info'])
 #   "total_rows": 2100,
 #   "rows_returned": 5,
 #   "sample_size": 5,
-#   "hint": "Showing first 5 of 2100 rows. Use result_mode='full' to retrieve all rows"
+#   "hint": "Showing first 5 of 2100 rows. Use response_mode='full' to retrieve all rows"
 # }
 
 # Follow the hint if you need all rows:

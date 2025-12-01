@@ -176,7 +176,7 @@ def _build_hint(rowcount: int, sample_size: int) -> str | None:
         return None
     if rowcount <= sample_size:
         return f"All {rowcount} rows returned"
-    return f"Showing first {sample_size} of {rowcount} rows. Use result_mode='full' to retrieve all rows"
+    return f"Showing first {sample_size} of {rowcount} rows. Use response_mode='full' to retrieve all rows"
 
 
 def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
@@ -226,7 +226,7 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
             "mode": "schema_only",
             "total_rows": rowcount,
             "rows_returned": 0,
-            "hint": "Use result_mode='full' to retrieve all rows",
+            "hint": "Use response_mode='full' to retrieve all rows",
         }
         return result
 
@@ -1137,7 +1137,7 @@ class ExecuteQueryTool(MCPTool):
                           "full": Return all rows.
                           "schema_only": Return column schema only, no rows (~95% reduction).
                           "sample": Return first 10 rows only (~60-80% reduction).
-            result_mode: DEPRECATED in v0.3.5 - use response_mode instead
+            result_mode: DEPRECATED - use response_mode instead
             ctx: Optional MCP context for request correlation
             **kwargs: Additional arguments (for backward compatibility)
 
