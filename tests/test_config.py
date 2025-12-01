@@ -4,6 +4,7 @@
 
 import os
 import tempfile
+import tomllib
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -499,7 +500,7 @@ def mock_corrupted_config():
         return patch.multiple(
             profile_utils,
             get_snowflake_config_path=Mock(return_value=mock_path),
-            _load_snowflake_config=Mock(side_effect=Exception("Corrupted file")),
+            _load_snowflake_config=Mock(side_effect=tomllib.TOMLDecodeError("Corrupted file", "", 0)),
         )
 
     return _mock

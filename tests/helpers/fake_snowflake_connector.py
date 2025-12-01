@@ -144,7 +144,19 @@ class FakeSnowflakeCursor:
             self._rows = [{"KEY": "QUERY_TAG", "VALUE": tag}]
             return
 
-        if upper.startswith("SHOW PARAMETERS LIKE 'STATEMENT_TIMEOUT_IN_SECONDS'"):
+        # Handle both plain and escaped versions of QUERY_TAG
+        if upper.startswith("SHOW PARAMETERS LIKE 'QUERY_TAG'") or upper.startswith(
+            r"SHOW PARAMETERS LIKE 'QUERY\_TAG'"
+        ):
+            self.description = [("KEY",), ("VALUE",)]
+            tag = self._session_parameters.get("QUERY_TAG") or ""
+            self._rows = [{"KEY": "QUERY_TAG", "VALUE": tag}]
+            return
+
+        # Handle both plain and escaped versions of STATEMENT_TIMEOUT_IN_SECONDS
+        if upper.startswith("SHOW PARAMETERS LIKE 'STATEMENT_TIMEOUT_IN_SECONDS'") or upper.startswith(
+            r"SHOW PARAMETERS LIKE 'STATEMENT\_TIMEOUT\_IN\_SECONDS'"
+        ):
             self.description = [("KEY",), ("VALUE",)]
             timeout = self._session_parameters.get("STATEMENT_TIMEOUT_IN_SECONDS") or ""
             self._rows = [{"KEY": "STATEMENT_TIMEOUT_IN_SECONDS", "VALUE": timeout}]
