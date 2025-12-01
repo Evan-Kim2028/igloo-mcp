@@ -54,7 +54,8 @@ def test_cli_commands_registered():
         # Basic check that help was generated
         assert len(help_text) > 0
         assert "report" in help_text
-    except Exception as e:
+    except (ValueError, TypeError, ImportError, RuntimeError) as e:
+        # CLI parser errors
         pytest.fail(f"CLI parser failed: {e}")
 
 
@@ -279,5 +280,6 @@ def test_all_imports_work():
 
     except ImportError as e:
         pytest.fail(f"Import failed: {e}")
-    except Exception as e:
+    except (ValueError, TypeError, RuntimeError) as e:
+        # Other initialization errors
         pytest.fail(f"Unexpected error during imports: {e}")

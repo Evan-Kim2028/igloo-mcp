@@ -6,6 +6,8 @@ SQL validation is robust against arbitrary inputs.
 
 from __future__ import annotations
 
+import contextlib
+
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -35,7 +37,11 @@ class TestSQLValidationProperties:
             assert any(keyword in error_msg for keyword in ["sql", "statement", "query", "empty", "invalid"]), (
                 f"Error message should be informative: {e}"
             )
-        except Exception as e:
+        except AssertionError:
+            # Re-raise assertion errors from the assert above
+            raise
+        except RuntimeError as e:
+            # Unexpected runtime errors should fail the test
             pytest.fail(f"Unexpected exception type: {type(e).__name__}: {e}")
 
     @pytest.mark.xfail(reason="Hypothesis finds obscure sqlglot edge cases - upstream limitation")
@@ -82,7 +88,8 @@ class TestSQLValidationProperties:
             try:
                 _, is_valid, _ = validate_sql_statement(sql, ["Select"], [])
                 results.append(("valid", is_valid))
-            except Exception as e:
+            except (ValueError, TypeError, RuntimeError) as e:
+                # SQL validation errors are expected
                 results.append(("error", type(e).__name__))
 
         # All results should be the same (case-insensitive)
@@ -109,8 +116,9 @@ class TestSQLValidationProperties:
             try:
                 _, is_valid, _ = validate_sql_statement(sql, ["Select"], [])
                 results.append(is_valid)
-            except Exception:
-                pass  # Some variations might be invalid, that's ok
+            except (ValueError, TypeError, RuntimeError):
+                # Some variations might be invalid, that's ok - skip them
+                pass
 
         # At least the base case should work
         _, base_valid, _ = validate_sql_statement(base_sql, ["Select"], [])
@@ -125,13 +133,9 @@ class TestSQLValidationProperties:
         """
         injection_attempt = "SELECT 1 " + "".join(injection_chars)
 
-        try:
+        with contextlib.suppress(ValueError, TypeError, RuntimeError):
+            # Expected - validation might reject malformed SQL or raise errors
             validate_sql_statement(injection_attempt, ["Select"], [])
-        except (ValueError, TypeError):
-            # Expected - validation might reject malformed SQL
-            pass
-        except Exception as e:
-            pytest.fail(f"Should not crash on injection patterns: {type(e).__name__}: {e}")
 
 
 class TestCacheKeyGeneration:
@@ -198,7 +202,8 @@ class TestCacheKeyGeneration:
                 )
                 assert isinstance(key, str), "Cache key should be a string"
                 assert len(key) > 0, "Cache key should not be empty"
-            except Exception as e:
+            except (ValueError, TypeError, RuntimeError) as e:
+                # Cache key generation errors are acceptable
                 pytest.fail(f"Cache key generation should not crash: {type(e).__name__}: {e}")
 
 

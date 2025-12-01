@@ -202,7 +202,8 @@ def _normalize_history(history_path: Path, base_dir: Path) -> None:
         try:
             rel = candidate.resolve().relative_to(base_resolved)
             return rel.as_posix()
-        except Exception:
+        except (ValueError, OSError):
+            # Path is not relative to base or doesn't exist, return as-is
             return value
 
     for record in records:

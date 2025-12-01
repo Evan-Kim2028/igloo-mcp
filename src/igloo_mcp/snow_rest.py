@@ -206,19 +206,19 @@ class SnowRestClient:
             "Accept": "application/json",
             "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
         }
-        request = urllib.request.Request(url, data=data, method=method.upper())
+        request = urllib.request.Request(url, data=data, method=method.upper())  # noqa: S310 - URL from validated Snowflake config
         for key, value in headers.items():
             request.add_header(key, value)
 
         try:
-            with urllib.request.urlopen(request, timeout=self.request_timeout) as resp:
+            with urllib.request.urlopen(request, timeout=self.request_timeout) as resp:  # noqa: S310 - URL from validated Snowflake config
                 raw = resp.read().decode("utf-8")
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as exc:  # pragma: no cover - network errors
             body = exc.read().decode("utf-8") if hasattr(exc, "read") else ""
             raise SnowRestError(body or str(exc)) from exc
         except urllib.error.URLError as exc:  # pragma: no cover
-            raise SnowRestError(str(exc.reason)) from exc
+            raise SnowRestError(str(exc)) from exc
 
     def _get_token(self) -> str:
         now = time.time()

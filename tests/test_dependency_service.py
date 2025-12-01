@@ -220,7 +220,7 @@ class TestDependencyServiceErrorHandling:
         def patched_build(*args, **kwargs):
             try:
                 raise ValueError("Test exception")
-            except Exception as e:
+            except ValueError as e:
                 dep_module.logger.error(f"Dependency graph build failed: {e}")
                 return {
                     "status": "error",

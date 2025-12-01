@@ -34,7 +34,7 @@ async def run_real_timeout_test(profile: str, statement: str, timeout_seconds: i
     # FastMCP server object is only needed to satisfy the lifespan signature
     try:
         from fastmcp import FastMCP
-    except Exception:
+    except ImportError:
         from mcp.server.fastmcp import FastMCP  # type: ignore
 
     server = FastMCP("timeout-test", lifespan=lifespan)

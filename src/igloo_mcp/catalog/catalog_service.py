@@ -353,7 +353,7 @@ class CatalogService:
                     FROM INFORMATION_SCHEMA.FUNCTIONS
                     WHERE FUNCTION_CATALOG = '{database}'
                     ORDER BY FUNCTION_CATALOG, FUNCTION_SCHEMA, FUNCTION_NAME
-                    """
+                    """  # noqa: S608 - database param from validated Snowflake config
                 else:
                     func_query = """
                     SELECT
@@ -415,7 +415,7 @@ class CatalogService:
                     FROM INFORMATION_SCHEMA.COLUMNS
                     WHERE TABLE_CATALOG = '{database}'
                     ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
-                    """
+                    """  # noqa: S608 - database param from validated Snowflake config
                 else:
                     col_query = """
                     SELECT

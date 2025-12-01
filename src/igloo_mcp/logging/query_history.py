@@ -300,9 +300,13 @@ class QueryHistory:
                             ):
                                 deduped = True
                                 break
-                        except Exception:
+                        except (ValueError, KeyError, TypeError) as e:
+                            # Skip malformed history entries
+                            logger.debug(f"Skipping malformed history entry during dedup check: {e}")
                             continue
-            except Exception:
+            except (OSError, ValueError) as e:
+                # Best effort - if history file is corrupt, continue anyway
+                logger.debug(f"Error reading history during dedup check: {e}")
                 pass
 
         if not deduped:
