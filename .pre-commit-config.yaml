@@ -27,6 +27,8 @@ repos:
             "--no-strict-optional",
             "src/igloo_mcp",
           ]
+        additional_dependencies:
+          - types-Markdown>=3.10.0
 
   # Phase 2 & 3.6: Local hooks for architecture and test quality
   - repo: local

@@ -789,7 +789,7 @@ data-importance="{insight.importance}">
         return md.markdown(
             markdown,
             extensions=["extra", "nl2br", "sane_lists"],
-            output_format="html5",
+            output_format="html",
         )
 
 
