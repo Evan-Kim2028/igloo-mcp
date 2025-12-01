@@ -47,8 +47,8 @@ class CatalogIndex:
         """
 
         catalog = self._load_catalog()
-        meta = cast(dict[str, Any], catalog.get("metadata", {}))
-        raw_columns = cast(Iterable[dict[str, Any]], catalog.get("columns") or [])
+        meta = cast("dict[str, Any]", catalog.get("metadata", {}))
+        raw_columns = cast("Iterable[dict[str, Any]]", catalog.get("columns") or [])
         column_index = self._build_column_index(raw_columns)
 
         normalized_object_types = {obj.lower() for obj in object_types} if object_types else None
@@ -65,7 +65,7 @@ class CatalogIndex:
             if normalized_object_types and object_type not in normalized_object_types:
                 continue
 
-            raw_entries = cast(Iterable[dict[str, Any]], catalog.get(source_key, []) or [])
+            raw_entries = cast("Iterable[dict[str, Any]]", catalog.get(source_key, []) or [])
             for raw in raw_entries:
                 entry = self._normalize_object(object_type, raw)
                 if entry is None:
@@ -112,10 +112,10 @@ class CatalogIndex:
 
         if catalog_json.exists():
             with catalog_json.open("r", encoding="utf-8") as handle:
-                return cast(dict[str, Any], json.load(handle))
+                return cast("dict[str, Any]", json.load(handle))
         if catalog_jsonl.exists():
             with catalog_jsonl.open("r", encoding="utf-8") as handle:
-                return cast(dict[str, Any], json.loads(handle.read()))
+                return cast("dict[str, Any]", json.loads(handle.read()))
 
         raise FileNotFoundError(f"Catalog not found in {self.catalog_dir}. Run build_catalog first.")
 

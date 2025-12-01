@@ -2,16 +2,57 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
 from igloo_mcp.mcp.exceptions import MCPValidationError
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_HISTORY_PATH = Path("logs/doc.jsonl")
 DEFAULT_ARTIFACT_ROOT = Path("logs/artifacts")
 DEFAULT_CACHE_SUBDIR = Path("cache")
 DEFAULT_REPORTS_SUBDIR = Path("reports")
 DEFAULT_CATALOG_SUBDIR = Path("catalogs")
+
+# Safe root directories for path validation (security boundary)
+SAFE_ROOTS = [
+    Path.home().resolve(),  # User's home directory (~/.igloo_mcp/)
+    Path.cwd().resolve(),  # Current working directory (project)
+]
+
+
+def _validate_path_safety(resolved: Path, context: str) -> bool:
+    """Validate that a resolved path is within safe boundaries.
+
+    This prevents path traversal attacks where malicious environment variables
+    could point to sensitive system files like /etc/passwd.
+
+    Args:
+        resolved: The resolved absolute path to validate
+        context: Description of what this path is for (e.g., "reports root")
+
+    Returns:
+        True if path is within safe boundaries, False otherwise
+    """
+    for safe_root in SAFE_ROOTS:
+        try:
+            resolved.relative_to(safe_root)
+            return True  # Path is within a safe root
+        except ValueError:
+            continue  # Try next safe root
+
+    # Path is outside all safe roots - security violation
+    logger.warning(
+        f"SECURITY: Rejected {context} path outside safe boundaries: {resolved}",
+        extra={
+            "rejected_path": str(resolved),
+            "safe_roots": [str(r) for r in SAFE_ROOTS],
+            "context": context,
+        },
+    )
+    return False
 
 
 def _get_log_scope() -> str:
@@ -107,11 +148,10 @@ def resolve_history_path(raw: str | None = None, *, start: Path | None = None) -
         base = get_global_base()
         subpath = apply_namespacing(DEFAULT_HISTORY_PATH)
         return (base / subpath).resolve()
-    else:
-        # repo scope
-        repo_root = find_repo_root(start=start)
-        subpath = apply_namespacing(DEFAULT_HISTORY_PATH)
-        return (repo_root / subpath).resolve()
+    # repo scope
+    repo_root = find_repo_root(start=start)
+    subpath = apply_namespacing(DEFAULT_HISTORY_PATH)
+    return (repo_root / subpath).resolve()
 
 
 def resolve_artifact_root(raw: str | None = None, *, start: Path | None = None) -> Path:
@@ -141,11 +181,10 @@ def resolve_artifact_root(raw: str | None = None, *, start: Path | None = None) 
         base = get_global_base()
         subpath = apply_namespacing(DEFAULT_ARTIFACT_ROOT)
         return (base / subpath).resolve()
-    else:
-        # repo scope
-        repo_root = find_repo_root(start=start)
-        subpath = apply_namespacing(DEFAULT_ARTIFACT_ROOT)
-        return (repo_root / subpath).resolve()
+    # repo scope
+    repo_root = find_repo_root(start=start)
+    subpath = apply_namespacing(DEFAULT_ARTIFACT_ROOT)
+    return (repo_root / subpath).resolve()
 
 
 def resolve_cache_root(
@@ -233,7 +272,11 @@ def resolve_reports_root(
                                 base_name = base_parts[-1]
                                 if base_name.startswith(".igloo-mcp") or base_name.startswith(".igloo_mcp"):
                                     base_path = Path(*base_parts)
-                                    return (base_path / DEFAULT_REPORTS_SUBDIR).resolve()
+                                    candidate_path = (base_path / DEFAULT_REPORTS_SUBDIR).resolve()
+                                    # Security: Validate path is within safe boundaries
+                                    if _validate_path_safety(candidate_path, "reports root"):
+                                        return candidate_path
+                                    # Path rejected, continue to fallback
             except (ValueError, OSError):
                 pass  # Invalid path, continue to fallback
 
@@ -242,10 +285,9 @@ def resolve_reports_root(
     if scope == "global":
         base = get_global_base()
         return (base / DEFAULT_REPORTS_SUBDIR).resolve()
-    else:
-        # repo scope
-        repo_root = find_repo_root(start=start)
-        return (repo_root / DEFAULT_REPORTS_SUBDIR).resolve()
+    # repo scope
+    repo_root = find_repo_root(start=start)
+    return (repo_root / DEFAULT_REPORTS_SUBDIR).resolve()
 
 
 def resolve_catalog_root(
@@ -295,7 +337,11 @@ def resolve_catalog_root(
                                 base_name = base_parts[-1]
                                 if base_name.startswith(".igloo-mcp") or base_name.startswith(".igloo_mcp"):
                                     base_path = Path(*base_parts)
-                                    return (base_path / DEFAULT_CATALOG_SUBDIR).resolve()
+                                    candidate_path = (base_path / DEFAULT_CATALOG_SUBDIR).resolve()
+                                    # Security: Validate path is within safe boundaries
+                                    if _validate_path_safety(candidate_path, "catalog root"):
+                                        return candidate_path
+                                    # Path rejected, continue to fallback
             except (ValueError, OSError):
                 pass  # Invalid path, continue to fallback
 
@@ -304,10 +350,9 @@ def resolve_catalog_root(
     if scope == "global":
         base = get_global_base()
         return (base / DEFAULT_CATALOG_SUBDIR).resolve()
-    else:
-        # repo scope
-        repo_root = find_repo_root(start=start)
-        return (repo_root / DEFAULT_CATALOG_SUBDIR).resolve()
+    # repo scope
+    repo_root = find_repo_root(start=start)
+    return (repo_root / DEFAULT_CATALOG_SUBDIR).resolve()
 
 
 def resolve_catalog_path(
@@ -337,14 +382,13 @@ def resolve_catalog_path(
     if account_scope:
         # Account-wide catalogs go to catalogs/account/
         return (catalog_root / "account").resolve()
-    elif database:
+    if database:
         # Database-specific catalogs go to catalogs/{database}/
         # Sanitize database name for filesystem safety
         safe_db_name = database.replace("/", "_").replace("\\", "_")
         return (catalog_root / safe_db_name).resolve()
-    else:
-        # Current database (unknown) goes to catalogs/current/
-        return (catalog_root / "current").resolve()
+    # Current database (unknown) goes to catalogs/current/
+    return (catalog_root / "current").resolve()
 
 
 def validate_safe_path(

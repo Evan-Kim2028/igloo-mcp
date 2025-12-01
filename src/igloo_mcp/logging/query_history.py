@@ -48,7 +48,7 @@ def normalize_insight(value: str | dict[str, Any]) -> Insight:
             "business_impact": "",
             "follow_up_needed": False,
         }
-    norm = cast(Insight, dict(value))
+    norm = cast("Insight", dict(value))
     norm.setdefault("summary", "")
     norm.setdefault("key_metrics", [])
     norm.setdefault("business_impact", "")
@@ -83,7 +83,7 @@ def truncate_insight_for_storage(insight: Insight, max_bytes: int = 16384) -> In
             while len(truncated_summary.encode("utf-8")) > max_summary_bytes - 3:
                 truncated_summary = truncated_summary[:-1]
             truncated["summary"] = truncated_summary + "..."
-    return cast(Insight, truncated)
+    return cast("Insight", truncated)
 
 
 class QueryHistory:
@@ -307,7 +307,6 @@ class QueryHistory:
             except (OSError, ValueError) as e:
                 # Best effort - if history file is corrupt, continue anyway
                 logger.debug(f"Error reading history during dedup check: {e}")
-                pass
 
         if not deduped:
             # Append new history entry

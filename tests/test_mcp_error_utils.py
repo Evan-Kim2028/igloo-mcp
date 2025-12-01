@@ -378,7 +378,6 @@ class TestDecoratorFunctions:
 
     # REMOVED - These functions have different signatures or don't exist as standalone
     # The decorator logic is tested through integration tests
-    pass
 
 
 class TestFormatFunctionsEdgeCases:

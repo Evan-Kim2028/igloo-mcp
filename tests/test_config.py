@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 import pytest
 import yaml  # type: ignore[import-untyped]
 
-import igloo_mcp.profile_utils as profile_utils
+from igloo_mcp import profile_utils
 from igloo_mcp.config import Config, SnowflakeConfig, get_config, set_config
 from igloo_mcp.profile_utils import (
     ProfileSummary,

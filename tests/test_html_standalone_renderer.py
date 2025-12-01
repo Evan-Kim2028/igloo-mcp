@@ -535,3 +535,151 @@ class TestHTMLStandaloneRendererMetadata:
 
         assert 'name="created"' in content
         assert 'name="updated"' in content
+
+
+@pytest.mark.regression
+class TestMarkdownRenderingRegression:
+    """Ensure markdown features render correctly with standard library.
+
+    These tests protect against regressions when replacing the custom
+    markdown parser with the standard markdown library.
+
+    See: todos/003-pending-p1-replace-custom-markdown-parser.md
+    """
+
+    def test_markdown_code_blocks(self, renderer):
+        """Code blocks should render with proper <pre><code> tags."""
+        markdown_text = """```python
+def hello():
+    print('world')
+```"""
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        # Should have code block elements
+        assert "<pre>" in html or "<code>" in html, "Code blocks not rendered"
+        assert "def hello()" in html, "Code content missing"
+
+    def test_markdown_inline_code(self, renderer):
+        """Inline code should render with <code> tags."""
+        markdown_text = "Use the `markdown` library for parsing."
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        assert "<code>markdown</code>" in html, "Inline code not rendered"
+
+    def test_markdown_tables(self, renderer):
+        """Tables should render with proper <table> structure."""
+        markdown_text = """| Column A | Column B |
+|----------|----------|
+| Value 1  | Value 2  |
+| Value 3  | Value 4  |"""
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        # Should have table elements
+        assert "<table>" in html, "Table not rendered"
+        assert "<th>" in html or "<td>" in html, "Table cells missing"
+        assert "Column A" in html, "Table header Column A missing"
+        assert "Column B" in html, "Table header Column B missing"
+        assert "Value 1" in html, "Table data Value 1 missing"
+        assert "Value 2" in html, "Table data Value 2 missing"
+
+    def test_markdown_headers(self, renderer):
+        """Headers should render with proper semantic HTML."""
+        markdown_text = """# Heading 1
+## Heading 2
+### Heading 3
+#### Heading 4"""
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        assert "<h1>Heading 1</h1>" in html, "H1 not rendered"
+        assert "<h2>Heading 2</h2>" in html, "H2 not rendered"
+        assert "<h3>Heading 3</h3>" in html, "H3 not rendered"
+        assert "<h4>Heading 4</h4>" in html, "H4 not rendered"
+
+    def test_markdown_lists(self, renderer):
+        """Lists should render with <ul> and <li> tags."""
+        markdown_text = """- Item 1
+- Item 2
+- Item 3"""
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        assert "<ul>" in html, "Unordered list not rendered"
+        assert "<li>Item 1</li>" in html, "List item 1 missing"
+        assert "<li>Item 2</li>" in html, "List item 2 missing"
+        assert "<li>Item 3</li>" in html, "List item 3 missing"
+
+    def test_markdown_links(self, renderer):
+        """Links should render with <a> tags."""
+        markdown_text = "[Click here](https://example.com)"
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        assert '<a href="https://example.com">Click here</a>' in html, "Link not rendered"
+
+    def test_markdown_images(self, renderer):
+        """Images should render with <img> tags."""
+        markdown_text = "![Alt text](https://example.com/image.png)"
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        assert "<img" in html, "Image tag not rendered"
+        assert 'alt="Alt text"' in html, "Alt text missing"
+        assert 'src="https://example.com/image.png"' in html, "Image source missing"
+
+    def test_markdown_bold_and_italic(self, renderer):
+        """Bold and italic formatting should work."""
+        markdown_text = "**bold text** and *italic text*"
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        assert "<strong>bold text</strong>" in html or "<b>bold text</b>" in html, "Bold not rendered"
+        assert "<em>italic text</em>" in html or "<i>italic text</i>" in html, "Italic not rendered"
+
+    def test_markdown_mixed_content(self, renderer):
+        """Complex markdown with mixed elements should render correctly."""
+        markdown_text = """# Overview
+
+This is a **comprehensive** test with:
+
+- Code: `inline_code()`
+- Links: [example](https://example.com)
+- **Bold** and *italic*
+
+## Data Table
+
+| Metric | Value |
+|--------|-------|
+| Count  | 100   |
+
+```python
+def test():
+    return True
+```"""
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        # Verify all elements are present
+        assert "<h1>Overview</h1>" in html, "Header missing"
+        assert "<strong>comprehensive</strong>" in html or "<b>comprehensive</b>" in html, "Bold missing"
+        assert "<ul>" in html, "List missing"
+        assert "<code>inline_code()</code>" in html, "Inline code missing"
+        assert '<a href="https://example.com">example</a>' in html, "Link missing"
+        assert "<table>" in html, "Table missing"
+        assert "<pre>" in html or "def test():" in html, "Code block missing"
+
+    def test_markdown_preserves_newlines(self, renderer):
+        """Newlines should be converted to <br> with nl2br extension."""
+        markdown_text = """Line 1
+Line 2
+Line 3"""
+
+        html = renderer._markdown_to_html(markdown_text)
+
+        # With nl2br extension, newlines should create line breaks
+        assert "Line 1" in html
+        assert "Line 2" in html
+        assert "Line 3" in html

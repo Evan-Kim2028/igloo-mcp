@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-import igloo_mcp.profile_utils as profile_utils
+from igloo_mcp import profile_utils
 
 
 class TestMCPServerProfileIntegration:

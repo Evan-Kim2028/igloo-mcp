@@ -33,7 +33,7 @@ def test_get_profile_recommendations_with_profile():
         (1, 1),
         (3.14, 3.14),
         ("text", "text"),
-        (Decimal("5"), 5),
+        (Decimal(5), 5),
         (Decimal("2.5"), 2.5),
         (datetime(2024, 1, 2, 3, 4, 5), "2024-01-02T03:04:05"),
         (date(2024, 1, 2), "2024-01-02"),
@@ -57,8 +57,8 @@ def test_json_compatible_bytes_hex():
 def test_json_compatible_iterables_and_dicts():
     data = {
         "items": {1, 2},
-        "tuple": (Decimal("1"), Decimal("2.5")),
-        "list": [datetime(2024, 1, 1, 1, 1), Decimal("3")],
+        "tuple": (Decimal(1), Decimal("2.5")),
+        "list": [datetime(2024, 1, 1, 1, 1), Decimal(3)],
     }
     result = json_compatible(data)
     assert result["items"] == [1, 2]
@@ -69,7 +69,7 @@ def test_json_compatible_iterables_and_dicts():
 
 def test_json_compatible_namedtuple_and_namespace():
     Row = namedtuple("Row", ["col"])
-    ns = SimpleNamespace(a=Decimal("4"))
+    ns = SimpleNamespace(a=Decimal(4))
     result = json_compatible({"row": Row(col=datetime(2024, 1, 2)), "ns": ns})
     assert result["row"][0].startswith("2024-01-02T")
     assert result["ns"]["a"] == 4

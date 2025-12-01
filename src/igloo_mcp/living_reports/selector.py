@@ -58,9 +58,9 @@ class SelectorResolutionError(ValueError):
     def _default_message(self):
         if self.error_type == "not_found":
             return f"Report not found: {self.selector}"
-        elif self.error_type == "ambiguous":
+        if self.error_type == "ambiguous":
             return f"Ambiguous selector '{self.selector}' matches multiple reports"
-        elif self.error_type == "invalid_format":
+        if self.error_type == "invalid_format":
             return f"Invalid selector format: {self.selector}"
         return "Unknown selector error"
 

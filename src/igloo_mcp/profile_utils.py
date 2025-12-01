@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 class ProfileValidationError(ProfileConfigurationError):
     """Error raised when Snowflake profile validation fails."""
 
-    pass
 
 
 class ProfileInfo(NamedTuple):

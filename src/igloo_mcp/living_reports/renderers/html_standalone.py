@@ -771,85 +771,26 @@ data-importance="{insight.importance}">
         return escape(text) if text else ""
 
     def _markdown_to_html(self, markdown: str) -> str:
-        """Convert basic markdown to HTML with proper structure.
+        """Convert markdown to HTML using standard markdown library.
 
-        Handles:
-        - Headers (####, ###, ##, #)
-        - Lists (-, *)
-        - Bold and italic
-        - Code blocks
-        - Paragraphs
+        This uses the Python markdown library with extensions for:
+        - Extra features (tables, fenced code blocks, etc.)
+        - Newline to <br> conversion
+        - Sane list handling
 
         Args:
             markdown: Markdown text
 
         Returns:
-            HTML string with valid semantic structure
+            HTML string
         """
-        import re
+        import markdown as md
 
-        html_lines = []
-        lines = markdown.split("\n")
-        in_list = False
-
-        for line in lines:
-            line_stripped = line.strip()
-            if not line_stripped:
-                if in_list:
-                    html_lines.append("</ul>")
-                    in_list = False
-                continue
-
-            # Headers (must come before escaping for clean output)
-            if line_stripped.startswith("####"):
-                if in_list:
-                    html_lines.append("</ul>")
-                    in_list = False
-                html_lines.append(f"<h4>{escape(line_stripped[4:].strip())}</h4>")
-            elif line_stripped.startswith("###"):
-                if in_list:
-                    html_lines.append("</ul>")
-                    in_list = False
-                html_lines.append(f"<h3>{escape(line_stripped[3:].strip())}</h3>")
-            elif line_stripped.startswith("##"):
-                if in_list:
-                    html_lines.append("</ul>")
-                    in_list = False
-                html_lines.append(f"<h3>{escape(line_stripped[2:].strip())}</h3>")
-            elif line_stripped.startswith("#"):
-                if in_list:
-                    html_lines.append("</ul>")
-                    in_list = False
-                html_lines.append(f"<h3>{escape(line_stripped[1:].strip())}</h3>")
-
-            # Lists
-            elif line_stripped.startswith("- ") or line_stripped.startswith("* "):
-                if not in_list:
-                    html_lines.append("<ul>")
-                    in_list = True
-                text = escape(line_stripped[2:].strip())
-                # Handle inline formatting
-                text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-                text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
-                text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
-                html_lines.append(f"<li>{text}</li>")
-
-            # Paragraphs
-            else:
-                if in_list:
-                    html_lines.append("</ul>")
-                    in_list = False
-                text = escape(line_stripped)
-                # Handle inline formatting
-                text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-                text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
-                text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
-                html_lines.append(f"<p>{text}</p>")
-
-        if in_list:
-            html_lines.append("</ul>")
-
-        return "\n".join(html_lines)
+        return md.markdown(
+            markdown,
+            extensions=["extra", "nl2br", "sane_lists"],
+            output_format="html5",
+        )
 
 
 __all__ = ["HTMLStandaloneRenderer"]

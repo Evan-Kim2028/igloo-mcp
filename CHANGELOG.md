@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.7] - 2025-12-01
 
+### 🔒 Security Fixes (P1)
+- **Path Traversal Vulnerability**: Fixed critical security vulnerability in `path_utils.py` where malicious environment variables could access sensitive system files
+  - Added path validation to ensure all resolved paths stay within safe boundaries (user home directory and current working directory)
+  - Added comprehensive security regression tests to prevent future vulnerabilities
+  - See: `todos/001-pending-p1-path-traversal-vulnerability.md`
+
+### ⚠️ Data Integrity (P1)
+- **Silent Data Truncation**: Added explicit warnings when `response_mode='summary'` truncates query results
+  - WARNING-level logs for all truncations with percentage of data loss
+  - ERROR-level logs for large datasets (>1000 rows) to prevent catastrophic data loss
+  - Comprehensive metadata in `result_mode_info` field
+  - See: `todos/002-pending-p1-silent-data-truncation-summary-mode.md`
+
 ### 🔥 Critical Fixes
 - **#110**: Fixed execute_query schema showing wrong response_mode values (`auto`/`sync` → `schema_only`/`summary`/`sample`/`full`)
 - **#111**: Implemented v0.3.6 breaking change - execute_query now defaults to `response_mode='summary'` for 60-95% token savings

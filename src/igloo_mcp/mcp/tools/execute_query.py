@@ -249,6 +249,29 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
         sample_rows = rows[:RESULT_MODE_SUMMARY_SAMPLE_SIZE]
         result["rows"] = sample_rows
 
+        # DATA INTEGRITY: Warn when truncating results to prevent silent data loss
+        if rowcount > RESULT_MODE_SUMMARY_SAMPLE_SIZE:
+            truncation_pct = (1 - RESULT_MODE_SUMMARY_SAMPLE_SIZE / rowcount) * 100
+
+            logger.warning(
+                f"Result truncated: {rowcount} rows → {RESULT_MODE_SUMMARY_SAMPLE_SIZE} rows "
+                f"({truncation_pct:.1f}% data loss). Use result_mode='full' for all data.",
+                extra={
+                    "total_rows": rowcount,
+                    "returned_rows": RESULT_MODE_SUMMARY_SAMPLE_SIZE,
+                    "truncation_percentage": truncation_pct,
+                    "result_mode": mode,
+                },
+            )
+
+            # CRITICAL: Warn for catastrophic data loss on large datasets
+            if rowcount > 1000:
+                logger.error(
+                    f"LARGE DATASET TRUNCATION: {rowcount} rows truncated to "
+                    f"{RESULT_MODE_SUMMARY_SAMPLE_SIZE}. This may cause data loss in downstream processing!",
+                    extra={"severity": "high", "rowcount": rowcount, "sample_size": RESULT_MODE_SUMMARY_SAMPLE_SIZE},
+                )
+
         result["result_mode_info"] = {
             "mode": "summary",
             "total_rows": rowcount,
@@ -1397,7 +1420,6 @@ class ExecuteQueryTool(MCPTool):
                 except (AttributeError, TypeError, ValueError):
                     # Session parameter adjustments are best-effort; ignore failures.
                     logger.debug(f"Failed to set session parameter {name}", exc_info=True)
-                    pass
 
             def _restore_session_parameters(
                 previous: dict[str, str | None],
@@ -1416,7 +1438,6 @@ class ExecuteQueryTool(MCPTool):
                         "Failed to restore QUERY_TAG session parameter",
                         exc_info=True,
                     )
-                    pass
 
                 try:
                     prev_timeout = previous.get("STATEMENT_TIMEOUT_IN_SECONDS")

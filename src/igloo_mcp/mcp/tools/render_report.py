@@ -221,7 +221,7 @@ class RenderReportTool(MCPTool):
                     "format": format,
                 },
             )
-        elif status == "validation_failed":
+        if status == "validation_failed":
             validation_errors = result.get("validation_errors", [])
             raise MCPValidationError(
                 f"Report validation failed: {', '.join(validation_errors)}",
@@ -236,7 +236,7 @@ class RenderReportTool(MCPTool):
                     "report_id": resolved_report_id,
                 },
             )
-        elif status == "render_failed":
+        if status == "render_failed":
             error_msg = result.get("error", "Unknown rendering error")
             raise MCPExecutionError(
                 f"Rendering failed: {error_msg}",
