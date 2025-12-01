@@ -206,7 +206,7 @@ class TestHTMLStandaloneRendererInsights:
     """Test insight rendering."""
 
     def test_render_with_insights(self, renderer, full_outline, tmp_path):
-        """Test rendering report with insights."""
+        """Test rendering report with insights in insights-only sections."""
         result = renderer.render(
             report_dir=tmp_path,
             outline=full_outline,
@@ -214,9 +214,10 @@ class TestHTMLStandaloneRendererInsights:
 
         content = Path(result["output_path"]).read_text(encoding="utf-8")
 
-        # Check insights are present
-        assert "Revenue increased 25% YoY" in content
-        assert "Customer retention rate improved to 95%" in content
+        # Executive Summary has narrative content, so insights won't show in HTML
+        # (this is correct - we fixed double rendering in #114)
+        # But Detailed Analysis section has no content, only insights, so they WILL show
+        assert "Customer retention rate improved to 95%" in content  # insight_id_2 in section without content
 
     def test_render_insight_importance_class(self, renderer, full_outline, tmp_path):
         """Test that insights have correct importance class."""
@@ -423,6 +424,9 @@ class TestHTMLStandaloneRendererHelpers:
         assert "<h3>" in result
 
         result = renderer._markdown_to_html("### Header 3")
+        assert "<h3>" in result
+
+        result = renderer._markdown_to_html("#### Header 4")
         assert "<h4>" in result
 
     def test_markdown_to_html_bold_italic(self, renderer):
