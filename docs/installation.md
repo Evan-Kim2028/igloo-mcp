@@ -55,18 +55,69 @@ Config file: `~/.cursor/mcp.json`
 ```
 
 ### Claude Code
-Settings snippet:
+
+#### Global Setup (Recommended)
+
+Use the Claude Code CLI to add igloo-mcp globally across all projects:
+
+```bash
+# Install as global MCP server
+claude mcp add --scope user --transport stdio igloo-mcp -- uv tool run igloo_mcp --profile my-profile
+
+# Verify installation
+claude mcp list
+```
+
+Restart Claude Code and test:
+- "Test my Snowflake connection"
+- "Build a catalog for my database"
+
+#### Project Setup (Team Sharing)
+
+For team collaboration, create `.mcp.json` in your project root:
+
 ```json
 {
-  "mcp": {
+  "mcpServers": {
     "igloo-mcp": {
-      "command": "igloo-mcp",
-      "args": ["--profile", "my-profile"],
-      "env": {"SNOWFLAKE_PROFILE": "my-profile"}
+      "type": "stdio",
+      "command": "uv",
+      "args": ["tool", "run", "igloo_mcp", "--profile", "my-profile"],
+      "env": {
+        "SNOWFLAKE_PROFILE": "my-profile"
+      }
     }
   }
 }
 ```
+
+Commit `.mcp.json` to version control so your team automatically gets the same setup.
+
+#### Manual Configuration
+
+Alternatively, add to `~/.claude.json` under the `mcpServers` section:
+
+```json
+{
+  "mcpServers": {
+    "igloo-mcp": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["tool", "run", "igloo_mcp", "--profile", "my-profile"],
+      "env": {
+        "SNOWFLAKE_PROFILE": "my-profile"
+      }
+    }
+  }
+}
+```
+
+**Important Notes:**
+- ✅ Executable is `igloo_mcp` (underscore), not `igloo-mcp` (dash)
+- ✅ `type: "stdio"` is required for local MCP servers
+- ✅ Global config: `~/.claude.json`, NOT `~/.config/claude-code/mcp.json`
+
+See [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp) for more details.
 
 ### Codex / Other MCP clients
 Most MCP clients accept a similar block under a client‑specific config file (path varies). Use:
