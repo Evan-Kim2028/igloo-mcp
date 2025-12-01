@@ -23,7 +23,6 @@ class ProfileValidationError(ProfileConfigurationError):
     """Error raised when Snowflake profile validation fails."""
 
 
-
 class ProfileInfo(NamedTuple):
     """Structured profile information."""
 

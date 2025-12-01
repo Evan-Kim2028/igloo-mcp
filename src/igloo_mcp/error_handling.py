@@ -54,20 +54,16 @@ class SnowflakeConnectionError(Exception):
     """Raised when Snowflake connection issues occur."""
 
 
-
 class SnowflakePermissionError(Exception):
     """Raised when insufficient permissions are detected."""
-
 
 
 class SnowflakeTimeoutError(Exception):
     """Raised when operations timeout."""
 
 
-
 class SnowflakeError(Exception):
     """Base class for all Snowflake-related errors."""
-
 
 
 class ProfileConfigurationError(SnowflakeError):

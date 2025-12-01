@@ -62,7 +62,6 @@ class MCPToolSchema(BaseModel):
     """Base schema for MCP tool parameters."""
 
 
-
 class MCPTool(ABC):
     """Base class for MCP tools implementing command pattern.
 
