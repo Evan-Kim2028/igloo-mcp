@@ -63,6 +63,7 @@ from igloo_mcp.living_reports.changes_schema import (
 from igloo_mcp.living_reports.models import Insight, Outline, Section
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
 from igloo_mcp.living_reports.service import ReportService
+from igloo_mcp.living_reports.templates import render_section_template
 from igloo_mcp.mcp.error_utils import wrap_validation_error
 from igloo_mcp.mcp.exceptions import (
     MCPExecutionError,
@@ -1454,149 +1455,12 @@ class EvolveReportTool(MCPTool):
         return warnings
 
     def _render_section_template(self, template_name: str, template_data: dict[str, Any], section_title: str) -> str:
-        """Render structured markdown templates for sections."""
-        if not isinstance(template_name, str):
-            raise ValueError("template must be a string")
-        normalized_name = template_name.strip().lower()
-        data = template_data or {}
+        """Render structured markdown templates for sections.
 
-        if normalized_name in {"findings", "findings_list"}:
-            findings = data.get("findings", [])
-            if not findings:
-                raise ValueError("findings_list template requires 'findings' array")
-            heading = data.get("heading") or f"Key Findings - {section_title}"
-            lines = [f"## {heading.strip()}", ""]
-            for idx, finding in enumerate(findings, 1):
-                title = finding.get("title") or f"Finding {idx}"
-                summary = finding.get("description") or finding.get("summary") or ""
-                metric = finding.get("metric") or {}
-                lines.append(f"### {idx}. {title.strip()}")
-                if metric:
-                    lines.append("")
-                    lines.append("| Metric | Value | Trend |")
-                    lines.append("| --- | --- | --- |")
-                    lines.append(
-                        f"| {metric.get('name', 'Value')} | {metric.get('value', '-')} | {metric.get('trend', '-')} |"
-                    )
-                if summary:
-                    lines.append("")
-                    lines.append(summary.strip())
-                if finding.get("actions"):
-                    lines.append("")
-                    lines.append("**Next Steps**")
-                    for action in finding["actions"]:
-                        lines.append(f"- {action}")
-                lines.append("")
-            return "\n".join(lines).strip()
-
-        if normalized_name in {"metrics", "metrics_snapshot"}:
-            metrics = data.get("metrics", [])
-            if not metrics:
-                raise ValueError("metrics_snapshot template requires 'metrics' array")
-            heading = data.get("heading") or f"{section_title} Metrics"
-            lines = [f"## {heading.strip()}", "", "| Metric | Value | Target | Delta |", "| --- | --- | --- | --- |"]
-            for metric in metrics:
-                lines.append(
-                    "| {name} | {value} | {target} | {delta} |".format(
-                        name=metric.get("name", "Metric"),
-                        value=metric.get("value", "-"),
-                        target=metric.get("target", "-"),
-                        delta=metric.get("delta", "-"),
-                    )
-                )
-            if data.get("callouts"):
-                lines.append("")
-                lines.append("### Callouts")
-                for callout in data["callouts"]:
-                    title = callout.get("title", "Callout")
-                    detail = callout.get("detail") or callout.get("description") or ""
-                    lines.append(f"- **{title}** — {detail}")
-            return "\n".join(lines).strip()
-
-        if normalized_name in {"bullet", "bullet_list", "summary_bullets"}:
-            items = data.get("items") or data.get("bullets")
-            if not items:
-                raise ValueError("bullet_list template requires 'items' array")
-            heading = data.get("heading") or section_title or "Summary"
-            lines = [f"## {heading.strip()}", ""]
-            for item in items:
-                lines.append(f"- {item}")
-            return "\n".join(lines).strip()
-
-        if normalized_name in {"executive_summary", "exec_summary"}:
-            # Executive summary with headline, key takeaways, and optional recommendation
-            headline = data.get("headline") or data.get("title") or section_title
-            key_points = data.get("key_points") or data.get("takeaways") or []
-            recommendation = data.get("recommendation") or data.get("action")
-            conclusion = data.get("conclusion") or data.get("summary")
-
-            lines = [f"## {headline.strip()}", ""]
-
-            if data.get("context"):
-                lines.append(data["context"].strip())
-                lines.append("")
-
-            if key_points:
-                lines.append("### Key Takeaways")
-                lines.append("")
-                for idx, point in enumerate(key_points, 1):
-                    if isinstance(point, dict):
-                        title = point.get("title", f"Point {idx}")
-                        detail = point.get("detail", "")
-                        lines.append(f"{idx}. **{title}** — {detail}")
-                    else:
-                        lines.append(f"{idx}. {point}")
-                lines.append("")
-
-            if recommendation:
-                lines.append("### Recommendation")
-                lines.append("")
-                lines.append(f"> {recommendation.strip()}")
-                lines.append("")
-
-            if conclusion:
-                lines.append(conclusion.strip())
-                lines.append("")
-
-            return "\n".join(lines).strip()
-
-        if normalized_name in {"action_items", "next_steps", "actions"}:
-            # Action items with owners, due dates, and priority
-            actions = data.get("actions") or data.get("items") or []
-            if not actions:
-                raise ValueError("action_items template requires 'actions' array")
-
-            heading = data.get("heading") or "Action Items"
-            lines = [f"## {heading.strip()}", ""]
-
-            has_table_data = any(
-                isinstance(a, dict) and (a.get("owner") or a.get("due") or a.get("priority")) for a in actions
-            )
-
-            if has_table_data:
-                lines.append("| # | Action | Owner | Due | Priority |")
-                lines.append("| --- | --- | --- | --- | --- |")
-                for idx, action in enumerate(actions, 1):
-                    if isinstance(action, dict):
-                        desc = action.get("description") or action.get("action") or action.get("title") or ""
-                        owner = action.get("owner") or "TBD"
-                        due = action.get("due") or action.get("due_date") or "-"
-                        priority = action.get("priority") or "Medium"
-                        lines.append(f"| {idx} | {desc} | {owner} | {due} | {priority} |")
-                    else:
-                        lines.append(f"| {idx} | {action} | TBD | - | Medium |")
-            else:
-                for idx, action in enumerate(actions, 1):
-                    if isinstance(action, dict):
-                        desc = action.get("description") or action.get("action") or action.get("title") or ""
-                        lines.append(f"{idx}. {desc}")
-                    else:
-                        lines.append(f"{idx}. {action}")
-
-            lines.append("")
-            return "\n".join(lines).strip()
-
-        raise ValueError(f"Unknown section template: {template_name}")
+        Delegates to the centralized template renderer in templates.py.
+        This ensures a single source of truth for all section content templates.
+        """
+        return render_section_template(template_name, template_data, section_title)
 
     def _apply_format_options(self, content: str, format_options: dict[str, Any], section_title: str) -> str:
         """Apply simple markdown formatting helpers requested by the agent."""

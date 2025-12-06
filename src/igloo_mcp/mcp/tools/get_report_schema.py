@@ -15,6 +15,10 @@ from igloo_mcp.living_reports.changes_schema import (
     ProposedChanges,
 )
 from igloo_mcp.living_reports.models import Insight, Outline, Section
+from igloo_mcp.living_reports.templates import (
+    SECTION_CONTENT_TEMPLATES,
+    get_section_template_names,
+)
 from igloo_mcp.mcp.exceptions import MCPValidationError
 from igloo_mcp.mcp.tools.base import MCPTool, ensure_request_id, tool_error_handler
 
@@ -107,13 +111,14 @@ class GetReportSchemaTool(MCPTool):
         request_id = ensure_request_id(request_id)
 
         # Validate schema_type
-        valid_types = ("proposed_changes", "insight", "section", "outline", "all")
+        valid_types = ("proposed_changes", "insight", "section", "outline", "section_templates", "all")
         if schema_type not in valid_types:
             raise MCPValidationError(
                 f"Invalid schema_type '{schema_type}'. Must be one of: {', '.join(valid_types)}",
                 validation_errors=[f"Invalid schema_type: {schema_type}"],
                 hints=[
                     "Use 'proposed_changes' for evolve_report schema (most common)",
+                    "Use 'section_templates' to discover available section content templates",
                     "Use 'insight', 'section', or 'outline' for individual models",
                     "Use 'all' to get all schemas at once",
                 ],
@@ -180,18 +185,61 @@ class GetReportSchemaTool(MCPTool):
             "outline": Outline.model_json_schema(),
         }
 
+        # Handle section_templates specially
+        if schema_type == "section_templates":
+            return self._build_section_templates_response()
+
         if schema_type == "all":
             return {
                 "status": "success",
                 "schema_type": "all",
                 "schema_version": CURRENT_CHANGES_SCHEMA_VERSION,
                 "schemas": schemas,
+                "section_templates": self._get_section_templates_data(),
             }
         return {
             "status": "success",
             "schema_type": schema_type,
             "schema_version": CURRENT_CHANGES_SCHEMA_VERSION,
             "json_schema": schemas[schema_type],
+        }
+
+    def _build_section_templates_response(self) -> dict[str, Any]:
+        """Build response for section_templates schema type."""
+        return {
+            "status": "success",
+            "schema_type": "section_templates",
+            "description": (
+                "Section content templates generate formatted markdown for common section types. "
+                "Use with evolve_report by setting 'template' and 'template_data' when adding or modifying sections."
+            ),
+            "usage": {
+                "when_adding_section": {
+                    "title": "Key Findings",
+                    "template": "findings",
+                    "template_data": {"findings": [{"title": "...", "metric": {...}}]},
+                },
+                "when_modifying_section": {
+                    "section_id": "uuid",
+                    "template": "metrics",
+                    "template_data": {"metrics": [{"name": "...", "value": "..."}]},
+                },
+            },
+            "available_names": get_section_template_names(),
+            "templates": self._get_section_templates_data(),
+        }
+
+    def _get_section_templates_data(self) -> dict[str, Any]:
+        """Get section templates data for schema responses."""
+        return {
+            name: {
+                "description": info["description"],
+                "aliases": info.get("aliases", []),
+                "required_fields": info.get("required_fields", []),
+                "optional_fields": info.get("optional_fields", []),
+                "example_template_data": info.get("example", {}),
+            }
+            for name, info in SECTION_CONTENT_TEMPLATES.items()
         }
 
     def _build_examples_response(self, schema_type: str) -> dict[str, Any]:
@@ -325,7 +373,10 @@ class GetReportSchemaTool(MCPTool):
                 "status": "success",
                 "schema_type": "all",
                 "examples": examples,
+                "section_templates": self._get_section_templates_data(),
             }
+        if schema_type == "section_templates":
+            return self._build_section_templates_response()
         if schema_type in examples:
             return {
                 "status": "success",
@@ -388,6 +439,20 @@ class GetReportSchemaTool(MCPTool):
                 "status": "success",
                 "schema_type": "all",
                 "quick_reference": compact_refs,
+                "section_templates": list(SECTION_CONTENT_TEMPLATES.keys()),
+            }
+        if schema_type == "section_templates":
+            # For compact, just list template names and their required fields
+            return {
+                "status": "success",
+                "schema_type": "section_templates",
+                "templates": {
+                    name: {
+                        "required": info.get("required_fields", []),
+                        "aliases": info.get("aliases", []),
+                    }
+                    for name, info in SECTION_CONTENT_TEMPLATES.items()
+                },
             }
         if schema_type in compact_refs:
             return {
@@ -418,10 +483,11 @@ class GetReportSchemaTool(MCPTool):
                         "insight",
                         "section",
                         "outline",
+                        "section_templates",
                         "all",
                     ],
                     "default": "proposed_changes",
-                    "examples": ["proposed_changes", "insight", "all"],
+                    "examples": ["proposed_changes", "section_templates", "all"],
                 },
                 "format": {
                     "type": "string",

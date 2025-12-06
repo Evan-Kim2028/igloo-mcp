@@ -6,7 +6,10 @@ giving LLM agents a clear structure to populate with content.
 All templates enforce citation requirements by default.
 """
 
+from __future__ import annotations
+
 import uuid
+from typing import Any
 
 from .models import Section
 
@@ -195,74 +198,115 @@ def get_template(name: str) -> list[Section]:
 # =============================================================================
 # These templates format section content with structured markdown.
 # Use via evolve_report with template="findings" and template_data={...}
+#
+# SINGLE SOURCE OF TRUTH: evolve_report.py delegates to these functions.
 
-SECTION_CONTENT_TEMPLATES: dict[str, dict[str, str | list[str]]] = {
+# Template metadata for discovery via get_report_schema
+SECTION_CONTENT_TEMPLATES: dict[str, dict[str, Any]] = {
     "findings": {
-        "format": """## {heading}
-
-| Finding | Metric | Impact |
-|---------|--------|--------|
-{findings_rows}
-
-### Details
-
-{findings_details}
-""",
-        "fields": ["findings"],
-        "description": "Key findings table with details section",
+        "description": "Key findings with optional metrics and action items",
+        "aliases": ["findings_list"],
+        "required_fields": ["findings"],
+        "optional_fields": ["heading"],
+        "example": {
+            "heading": "Key Findings",
+            "findings": [
+                {
+                    "title": "Revenue Growth",
+                    "description": "Strong YoY performance",
+                    "metric": {"name": "YoY Growth", "value": "+45%", "trend": "↑"},
+                    "actions": ["Expand to new markets"],
+                }
+            ],
+        },
     },
     "metrics": {
-        "format": """## {heading}
-
-| Metric | Value | Change |
-|--------|-------|--------|
-{metrics_rows}
-""",
-        "fields": ["metrics"],
-        "description": "Metrics summary table",
+        "description": "Metrics snapshot table with optional callouts",
+        "aliases": ["metrics_snapshot"],
+        "required_fields": ["metrics"],
+        "optional_fields": ["heading", "callouts"],
+        "example": {
+            "heading": "Q4 Metrics",
+            "metrics": [
+                {"name": "Revenue", "value": "$2.4M", "target": "$2.0M", "delta": "+20%"},
+                {"name": "Users", "value": "50K", "target": "45K", "delta": "+11%"},
+            ],
+            "callouts": [{"title": "Record Quarter", "detail": "Highest revenue ever"}],
+        },
     },
-    "methodology": {
-        "format": """## {heading}
-
-**Data Sources:**
-{data_sources}
-
-**Time Period:** {time_period}
-
-**Analysis Approach:**
-{approach}
-""",
-        "fields": ["data_sources", "time_period", "approach"],
-        "description": "Methodology section with sources and approach",
+    "bullet_list": {
+        "description": "Simple bullet point list",
+        "aliases": ["bullet", "summary_bullets"],
+        "required_fields": ["items"],
+        "optional_fields": ["heading"],
+        "example": {
+            "heading": "Summary",
+            "items": ["First key point", "Second key point", "Third key point"],
+        },
     },
     "executive_summary": {
-        "format": """## {heading}
-
-{summary}
-
-### Key Highlights
-
-{highlights}
-
-### Recommendations
-
-{recommendations}
-""",
-        "fields": ["summary", "highlights", "recommendations"],
-        "description": "Executive summary with highlights and recommendations",
+        "description": "Executive summary with key takeaways and recommendation",
+        "aliases": ["exec_summary"],
+        "required_fields": [],
+        "optional_fields": ["headline", "context", "key_points", "recommendation", "conclusion"],
+        "example": {
+            "headline": "Q4 Performance Review",
+            "context": "This quarter marked significant growth...",
+            "key_points": [
+                {"title": "Revenue", "detail": "Up 25% YoY"},
+                "Customer satisfaction at all-time high",
+            ],
+            "recommendation": "Increase investment in growth initiatives",
+            "conclusion": "Strong foundation for continued expansion",
+        },
+    },
+    "action_items": {
+        "description": "Action items with owners, due dates, and priority",
+        "aliases": ["next_steps", "actions"],
+        "required_fields": ["actions"],
+        "optional_fields": ["heading"],
+        "example": {
+            "heading": "Next Steps",
+            "actions": [
+                {
+                    "description": "Complete security audit",
+                    "owner": "Security Team",
+                    "due": "2024-01-15",
+                    "priority": "High",
+                },
+                {"description": "Update documentation", "owner": "TBD"},
+            ],
+        },
+    },
+    "methodology": {
+        "description": "Methodology section with data sources and approach",
+        "aliases": [],
+        "required_fields": [],
+        "optional_fields": ["heading", "data_sources", "time_period", "approach"],
+        "example": {
+            "heading": "Methodology",
+            "data_sources": ["Snowflake analytics warehouse", "On-chain transaction data"],
+            "time_period": "Q4 2024 (Oct 1 - Dec 31)",
+            "approach": "Aggregated daily metrics with 7-day moving averages",
+        },
     },
 }
 
 
-def format_section_content(template_name: str, data: dict[str, str | list]) -> str:
-    """Format section content using a predefined template.
+def render_section_template(
+    template_name: str,
+    template_data: dict[str, Any],
+    section_title: str = "Untitled Section",
+) -> str:
+    """Render structured markdown content from a section template.
 
-    This function renders structured markdown content from template + data.
-    Use for consistent formatting of common section types.
+    This is the SINGLE SOURCE OF TRUTH for section content templates.
+    evolve_report.py delegates to this function.
 
     Args:
-        template_name: Template name (findings, metrics, methodology, executive_summary)
-        data: Template data dictionary with required fields
+        template_name: Template name (findings, metrics, bullet_list, executive_summary, action_items, methodology)
+        template_data: Data to populate the template
+        section_title: Fallback title if not provided in template_data
 
     Returns:
         Formatted markdown string
@@ -271,92 +315,267 @@ def format_section_content(template_name: str, data: dict[str, str | list]) -> s
         ValueError: If template name not found or required fields missing
 
     Example:
-        >>> content = format_section_content("findings", {
+        >>> content = render_section_template("findings", {
         ...     "heading": "Key Findings",
         ...     "findings": [
-        ...         {"title": "Revenue Growth", "metric": "+45%", "impact": "High"},
-        ...         {"title": "User Retention", "metric": "92%", "impact": "Medium"},
+        ...         {"title": "Revenue Growth", "metric": {"name": "YoY", "value": "+45%", "trend": "↑"}},
         ...     ],
-        ... })
+        ... }, "Analysis")
     """
-    if template_name not in SECTION_CONTENT_TEMPLATES:
+    if not isinstance(template_name, str):
+        raise ValueError("template must be a string")
+
+    normalized_name = template_name.strip().lower()
+    data = template_data or {}
+
+    # Resolve aliases
+    resolved_name = _resolve_template_alias(normalized_name)
+    if resolved_name is None:
         available = ", ".join(SECTION_CONTENT_TEMPLATES.keys())
         raise ValueError(f"Unknown section template: {template_name}. Available: {available}")
 
-    template_info = SECTION_CONTENT_TEMPLATES[template_name]
-    template_format = str(template_info["format"])
+    # Dispatch to specific renderer
+    if resolved_name == "findings":
+        return _render_findings(data, section_title)
+    elif resolved_name == "metrics":
+        return _render_metrics(data, section_title)
+    elif resolved_name == "bullet_list":
+        return _render_bullet_list(data, section_title)
+    elif resolved_name == "executive_summary":
+        return _render_executive_summary(data, section_title)
+    elif resolved_name == "action_items":
+        return _render_action_items(data, section_title)
+    elif resolved_name == "methodology":
+        return _render_methodology(data, section_title)
+    else:
+        raise ValueError(f"Unknown section template: {template_name}")
 
-    # Set default heading
-    data = dict(data)  # Copy to avoid mutation
-    data.setdefault("heading", template_name.replace("_", " ").title())
 
-    # Format based on template type
-    if template_name == "findings":
-        findings = data.get("findings", [])
-        if not isinstance(findings, list):
-            raise ValueError("findings template requires 'findings' list")
+def _resolve_template_alias(name: str) -> str | None:
+    """Resolve template alias to canonical name."""
+    # Check direct match
+    if name in SECTION_CONTENT_TEMPLATES:
+        return name
+    # Check aliases
+    for canonical, info in SECTION_CONTENT_TEMPLATES.items():
+        if name in info.get("aliases", []):
+            return canonical
+    return None
 
-        rows = []
-        details = []
-        for idx, finding in enumerate(findings, 1):
-            if isinstance(finding, dict):
-                title = finding.get("title", f"Finding {idx}")
-                metric = finding.get("metric", "N/A")
-                impact = finding.get("impact", "N/A")
-                description = finding.get("description", "")
-                rows.append(f"| {title} | {metric} | {impact} |")
-                if description:
-                    details.append(f"**{title}:** {description}")
+
+def _render_findings(data: dict[str, Any], section_title: str) -> str:
+    """Render findings template."""
+    findings = data.get("findings", [])
+    if not findings:
+        raise ValueError("findings template requires 'findings' array")
+
+    heading = data.get("heading") or f"Key Findings - {section_title}"
+    lines = [f"## {heading.strip()}", ""]
+
+    for idx, finding in enumerate(findings, 1):
+        title = finding.get("title") or f"Finding {idx}"
+        summary = finding.get("description") or finding.get("summary") or ""
+        metric = finding.get("metric") or {}
+
+        lines.append(f"### {idx}. {title.strip()}")
+        if metric:
+            lines.append("")
+            lines.append("| Metric | Value | Trend |")
+            lines.append("| --- | --- | --- |")
+            lines.append(f"| {metric.get('name', 'Value')} | {metric.get('value', '-')} | {metric.get('trend', '-')} |")
+        if summary:
+            lines.append("")
+            lines.append(summary.strip())
+        if finding.get("actions"):
+            lines.append("")
+            lines.append("**Next Steps**")
+            for action in finding["actions"]:
+                lines.append(f"- {action}")
+        lines.append("")
+
+    return "\n".join(lines).strip()
+
+
+def _render_metrics(data: dict[str, Any], section_title: str) -> str:
+    """Render metrics snapshot template."""
+    metrics = data.get("metrics", [])
+    if not metrics:
+        raise ValueError("metrics template requires 'metrics' array")
+
+    heading = data.get("heading") or f"{section_title} Metrics"
+    lines = [f"## {heading.strip()}", "", "| Metric | Value | Target | Delta |", "| --- | --- | --- | --- |"]
+
+    for metric in metrics:
+        lines.append(
+            "| {name} | {value} | {target} | {delta} |".format(
+                name=metric.get("name", "Metric"),
+                value=metric.get("value", "-"),
+                target=metric.get("target", "-"),
+                delta=metric.get("delta", "-"),
+            )
+        )
+
+    if data.get("callouts"):
+        lines.append("")
+        lines.append("### Callouts")
+        for callout in data["callouts"]:
+            title = callout.get("title", "Callout")
+            detail = callout.get("detail") or callout.get("description") or ""
+            lines.append(f"- **{title}** — {detail}")
+
+    return "\n".join(lines).strip()
+
+
+def _render_bullet_list(data: dict[str, Any], section_title: str) -> str:
+    """Render bullet list template."""
+    items = data.get("items") or data.get("bullets")
+    if not items:
+        raise ValueError("bullet_list template requires 'items' array")
+
+    heading = data.get("heading") or section_title or "Summary"
+    lines = [f"## {heading.strip()}", ""]
+    for item in items:
+        lines.append(f"- {item}")
+
+    return "\n".join(lines).strip()
+
+
+def _render_executive_summary(data: dict[str, Any], section_title: str) -> str:
+    """Render executive summary template."""
+    headline = data.get("headline") or data.get("title") or section_title
+    key_points = data.get("key_points") or data.get("takeaways") or []
+    recommendation = data.get("recommendation") or data.get("action")
+    conclusion = data.get("conclusion") or data.get("summary")
+
+    lines = [f"## {headline.strip()}", ""]
+
+    if data.get("context"):
+        lines.append(data["context"].strip())
+        lines.append("")
+
+    if key_points:
+        lines.append("### Key Takeaways")
+        lines.append("")
+        for idx, point in enumerate(key_points, 1):
+            if isinstance(point, dict):
+                title = point.get("title", f"Point {idx}")
+                detail = point.get("detail", "")
+                lines.append(f"{idx}. **{title}** — {detail}")
             else:
-                rows.append(f"| Finding {idx} | N/A | N/A |")
+                lines.append(f"{idx}. {point}")
+        lines.append("")
 
-        data["findings_rows"] = "\n".join(rows) if rows else "| No findings | - | - |"
-        data["findings_details"] = "\n\n".join(details) if details else "_No details available._"
+    if recommendation:
+        lines.append("### Recommendation")
+        lines.append("")
+        lines.append(f"> {recommendation.strip()}")
+        lines.append("")
 
-    elif template_name == "metrics":
-        metrics = data.get("metrics", [])
-        if not isinstance(metrics, list):
-            raise ValueError("metrics template requires 'metrics' list")
+    if conclusion:
+        lines.append(conclusion.strip())
+        lines.append("")
 
-        rows = []
-        for metric in metrics:
-            if isinstance(metric, dict):
-                name = metric.get("name", "Unknown")
-                value = metric.get("value", "N/A")
-                change = metric.get("change", "-")
-                rows.append(f"| {name} | {value} | {change} |")
+    return "\n".join(lines).strip()
 
-        data["metrics_rows"] = "\n".join(rows) if rows else "| No metrics | - | - |"
 
-    elif template_name == "methodology":
-        # Format data_sources as bullet list if it's a list
-        sources = data.get("data_sources", "Not specified")
+def _render_action_items(data: dict[str, Any], section_title: str) -> str:
+    """Render action items template."""
+    actions = data.get("actions") or data.get("items") or []
+    if not actions:
+        raise ValueError("action_items template requires 'actions' array")
+
+    heading = data.get("heading") or "Action Items"
+    lines = [f"## {heading.strip()}", ""]
+
+    has_table_data = any(isinstance(a, dict) and (a.get("owner") or a.get("due") or a.get("priority")) for a in actions)
+
+    if has_table_data:
+        lines.append("| # | Action | Owner | Due | Priority |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        for idx, action in enumerate(actions, 1):
+            if isinstance(action, dict):
+                desc = action.get("description") or action.get("action") or action.get("title") or ""
+                owner = action.get("owner") or "TBD"
+                due = action.get("due") or action.get("due_date") or "-"
+                priority = action.get("priority") or "Medium"
+                lines.append(f"| {idx} | {desc} | {owner} | {due} | {priority} |")
+            else:
+                lines.append(f"| {idx} | {action} | TBD | - | Medium |")
+    else:
+        for idx, action in enumerate(actions, 1):
+            if isinstance(action, dict):
+                desc = action.get("description") or action.get("action") or action.get("title") or ""
+                lines.append(f"{idx}. {desc}")
+            else:
+                lines.append(f"{idx}. {action}")
+
+    lines.append("")
+    return "\n".join(lines).strip()
+
+
+def _render_methodology(data: dict[str, Any], section_title: str) -> str:
+    """Render methodology template."""
+    heading = data.get("heading") or section_title or "Methodology"
+    lines = [f"## {heading.strip()}", ""]
+
+    # Data sources
+    sources = data.get("data_sources", [])
+    if sources:
+        lines.append("**Data Sources:**")
         if isinstance(sources, list):
-            data["data_sources"] = "\n".join(f"- {s}" for s in sources)
-        data.setdefault("time_period", "Not specified")
-        data.setdefault("approach", "Not specified")
+            for source in sources:
+                lines.append(f"- {source}")
+        else:
+            lines.append(str(sources))
+        lines.append("")
 
-    elif template_name == "executive_summary":
-        # Format highlights as bullet list if it's a list
-        highlights = data.get("highlights", "")
-        if isinstance(highlights, list):
-            data["highlights"] = "\n".join(f"- {h}" for h in highlights)
-        recommendations = data.get("recommendations", "")
-        if isinstance(recommendations, list):
-            data["recommendations"] = "\n".join(f"- {r}" for r in recommendations)
-        data.setdefault("summary", "")
+    # Time period
+    time_period = data.get("time_period")
+    if time_period:
+        lines.append(f"**Time Period:** {time_period}")
+        lines.append("")
 
-    # Format the template with data
-    try:
-        return template_format.format(**data)
-    except KeyError as e:
-        raise ValueError(f"Missing required field for {template_name} template: {e}") from e
+    # Approach
+    approach = data.get("approach")
+    if approach:
+        lines.append("**Analysis Approach:**")
+        lines.append(approach.strip())
+        lines.append("")
+
+    return "\n".join(lines).strip()
 
 
-def list_section_content_templates() -> dict[str, str]:
-    """List available section content templates with descriptions.
+def list_section_content_templates() -> dict[str, dict[str, Any]]:
+    """List available section content templates with full metadata.
 
     Returns:
-        Dictionary mapping template name to description
+        Dictionary with template info including description, aliases, fields, and example.
+
+    Example:
+        >>> templates = list_section_content_templates()
+        >>> print(templates["findings"]["description"])
+        'Key findings with optional metrics and action items'
     """
-    return {name: str(info.get("description", "No description")) for name, info in SECTION_CONTENT_TEMPLATES.items()}
+    return SECTION_CONTENT_TEMPLATES.copy()
+
+
+def get_section_template_names() -> list[str]:
+    """Get list of all valid template names including aliases.
+
+    Returns:
+        List of all template names that can be used.
+    """
+    names = list(SECTION_CONTENT_TEMPLATES.keys())
+    for info in SECTION_CONTENT_TEMPLATES.values():
+        names.extend(info.get("aliases", []))
+    return sorted(set(names))
+
+
+# Legacy alias for backward compatibility
+def format_section_content(template_name: str, data: dict[str, Any]) -> str:
+    """Format section content using a predefined template.
+
+    DEPRECATED: Use render_section_template() instead.
+    This function is kept for backward compatibility.
+    """
+    return render_section_template(template_name, data, "Untitled Section")

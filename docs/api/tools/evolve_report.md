@@ -193,15 +193,43 @@ The insights are created atomically with the section and automatically linked. U
 
 Use pre-built markdown templates to generate structured section content. Templates produce clean, consistently formatted markdown.
 
+> **💡 Tip**: Use `get_report_schema(schema_type="section_templates")` to discover all available templates, their required fields, and example usage.
+
 #### Available Templates
 
-| Template | Aliases | Description |
-|----------|---------|-------------|
-| `findings_list` | `findings` | Key findings with metrics and action items |
-| `metrics_snapshot` | `metrics` | Metrics table with callouts |
-| `bullet_list` | `bullet`, `summary_bullets` | Simple bullet point summary |
-| `executive_summary` | `exec_summary` | Executive summary with takeaways and recommendations |
-| `action_items` | `next_steps`, `actions` | Action items with optional owners and due dates |
+| Template | Aliases | Required Fields | Description |
+|----------|---------|-----------------|-------------|
+| `findings` | `findings_list` | `findings` | Key findings with metrics and action items |
+| `metrics` | `metrics_snapshot` | `metrics` | Metrics table with optional callouts |
+| `bullet_list` | `bullet`, `summary_bullets` | `items` | Simple bullet point summary |
+| `executive_summary` | `exec_summary` | _(none)_ | Executive summary with takeaways and recommendations |
+| `action_items` | `next_steps`, `actions` | `actions` | Action items with optional owners and due dates |
+| `methodology` | _(none)_ | _(none)_ | Methodology section with data sources and approach |
+
+#### Discovering Templates Programmatically
+
+```python
+# Get full template documentation
+result = get_report_schema(schema_type="section_templates")
+
+# Returns:
+{
+  "status": "success",
+  "schema_type": "section_templates",
+  "description": "Section content templates generate formatted markdown...",
+  "available_names": ["action_items", "actions", "bullet", "bullet_list", ...],
+  "templates": {
+    "findings": {
+      "description": "Key findings with optional metrics and action items",
+      "aliases": ["findings_list"],
+      "required_fields": ["findings"],
+      "optional_fields": ["heading"],
+      "example_template_data": {...}
+    },
+    ...
+  }
+}
+```
 
 #### Example: Findings List Template
 
@@ -315,6 +343,45 @@ Monthly recurring revenue exceeded targets.
 ```
 
 **Note**: If action items include `owner`, `due`, or `priority` fields, they render as a table. Otherwise, they render as a numbered list.
+
+#### Example: Methodology Template
+
+```json
+{
+  "sections_to_add": [
+    {
+      "title": "Methodology",
+      "order": 1,
+      "template": "methodology",
+      "template_data": {
+        "heading": "Analysis Methodology",
+        "data_sources": [
+          "Snowflake analytics warehouse (DEX_TRADES_V2)",
+          "On-chain transaction data via Allium",
+          "CoinGecko price feeds"
+        ],
+        "time_period": "Q4 2024 (October 1 - December 31)",
+        "approach": "We aggregated daily trading volumes and computed 7-day moving averages to smooth volatility. Price impacts were calculated using VWAP methodology across all trades above $1,000."
+      }
+    }
+  ]
+}
+```
+
+**Generated Markdown**:
+```markdown
+## Analysis Methodology
+
+**Data Sources:**
+- Snowflake analytics warehouse (DEX_TRADES_V2)
+- On-chain transaction data via Allium
+- CoinGecko price feeds
+
+**Time Period:** Q4 2024 (October 1 - December 31)
+
+**Analysis Approach:**
+We aggregated daily trading volumes and computed 7-day moving averages to smooth volatility. Price impacts were calculated using VWAP methodology across all trades above $1,000.
+```
 
 ### Response Detail Control
 
