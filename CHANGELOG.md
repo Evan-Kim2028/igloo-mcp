@@ -13,6 +13,57 @@ This release introduces a comprehensive overhaul of the Living Reports rendering
 
 ### ✨ New Features
 
+#### Quality & Validation Tools
+- **`validate_report`**: New MCP tool with 8 quality checks:
+  - `citations` - Validates all insights have proper source citations
+  - `empty_sections` - Detects sections without content or insights
+  - `orphaned_insights` - Finds insights not linked to any section
+  - `duplicate_orders` - Checks for duplicate section order values
+  - `chart_references` - Validates chart file paths exist on disk
+  - `insight_importance` - Ensures importance values in valid 1-10 range
+  - `section_titles` - Validates all sections have non-empty titles
+  - `stale_content` - Flags content older than configurable threshold
+  - Includes `fix_mode=True` for auto-fixing common issues
+  - Generates actionable recommendations for manual fixes
+
+#### Markdown Renderer
+- **`MarkdownRenderer`**: New renderer for GitHub/GitLab publishing:
+  - YAML frontmatter for static site generators (Jekyll, Hugo)
+  - Automatic Table of Contents generation
+  - Insight blockquotes with citation formatting
+  - Platform-specific options: `github`, `gitlab`, `generic`
+  - Image handling modes: `relative`, `base64`, `absolute`
+  - Integrated with `render_report(format="markdown")`
+
+#### Audit Trail & Evolution History
+- **`include_audit`**: New parameter for `get_report` tool:
+  - Returns complete audit trail from report outline
+  - Version history with evolution timestamps
+  - Human-readable summaries of each change event
+  - Tracks event types, instructions, before/after states
+
+#### Chart Management
+- **Chart auto-copy**: Enhanced `attach_chart` operation:
+  - `auto_copy=True` option copies external charts to `report_files/{report_id}/`
+  - Automatic path rewriting to relative paths for portability
+  - File existence validation before operations
+  - Proper error handling for copy failures
+
+#### Enhanced Dry-Run Preview
+- **Dry-run preview enhancements**:
+  - `rendered_preview` with markdown snippets (truncated to 500 chars)
+  - `modifications` array with before/after diffs for:
+    - Section changes (title, content, notes, order)
+    - Insight changes (summary, importance, status)
+  - Automatic truncation for token efficiency
+
+#### Stale Content Detection
+- **Stale content tracking**: Enhanced `get_report` parameters:
+  - `stale_threshold_days` parameter (default: 7 days)
+  - `filter_stale` / `filter_fresh` filtering options
+  - Annotates sections/insights with `is_stale` boolean
+  - Adds `days_since_update` field for age tracking
+
 #### HTML Standalone Renderer
 - **Self-contained HTML output**: No Quarto installation required
 - **Style presets**: `compact`, `default`, `professional`, `wide`, `print`
