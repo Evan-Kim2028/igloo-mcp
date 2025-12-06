@@ -640,12 +640,17 @@ data-importance="{insight.importance}">
 
         .section-content p {{
             margin-bottom: {style["paragraph_spacing"]};
+            max-width: 65ch;
         }}
 
         .report-content ul,
         .report-content ol {{
             margin-left: {style["list_indent"]};
             margin-bottom: 1rem;
+        }}
+
+        .report-content li {{
+            max-width: 65ch;
         }}
 
         .insights-list {{
@@ -829,10 +834,22 @@ data-importance="{insight.importance}">
             background: var(--surface);
             font-weight: 600;
             color: var(--text);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.8125rem;
+            border-bottom: 2px solid var(--border);
+        }}
+
+        .section-content td {{
+            font-variant-numeric: tabular-nums;
+        }}
+
+        .section-content tbody tr:nth-child(even) {{
+            background: var(--surface);
         }}
 
         .section-content tr:hover {{
-            background: var(--surface);
+            background: #f1f5f9;
         }}
 
         /* Blockquotes */
@@ -889,7 +906,19 @@ data-importance="{insight.importance}">
             }}
 
             .insight-high {{
-                background: #422006;
+                background: linear-gradient(135deg, #422006 0%, #451a03 100%);
+            }}
+
+            .insight-medium {{
+                background: linear-gradient(135deg, #0c4a6e 0%, #082f49 100%);
+            }}
+
+            .section-content tbody tr:nth-child(even) {{
+                background: var(--surface);
+            }}
+
+            .section-content tr:hover {{
+                background: #334155;
             }}
 
             .citation-sql {{
@@ -976,8 +1005,10 @@ data-importance="{insight.importance}">
                 text-decoration: none;
             }}
 
-            a[href]::after {{
-                content: none;
+            a[href^="http"]::after {{
+                content: " (" attr(href) ")";
+                font-size: 0.8em;
+                color: #666;
             }}
         }}
 

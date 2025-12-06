@@ -510,7 +510,8 @@ class TestQuartoRenderer:
 
             content = qmd_file.read_text()
             assert 'title: "Test Report"' in content
-            assert "format: html" in content
+            assert "format:" in content  # New nested format block
+            assert "html:" in content  # Format name as nested key
             assert "toc: true" in content
             assert "## Test Section" in content
             assert "### Test insight" in content
@@ -585,7 +586,8 @@ class TestTemplateResolution:
             # Verify content was generated from template
             content = qmd_file.read_text()
             assert 'title: "Test Report"' in content
-            assert "format: html" in content
+            assert "format:" in content  # New nested format block
+            assert "html:" in content  # Format name as nested key
 
     def test_template_resolution_via_repo_root(self):
         """Test Strategy 2: Template resolution using repo root (development mode)."""
@@ -784,7 +786,7 @@ class TestTemplateResolution:
             # Verify content matches expected template structure
             content = qmd_file.read_text()
             assert 'title: "Real Package Test"' in content
-            assert "format: html" in content
+            assert "format:" in content  # New nested format block
             # Template uses YAML front matter, not markdown headers for title
             assert "---" in content  # YAML front matter delimiters
 

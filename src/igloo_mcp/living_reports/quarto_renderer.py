@@ -349,3 +349,9 @@ class QuartoRenderer:
         qmd_path = report_dir / "report.qmd"
         with open(qmd_path, "w", encoding="utf-8") as f:
             f.write(qmd_content)
+
+        # Copy styles.css to report directory for custom styling
+        styles_src = template_dir / "styles.css"
+        if styles_src.exists():
+            styles_dst = report_dir / "styles.css"
+            shutil.copy(styles_src, styles_dst)

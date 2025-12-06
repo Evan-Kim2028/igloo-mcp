@@ -943,6 +943,91 @@ class ReportService:
 
         return citation_map
 
+    def _get_next_order(self, outline: Outline) -> int:
+        """Get next available order value for a new section.
+
+        Args:
+            outline: Report outline to check existing orders
+
+        Returns:
+            Next available order value (max existing + 1, or 0 if no sections)
+        """
+        existing = [s.order for s in outline.sections if s.order is not None]
+        return max(existing, default=-1) + 1
+
+    def _check_duplicate_orders(self, outline: Outline) -> list[str]:
+        """Check for duplicate order values and return warnings.
+
+        Args:
+            outline: Report outline to check
+
+        Returns:
+            List of warning messages (empty if no duplicates)
+        """
+        orders = [s.order for s in outline.sections if s.order is not None]
+        duplicates = [o for o in set(orders) if orders.count(o) > 1]
+        if duplicates:
+            return [
+                f"Sections have duplicate order values: {sorted(set(duplicates))}. "
+                "Rendering order may be unpredictable. Use reorder_sections to fix."
+            ]
+        return []
+
+    def reorder_sections(
+        self,
+        report_id: str,
+        section_order: list[str],
+        actor: str = "cli",
+    ) -> dict[str, Any]:
+        """Reorder sections by section_id list.
+
+        Assigns order values 0, 1, 2, ... based on position in the provided list.
+        Sections not in the list retain their current order but are shifted to
+        come after the reordered sections.
+
+        Args:
+            report_id: Report identifier
+            section_order: List of section_ids in desired order
+            actor: Who is performing the reorder
+
+        Returns:
+            Dictionary with:
+            - reordered: Number of sections reordered
+            - new_order: Final section order (all section_ids)
+            - warnings: List of warning messages
+        """
+        outline = self.get_report_outline(report_id)
+        section_map = {s.section_id: s for s in outline.sections}
+        warnings: list[str] = []
+
+        # Track which sections were explicitly ordered
+        ordered_ids = set()
+        for idx, sid in enumerate(section_order):
+            if sid in section_map:
+                section_map[sid].order = idx
+                ordered_ids.add(sid)
+            else:
+                warnings.append(f"Section ID not found: {sid}")
+
+        # Shift unordered sections to come after ordered ones
+        next_order = len(section_order)
+        for section in outline.sections:
+            if section.section_id not in ordered_ids:
+                section.order = next_order
+                next_order += 1
+
+        # Update the outline
+        self.update_report_outline(report_id, outline, actor=actor)
+
+        # Return final order
+        final_order = [s.section_id for s in sorted(outline.sections, key=lambda s: s.order)]
+
+        return {
+            "reordered": len(ordered_ids),
+            "new_order": final_order,
+            "warnings": warnings,
+        }
+
     def render_report(
         self,
         report_id: str,

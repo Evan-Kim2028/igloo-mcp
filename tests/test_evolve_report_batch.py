@@ -21,6 +21,7 @@ from igloo_mcp.mcp.tools.evolve_report_batch import (
     OP_MODIFY_SECTION,
     OP_REMOVE_INSIGHT,
     OP_REMOVE_SECTION,
+    OP_REORDER_SECTIONS,
     OP_UPDATE_METADATA,
     OP_UPDATE_TITLE,
     VALID_OPERATIONS,
@@ -470,9 +471,10 @@ class TestOperationConstants:
         assert OP_ADD_SECTION in VALID_OPERATIONS
         assert OP_MODIFY_SECTION in VALID_OPERATIONS
         assert OP_REMOVE_SECTION in VALID_OPERATIONS
+        assert OP_REORDER_SECTIONS in VALID_OPERATIONS
         assert OP_UPDATE_TITLE in VALID_OPERATIONS
         assert OP_UPDATE_METADATA in VALID_OPERATIONS
 
     def test_valid_operations_count(self):
-        """VALID_OPERATIONS should have exactly 9 operations."""
-        assert len(VALID_OPERATIONS) == 9
+        """VALID_OPERATIONS should have exactly 10 operations."""
+        assert len(VALID_OPERATIONS) == 10

@@ -1,8 +1,18 @@
 ---
 title: "{{ outline.title }}"
-format: {{ format }}
-{% if options.toc %}toc: true{% endif %}
-{% if options.code_folding %}code-fold: true{% endif %}
+format:
+  {{ format }}:
+    toc: {{ 'true' if options.toc else 'false' }}
+    css: styles.css
+    theme:
+      light: flatly
+      dark: darkly
+    mainfont: system-ui, -apple-system, sans-serif
+    fontsize: 1rem
+    linestretch: 1.75
+{% if options.code_folding %}
+    code-fold: true
+{% endif %}
 ---
 
 {% set citation_map = hints.get('citation_map', {}) if hints else {} %}

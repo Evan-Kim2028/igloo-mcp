@@ -188,3 +188,175 @@ def get_template(name: str) -> list[Section]:
         available = ", ".join(TEMPLATES.keys())
         raise ValueError(f"Unknown template: {name}. Available templates: {available}")
     return TEMPLATES[name]()
+
+
+# =============================================================================
+# Section Content Templates
+# =============================================================================
+# These templates format section content with structured markdown.
+# Use via evolve_report with template="findings" and template_data={...}
+
+SECTION_CONTENT_TEMPLATES: dict[str, dict[str, str | list[str]]] = {
+    "findings": {
+        "format": """## {heading}
+
+| Finding | Metric | Impact |
+|---------|--------|--------|
+{findings_rows}
+
+### Details
+
+{findings_details}
+""",
+        "fields": ["findings"],
+        "description": "Key findings table with details section",
+    },
+    "metrics": {
+        "format": """## {heading}
+
+| Metric | Value | Change |
+|--------|-------|--------|
+{metrics_rows}
+""",
+        "fields": ["metrics"],
+        "description": "Metrics summary table",
+    },
+    "methodology": {
+        "format": """## {heading}
+
+**Data Sources:**
+{data_sources}
+
+**Time Period:** {time_period}
+
+**Analysis Approach:**
+{approach}
+""",
+        "fields": ["data_sources", "time_period", "approach"],
+        "description": "Methodology section with sources and approach",
+    },
+    "executive_summary": {
+        "format": """## {heading}
+
+{summary}
+
+### Key Highlights
+
+{highlights}
+
+### Recommendations
+
+{recommendations}
+""",
+        "fields": ["summary", "highlights", "recommendations"],
+        "description": "Executive summary with highlights and recommendations",
+    },
+}
+
+
+def format_section_content(template_name: str, data: dict[str, str | list]) -> str:
+    """Format section content using a predefined template.
+
+    This function renders structured markdown content from template + data.
+    Use for consistent formatting of common section types.
+
+    Args:
+        template_name: Template name (findings, metrics, methodology, executive_summary)
+        data: Template data dictionary with required fields
+
+    Returns:
+        Formatted markdown string
+
+    Raises:
+        ValueError: If template name not found or required fields missing
+
+    Example:
+        >>> content = format_section_content("findings", {
+        ...     "heading": "Key Findings",
+        ...     "findings": [
+        ...         {"title": "Revenue Growth", "metric": "+45%", "impact": "High"},
+        ...         {"title": "User Retention", "metric": "92%", "impact": "Medium"},
+        ...     ],
+        ... })
+    """
+    if template_name not in SECTION_CONTENT_TEMPLATES:
+        available = ", ".join(SECTION_CONTENT_TEMPLATES.keys())
+        raise ValueError(f"Unknown section template: {template_name}. Available: {available}")
+
+    template_info = SECTION_CONTENT_TEMPLATES[template_name]
+    template_format = str(template_info["format"])
+
+    # Set default heading
+    data = dict(data)  # Copy to avoid mutation
+    data.setdefault("heading", template_name.replace("_", " ").title())
+
+    # Format based on template type
+    if template_name == "findings":
+        findings = data.get("findings", [])
+        if not isinstance(findings, list):
+            raise ValueError("findings template requires 'findings' list")
+
+        rows = []
+        details = []
+        for idx, finding in enumerate(findings, 1):
+            if isinstance(finding, dict):
+                title = finding.get("title", f"Finding {idx}")
+                metric = finding.get("metric", "N/A")
+                impact = finding.get("impact", "N/A")
+                description = finding.get("description", "")
+                rows.append(f"| {title} | {metric} | {impact} |")
+                if description:
+                    details.append(f"**{title}:** {description}")
+            else:
+                rows.append(f"| Finding {idx} | N/A | N/A |")
+
+        data["findings_rows"] = "\n".join(rows) if rows else "| No findings | - | - |"
+        data["findings_details"] = "\n\n".join(details) if details else "_No details available._"
+
+    elif template_name == "metrics":
+        metrics = data.get("metrics", [])
+        if not isinstance(metrics, list):
+            raise ValueError("metrics template requires 'metrics' list")
+
+        rows = []
+        for metric in metrics:
+            if isinstance(metric, dict):
+                name = metric.get("name", "Unknown")
+                value = metric.get("value", "N/A")
+                change = metric.get("change", "-")
+                rows.append(f"| {name} | {value} | {change} |")
+
+        data["metrics_rows"] = "\n".join(rows) if rows else "| No metrics | - | - |"
+
+    elif template_name == "methodology":
+        # Format data_sources as bullet list if it's a list
+        sources = data.get("data_sources", "Not specified")
+        if isinstance(sources, list):
+            data["data_sources"] = "\n".join(f"- {s}" for s in sources)
+        data.setdefault("time_period", "Not specified")
+        data.setdefault("approach", "Not specified")
+
+    elif template_name == "executive_summary":
+        # Format highlights as bullet list if it's a list
+        highlights = data.get("highlights", "")
+        if isinstance(highlights, list):
+            data["highlights"] = "\n".join(f"- {h}" for h in highlights)
+        recommendations = data.get("recommendations", "")
+        if isinstance(recommendations, list):
+            data["recommendations"] = "\n".join(f"- {r}" for r in recommendations)
+        data.setdefault("summary", "")
+
+    # Format the template with data
+    try:
+        return template_format.format(**data)
+    except KeyError as e:
+        raise ValueError(f"Missing required field for {template_name} template: {e}") from e
+
+
+def list_section_content_templates() -> dict[str, str]:
+    """List available section content templates with descriptions.
+
+    Returns:
+        Dictionary mapping template name to description
+    """
+    return {name: str(info.get("description", "No description")) for name, info in SECTION_CONTENT_TEMPLATES.items()}

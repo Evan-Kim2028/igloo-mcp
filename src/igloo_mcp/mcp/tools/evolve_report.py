@@ -315,7 +315,7 @@ class EvolveReportTool(MCPTool):
                         "message",
                         f"Could not resolve report selector: {report_selector}",
                     ),
-                    selector=report_selector,
+                    selector=report_id,
                     error=error_dict.get("error", "not_found"),
                     candidates=error_dict.get("candidates", []),
                 ) from e
@@ -1441,6 +1441,15 @@ class EvolveReportTool(MCPTool):
         for section in outline.sections:
             if not section.insight_ids:
                 warnings.append(f"Section '{section.title}' ({section.section_id}) has no insights")
+
+        # Check for duplicate section order values
+        orders = [s.order for s in outline.sections if s.order is not None]
+        duplicates = [o for o in set(orders) if orders.count(o) > 1]
+        if duplicates:
+            warnings.append(
+                f"Sections have duplicate order values: {sorted(set(duplicates))}. "
+                "Rendering order may be unpredictable. Use reorder_sections batch operation to fix."
+            )
 
         return warnings
 

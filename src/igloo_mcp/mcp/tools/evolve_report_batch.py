@@ -84,6 +84,7 @@ OP_REMOVE_INSIGHT = "remove_insight"
 OP_ADD_SECTION = "add_section"
 OP_MODIFY_SECTION = "modify_section"
 OP_REMOVE_SECTION = "remove_section"
+OP_REORDER_SECTIONS = "reorder_sections"
 OP_UPDATE_TITLE = "update_title"
 OP_UPDATE_METADATA = "update_metadata"
 OP_ATTACH_CHART = "attach_chart"
@@ -95,6 +96,7 @@ VALID_OPERATIONS = {
     OP_ADD_SECTION,
     OP_MODIFY_SECTION,
     OP_REMOVE_SECTION,
+    OP_REORDER_SECTIONS,
     OP_UPDATE_TITLE,
     OP_UPDATE_METADATA,
     OP_ATTACH_CHART,
@@ -445,6 +447,19 @@ class EvolveReportBatchTool(MCPTool):
                 "request_id": request_id,
             }
 
+        # Handle reorder_sections operations separately (service-level operation)
+        reorder_ops = [op for op in operations if op.get("type") == OP_REORDER_SECTIONS]
+        reorder_results = []
+        for reorder_op in reorder_ops:
+            section_order = reorder_op.get("section_order", [])
+            if section_order:
+                reorder_result = self.report_service.reorder_sections(
+                    report_id=report_id,
+                    section_order=section_order,
+                    actor="agent",
+                )
+                reorder_results.append(reorder_result)
+
         # Import and use the evolve report tool to apply changes
         from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
 
@@ -468,6 +483,10 @@ class EvolveReportBatchTool(MCPTool):
             "operations_summary": self._summarize_operations(operations),
             "total_duration_ms": round(total_duration, 2),
         }
+
+        # Add reorder results if any
+        if reorder_results:
+            result["batch_info"]["reorder_results"] = reorder_results
 
         logger.info(
             "evolve_report_batch_completed",
