@@ -500,7 +500,7 @@ class EvolveReportBatchTool(MCPTool):
                                     "copied": True,
                                 }
                             )
-                        except Exception as e:
+                        except OSError as e:
                             chart_copy_results.append(
                                 {
                                     "chart_id": chart_id,

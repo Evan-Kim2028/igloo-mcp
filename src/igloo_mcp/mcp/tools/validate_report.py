@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 
 
 # Check result constants
-CHECK_PASS = "pass"
+CHECK_PASS = "pass"  # noqa: S105
 CHECK_WARNING = "warning"
 CHECK_ERROR = "error"
 CHECK_FIXED = "fixed"

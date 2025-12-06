@@ -680,7 +680,7 @@ class TestValidateReportTiming:
         )
 
         assert "duration_ms" in result
-        assert isinstance(result["duration_ms"], (int, float))
+        assert isinstance(result["duration_ms"], int | float)
         assert result["duration_ms"] >= 0
 
     async def test_request_id_included(self, validate_tool, empty_report_id):

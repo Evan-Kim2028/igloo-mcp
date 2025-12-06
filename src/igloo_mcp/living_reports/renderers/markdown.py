@@ -313,7 +313,7 @@ class MarkdownRenderer:
                 }
                 mime = mime_types.get(ext, "image/png")
                 return f"![{description}](data:{mime};base64,{b64})\n"
-            except Exception:
+            except OSError:
                 return f"*[Failed to embed chart: {chart_id}]*\n"
 
         elif image_mode == "relative" and images_dir:
@@ -410,7 +410,7 @@ class MarkdownRenderer:
 
                 shutil.copy2(chart_path, dest_path)
                 copied += 1
-            except Exception as e:
+            except OSError as e:
                 warnings.append(f"Failed to copy chart {chart_id}: {e}")
 
         return copied
