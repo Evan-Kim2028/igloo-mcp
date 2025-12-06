@@ -11,6 +11,7 @@ import contextlib
 import json
 import logging
 import os
+import shutil
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -101,11 +102,11 @@ class ReportIndex:
         self._title_to_id = title_to_id
 
     def rebuild_from_filesystem(self) -> None:
-        """Rebuild index by scanning report directories.
+        """Rebuild index by scanning report directories atomically.
 
-        This method scans the by_id/ directory and rebuilds the index
-        from the actual report directories on disk. Useful for recovery
-        from index corruption or filesystem drift.
+        Builds a fresh index from by_id/ into a temp file and atomically swaps
+        it into place. On failure, the existing index (and in-memory entries)
+        are preserved and the backup is restored.
         """
         reports_root = self.index_path.parent
         by_id_dir = reports_root / "by_id"
@@ -114,6 +115,10 @@ class ReportIndex:
             self._entries = {}
             self._title_to_id = {}
             return
+
+        previous_entries = self._entries
+        previous_titles = self._title_to_id
+        backup_path = self.index_path.with_suffix(".jsonl.bak")
 
         new_entries: dict[str, IndexEntry] = {}
         title_to_id: dict[str, str] = {}
@@ -169,19 +174,38 @@ class ReportIndex:
             new_entries[entry.report_id] = entry
             title_to_id[entry.current_title.lower()] = entry.report_id
 
-        self._entries = new_entries
-        self._title_to_id = title_to_id
+        # Backup current index before swapping
+        with contextlib.suppress(Exception):
+            if self.index_path.exists():
+                shutil.copy2(self.index_path, backup_path)
 
-        # Rewrite index file
-        self._save_index()
+        try:
+            self._save_index_internal(entries=new_entries, title_map=title_to_id)
+            with contextlib.suppress(Exception):
+                if backup_path.exists():
+                    backup_path.unlink()
+        except Exception:
+            # Restore previous state and backup file
+            self._entries = previous_entries
+            self._title_to_id = previous_titles
+            with contextlib.suppress(Exception):
+                if backup_path.exists():
+                    backup_path.replace(self.index_path)
+            raise
 
     def _save_index(self) -> None:
         """Save current index to disk."""
+        self._save_index_internal(entries=None, title_map=None)
+
+    def _save_index_internal(self, entries=None, title_map=None) -> None:
+        """Save provided entries to disk atomically and update in-memory cache."""
         temp_path = self.index_path.with_suffix(".tmp")
+        entries = self._entries if entries is None else entries
+        title_map = self._title_to_id if title_map is None else title_map
 
         try:
             with temp_path.open("w", encoding="utf-8") as f:
-                for entry in self._entries.values():
+                for entry in entries.values():
                     data = entry.model_dump()
                     line = json.dumps(data, ensure_ascii=False) + "\n"
                     f.write(line)
@@ -189,6 +213,8 @@ class ReportIndex:
                 os.fsync(f.fileno())
 
             temp_path.replace(self.index_path)
+            self._entries = entries
+            self._title_to_id = title_map
             # Best-effort directory sync for index durability
             try:
                 dir_fd = os.open(str(self.index_path.parent), os.O_RDONLY)

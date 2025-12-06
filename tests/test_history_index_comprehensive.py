@@ -172,6 +172,72 @@ class TestHistoryIndexRecordResolution:
         # Should return first match
         assert result["value"] == "first"
 
+    def test_get_record_by_execution_id(self, tmp_path):
+        """Test direct execution_id lookup without DatasetSource."""
+        # Arrange
+        history_path = tmp_path / "history.jsonl"
+        record = {"execution_id": "exec-direct", "statement": "SELECT 1"}
+        history_path.write_text(json.dumps(record) + "\n")
+        index = HistoryIndex(history_path)
+
+        # Act
+        result = index.get_record_by_execution_id("exec-direct")
+
+        # Assert
+        assert result is not None
+        assert result["execution_id"] == "exec-direct"
+
+    def test_get_record_by_execution_id_not_found(self, tmp_path):
+        """Test direct lookup returns None when not found."""
+        # Arrange
+        history_path = tmp_path / "history.jsonl"
+        history_path.write_text(json.dumps({"execution_id": "other"}) + "\n")
+        index = HistoryIndex(history_path)
+
+        # Act
+        result = index.get_record_by_execution_id("not-found")
+
+        # Assert
+        assert result is None
+
+    def test_get_records_batch(self, tmp_path):
+        """Test batch lookup of multiple execution_ids."""
+        # Arrange
+        history_path = tmp_path / "history.jsonl"
+        records = [
+            {"execution_id": "exec-1", "value": "first"},
+            {"execution_id": "exec-2", "value": "second"},
+            {"execution_id": "exec-3", "value": "third"},
+        ]
+        with history_path.open("w") as f:
+            for record in records:
+                f.write(json.dumps(record) + "\n")
+        index = HistoryIndex(history_path)
+
+        # Act
+        result = index.get_records_batch(["exec-1", "exec-3", "exec-missing"])
+
+        # Assert
+        assert len(result) == 2
+        assert "exec-1" in result
+        assert "exec-3" in result
+        assert "exec-missing" not in result
+        assert result["exec-1"]["value"] == "first"
+        assert result["exec-3"]["value"] == "third"
+
+    def test_get_records_batch_empty_list(self, tmp_path):
+        """Test batch lookup with empty list returns empty dict."""
+        # Arrange
+        history_path = tmp_path / "history.jsonl"
+        history_path.write_text(json.dumps({"execution_id": "exec-1"}) + "\n")
+        index = HistoryIndex(history_path)
+
+        # Act
+        result = index.get_records_batch([])
+
+        # Assert
+        assert result == {}
+
 
 class TestManifestPathResolution:
     """Test _resolve_manifest_path() static method."""

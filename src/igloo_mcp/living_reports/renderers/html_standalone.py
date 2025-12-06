@@ -5,12 +5,51 @@ Generates self-contained HTML files with embedded CSS and no external dependenci
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 from html import escape
 from pathlib import Path
 from typing import Any
 
+import markdown as md
+
 from igloo_mcp.living_reports.models import Outline
+
+DEFAULT_STYLE = {
+    "max_width": "1200px",
+    "body_padding": "3rem 4rem",
+    "line_height": 1.75,
+    "paragraph_spacing": "1.25rem",
+    "list_indent": "2rem",
+    "table_cell_padding": "1rem 1.25rem",
+    "font_family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif",
+    "heading_color": "#0f172a",
+}
+
+STYLE_PRESETS: dict[str, dict[str, Any]] = {
+    "compact": {
+        "max_width": "900px",
+        "body_padding": "2rem 2.5rem",
+        "line_height": 1.6,
+        "paragraph_spacing": "1rem",
+    },
+    "default": {},
+    "professional": {
+        "max_width": "1200px",
+        "body_padding": "3rem 4rem",
+    },
+    "wide": {
+        "max_width": "1400px",
+        "body_padding": "3rem 4.5rem",
+    },
+    "print": {
+        "max_width": "960px",
+        "line_height": 1.8,
+        "font_family": "'Georgia', 'Times New Roman', serif",
+    },
+}
+
+ALLOWED_STYLE_KEYS = set(DEFAULT_STYLE.keys())
 
 
 class HTMLStandaloneRenderer:
@@ -52,6 +91,11 @@ class HTMLStandaloneRenderer:
         # Collect and embed charts
         embedded_charts = self._collect_and_embed_charts(outline, warnings)
 
+        style_config, style_warnings = self._build_style_config(options)
+        warnings.extend(style_warnings)
+
+        custom_css = options.get("custom_css")
+
         # Generate HTML content
         html_content = self._generate_html(
             outline=outline,
@@ -60,6 +104,8 @@ class HTMLStandaloneRenderer:
             options=options,
             warnings=warnings,
             embedded_charts=embedded_charts,
+            style_config=style_config,
+            custom_css=custom_css,
         )
 
         # Write to file
@@ -87,6 +133,8 @@ class HTMLStandaloneRenderer:
         options: dict[str, Any],
         warnings: list[str],
         embedded_charts: dict[str, str],
+        style_config: dict[str, Any],
+        custom_css: str | None,
     ) -> str:
         """Generate the complete HTML document.
 
@@ -120,7 +168,7 @@ class HTMLStandaloneRenderer:
         toc_html = self._render_toc(outline) if include_toc else ""
 
         # Get CSS
-        css = self._get_css(theme)
+        css = self._get_css(theme, style_config, custom_css)
 
         # Build complete HTML
         html = f"""<!DOCTYPE html>
@@ -190,8 +238,6 @@ class HTMLStandaloneRenderer:
         Returns:
             Dictionary mapping chart_id to base64-encoded data URI
         """
-        import base64
-
         embedded_charts: dict[str, str] = {}
         charts_metadata = outline.metadata.get("charts", {})
 
@@ -289,20 +335,21 @@ class HTMLStandaloneRenderer:
             <h2>{escape(section.title)}</h2>
 """
 
-        # Section notes
-        if section.notes:
-            html += f"""            <div class="section-notes">{escape(section.notes)}</div>
-"""
-
-        # Section content (prose)
+        has_content = bool(section.content)
         if section.content:
-            # Convert markdown to HTML (basic conversion)
-            content_html = self._markdown_to_html(section.content)
+            if section.content_format == "html":
+                content_html = section.content
+            else:
+                content_html = self._markdown_to_html(section.content)
             html += f"""            <div class="section-content">{content_html}</div>
 """
+        elif section.notes:
+            notes_html = self._markdown_to_html(section.notes)
+            html += f"""            <div class="section-content">{notes_html}</div>
+"""
 
-        # Insights (only show if no prose content - avoid redundancy)
-        elif section.insight_ids:
+        # Insights (only hide when prose content exists)
+        if not has_content and section.insight_ids:
             html += """            <div class="insights-list">
 """
             for insight_id in section.insight_ids:
@@ -451,18 +498,46 @@ data-importance="{insight.importance}">
 """
         return html
 
-    def _get_css(self, theme: str = "default") -> str:
+    def _build_style_config(self, options: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+        preset_name = (options.get("style_preset") or "professional").lower()
+        css_overrides = options.get("css_options") or {}
+        warnings: list[str] = []
+
+        preset = STYLE_PRESETS.get(preset_name)
+        if preset is None:
+            warnings.append(f"Unknown style_preset '{preset_name}', falling back to professional")
+            preset = STYLE_PRESETS["professional"]
+
+        style: dict[str, Any] = {**DEFAULT_STYLE, **preset}
+
+        for key, value in css_overrides.items():
+            if key not in ALLOWED_STYLE_KEYS:
+                warnings.append(f"Ignoring unsupported css_options.{key}")
+                continue
+            style[key] = value
+
+        return style, warnings
+
+    def _get_css(
+        self,
+        theme: str = "default",
+        style_config: dict[str, Any] | None = None,
+        custom_css: str | None = None,
+    ) -> str:
         """Get CSS styles for the report.
 
         Args:
             theme: Theme name (default, dark, minimal)
+            style_config: Style overrides for spacing/typography
+            custom_css: Raw CSS string appended to output
 
         Returns:
             CSS styles as string
         """
+        style = style_config or DEFAULT_STYLE
         # Base styles
-        css = """
-        :root {
+        css = f"""
+        :root {{
             --primary-color: #2563eb;
             --secondary-color: #64748b;
             --background: #ffffff;
@@ -473,219 +548,217 @@ data-importance="{insight.importance}">
             --success: #22c55e;
             --warning: #f59e0b;
             --error: #ef4444;
-        }
+        }}
 
-        * {
+        * {{
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-        }
+        }}
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
+        body {{
+            font-family: {style["font_family"]};
+            line-height: {style["line_height"]};
             color: var(--text);
             background: var(--background);
-            max-width: 900px;
+            max-width: {style["max_width"]};
             margin: 0 auto;
-            padding: 2rem;
-        }
+            padding: {style["body_padding"]};
+        }}
 
-        .report-header {
+        .report-header {{
             border-bottom: 2px solid var(--primary-color);
             padding-bottom: 1.5rem;
             margin-bottom: 2rem;
-        }
+        }}
 
-        .report-header h1 {
+        .report-header h1 {{
             font-size: 2rem;
             margin-bottom: 0.5rem;
-        }
+        }}
 
-        .report-meta {
+        .report-meta {{
             display: flex;
             flex-wrap: wrap;
             gap: 1rem;
             font-size: 0.875rem;
             color: var(--text-muted);
-        }
+        }}
 
-        .meta-item code {
+        .meta-item code {{
             background: var(--surface);
             padding: 0.125rem 0.375rem;
             border-radius: 0.25rem;
             font-size: 0.8125rem;
-        }
+        }}
 
-        .table-of-contents {
+        .table-of-contents {{
             background: var(--surface);
             padding: 1.5rem;
             border-radius: 0.5rem;
             margin-bottom: 2rem;
-        }
+        }}
 
-        .table-of-contents h2 {
+        .table-of-contents h2 {{
             font-size: 1rem;
             margin-bottom: 0.75rem;
             color: var(--text-muted);
-        }
+        }}
 
-        .table-of-contents ul {
+        .table-of-contents ul {{
             list-style: none;
-        }
+        }}
 
-        .table-of-contents li {
+        .table-of-contents li {{
             margin: 0.375rem 0;
-        }
+        }}
 
-        .table-of-contents a {
+        .table-of-contents a {{
             color: var(--primary-color);
             text-decoration: none;
-        }
+        }}
 
-        .table-of-contents a:hover {
+        .table-of-contents a:hover {{
             text-decoration: underline;
-        }
+        }}
 
-        .report-section {
+        .report-section {{
             margin-bottom: 2.5rem;
-        }
+        }}
 
-        .report-section h2 {
-            font-size: 1.5rem;
+        .report-section h2 {{
+            font-size: 1.6rem;
             border-bottom: 1px solid var(--border);
             padding-bottom: 0.5rem;
             margin-bottom: 1rem;
-        }
+            color: {style["heading_color"]};
+        }}
 
-        .section-notes {
-            background: var(--surface);
-            padding: 1rem;
-            border-radius: 0.5rem;
-            margin-bottom: 1rem;
-            font-style: italic;
-            color: var(--text-muted);
-        }
-
-        .section-content {
+        .section-content {{
             margin-bottom: 1.5rem;
-        }
+        }}
 
-        .section-content p {
+        .section-content p {{
+            margin-bottom: {style["paragraph_spacing"]};
+        }}
+
+        .report-content ul,
+        .report-content ol {{
+            margin-left: {style["list_indent"]};
             margin-bottom: 1rem;
-        }
+        }}
 
-        .insights-list {
+        .insights-list {{
             display: flex;
             flex-direction: column;
             gap: 0.75rem;
-        }
+        }}
 
-        .insight {
+        .insight {{
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
             padding: 1rem;
             border-radius: 0.5rem;
             border-left: 4px solid;
-        }
+        }}
 
-        .insight-high {
+        .insight-high {{
             background: #fef3c7;
             border-color: var(--warning);
-        }
+        }}
 
-        .insight-medium {
+        .insight-medium {{
             background: var(--surface);
             border-color: var(--primary-color);
-        }
+        }}
 
-        .insight-low {
+        .insight-low {{
             background: var(--surface);
             border-color: var(--secondary-color);
-        }
+        }}
 
-        .insight-summary {
+        .insight-summary {{
             flex: 1;
-        }
+        }}
 
-        .insight-importance {
+        .insight-importance {{
             color: var(--warning);
             margin-left: 1rem;
             white-space: nowrap;
-        }
+        }}
 
-        .insight-chart {
+        .insight-chart {{
             margin: 1rem 0;
             text-align: center;
-        }
+        }}
 
-        .insight-chart img {
+        .insight-chart img {{
             max-width: 100%;
             height: auto;
             border-radius: 0.5rem;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
+        }}
 
-        .chart-caption {
+        .chart-caption {{
             margin-top: 0.5rem;
             font-size: 0.875rem;
             color: var(--text-muted);
             font-style: italic;
-        }
+        }}
 
-        .citation-ref {
+        .citation-ref {{
             color: var(--primary-color);
             font-size: 0.75rem;
             margin-left: 0.25rem;
-        }
+        }}
 
-        .citation-ref a {
+        .citation-ref a {{
             text-decoration: none;
-        }
+        }}
 
-        .citations-appendix {
+        .citations-appendix {{
             margin-top: 3rem;
             padding-top: 2rem;
             border-top: 2px solid var(--border);
-        }
+        }}
 
-        .citations-appendix h2 {
+        .citations-appendix h2 {{
             font-size: 1.25rem;
             margin-bottom: 1rem;
-        }
+        }}
 
-        .citations-list {
+        .citations-list {{
             padding-left: 1.5rem;
-        }
+        }}
 
-        .citation-item {
+        .citation-item {{
             margin-bottom: 1rem;
             padding: 0.75rem;
             background: var(--surface);
             border-radius: 0.375rem;
-        }
+        }}
 
-        .citation-id {
+        .citation-id {{
             display: block;
             font-weight: 600;
             margin-bottom: 0.25rem;
-        }
+        }}
 
-        .citation-id code {
+        .citation-id code {{
             font-weight: normal;
             background: var(--background);
             padding: 0.125rem 0.25rem;
             border-radius: 0.25rem;
-        }
+        }}
 
-        .citation-time, .citation-stats {
+        .citation-time, .citation-stats {{
             display: block;
             font-size: 0.875rem;
             color: var(--text-muted);
-        }
+        }}
 
-        .citation-sql {
+        .citation-sql {{
             margin: 0.5rem 0;
             padding: 0.5rem;
             background: #1e293b;
@@ -693,54 +766,266 @@ data-importance="{insight.importance}">
             border-radius: 0.25rem;
             overflow-x: auto;
             font-size: 0.8125rem;
-        }
+        }}
 
-        .report-footer {
+        .report-footer {{
             margin-top: 3rem;
             padding-top: 1rem;
             border-top: 1px solid var(--border);
             text-align: center;
-            font-size: 0.875rem;
+            padding: 1.5rem 0;
+            margin-top: 2rem;
+            border-top: 1px solid var(--border);
             color: var(--text-muted);
-        }
+            font-size: 0.875rem;
+        }}
 
-        .report-footer a {
+        .report-footer a {{
             color: var(--primary-color);
-        }
+        }}
 
-        @media (prefers-color-scheme: dark) {
-            :root {
+        /* Code blocks and inline code */
+        .section-content pre {{
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1rem 1.25rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }}
+
+        .section-content code {{
+            background: var(--surface);
+            padding: 0.125rem 0.375rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+        }}
+
+        .section-content pre code {{
+            background: transparent;
+            padding: 0;
+            font-size: inherit;
+        }}
+
+        /* Tables */
+        .section-content table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.5rem;
+            font-size: 0.9375rem;
+        }}
+
+        .section-content th,
+        .section-content td {{
+            padding: {style["table_cell_padding"]};
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }}
+
+        .section-content th {{
+            background: var(--surface);
+            font-weight: 600;
+            color: var(--text);
+        }}
+
+        .section-content tr:hover {{
+            background: var(--surface);
+        }}
+
+        /* Blockquotes */
+        .section-content blockquote {{
+            border-left: 4px solid var(--primary-color);
+            margin: 1rem 0;
+            padding: 0.75rem 1.25rem;
+            background: var(--surface);
+            border-radius: 0 0.25rem 0.25rem 0;
+            color: var(--text-muted);
+            font-style: italic;
+        }}
+
+        .section-content blockquote p {{
+            margin-bottom: 0;
+        }}
+
+        /* Horizontal rules */
+        .section-content hr {{
+            border: none;
+            height: 1px;
+            background: var(--border);
+            margin: 2rem 0;
+        }}
+
+        /* Images in content */
+        .section-content img {{
+            max-width: 100%;
+            height: auto;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }}
+
+        /* Nested list styles */
+        .section-content ul ul,
+        .section-content ol ol,
+        .section-content ul ol,
+        .section-content ol ul {{
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }}
+
+        .section-content li {{
+            margin-bottom: 0.375rem;
+        }}
+
+        @media (prefers-color-scheme: dark) {{
+            :root {{
                 --background: #0f172a;
                 --surface: #1e293b;
                 --text: #f1f5f9;
                 --text-muted: #94a3b8;
                 --border: #334155;
-            }
+            }}
 
-            .insight-high {
+            .insight-high {{
                 background: #422006;
-            }
+            }}
 
-            .citation-sql {
+            .citation-sql {{
                 background: #0f172a;
-            }
-        }
+            }}
 
-        @media print {
-            body {
+            .section-content pre {{
+                background: #0f172a;
+                border: 1px solid var(--border);
+            }}
+
+            .section-content th {{
+                background: #1e293b;
+            }}
+
+            .section-content blockquote {{
+                background: #1e293b;
+            }}
+        }}
+
+        /* Print styles */
+        @media print {{
+            body {{
                 max-width: none;
-                padding: 0;
-            }
+                padding: 1.5rem;
+                font-size: 11pt;
+                line-height: 1.5;
+            }}
 
-            .table-of-contents {
+            .table-of-contents {{
                 display: none;
-            }
-        }
+            }}
+
+            .report-header {{
+                border-bottom: 1px solid #333;
+                page-break-after: avoid;
+            }}
+
+            .report-section {{
+                page-break-inside: avoid;
+            }}
+
+            .report-section h2 {{
+                page-break-after: avoid;
+            }}
+
+            .insight {{
+                page-break-inside: avoid;
+                background: #f5f5f5 !important;
+                border-color: #333 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }}
+
+            .insight-high {{
+                background: #fff3cd !important;
+            }}
+
+            .citations-appendix {{
+                page-break-before: always;
+            }}
+
+            .citation-sql {{
+                background: #f5f5f5 !important;
+                color: #333 !important;
+            }}
+
+            .section-content pre {{
+                background: #f5f5f5 !important;
+                color: #333 !important;
+                border: 1px solid #ccc;
+            }}
+
+            .section-content table {{
+                font-size: 10pt;
+            }}
+
+            .report-footer {{
+                display: none;
+            }}
+
+            a {{
+                color: inherit;
+                text-decoration: none;
+            }}
+
+            a[href]::after {{
+                content: none;
+            }}
+        }}
+
+        /* Responsive design */
+        @media (max-width: 768px) {{
+            body {{
+                padding: 1.5rem;
+            }}
+
+            .report-header h1 {{
+                font-size: 1.5rem;
+            }}
+
+            .report-meta {{
+                flex-direction: column;
+                gap: 0.5rem;
+            }}
+
+            .report-section h2 {{
+                font-size: 1.25rem;
+            }}
+
+            .insight {{
+                flex-direction: column;
+                gap: 0.5rem;
+            }}
+
+            .insight-importance {{
+                margin-left: 0;
+            }}
+
+            .section-content table {{
+                font-size: 0.875rem;
+            }}
+
+            .section-content th,
+            .section-content td {{
+                padding: 0.5rem 0.75rem;
+            }}
+        }}
 """
+
+        if custom_css:
+            css += f"\n/* Custom CSS */\n{custom_css}\n"
 
         if theme == "dark":
             css += """
-        :root {
+        body {
             --background: #0f172a;
             --surface: #1e293b;
             --text: #f1f5f9;
@@ -750,12 +1035,13 @@ data-importance="{insight.importance}">
 """
         elif theme == "minimal":
             css += """
-        .insight {
-            border-left: none;
-            border-bottom: 1px solid var(--border);
-            border-radius: 0;
+        body {
+            font-family: 'Source Sans Pro', sans-serif;
+            --primary-color: #111111;
+            --secondary-color: #6b7280;
+            --surface: #f3f4f6;
         }
-"""
+        """
 
         return css
 
@@ -784,8 +1070,6 @@ data-importance="{insight.importance}">
         Returns:
             HTML string
         """
-        import markdown as md
-
         return md.markdown(
             markdown,
             extensions=["extra", "nl2br", "sane_lists"],

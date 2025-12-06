@@ -26,8 +26,8 @@ Step 2 - LLM generates and applies changes:
         proposed_changes={
             "insights_to_add": [{
                 "insight_id": "insight_uuid_123",
-                "summary": "Enterprise segment drove 45% YoY growth",
-                "importance": 9,
+                "summary": "30-day retention improved 15% QoQ",
+                "importance": 8,
                 "supporting_queries": [...]
             }],
             "sections_to_modify": [{
@@ -43,6 +43,7 @@ This design keeps the tool LLM-agnostic - works with any MCP client (Claude, GPT
 
 from __future__ import annotations
 
+import datetime
 import time
 import uuid
 from typing import Any
@@ -281,10 +282,9 @@ class EvolveReportTool(MCPTool):
                 },
             )
 
-            # Auto-refresh index before operations to sync with CLI-created reports
+            # Note: Index refresh moved to post-operation only to avoid double filesystem scan.
+            # The post-operation refresh (line ~547) ensures consistency after changes.
             selector_start = time.time()
-            if getattr(self.report_service, "index", None):
-                self.report_service.index.rebuild_from_filesystem()
 
             # Step 1: Resolve selector with explicit error handling
             try:
@@ -469,6 +469,8 @@ class EvolveReportTool(MCPTool):
 
             # Calculate warnings from the post-change outline
             warnings = self._calculate_outline_warnings(new_outline)
+            formatting_feedback = self._calculate_formatting_feedback(changes_obj, new_outline)
+            warnings = warnings + formatting_feedback["warnings"]
 
             # Step 4: Dry run check
             if dry_run or (constraints and constraints.get("dry_run")):
@@ -503,6 +505,7 @@ class EvolveReportTool(MCPTool):
                     "proposed_changes": changes_obj.model_dump(),
                     "preview": preview,
                     "warnings": warnings,
+                    "formatting_feedback": formatting_feedback,
                     "validation_passed": True,
                     "request_id": request_id,
                 }
@@ -649,6 +652,7 @@ class EvolveReportTool(MCPTool):
 
             # Add request_id to all response levels
             response["request_id"] = request_id
+            response["formatting_feedback"] = formatting_feedback
 
             return response
 
@@ -701,6 +705,12 @@ class EvolveReportTool(MCPTool):
                 issues.append(f"Section ID already exists: {section_id}")
 
         for modify_data in changes.get("sections_to_modify", []):
+            modify_data = dict(modify_data)
+            if modify_data.get("template_data") and not modify_data.get("template"):
+                sid = modify_data.get("section_id")
+                raise ValueError(
+                    f"Section modification requires template when template_data is provided (section_id={sid})"
+                )
             section_id = modify_data.get("section_id")
             if section_id not in existing_section_ids:
                 issues.append(f"Section ID not found: {section_id}")
@@ -818,6 +828,7 @@ class EvolveReportTool(MCPTool):
         Returns:
             New outline with changes applied
         """
+        now_iso = datetime.datetime.now(datetime.UTC).isoformat()
         # Create a deep copy of the outline
         new_outline_data = current_outline.model_dump(by_alias=True)
         new_outline = Outline(**new_outline_data)
@@ -865,6 +876,8 @@ class EvolveReportTool(MCPTool):
                     raise ValueError(f"Section {section_context}: insights[{idx}] must have summary and importance")
                 if "status" not in insight_payload or insight_payload["status"] is None:
                     insight_payload["status"] = "active"
+                insight_payload.setdefault("created_at", now_iso)
+                insight_payload.setdefault("updated_at", now_iso)
                 _ensure_supporting_queries(insight_payload)
                 try:
                     insight = Insight(**insight_payload)
@@ -882,6 +895,8 @@ class EvolveReportTool(MCPTool):
             # Ensure status defaults to "active" if not provided
             if "status" not in insight_data or insight_data["status"] is None:
                 insight_data["status"] = "active"
+            insight_data.setdefault("created_at", now_iso)
+            insight_data.setdefault("updated_at", now_iso)
             _ensure_supporting_queries(insight_data)
             insight = Insight(**insight_data)
             new_outline.insights.append(insight)
@@ -892,6 +907,9 @@ class EvolveReportTool(MCPTool):
             insight_id = modify_data["insight_id"]
             for _i, insight in enumerate(new_outline.insights):
                 if insight.insight_id == insight_id:
+                    modified = False
+                    if not insight.created_at:
+                        insight.created_at = now_iso
                     for key, value in modify_data.items():
                         # Skip None values to support partial updates
                         # Only update fields that are explicitly provided (not None)
@@ -900,6 +918,9 @@ class EvolveReportTool(MCPTool):
                                 # Keep supporting_queries in sync when only citations are provided
                                 insight.supporting_queries = value
                             setattr(insight, key, value)
+                            modified = True
+                    if modified:
+                        insight.updated_at = now_iso
                     break
 
         # Apply insight removals
@@ -926,6 +947,31 @@ class EvolveReportTool(MCPTool):
                 "content_format",
             }
             filtered_data = {k: v for k, v in section_data.items() if k in section_fields}
+            if section_data.get("template_data") and not section_data.get("template"):
+                raise ValueError(f"Section {section_id or '<auto>'}: template_data provided without template name")
+            template_name = section_data.get("template")
+            if template_name:
+                filtered_data["content"] = self._render_section_template(
+                    template_name=template_name,
+                    template_data=section_data.get("template_data") or {},
+                    section_title=section_data.get("title") or "Untitled Section",
+                )
+                filtered_data.setdefault("content_format", "markdown")
+            format_options = section_data.get("format_options")
+            if format_options is not None and not isinstance(format_options, dict):
+                sid = section_id or "<auto>"
+                raise ValueError(
+                    f"Section {sid}: format_options must be a dictionary, got {type(format_options).__name__}"
+                )
+            if filtered_data.get("content") and format_options:
+                filtered_data["content"] = self._apply_format_options(
+                    filtered_data["content"],
+                    format_options,
+                    filtered_data.get("title") or "Untitled Section",
+                )
+
+            filtered_data.setdefault("created_at", now_iso)
+            filtered_data.setdefault("updated_at", now_iso)
 
             # Handle inline insights (atomic add-and-link)
             if "insights" in section_data and section_data["insights"] is not None:
@@ -992,6 +1038,12 @@ class EvolveReportTool(MCPTool):
 
         # Apply section modifications
         for modify_data in changes.get("sections_to_modify", []):
+            modify_data = dict(modify_data)
+            if modify_data.get("template_data") and not modify_data.get("template"):
+                sid = modify_data.get("section_id")
+                raise ValueError(
+                    f"Section modification requires template when template_data is provided (section_id={sid})"
+                )
             section_id = modify_data.get("section_id")
             if not section_id:
                 raise wrap_validation_error(
@@ -1003,6 +1055,16 @@ class EvolveReportTool(MCPTool):
             for i, section in enumerate(new_outline.sections):
                 if section.section_id == section_id:
                     section_found = True
+                    updated = False
+
+                    if modify_data.get("template"):
+                        section_title = modify_data.get("title") or section.title or "Untitled Section"
+                        modify_data["content"] = self._render_section_template(
+                            template_name=modify_data["template"],
+                            template_data=modify_data.get("template_data") or {},
+                            section_title=section_title,
+                        )
+                        modify_data.setdefault("content_format", "markdown")
 
                     # Get all existing and new insight IDs for validation
                     existing_insight_ids = {i.insight_id for i in new_outline.insights}
@@ -1016,6 +1078,12 @@ class EvolveReportTool(MCPTool):
                     # Track operations for detailed error reporting
                     operations_performed = []
                     errors = []
+                    format_options = modify_data.get("format_options")
+                    if format_options is not None and not isinstance(format_options, dict):
+                        raise ValueError(
+                            f"Section {section_id}: format_options must be a dictionary, "
+                            f"got {type(format_options).__name__}"
+                        )
 
                     # Modify title
                     if "title" in modify_data and modify_data["title"] is not None:
@@ -1026,6 +1094,7 @@ class EvolveReportTool(MCPTool):
                                 raise ValueError("title cannot be empty")
                             section.title = modify_data["title"]
                             operations_performed.append("title")
+                            updated = True
                         except Exception as e:
                             errors.append(f"Failed to update title: {e!s}")
 
@@ -1036,6 +1105,7 @@ class EvolveReportTool(MCPTool):
                                 raise ValueError(f"notes must be a string, got {type(modify_data['notes']).__name__}")
                             section.notes = modify_data["notes"]
                             operations_performed.append("notes")
+                            updated = True
                         except Exception as e:
                             errors.append(f"Failed to update notes: {e!s}")
 
@@ -1058,7 +1128,12 @@ class EvolveReportTool(MCPTool):
                                 )
                             else:
                                 section.content = modify_data["content"]
+                            if section.content and section.content.strip():
+                                section.notes = None
+                            elif not section.content or not section.content.strip():
+                                section.content = None
                             operations_performed.append("content")
+                            updated = True
                         except Exception as e:
                             errors.append(f"Failed to update content: {e!s}")
 
@@ -1073,6 +1148,7 @@ class EvolveReportTool(MCPTool):
                                 raise ValueError("content_format must be one of markdown, html, plain")
                             section.content_format = modify_data["content_format"]
                             operations_performed.append("content_format")
+                            updated = True
                         except Exception as e:
                             errors.append(f"Failed to update content_format: {e!s}")
 
@@ -1085,6 +1161,7 @@ class EvolveReportTool(MCPTool):
                                 raise ValueError(f"order must be non-negative, got {modify_data['order']}")
                             section.order = modify_data["order"]
                             operations_performed.append("order")
+                            updated = True
                         except Exception as e:
                             errors.append(f"Failed to update order: {e!s}")
 
@@ -1124,6 +1201,8 @@ class EvolveReportTool(MCPTool):
                                 operations_performed.append(
                                     f"insight_ids_to_add ({added_count} added, {skipped_count} already present)"
                                 )
+                                if added_count > 0 or skipped_count > 0:
+                                    updated = True
                         except Exception as e:
                             errors.append(f"Failed to add insight_ids: {e!s}")
 
@@ -1139,6 +1218,8 @@ class EvolveReportTool(MCPTool):
                                 if inline_id not in section.insight_ids:
                                     section.insight_ids.append(inline_id)
                             operations_performed.append(f"inline_insights_added ({len(inline_ids)})")
+                            if inline_ids:
+                                updated = True
                         except Exception as e:
                             errors.append(f"Failed to create inline insights: {e!s}")
 
@@ -1157,28 +1238,44 @@ class EvolveReportTool(MCPTool):
                             else:
                                 # Remove insights (skip if not present silently)
                                 removed_count = 0
-                                skipped_count = 0
+                                missing_count = 0
                                 for insight_id in insight_ids_to_remove:
                                     if insight_id in section.insight_ids:
                                         section.insight_ids.remove(insight_id)
                                         removed_count += 1
                                     else:
-                                        skipped_count += 1
+                                        missing_count += 1
 
                                 operations_performed.append(
-                                    f"insight_ids_to_remove ({removed_count} removed, {skipped_count} not present)"
+                                    f"insight_ids_to_remove ({removed_count} removed, {missing_count} missing)"
                                 )
+                                if removed_count > 0 or missing_count > 0:
+                                    updated = True
                         except Exception as e:
                             errors.append(f"Failed to remove insight_ids: {e!s}")
 
+                    if format_options:
+                        section.content = self._apply_format_options(
+                            section.content or "",
+                            format_options,
+                            section.title or "Untitled Section",
+                        )
+                        if section.content and section.content.strip():
+                            section.notes = None
+                        operations_performed.append("format_options")
+                        updated = True
+
                     # Report errors if any occurred
                     if errors:
-                        error_details = "; ".join(errors)
+                        error_details = " | ".join(errors)
                         raise ValueError(
                             f"Failed to modify section {section_id}: {error_details}. "
                             f"Operations attempted: {operations_performed}. "
                             f"Modification data: {modify_data}"
                         )
+
+                    if updated:
+                        section.updated_at = now_iso
 
                     break
 
@@ -1346,6 +1443,236 @@ class EvolveReportTool(MCPTool):
                 warnings.append(f"Section '{section.title}' ({section.section_id}) has no insights")
 
         return warnings
+
+    def _render_section_template(self, template_name: str, template_data: dict[str, Any], section_title: str) -> str:
+        """Render structured markdown templates for sections."""
+        if not isinstance(template_name, str):
+            raise ValueError("template must be a string")
+        normalized_name = template_name.strip().lower()
+        data = template_data or {}
+
+        if normalized_name in {"findings", "findings_list"}:
+            findings = data.get("findings", [])
+            if not findings:
+                raise ValueError("findings_list template requires 'findings' array")
+            heading = data.get("heading") or f"Key Findings - {section_title}"
+            lines = [f"## {heading.strip()}", ""]
+            for idx, finding in enumerate(findings, 1):
+                title = finding.get("title") or f"Finding {idx}"
+                summary = finding.get("description") or finding.get("summary") or ""
+                metric = finding.get("metric") or {}
+                lines.append(f"### {idx}. {title.strip()}")
+                if metric:
+                    lines.append("")
+                    lines.append("| Metric | Value | Trend |")
+                    lines.append("| --- | --- | --- |")
+                    lines.append(
+                        f"| {metric.get('name', 'Value')} | {metric.get('value', '-')} | {metric.get('trend', '-')} |"
+                    )
+                if summary:
+                    lines.append("")
+                    lines.append(summary.strip())
+                if finding.get("actions"):
+                    lines.append("")
+                    lines.append("**Next Steps**")
+                    for action in finding["actions"]:
+                        lines.append(f"- {action}")
+                lines.append("")
+            return "\n".join(lines).strip()
+
+        if normalized_name in {"metrics", "metrics_snapshot"}:
+            metrics = data.get("metrics", [])
+            if not metrics:
+                raise ValueError("metrics_snapshot template requires 'metrics' array")
+            heading = data.get("heading") or f"{section_title} Metrics"
+            lines = [f"## {heading.strip()}", "", "| Metric | Value | Target | Delta |", "| --- | --- | --- | --- |"]
+            for metric in metrics:
+                lines.append(
+                    "| {name} | {value} | {target} | {delta} |".format(
+                        name=metric.get("name", "Metric"),
+                        value=metric.get("value", "-"),
+                        target=metric.get("target", "-"),
+                        delta=metric.get("delta", "-"),
+                    )
+                )
+            if data.get("callouts"):
+                lines.append("")
+                lines.append("### Callouts")
+                for callout in data["callouts"]:
+                    title = callout.get("title", "Callout")
+                    detail = callout.get("detail") or callout.get("description") or ""
+                    lines.append(f"- **{title}** — {detail}")
+            return "\n".join(lines).strip()
+
+        if normalized_name in {"bullet", "bullet_list", "summary_bullets"}:
+            items = data.get("items") or data.get("bullets")
+            if not items:
+                raise ValueError("bullet_list template requires 'items' array")
+            heading = data.get("heading") or section_title or "Summary"
+            lines = [f"## {heading.strip()}", ""]
+            for item in items:
+                lines.append(f"- {item}")
+            return "\n".join(lines).strip()
+
+        if normalized_name in {"executive_summary", "exec_summary"}:
+            # Executive summary with headline, key takeaways, and optional recommendation
+            headline = data.get("headline") or data.get("title") or section_title
+            key_points = data.get("key_points") or data.get("takeaways") or []
+            recommendation = data.get("recommendation") or data.get("action")
+            conclusion = data.get("conclusion") or data.get("summary")
+
+            lines = [f"## {headline.strip()}", ""]
+
+            if data.get("context"):
+                lines.append(data["context"].strip())
+                lines.append("")
+
+            if key_points:
+                lines.append("### Key Takeaways")
+                lines.append("")
+                for idx, point in enumerate(key_points, 1):
+                    if isinstance(point, dict):
+                        title = point.get("title", f"Point {idx}")
+                        detail = point.get("detail", "")
+                        lines.append(f"{idx}. **{title}** — {detail}")
+                    else:
+                        lines.append(f"{idx}. {point}")
+                lines.append("")
+
+            if recommendation:
+                lines.append("### Recommendation")
+                lines.append("")
+                lines.append(f"> {recommendation.strip()}")
+                lines.append("")
+
+            if conclusion:
+                lines.append(conclusion.strip())
+                lines.append("")
+
+            return "\n".join(lines).strip()
+
+        if normalized_name in {"action_items", "next_steps", "actions"}:
+            # Action items with owners, due dates, and priority
+            actions = data.get("actions") or data.get("items") or []
+            if not actions:
+                raise ValueError("action_items template requires 'actions' array")
+
+            heading = data.get("heading") or "Action Items"
+            lines = [f"## {heading.strip()}", ""]
+
+            has_table_data = any(
+                isinstance(a, dict) and (a.get("owner") or a.get("due") or a.get("priority")) for a in actions
+            )
+
+            if has_table_data:
+                lines.append("| # | Action | Owner | Due | Priority |")
+                lines.append("| --- | --- | --- | --- | --- |")
+                for idx, action in enumerate(actions, 1):
+                    if isinstance(action, dict):
+                        desc = action.get("description") or action.get("action") or action.get("title") or ""
+                        owner = action.get("owner") or "TBD"
+                        due = action.get("due") or action.get("due_date") or "-"
+                        priority = action.get("priority") or "Medium"
+                        lines.append(f"| {idx} | {desc} | {owner} | {due} | {priority} |")
+                    else:
+                        lines.append(f"| {idx} | {action} | TBD | - | Medium |")
+            else:
+                for idx, action in enumerate(actions, 1):
+                    if isinstance(action, dict):
+                        desc = action.get("description") or action.get("action") or action.get("title") or ""
+                        lines.append(f"{idx}. {desc}")
+                    else:
+                        lines.append(f"{idx}. {action}")
+
+            lines.append("")
+            return "\n".join(lines).strip()
+
+        raise ValueError(f"Unknown section template: {template_name}")
+
+    def _apply_format_options(self, content: str, format_options: dict[str, Any], section_title: str) -> str:
+        """Apply simple markdown formatting helpers requested by the agent."""
+        if not content:
+            return content
+
+        updated = content.strip()
+        auto_heading = format_options.get("auto_heading")
+        if auto_heading:
+            heading_text = auto_heading if isinstance(auto_heading, str) else section_title or "Overview"
+            first_line = updated.splitlines()[0].strip() if updated.splitlines() else ""
+            if not first_line.startswith("#"):
+                updated = f"## {heading_text.strip()}\n\n{updated}"
+
+        if format_options.get("ensure_blank_lines", True):
+            normalized_lines: list[str] = []
+            lines = updated.splitlines()
+            for idx, line in enumerate(lines):
+                normalized_lines.append(line.rstrip())
+                if line.strip().startswith("#") and idx + 1 < len(lines) and lines[idx + 1].strip():
+                    normalized_lines.append("")
+            updated = "\n".join(normalized_lines).strip()
+
+        return updated
+
+    def _analyze_section_formatting(self, section: Section) -> list[str]:
+        """Heuristic checks to flag unreadable markdown sections."""
+        warnings: list[str] = []
+        title = section.title or section.section_id or "Untitled Section"
+        content = (section.content or "").strip()
+        if not content:
+            warnings.append(f"Section '{title}' is missing markdown content.")
+            return warnings
+
+        lines = [line for line in content.splitlines() if line.strip()]
+        has_heading = any(line.lstrip().startswith("#") for line in lines)
+        if len(content) > 240 and not has_heading:
+            warnings.append(f"Section '{title}' has >200 characters but no headings. Add ## subheads for scanability.")
+
+        paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+        if any(len(p) > 600 for p in paragraphs):
+            warnings.append(
+                f"Section '{title}' contains very long paragraphs. Break them into shorter blocks or bullets."
+            )
+
+        bullet_lines = [line for line in lines if line.lstrip().startswith(("-", "*", "+", "1.", "1)"))]
+        if len(paragraphs) >= 4 and len(content) > 600 and not bullet_lines:
+            warnings.append(
+                f"Section '{title}' has multiple paragraphs but no bullet lists. Consider using '-' or numbered lists."
+            )
+
+        return warnings
+
+    def _calculate_formatting_feedback(self, changes: ProposedChanges, outline: Outline) -> dict[str, Any]:
+        """Focus formatting guidance on sections touched by this request."""
+        touched_section_ids = {
+            *(section.section_id for section in changes.sections_to_add if section.section_id),
+            *(section.section_id for section in changes.sections_to_modify if section.section_id),
+        }
+        touched_section_ids -= set(changes.sections_to_remove)
+
+        section_feedback: list[dict[str, Any]] = []
+        formatting_warnings: list[str] = []
+
+        for section in outline.sections:
+            if section.section_id in touched_section_ids:
+                section_warnings = self._analyze_section_formatting(section)
+                if section_warnings:
+                    formatting_warnings.extend(section_warnings)
+                    section_feedback.append(
+                        {
+                            "section_id": section.section_id,
+                            "title": section.title,
+                            "warnings": section_warnings,
+                        }
+                    )
+
+        score_penalty = 12 * len(formatting_warnings)
+        score = max(0, 100 - score_penalty) if touched_section_ids else 100
+
+        return {
+            "score": score,
+            "warnings": formatting_warnings,
+            "section_feedback": section_feedback,
+        }
 
     def _calculate_preview(self, changes: ProposedChanges, outline: Outline) -> dict[str, Any]:
         """Calculate preview of changes that would be applied.

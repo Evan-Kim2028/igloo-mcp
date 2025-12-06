@@ -4,16 +4,18 @@ Render living reports to human-readable formats (HTML, PDF, etc.) using Quarto.
 
 **Features**:
 - Quarto-based rendering
-- Multiple format support (HTML, PDF, Markdown, DOCX)
+- Multiple format support (HTML, PDF, Markdown, DOCX, HTML Standalone)
 - Optional preview generation
 - **Optional preview**: Configurable preview truncation (100-10,000 chars)
+- **Standalone HTML**: No-Quarto-required single-file HTML output
 
 ## Overview
 
 The `render_report` tool transforms Living Reports from JSON structure into human-readable documents. It supports:
 
-- **Multiple formats**: HTML, PDF, Markdown, DOCX
+- **Multiple formats**: HTML, PDF, Markdown, DOCX, HTML Standalone
 - **Quarto rendering**: Professional document generation with templates
+- **Standalone HTML**: Self-contained HTML without Quarto dependency
 - **Optional preview**: Configurable preview truncation (100-10,000 chars)
 - **Dry-run mode**: Generate QMD without rendering
 - **Automatic cleanup**: Manages temporary files
@@ -30,7 +32,7 @@ The `render_report` tool transforms Living Reports from JSON structure into huma
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `format` | string | "html" | Output format: `html`, `pdf`, `markdown`, or `docx` |
+| `format` | string | "html" | Output format: `html`, `pdf`, `markdown`, `docx`, or `html_standalone` |
 | `include_preview` | boolean | false | Return truncated preview of rendered content |
 | `preview_max_chars` | integer | 2000 | Preview truncation size (100-10,000) |
 | `dry_run` | boolean | false | Generate QMD file without rendering |
@@ -54,6 +56,68 @@ Professional web-ready reports with:
 {
   "report_selector": "Q1 Analysis",
   "format": "html"
+}
+```
+
+---
+
+### HTML Standalone
+
+Self-contained HTML with embedded CSS and no external dependencies:
+- Single file output (no Quarto required)
+- Embedded stylesheets and charts
+- Style presets (compact, professional, wide, print)
+- Custom CSS support
+- Full print stylesheet
+- Responsive design for mobile
+- Dark mode support
+
+**Use when**: Sharing reports without Quarto installation, or when you need a single portable file.
+
+**Example**:
+```json
+{
+  "report_selector": "Q1 Analysis",
+  "format": "html_standalone"
+}
+```
+
+**With style options**:
+```json
+{
+  "report_selector": "Q1 Analysis",
+  "format": "html_standalone",
+  "options": {
+    "style_preset": "professional",
+    "toc": true,
+    "theme": "default"
+  }
+}
+```
+
+**Style Presets**:
+| Preset | Description |
+|--------|-------------|
+| `compact` | Narrow width (900px), reduced spacing |
+| `default` | Standard styling |
+| `professional` | Wide (1200px), generous spacing |
+| `wide` | Extra wide (1400px) for data-heavy reports |
+| `print` | Optimized for printing with serif fonts |
+
+**Custom CSS Options**:
+```json
+{
+  "report_selector": "Q1 Analysis",
+  "format": "html_standalone",
+  "options": {
+    "css_options": {
+      "max_width": "1400px",
+      "body_padding": "3rem 4rem",
+      "line_height": 1.8,
+      "heading_color": "#1a365d"
+    },
+    "custom_css": "body { border-top: 4px solid #2563eb; }"
+  }
 }
 ```
 

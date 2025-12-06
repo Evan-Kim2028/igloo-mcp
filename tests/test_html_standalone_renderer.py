@@ -365,11 +365,11 @@ class TestHTMLStandaloneRendererThemes:
 
         content = Path(result["output_path"]).read_text(encoding="utf-8")
 
-        # Check for dark theme override
-        assert "--background: #0f172a" in content
+        assert "--background: #0f172a;" in content
+        assert "prefers-color-scheme" in content
 
     def test_render_minimal_theme(self, renderer, basic_outline, tmp_path):
-        """Test rendering with minimal theme."""
+        """Test rendering with minimal theme overrides."""
         result = renderer.render(
             report_dir=tmp_path,
             outline=basic_outline,
@@ -378,8 +378,104 @@ class TestHTMLStandaloneRendererThemes:
 
         content = Path(result["output_path"]).read_text(encoding="utf-8")
 
-        # Minimal theme should have modified insight styles
-        assert "border-left: none" in content
+        assert "font-family: 'Source Sans Pro'" in content
+        assert "--surface: #f3f4f6" in content
+
+
+class TestHTMLStandaloneRendererStyles:
+    """Test style presets and overrides for standalone renderer."""
+
+    def test_style_preset_compact(self, renderer, basic_outline, tmp_path):
+        """Compact preset should update max width and padding values."""
+        result = renderer.render(
+            report_dir=tmp_path,
+            outline=basic_outline,
+            options={"style_preset": "compact"},
+        )
+
+        content = Path(result["output_path"]).read_text(encoding="utf-8")
+
+        assert "max-width: 900px" in content
+        assert "padding: 2rem 2.5rem" in content
+
+    def test_css_options_override(self, renderer, basic_outline, tmp_path):
+        """Custom css_options should override preset defaults."""
+        result = renderer.render(
+            report_dir=tmp_path,
+            outline=basic_outline,
+            options={
+                "css_options": {
+                    "max_width": "1500px",
+                    "paragraph_spacing": "2rem",
+                }
+            },
+        )
+
+        content = Path(result["output_path"]).read_text(encoding="utf-8")
+
+        assert "max-width: 1500px" in content
+        assert "margin-bottom: 2rem" in content
+
+    def test_custom_css_appended(self, renderer, basic_outline, tmp_path):
+        """Custom CSS should be appended verbatim to the stylesheet."""
+        custom = "body { border: 5px solid red; }"
+        result = renderer.render(
+            report_dir=tmp_path,
+            outline=basic_outline,
+            options={"custom_css": custom},
+        )
+
+        content = Path(result["output_path"]).read_text(encoding="utf-8")
+
+        assert custom in content
+
+    def test_css_includes_code_block_styles(self, renderer, basic_outline, tmp_path):
+        """Rendered CSS should include code block styling."""
+        result = renderer.render(
+            report_dir=tmp_path,
+            outline=basic_outline,
+        )
+
+        content = Path(result["output_path"]).read_text(encoding="utf-8")
+
+        assert ".section-content pre" in content
+        assert ".section-content code" in content
+
+    def test_css_includes_table_styles(self, renderer, basic_outline, tmp_path):
+        """Rendered CSS should include table styling."""
+        result = renderer.render(
+            report_dir=tmp_path,
+            outline=basic_outline,
+        )
+
+        content = Path(result["output_path"]).read_text(encoding="utf-8")
+
+        assert ".section-content table" in content
+        assert ".section-content th" in content
+        assert ".section-content td" in content
+
+    def test_css_includes_print_styles(self, renderer, basic_outline, tmp_path):
+        """Rendered CSS should include comprehensive print styles."""
+        result = renderer.render(
+            report_dir=tmp_path,
+            outline=basic_outline,
+        )
+
+        content = Path(result["output_path"]).read_text(encoding="utf-8")
+
+        assert "@media print" in content
+        assert "page-break-inside: avoid" in content
+
+    def test_css_includes_responsive_styles(self, renderer, basic_outline, tmp_path):
+        """Rendered CSS should include responsive/mobile styles."""
+        result = renderer.render(
+            report_dir=tmp_path,
+            outline=basic_outline,
+        )
+
+        content = Path(result["output_path"]).read_text(encoding="utf-8")
+
+        assert "@media (max-width: 768px)" in content
 
 
 class TestHTMLStandaloneRendererCSS:

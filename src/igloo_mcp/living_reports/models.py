@@ -6,10 +6,16 @@ providing validation and serialization for all report components.
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+def _now_iso() -> str:
+    """Return current UTC time as ISO 8601 string."""
+    return dt.datetime.now(dt.UTC).isoformat()
 
 
 class DatasetSource(BaseModel):
@@ -255,6 +261,14 @@ class Insight(BaseModel):
         default_factory=list,
         description="List of citations (query, api, url, observation, document)",
     )
+    created_at: str = Field(
+        default_factory=_now_iso,
+        description="ISO 8601 timestamp when insight was created",
+    )
+    updated_at: str = Field(
+        default_factory=_now_iso,
+        description="ISO 8601 timestamp when insight was last updated",
+    )
     draft_changes: dict[str, Any] | None = Field(
         default=None,
         description="Pending changes from LLM evolution",
@@ -312,6 +326,10 @@ class Insight(BaseModel):
             # Use object.__setattr__ to bypass validate_assignment and prevent recursion
             object.__setattr__(self, "supporting_queries", converted_queries)
 
+        # Align updated_at with created_at if missing or empty
+        if not self.updated_at:
+            object.__setattr__(self, "updated_at", self.created_at)
+
         return self
 
 
@@ -355,6 +373,14 @@ class Section(BaseModel):
         description="Format for content field (markdown, html, plain)",
         pattern="^(markdown|html|plain)$",
     )
+    created_at: str = Field(
+        default_factory=_now_iso,
+        description="ISO 8601 timestamp when section was created",
+    )
+    updated_at: str = Field(
+        default_factory=_now_iso,
+        description="ISO 8601 timestamp when section was last updated",
+    )
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional section metadata (category tags, etc.)",
@@ -369,6 +395,13 @@ class Section(BaseModel):
         except ValueError as e:
             raise ValueError(f"section_id must be valid UUID string: {v}") from e
         return v
+
+    @model_validator(mode="after")
+    def _default_updated_at(self) -> Section:
+        """Ensure updated_at is always populated."""
+        if not self.updated_at:
+            object.__setattr__(self, "updated_at", self.created_at)
+        return self
 
 
 class Outline(BaseModel):

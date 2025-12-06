@@ -118,6 +118,18 @@ class SectionChange(BaseModel):
     notes: str | None = None
     content: str | None = None
     content_format: Literal["markdown", "html", "plain"] | None = "markdown"
+    template: str | None = Field(
+        default=None,
+        description="Optional markdown template name to auto-generate section content",
+    )
+    template_data: dict[str, Any] | None = Field(
+        default=None,
+        description="Structured context passed to the selected template",
+    )
+    format_options: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional formatting helpers (e.g., auto headings, list coercion)",
+    )
     content_merge_mode: Literal["replace", "merge", "append", "prepend"] | None = Field(
         default="replace",
         description="How to merge content with existing: replace, merge (placeholder-based), append, prepend",
