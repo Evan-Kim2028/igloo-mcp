@@ -1619,8 +1619,8 @@ class EvolveReportTool(MCPTool):
                     "insight_id": i.insight_id,
                     "importance": i.importance,
                     "preview": (
-                        f"> **Insight:** {i.summary[:200]}"
-                        f"{'...' if len(i.summary) > 200 else ''}\n"
+                        f"> **Insight:** {(i.summary or '')[:200]}"
+                        f"{'...' if i.summary and len(i.summary) > 200 else ''}\n"
                         f"> *Importance: {i.importance}/10*"
                     ),
                 }
@@ -1664,14 +1664,14 @@ class EvolveReportTool(MCPTool):
                         modifications.append(mod_entry)
 
         # Insight modifications
-        for mod in changes.insights_to_modify:
-            insight_id = mod.insight_id
+        for insight_change in changes.insights_to_modify:
+            insight_id = insight_change.insight_id
             current_insight = next((i for i in outline.insights if i.insight_id == insight_id), None)
             if not current_insight:
                 continue
 
             for field in ["summary", "importance", "status"]:
-                new_value = getattr(mod, field, None)
+                new_value = getattr(insight_change, field, None)
                 if new_value is not None:
                     old_value = getattr(current_insight, field, None)
                     if old_value != new_value:
