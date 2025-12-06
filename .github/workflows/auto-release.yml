@@ -1,0 +1,115 @@
+name: Auto Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  auto-release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      - name: Check if tag already exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag v${{ steps.version.outputs.version }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag v${{ steps.version.outputs.version }} does not exist"
+          fi
+
+      - name: Create and push tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Extract issues from PR body
+        id: extract_issues
+        run: |
+          # Extract issue numbers from PR body using "Closes #123" pattern
+          ISSUES=$(echo "${{ github.event.pull_request.body }}" | grep -oP '(?:Closes|Fixes|Resolves)\s+#\K\d+' | tr '\n' ',' | sed 's/,$//')
+          echo "issues=$ISSUES" >> $GITHUB_OUTPUT
+          echo "Found issues: $ISSUES"
+
+      - name: Close linked issues
+        if: steps.extract_issues.outputs.issues != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IFS=',' read -ra ISSUE_ARRAY <<< "${{ steps.extract_issues.outputs.issues }}"
+          for issue in "${ISSUE_ARRAY[@]}"; do
+            if [ -n "$issue" ]; then
+              echo "Closing issue #$issue"
+              gh issue close "$issue" --comment "Automatically closed by PR #${{ github.event.pull_request.number }} (merged into main)" || echo "Failed to close issue #$issue"
+            fi
+          done
+
+      - name: Extract release notes from CHANGELOG
+        id: release_notes
+        run: |
+          # Extract the latest version's changelog section
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Use awk to extract content between version headers
+          NOTES=$(awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '1d;$d')
+
+          # Save to file to handle multiline content
+          echo "$NOTES" > /tmp/release_notes.md
+
+          # Set output
+          {
+            echo 'notes<<EOF'
+            cat /tmp/release_notes.md
+            echo EOF
+          } >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --title "Release ${{ steps.version.outputs.tag }}: $(echo '${{ steps.release_notes.notes }}' | head -1 | sed 's/^### //')" \
+            --notes "${{ steps.release_notes.notes }}" \
+            --verify-tag
+
+      - name: Comment on PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COMMENT="🎉 **Release ${{ steps.version.outputs.tag }} Created!**
+
+          - ✅ Tag created and pushed
+          - ✅ GitHub release published
+          - ✅ PyPI publish triggered (see [release workflow](https://github.com/${{ github.repository }}/actions/workflows/release.yml))
+          "
+
+          if [ -n "${{ steps.extract_issues.outputs.issues }}" ]; then
+            COMMENT="$COMMENT
+          - ✅ Issues closed: #${{ steps.extract_issues.outputs.issues }}"
+          fi
+
+          gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT"
