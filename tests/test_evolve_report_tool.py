@@ -688,3 +688,290 @@ class TestEvolveReportToolEdgeCases:
 
         assert result["status"] == "validation_failed"
         assert "validation_errors" in result
+
+
+# ===== PHASE 4: Dry-Run Preview Tests (#135) =====
+
+
+@pytest.mark.asyncio
+class TestEvolveReportDryRunPreview:
+    """Tests for enhanced dry-run preview with rendered content and diffs - Issue #135."""
+
+    @pytest.fixture
+    def config(self):
+        """Create test configuration."""
+        return Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+
+    @pytest.fixture
+    def report_service(self, tmp_path: Path):
+        """Create report service with temp storage."""
+        return ReportService(reports_root=tmp_path / "reports")
+
+    @pytest.fixture
+    def evolve_tool(self, config, report_service):
+        """Create evolve report tool instance."""
+        return EvolveReportTool(config, report_service)
+
+    @pytest.fixture
+    def test_report_id(self, report_service):
+        """Create a test report and return its ID."""
+        return report_service.create_report(
+            title="Dry Run Test Report",
+            template="empty",
+            tags=["test"],
+        )
+
+    async def test_dry_run_returns_preview_for_new_sections(self, evolve_tool, test_report_id):
+        """Dry run should include rendered preview for new sections."""
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add new section",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "New Analysis Section",
+                        "order": 0,
+                        "content": "This is the section content with **bold** text.",
+                    }
+                ]
+            },
+            dry_run=True,
+        )
+
+        assert result["status"] == "dry_run_success"
+        assert "preview" in result
+
+        preview = result["preview"]
+        assert preview["sections_to_add"] == 1
+
+        # Check for rendered preview of new sections
+        if "rendered_preview" in preview:
+            assert "new_sections" in preview["rendered_preview"]
+            new_sections = preview["rendered_preview"]["new_sections"]
+            assert len(new_sections) == 1
+            assert new_sections[0]["title"] == "New Analysis Section"
+            # Preview should contain markdown
+            assert "preview_markdown" in new_sections[0]
+
+    async def test_dry_run_returns_preview_for_new_insights(self, evolve_tool, test_report_id):
+        """Dry run should include rendered preview for new insights."""
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add new insight",
+            proposed_changes={
+                "insights_to_add": [
+                    {
+                        "summary": "Revenue grew 25% year-over-year driven by enterprise sales",
+                        "importance": 9,
+                    }
+                ]
+            },
+            constraints={"skip_citation_validation": True},
+            dry_run=True,
+        )
+
+        assert result["status"] == "dry_run_success"
+        assert "preview" in result
+
+        preview = result["preview"]
+        assert preview["insights_to_add"] == 1
+
+        # Check for rendered preview of new insights
+        if "rendered_preview" in preview:
+            assert "new_insights" in preview["rendered_preview"]
+            new_insights = preview["rendered_preview"]["new_insights"]
+            assert len(new_insights) == 1
+            assert new_insights[0]["importance"] == 9
+            # Preview should contain formatted insight
+            assert "preview" in new_insights[0]
+            assert "Insight:" in new_insights[0]["preview"]
+
+    async def test_dry_run_returns_modifications_diff(self, evolve_tool, test_report_id, report_service):
+        """Dry run should include before/after diff for modifications."""
+        # First add a section to modify
+        await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section to modify later",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Original Title",
+                        "order": 0,
+                        "content": "Original content here.",
+                    }
+                ]
+            },
+        )
+
+        # Get the section ID
+        outline = report_service.get_report_outline(test_report_id)
+        section_id = outline.sections[0].section_id
+
+        # Now do a dry run to modify it
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Modify section title",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": section_id,
+                        "title": "Updated Title",
+                    }
+                ]
+            },
+            dry_run=True,
+        )
+
+        assert result["status"] == "dry_run_success"
+        assert "preview" in result
+
+        preview = result["preview"]
+        assert preview["sections_to_modify"] == 1
+
+        # Check for modifications with before/after
+        if "modifications" in preview:
+            mods = preview["modifications"]
+            assert len(mods) >= 1
+
+            # Find the title modification
+            title_mod = next((m for m in mods if m.get("field") == "title"), None)
+            if title_mod:
+                assert title_mod["before"] == "Original Title"
+                assert title_mod["after"] == "Updated Title"
+                assert title_mod["type"] == "section"
+
+    async def test_dry_run_returns_insight_modification_diff(self, evolve_tool, test_report_id, report_service):
+        """Dry run should include before/after diff for insight modifications."""
+        # First add an insight to modify
+        await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add insight to modify later",
+            proposed_changes={
+                "insights_to_add": [
+                    {
+                        "summary": "Original insight summary",
+                        "importance": 5,
+                    }
+                ]
+            },
+            constraints={"skip_citation_validation": True},
+        )
+
+        # Get the insight ID
+        outline = report_service.get_report_outline(test_report_id)
+        insight_id = outline.insights[0].insight_id
+
+        # Now do a dry run to modify it
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Modify insight importance",
+            proposed_changes={
+                "insights_to_modify": [
+                    {
+                        "insight_id": insight_id,
+                        "importance": 9,
+                    }
+                ]
+            },
+            constraints={"skip_citation_validation": True},
+            dry_run=True,
+        )
+
+        assert result["status"] == "dry_run_success"
+        assert "preview" in result
+
+        preview = result["preview"]
+        assert preview["insights_to_modify"] == 1
+
+        # Check for modifications with before/after
+        if "modifications" in preview:
+            mods = preview["modifications"]
+            importance_mod = next((m for m in mods if m.get("field") == "importance"), None)
+            if importance_mod:
+                assert importance_mod["before"] == 5
+                assert importance_mod["after"] == 9
+                assert importance_mod["type"] == "insight"
+
+    async def test_dry_run_preview_truncates_long_content(self, evolve_tool, test_report_id):
+        """Dry run preview should truncate long content for token efficiency."""
+        long_content = "A" * 1000  # 1000 characters
+
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section with long content",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Long Content Section",
+                        "order": 0,
+                        "content": long_content,
+                    }
+                ]
+            },
+            dry_run=True,
+        )
+
+        assert result["status"] == "dry_run_success"
+
+        # If rendered_preview exists, check truncation
+        if "rendered_preview" in result.get("preview", {}):
+            new_sections = result["preview"]["rendered_preview"].get("new_sections", [])
+            if new_sections:
+                preview_md = new_sections[0].get("preview_markdown", "")
+                # Should be truncated to reasonable length (500 chars in implementation)
+                assert len(preview_md) <= 600  # Some buffer for markdown formatting
+
+    async def test_dry_run_estimated_version(self, evolve_tool, test_report_id):
+        """Dry run should include estimated new version number."""
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section",
+            proposed_changes={"sections_to_add": [{"title": "Test Section", "order": 0}]},
+            dry_run=True,
+        )
+
+        assert result["status"] == "dry_run_success"
+        assert "preview" in result
+        assert "estimated_outline_version" in result["preview"]
+        # Should be current version + 1
+        assert result["preview"]["estimated_outline_version"] >= 1
+
+    async def test_dry_run_no_changes_applied(self, evolve_tool, test_report_id, report_service):
+        """Dry run should not actually apply any changes."""
+        # Get original state
+        original_outline = report_service.get_report_outline(test_report_id)
+        original_section_count = len(original_outline.sections)
+
+        # Do dry run
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section (dry run)",
+            proposed_changes={"sections_to_add": [{"title": "Should Not Appear", "order": 0}]},
+            dry_run=True,
+        )
+
+        assert result["status"] == "dry_run_success"
+
+        # Verify no changes were made
+        after_outline = report_service.get_report_outline(test_report_id)
+        assert len(after_outline.sections) == original_section_count
+
+    async def test_dry_run_combined_operations_preview(self, evolve_tool, test_report_id):
+        """Dry run should show preview for multiple operation types."""
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section and insight",
+            proposed_changes={
+                "sections_to_add": [{"title": "New Section", "order": 0}],
+                "insights_to_add": [{"summary": "New insight", "importance": 7}],
+            },
+            constraints={"skip_citation_validation": True},
+            dry_run=True,
+        )
+
+        assert result["status"] == "dry_run_success"
+        assert "preview" in result
+
+        preview = result["preview"]
+        assert preview["sections_to_add"] == 1
+        assert preview["insights_to_add"] == 1

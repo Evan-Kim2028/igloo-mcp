@@ -59,6 +59,7 @@ from igloo_mcp.config import Config
 from igloo_mcp.living_reports.changes_schema import (
     CURRENT_CHANGES_SCHEMA_VERSION,
     ProposedChanges,
+    SectionChange,
 )
 from igloo_mcp.living_reports.models import Insight, Outline, Section
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
@@ -683,6 +684,13 @@ class EvolveReportTool(MCPTool):
         # Check for invalid insight IDs
         existing_insight_ids = {i.insight_id for i in current_outline.insights}
 
+        # Track insights being added in this operation (for cross-validation)
+        insights_being_added = {
+            insight_data.get("insight_id")
+            for insight_data in changes.get("insights_to_add", [])
+            if insight_data.get("insight_id")
+        }
+
         for insight_data in changes.get("insights_to_add", []):
             insight_id = insight_data.get("insight_id")
             if insight_id in existing_insight_ids:
@@ -690,7 +698,8 @@ class EvolveReportTool(MCPTool):
 
         for modify_data in changes.get("insights_to_modify", []):
             insight_id = modify_data.get("insight_id")
-            if insight_id not in existing_insight_ids:
+            # Allow modifying insights that are being added in the same batch
+            if insight_id not in existing_insight_ids and insight_id not in insights_being_added:
                 issues.append(f"Insight ID not found: {insight_id}")
 
         for insight_id in changes.get("insights_to_remove", []):
@@ -749,7 +758,22 @@ class EvolveReportTool(MCPTool):
             for modify_data in changes.get("insights_to_modify", []):
                 insight_id = modify_data.get("insight_id")
                 if insight_id not in existing_insight_ids:
-                    continue  # Already handled above
+                    # Check if this insight is being added in the same operation
+                    insights_being_added = {
+                        i.get("insight_id") for i in changes.get("insights_to_add", []) if i.get("insight_id")
+                    }
+                    if insight_id not in insights_being_added:
+                        continue  # Already handled above
+                    # For newly added insights in the same batch, skip further validation
+                    # The insight will be validated when it's added
+                    continue
+
+                # Check if this is a metadata-only modification
+                non_metadata_fields = {
+                    k
+                    for k in modify_data.keys()
+                    if k not in {"insight_id", "metadata"} and modify_data.get(k) is not None
+                }
 
                 # Get current insight to check if supporting_queries is being modified
                 current_insight = None
@@ -768,8 +792,7 @@ class EvolveReportTool(MCPTool):
                                 "missing supporting_queries[0] with execution_id. "
                                 "Use execute_query() first to get an execution_id, "
                                 "then include it in citations. "
-                                "To disable validation (not recommended): "
-                                "set skip_citation_validation=True in constraints"
+                                "To disable validation (not recommended): set skip_citation_validation=True in constraints"
                             )
                         elif not supporting_queries[0].get("execution_id"):
                             issues.append(
@@ -898,6 +921,9 @@ class EvolveReportTool(MCPTool):
                 insight_data["status"] = "active"
             insight_data.setdefault("created_at", now_iso)
             insight_data.setdefault("updated_at", now_iso)
+            # Ensure metadata is a dict, not None (Insight model requires dict)
+            if insight_data.get("metadata") is None:
+                insight_data["metadata"] = {}
             _ensure_supporting_queries(insight_data)
             insight = Insight(**insight_data)
             new_outline.insights.append(insight)
@@ -1555,9 +1581,9 @@ class EvolveReportTool(MCPTool):
             outline: Current outline
 
         Returns:
-            Preview dict with counts and estimated version
+            Preview dict with counts, rendered previews, and modification diffs
         """
-        return {
+        preview: dict[str, Any] = {
             "sections_to_add": len(changes.sections_to_add),
             "insights_to_add": len(changes.insights_to_add),
             "sections_to_modify": len(changes.sections_to_modify),
@@ -1567,6 +1593,123 @@ class EvolveReportTool(MCPTool):
             "estimated_outline_version": outline.outline_version + 1,
             "status_change": changes.status_change,
         }
+
+        # Add rendered preview of new content (truncated for token efficiency)
+        rendered_preview: dict[str, Any] = {}
+
+        # Preview of new sections
+        if changes.sections_to_add:
+            rendered_preview["new_sections"] = [
+                {
+                    "section_id": s.section_id,
+                    "title": s.title,
+                    "order": s.order,
+                    "preview_markdown": self._render_section_preview(s)[:500],
+                }
+                for s in changes.sections_to_add
+            ]
+
+        # Preview of new insights
+        if changes.insights_to_add:
+            rendered_preview["new_insights"] = [
+                {
+                    "insight_id": i.insight_id,
+                    "importance": i.importance,
+                    "preview": f"> **Insight:** {i.summary[:200]}{'...' if len(i.summary) > 200 else ''}\n> *Importance: {i.importance}/10*",
+                }
+                for i in changes.insights_to_add
+            ]
+
+        if rendered_preview:
+            preview["rendered_preview"] = rendered_preview
+
+        # Add before/after diffs for modifications
+        modifications: list[dict[str, Any]] = []
+
+        # Section modifications
+        for mod in changes.sections_to_modify:
+            section_id = mod.section_id
+            current_section = next((s for s in outline.sections if s.section_id == section_id), None)
+            if not current_section:
+                continue
+
+            # Check each modifiable field
+            for field in ["title", "content", "notes", "order"]:
+                new_value = getattr(mod, field, None)
+                if new_value is not None:
+                    old_value = getattr(current_section, field, None)
+                    if old_value != new_value:
+                        mod_entry: dict[str, Any] = {
+                            "type": "section",
+                            "section_id": section_id,
+                            "section_title": current_section.title,
+                            "field": field,
+                        }
+                        # Truncate long values for token efficiency
+                        if isinstance(old_value, str) and len(old_value) > 200:
+                            mod_entry["before"] = old_value[:200] + "..."
+                        else:
+                            mod_entry["before"] = old_value
+                        if isinstance(new_value, str) and len(new_value) > 200:
+                            mod_entry["after"] = new_value[:200] + "..."
+                        else:
+                            mod_entry["after"] = new_value
+                        modifications.append(mod_entry)
+
+        # Insight modifications
+        for mod in changes.insights_to_modify:
+            insight_id = mod.insight_id
+            current_insight = next((i for i in outline.insights if i.insight_id == insight_id), None)
+            if not current_insight:
+                continue
+
+            for field in ["summary", "importance", "status"]:
+                new_value = getattr(mod, field, None)
+                if new_value is not None:
+                    old_value = getattr(current_insight, field, None)
+                    if old_value != new_value:
+                        mod_entry = {
+                            "type": "insight",
+                            "insight_id": insight_id,
+                            "field": field,
+                            "before": old_value[:100] + "..."
+                            if isinstance(old_value, str) and len(old_value) > 100
+                            else old_value,
+                            "after": new_value[:100] + "..."
+                            if isinstance(new_value, str) and len(new_value) > 100
+                            else new_value,
+                        }
+                        modifications.append(mod_entry)
+
+        if modifications:
+            preview["modifications"] = modifications
+
+        return preview
+
+    def _render_section_preview(self, section: SectionChange) -> str:
+        """Render a section preview in markdown format.
+
+        Args:
+            section: SectionChange to preview (from proposed changes)
+
+        Returns:
+            Markdown preview string
+        """
+        parts = [f"## {section.title or 'Untitled Section'}"]
+        if section.content:
+            parts.append("")
+            parts.append(section.content)
+        elif section.notes:
+            parts.append("")
+            parts.append(section.notes)
+        # SectionChange uses insight_ids_to_add, not insight_ids
+        insight_count = len(section.insight_ids_to_add or [])
+        if section.insights:
+            insight_count += len(section.insights)
+        if insight_count > 0:
+            parts.append("")
+            parts.append(f"*[{insight_count} linked insight(s)]*")
+        return "\n".join(parts)
 
     def get_parameter_schema(self) -> dict[str, Any]:
         """Get JSON schema for tool parameters."""

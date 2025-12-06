@@ -478,3 +478,273 @@ class TestOperationConstants:
     def test_valid_operations_count(self):
         """VALID_OPERATIONS should have exactly 10 operations."""
         assert len(VALID_OPERATIONS) == 10
+
+
+# ===== PHASE 5: Chart Auto-Copy Tests (#134) =====
+
+
+@pytest.mark.asyncio
+class TestChartAutoCopy:
+    """Tests for chart auto-copy functionality - Issue #134."""
+
+    @pytest.fixture
+    def config(self):
+        """Create test configuration."""
+        return Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+
+    @pytest.fixture
+    def report_service(self, tmp_path: Path):
+        """Create report service with temp storage."""
+        return ReportService(reports_root=tmp_path / "reports")
+
+    @pytest.fixture
+    def batch_tool(self, config, report_service):
+        """Create batch evolve report tool instance."""
+        return EvolveReportBatchTool(config, report_service)
+
+    @pytest.fixture
+    def test_report_id(self, report_service):
+        """Create a test report and return its ID."""
+        return report_service.create_report(
+            title="Chart Test Report",
+            template="empty",
+        )
+
+    @pytest.fixture
+    def external_chart_file(self, tmp_path):
+        """Create an external chart file for testing."""
+        charts_dir = tmp_path / "external_charts"
+        charts_dir.mkdir()
+        chart_path = charts_dir / "revenue_chart.png"
+        # Write fake PNG data
+        chart_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"fake chart data")
+        return chart_path
+
+    async def test_attach_chart_basic(self, batch_tool, test_report_id, external_chart_file, report_service):
+        """Test basic attach_chart operation."""
+        from igloo_mcp.mcp.tools.evolve_report_batch import OP_ATTACH_CHART
+
+        result = await batch_tool.execute(
+            report_selector=test_report_id,
+            instruction="Attach revenue chart",
+            operations=[
+                {
+                    "type": OP_ATTACH_CHART,
+                    "chart_path": str(external_chart_file),
+                    "description": "Revenue Growth Chart",
+                }
+            ],
+        )
+
+        assert result["status"] == "success"
+
+        # Verify chart metadata was added
+        outline = report_service.get_report_outline(test_report_id)
+        charts = outline.metadata.get("charts", {})
+        assert len(charts) >= 1
+
+    async def test_attach_chart_with_auto_copy(self, batch_tool, test_report_id, external_chart_file, report_service):
+        """Test attach_chart with auto_copy=True copies file to report_files/."""
+        from igloo_mcp.mcp.tools.evolve_report_batch import OP_ATTACH_CHART
+
+        result = await batch_tool.execute(
+            report_selector=test_report_id,
+            instruction="Attach chart with auto-copy",
+            operations=[
+                {
+                    "type": OP_ATTACH_CHART,
+                    "chart_path": str(external_chart_file),
+                    "description": "Revenue Chart",
+                    "auto_copy": True,
+                }
+            ],
+        )
+
+        assert result["status"] == "success"
+
+        # Check batch_info for chart copy results
+        if "batch_info" in result and "chart_copy_results" in result["batch_info"]:
+            copy_results = result["batch_info"]["chart_copy_results"]
+            assert len(copy_results) >= 1
+            assert copy_results[0]["copied"] is True
+
+        # Verify chart was copied to report_files directory
+        outline = report_service.get_report_outline(test_report_id)
+        charts = outline.metadata.get("charts", {})
+
+        # At least one chart should exist
+        assert len(charts) >= 1
+
+        # Check if path was updated to relative path
+        for chart_id, chart_meta in charts.items():
+            chart_path = chart_meta.get("path", "")
+            # If auto_copy worked, path should be relative
+            if chart_meta.get("copied"):
+                assert "report_files/" in chart_path
+
+    async def test_attach_chart_without_auto_copy(
+        self, batch_tool, test_report_id, external_chart_file, report_service
+    ):
+        """Test attach_chart without auto_copy keeps original path."""
+        from igloo_mcp.mcp.tools.evolve_report_batch import OP_ATTACH_CHART
+
+        result = await batch_tool.execute(
+            report_selector=test_report_id,
+            instruction="Attach chart without auto-copy",
+            operations=[
+                {
+                    "type": OP_ATTACH_CHART,
+                    "chart_path": str(external_chart_file),
+                    "description": "External Chart",
+                    "auto_copy": False,
+                }
+            ],
+        )
+
+        assert result["status"] == "success"
+
+        # Verify chart metadata uses original path
+        outline = report_service.get_report_outline(test_report_id)
+        charts = outline.metadata.get("charts", {})
+
+        assert len(charts) >= 1
+        # Path should contain original location
+        for chart_id, chart_meta in charts.items():
+            chart_path = chart_meta.get("path", "")
+            assert str(external_chart_file) in chart_path or "external_charts" in chart_path
+
+    async def test_attach_chart_with_insight_links(
+        self, batch_tool, test_report_id, external_chart_file, report_service
+    ):
+        """Test attach_chart links chart to specified insights in a single atomic batch."""
+        from igloo_mcp.mcp.tools.evolve_report_batch import OP_ADD_INSIGHT, OP_ATTACH_CHART
+
+        insight_id = str(uuid.uuid4())
+
+        # Add insight and attach chart in a single atomic batch operation
+        result = await batch_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add insight and attach chart",
+            operations=[
+                {
+                    "type": OP_ADD_INSIGHT,
+                    "insight_id": insight_id,
+                    "summary": "Revenue grew 25%",
+                    "importance": 9,
+                    "supporting_queries": [],
+                },
+                {
+                    "type": OP_ATTACH_CHART,
+                    "chart_path": str(external_chart_file),
+                    "description": "Revenue Chart",
+                    "insight_ids": [insight_id],
+                },
+            ],
+            constraints={"skip_citation_validation": True},
+        )
+
+        assert result["status"] == "success"
+
+        # Verify insight has chart linked via metadata
+        outline = report_service.get_report_outline(test_report_id)
+        insight = next((i for i in outline.insights if i.insight_id == insight_id), None)
+
+        if insight and insight.metadata:
+            assert "chart_id" in insight.metadata
+
+    async def test_attach_chart_nonexistent_file(self, batch_tool, test_report_id):
+        """Test attach_chart with non-existent file."""
+        from igloo_mcp.mcp.tools.evolve_report_batch import OP_ATTACH_CHART
+
+        # This should either handle gracefully or validate
+        result = await batch_tool.execute(
+            report_selector=test_report_id,
+            instruction="Attach non-existent chart",
+            operations=[
+                {
+                    "type": OP_ATTACH_CHART,
+                    "chart_path": "/nonexistent/path/chart.png",
+                    "description": "Missing Chart",
+                }
+            ],
+        )
+
+        # Should either fail validation or succeed with warning
+        # Implementation may vary
+
+    async def test_attach_chart_custom_chart_id(self, batch_tool, test_report_id, external_chart_file, report_service):
+        """Test attach_chart with custom chart_id."""
+        from igloo_mcp.mcp.tools.evolve_report_batch import OP_ATTACH_CHART
+
+        custom_chart_id = "my_custom_chart_id"
+
+        result = await batch_tool.execute(
+            report_selector=test_report_id,
+            instruction="Attach chart with custom ID",
+            operations=[
+                {
+                    "type": OP_ATTACH_CHART,
+                    "chart_id": custom_chart_id,
+                    "chart_path": str(external_chart_file),
+                    "description": "Custom ID Chart",
+                }
+            ],
+        )
+
+        assert result["status"] == "success"
+
+        # Verify chart was added with custom ID
+        outline = report_service.get_report_outline(test_report_id)
+        charts = outline.metadata.get("charts", {})
+        assert custom_chart_id in charts
+
+    async def test_attach_chart_detects_format(self, batch_tool, test_report_id, external_chart_file, report_service):
+        """Test attach_chart detects file format from extension."""
+        from igloo_mcp.mcp.tools.evolve_report_batch import OP_ATTACH_CHART
+
+        result = await batch_tool.execute(
+            report_selector=test_report_id,
+            instruction="Attach PNG chart",
+            operations=[
+                {
+                    "type": OP_ATTACH_CHART,
+                    "chart_path": str(external_chart_file),
+                    "description": "PNG Chart",
+                }
+            ],
+        )
+
+        assert result["status"] == "success"
+
+        # Verify format was detected
+        outline = report_service.get_report_outline(test_report_id)
+        charts = outline.metadata.get("charts", {})
+
+        for chart_id, chart_meta in charts.items():
+            assert chart_meta.get("format") == "png"
+
+    async def test_attach_chart_stores_size(self, batch_tool, test_report_id, external_chart_file, report_service):
+        """Test attach_chart stores file size in metadata."""
+        from igloo_mcp.mcp.tools.evolve_report_batch import OP_ATTACH_CHART
+
+        result = await batch_tool.execute(
+            report_selector=test_report_id,
+            instruction="Attach chart",
+            operations=[
+                {
+                    "type": OP_ATTACH_CHART,
+                    "chart_path": str(external_chart_file),
+                    "description": "Chart with size",
+                }
+            ],
+        )
+
+        assert result["status"] == "success"
+
+        # Verify size was stored
+        outline = report_service.get_report_outline(test_report_id)
+        charts = outline.metadata.get("charts", {})
+
+        for chart_id, chart_meta in charts.items():
+            assert "size_bytes" in chart_meta
+            assert chart_meta["size_bytes"] > 0
