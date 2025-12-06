@@ -312,11 +312,6 @@ class TestAuditTrailIdTracking:
     @pytest.mark.asyncio
     async def test_audit_includes_section_ids_removed(self, evolve_tool, report_service):
         """Test that audit trail includes section_ids_removed field."""
-        # TODO: Audit trail file creation not working in test environment
-        # Audit logging infrastructure exists but files aren't being created
-        # during tests. Needs investigation of test fixture setup or storage layer.
-        pytest.skip("Audit trail file creation not working in test environment")
-
         # Create report with sections
         report_id = report_service.create_report(
             title="Test Report",
@@ -340,7 +335,7 @@ class TestAuditTrailIdTracking:
         )
 
         # Read audit trail
-        audit_file = report_service.reports_root / report_id / "audit.jsonl"
+        audit_file = report_service.reports_root / "by_id" / report_id / "audit.jsonl"
         assert audit_file.exists()
 
         # Get last audit entry
@@ -350,18 +345,14 @@ class TestAuditTrailIdTracking:
             lines = f.readlines()
             last_entry = json.loads(lines[-1])
 
-        # Verify section_ids_removed in audit
-        assert "section_ids_removed" in last_entry
-        assert last_entry["section_ids_removed"] == proposed_changes["sections_to_remove"]
+        # Verify section_ids_removed in audit payload
+        assert "payload" in last_entry
+        assert "section_ids_removed" in last_entry["payload"]
+        assert last_entry["payload"]["section_ids_removed"] == proposed_changes["sections_to_remove"]
 
     @pytest.mark.asyncio
     async def test_audit_includes_insight_ids_removed(self, evolve_tool, report_service):
         """Test that audit trail includes insight_ids_removed field."""
-        # TODO: Audit trail file creation not working in test environment
-        # Audit logging infrastructure exists but files aren't being created
-        # during tests. Needs investigation of test fixture setup or storage layer.
-        pytest.skip("Audit trail file creation not working in test environment")
-
         # Create report with insights
         report_id = report_service.create_report(
             title="Test Report",
@@ -388,7 +379,7 @@ class TestAuditTrailIdTracking:
         )
 
         # Read audit trail
-        audit_file = report_service.reports_root / report_id / "audit.jsonl"
+        audit_file = report_service.reports_root / "by_id" / report_id / "audit.jsonl"
         assert audit_file.exists()
 
         # Get last audit entry
@@ -398,9 +389,10 @@ class TestAuditTrailIdTracking:
             lines = f.readlines()
             last_entry = json.loads(lines[-1])
 
-        # Verify insight_ids_removed in audit
-        assert "insight_ids_removed" in last_entry
-        assert last_entry["insight_ids_removed"] == changes["insights_to_remove"]
+        # Verify insight_ids_removed in audit payload
+        assert "payload" in last_entry
+        assert "insight_ids_removed" in last_entry["payload"]
+        assert last_entry["payload"]["insight_ids_removed"] == changes["insights_to_remove"]
 
 
 class TestResponseSymmetry:

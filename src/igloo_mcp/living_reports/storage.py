@@ -162,6 +162,8 @@ class ReportStorage:
         self.lock_path = report_dir / ".lock"
 
         # Create directories if they don't exist
+        # Ensure report_dir exists first, then create backups subdirectory
+        self.report_dir.mkdir(parents=True, exist_ok=True)
         self.backups_dir.mkdir(parents=True, exist_ok=True)
 
     @contextmanager
