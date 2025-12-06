@@ -5,6 +5,97 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-12-06
+
+### 🎨 Major Feature: Living Reports Rendering Overhaul
+
+This release introduces a comprehensive overhaul of the Living Reports rendering system with beautiful HTML output, section templates, and enhanced documentation.
+
+### ✨ New Features
+
+#### HTML Standalone Renderer
+- **Self-contained HTML output**: No Quarto installation required
+- **Style presets**: `compact`, `default`, `professional`, `wide`, `print`
+- **CSS customization**: Custom `max_width`, `body_padding`, `line_height`, `heading_color`, and more
+- **Custom CSS injection**: Add your own CSS via `custom_css` option
+- **Dark mode support**: Automatic theme switching
+- **Responsive design**: Mobile-friendly layouts
+- **Print optimization**: Clean print stylesheets
+
+#### Section Templates
+Five new pre-built markdown templates for structured section content:
+- **`findings_list`** (`findings`): Key findings with metrics and action items
+- **`metrics_snapshot`** (`metrics`): Metrics table with callouts
+- **`bullet_list`** (`bullet`, `summary_bullets`): Simple bullet point summaries
+- **`executive_summary`** (`exec_summary`): Executive summaries with takeaways and recommendations
+- **`action_items`** (`next_steps`, `actions`): Action items with optional owners, due dates, and priorities
+
+#### Template Usage
+```json
+{
+  "sections_to_add": [{
+    "title": "Q4 Findings",
+    "order": 1,
+    "template": "findings_list",
+    "template_data": {
+      "heading": "Key Findings",
+      "findings": [
+        {
+          "title": "Revenue Growth",
+          "metric": {"name": "MRR", "value": "$1.2M", "trend": "+15%"},
+          "description": "Monthly recurring revenue exceeded targets."
+        }
+      ]
+    }
+  }]
+}
+```
+
+### 🐛 Bug Fixes
+- **#138**: Fixed batch operation validation to allow modifying insights that are added in the same operation
+  - `attach_chart` with `insight_ids` now works in a single atomic batch with `add_insight`
+  - Metadata-only insight modifications (e.g., chart_id linking) no longer trigger citation validation
+- Added `metadata` field to `InsightChange` schema to support chart linkage
+- Fixed insight creation to properly initialize empty metadata dict
+
+### 📚 Documentation
+- Updated `docs/api/tools/evolve_report.md` with section templates documentation
+- Updated `docs/api/tools/render_report.md` with HTML standalone format documentation
+- Added examples for all five template types
+- Documented CSS customization options and style presets
+
+### 🔧 Internal Improvements
+- Simplified report templates structure
+- Enhanced order enforcement for sections
+- Improved timestamp tracking throughout report lifecycle
+
+### Migration Guide
+
+No breaking changes. All existing reports and APIs continue to work as before.
+
+To use the new HTML standalone format:
+```json
+{
+  "report_selector": "My Report",
+  "format": "html_standalone",
+  "options": {
+    "style_preset": "professional",
+    "toc": true
+  }
+}
+```
+
+To use section templates, add `template` and `template_data` to your section operations:
+```json
+{
+  "template": "executive_summary",
+  "template_data": {
+    "headline": "Q4 Summary",
+    "key_points": ["Revenue up 25%", "Customer retention at 95%"]
+  }
+}
+```
+
 ## [0.3.7] - 2025-12-01
 
 ### 🔒 Security Fixes (P1)

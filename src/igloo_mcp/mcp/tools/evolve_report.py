@@ -743,7 +743,8 @@ class EvolveReportTool(MCPTool):
                     issues.append(
                         f"All insights require citations for reproducibility. Insight '{insight_id}' "
                         "missing supporting_queries[0] with execution_id. "
-                        "Use execute_query() first to get an execution_id, then include it in citations. "
+                        "Use execute_query() first to get an execution_id, "
+                        "then include it in citations. "
                         "To disable validation (not recommended): "
                         "set skip_citation_validation=True in constraints"
                     )
@@ -751,7 +752,8 @@ class EvolveReportTool(MCPTool):
                     issues.append(
                         f"All insights require citations. Insight '{insight_id}' "
                         "missing execution_id in citations[0]. "
-                        "Use execute_query() first to get an execution_id, then include it in citations"
+                        "Use execute_query() first to get an execution_id, "
+                        "then include it in citations"
                     )
 
             # Validate insights_to_modify
@@ -768,19 +770,18 @@ class EvolveReportTool(MCPTool):
                     # The insight will be validated when it's added
                     continue
 
-                # Check if this is a metadata-only modification
+                # Check if this is a metadata-only modification (e.g., chart_id linkage)
+                # Metadata-only modifications should not trigger citation validation
                 non_metadata_fields = {
-                    k
-                    for k in modify_data.keys()
-                    if k not in {"insight_id", "metadata"} and modify_data.get(k) is not None
+                    k for k in modify_data if k not in {"insight_id", "metadata"} and modify_data.get(k) is not None
                 }
+                if not non_metadata_fields:
+                    # This is a metadata-only modification (e.g., from attach_chart)
+                    # Skip citation validation for these
+                    continue
 
                 # Get current insight to check if supporting_queries is being modified
-                current_insight = None
-                for insight in current_outline.insights:
-                    if insight.insight_id == insight_id:
-                        current_insight = insight
-                        break
+                current_insight = next((i for i in current_outline.insights if i.insight_id == insight_id), None)
 
                 if current_insight:
                     # Check if supporting_queries is being modified
@@ -792,7 +793,8 @@ class EvolveReportTool(MCPTool):
                                 "missing supporting_queries[0] with execution_id. "
                                 "Use execute_query() first to get an execution_id, "
                                 "then include it in citations. "
-                                "To disable validation (not recommended): set skip_citation_validation=True in constraints"
+                                "To disable validation (not recommended): "
+                                "set skip_citation_validation=True in constraints"
                             )
                         elif not supporting_queries[0].get("execution_id"):
                             issues.append(
@@ -808,7 +810,8 @@ class EvolveReportTool(MCPTool):
                             "missing supporting_queries[0] with execution_id. "
                             "Use execute_query() first to get an execution_id, "
                             "then include it in citations. "
-                            "To disable validation (not recommended): set skip_citation_validation=True in constraints"
+                            "To disable validation (not recommended): "
+                            "set skip_citation_validation=True in constraints"
                         )
                     elif (
                         current_insight.supporting_queries and not current_insight.supporting_queries[0].execution_id
@@ -1615,7 +1618,11 @@ class EvolveReportTool(MCPTool):
                 {
                     "insight_id": i.insight_id,
                     "importance": i.importance,
-                    "preview": f"> **Insight:** {i.summary[:200]}{'...' if len(i.summary) > 200 else ''}\n> *Importance: {i.importance}/10*",
+                    "preview": (
+                        f"> **Insight:** {i.summary[:200]}"
+                        f"{'...' if len(i.summary) > 200 else ''}\n"
+                        f"> *Importance: {i.importance}/10*"
+                    ),
                 }
                 for i in changes.insights_to_add
             ]

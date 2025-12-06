@@ -377,7 +377,10 @@ class RenderReportTool(MCPTool):
                         },
                         "image_mode": {
                             "type": "string",
-                            "description": "How to handle images in markdown: 'relative' (copy to images/), 'base64' (embed), 'absolute' (keep paths).",
+                            "description": (
+                                "How to handle images in markdown: 'relative' (copy to images/), "
+                                "'base64' (embed), 'absolute' (keep paths)."
+                            ),
                             "enum": ["relative", "base64", "absolute"],
                             "default": "relative",
                         },

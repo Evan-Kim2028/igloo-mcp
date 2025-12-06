@@ -576,7 +576,7 @@ class TestChartAutoCopy:
         assert len(charts) >= 1
 
         # Check if path was updated to relative path
-        for chart_id, chart_meta in charts.items():
+        for _chart_id, chart_meta in charts.items():
             chart_path = chart_meta.get("path", "")
             # If auto_copy worked, path should be relative
             if chart_meta.get("copied"):
@@ -609,7 +609,7 @@ class TestChartAutoCopy:
 
         assert len(charts) >= 1
         # Path should contain original location
-        for chart_id, chart_meta in charts.items():
+        for _chart_id, chart_meta in charts.items():
             chart_path = chart_meta.get("path", "")
             assert str(external_chart_file) in chart_path or "external_charts" in chart_path
 
@@ -657,7 +657,7 @@ class TestChartAutoCopy:
         from igloo_mcp.mcp.tools.evolve_report_batch import OP_ATTACH_CHART
 
         # This should either handle gracefully or validate
-        result = await batch_tool.execute(
+        await batch_tool.execute(
             report_selector=test_report_id,
             instruction="Attach non-existent chart",
             operations=[
@@ -720,7 +720,7 @@ class TestChartAutoCopy:
         outline = report_service.get_report_outline(test_report_id)
         charts = outline.metadata.get("charts", {})
 
-        for chart_id, chart_meta in charts.items():
+        for _chart_id, chart_meta in charts.items():
             assert chart_meta.get("format") == "png"
 
     async def test_attach_chart_stores_size(self, batch_tool, test_report_id, external_chart_file, report_service):
@@ -745,6 +745,6 @@ class TestChartAutoCopy:
         outline = report_service.get_report_outline(test_report_id)
         charts = outline.metadata.get("charts", {})
 
-        for chart_id, chart_meta in charts.items():
+        for _chart_id, chart_meta in charts.items():
             assert "size_bytes" in chart_meta
             assert chart_meta["size_bytes"] > 0

@@ -569,3 +569,287 @@ class TestSectionProseContentSmoke:
         assert "2. Submit final report" in section.content
         # Should NOT have table headers for simple list
         assert "| # | Action |" not in section.content
+
+
+class TestSectionTemplateEdgeCases:
+    """Edge case tests for section templates - empty/null/special character handling."""
+
+    @pytest.mark.asyncio
+    async def test_findings_template_empty_findings_array_raises(self, tmp_path: Path):
+        """findings template with empty findings array should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="findings template requires"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with empty findings",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Empty Findings",
+                            "order": 1,
+                            "template": "findings_list",
+                            "template_data": {
+                                "findings": [],
+                            },
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_findings_template_missing_findings_raises(self, tmp_path: Path):
+        """findings template without findings key should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="findings template requires"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section without findings",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Missing Findings",
+                            "order": 1,
+                            "template": "findings_list",
+                            "template_data": {},
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_findings_template_special_characters(self, tmp_path: Path):
+        """findings template should handle special characters in content."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Special Chars", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add findings with special characters",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Special Characters Test",
+                        "order": 1,
+                        "template": "findings_list",
+                        "template_data": {
+                            "heading": "Test <script>alert('xss')</script>",
+                            "findings": [
+                                {
+                                    "title": "Finding with | pipe & ampersand",
+                                    "description": 'Has <html> tags and "quotes"',
+                                    "metric": {
+                                        "name": "O'Brien's Metric",
+                                        "value": "$1,000 < $2,000",
+                                        "trend": "↑ +50%",
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+
+        # Content should be generated (markdown)
+        assert section.content is not None
+        # Special characters should be preserved in markdown (not escaped yet)
+        assert "<script>" in section.content or "&lt;script&gt;" in section.content
+
+    @pytest.mark.asyncio
+    async def test_bullet_list_empty_items_raises(self, tmp_path: Path):
+        """bullet_list template with empty items should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="bullet_list template requires"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with empty items",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Empty Bullets",
+                            "order": 1,
+                            "template": "bullet_list",
+                            "template_data": {
+                                "items": [],
+                            },
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_executive_summary_template_minimal(self, tmp_path: Path):
+        """executive_summary template should work with minimal data."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Minimal Summary", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add minimal executive summary",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Executive Summary",
+                        "order": 1,
+                        "template": "executive_summary",
+                        "template_data": {},  # All fields optional
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+
+        # Should use section title as headline
+        assert "## Executive Summary" in section.content
+
+    @pytest.mark.asyncio
+    async def test_action_items_mixed_formats(self, tmp_path: Path):
+        """action_items template should handle mixed string and dict actions."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Mixed Actions", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add mixed action items",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Actions",
+                        "order": 1,
+                        "template": "action_items",
+                        "template_data": {
+                            "actions": [
+                                {"description": "With owner", "owner": "Alice"},
+                                "Simple string action",
+                            ],
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+
+        # Should render as table when any action has metadata fields
+        assert section.content is not None
+
+    @pytest.mark.asyncio
+    async def test_metrics_template_empty_metrics_raises(self, tmp_path: Path):
+        """metrics template with empty metrics should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="metrics template requires"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with empty metrics",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Empty Metrics",
+                            "order": 1,
+                            "template": "metrics",
+                            "template_data": {
+                                "metrics": [],
+                            },
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_unknown_template_raises(self, tmp_path: Path):
+        """Unknown template name should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="Unknown section template"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with unknown template",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Unknown Template",
+                            "order": 1,
+                            "template": "nonexistent_template",
+                            "template_data": {},
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_template_data_without_template_raises(self, tmp_path: Path):
+        """template_data without template should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="template_data provided without template"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with template_data but no template",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Missing Template",
+                            "order": 1,
+                            "template_data": {"key": "value"},
+                        }
+                    ]
+                },
+            )
