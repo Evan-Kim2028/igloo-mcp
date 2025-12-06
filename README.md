@@ -95,7 +95,7 @@ Restart Claude Code and ask: *"Show me the schema for my database"*
 | `get_report` | Read reports with progressive disclosure modes |
 | `search_report` | Find reports by title or tags |
 | `search_citations` | Search citations by source type or provider |
-| `get_report_schema` | Discover valid report structures at runtime |
+| `get_report_schema` | Discover valid structures and section templates at runtime |
 
 ### 🏥 Health & Diagnostics
 | Tool | Description |

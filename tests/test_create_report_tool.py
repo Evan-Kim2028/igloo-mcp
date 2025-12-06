@@ -85,10 +85,10 @@ class TestCreateReportTool:
     @pytest.mark.asyncio
     async def test_create_report_with_template(self, tool, report_service):
         """Test report creation with template."""
-        result = await tool.execute(title="Sales Report", template="monthly_sales")
+        result = await tool.execute(title="Deep Dive Report", template="deep_dive")
 
         assert result["status"] == "success"
-        assert result["template"] == "monthly_sales"
+        assert result["template"] == "deep_dive"
 
         # Verify template sections were applied
         outline = report_service.get_report_outline(result["report_id"])
@@ -118,19 +118,19 @@ class TestCreateReportTool:
         """Test report creation with all optional parameters."""
         result = await tool.execute(
             title="Complete Report",
-            template="quarterly_review",
+            template="analyst_v1",
             tags=["q1", "business"],
             description="Complete quarterly business review",
         )
 
         assert result["status"] == "success"
-        assert result["template"] == "quarterly_review"
+        assert result["template"] == "analyst_v1"
         assert result["tags"] == ["q1", "business"]
 
         # Verify all metadata
         outline = report_service.get_report_outline(result["report_id"])
         assert outline.metadata.get("description") == "Complete quarterly business review"
-        assert outline.metadata.get("template") == "quarterly_review"
+        assert outline.metadata.get("template") == "analyst_v1"
         assert outline.metadata.get("tags") == ["q1", "business"]
 
     @pytest.mark.asyncio
@@ -179,10 +179,9 @@ class TestCreateReportTool:
         template_prop = schema["properties"]["template"]
         assert template_prop["enum"] == [
             "default",
-            "monthly_sales",
-            "quarterly_review",
             "deep_dive",
             "analyst_v1",
+            "empty",
         ]
         assert template_prop["default"] == "default"
 

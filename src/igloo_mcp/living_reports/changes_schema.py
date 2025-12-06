@@ -73,6 +73,10 @@ class InsightChange(BaseModel):
     supporting_queries: list[dict[str, Any]] | None = None
     citations: list[dict[str, Any]] | None = None
     status: Literal["active", "archived", "killed"] | None = None
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional metadata to add or update on the insight (e.g., chart_id linkage)",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -118,6 +122,18 @@ class SectionChange(BaseModel):
     notes: str | None = None
     content: str | None = None
     content_format: Literal["markdown", "html", "plain"] | None = "markdown"
+    template: str | None = Field(
+        default=None,
+        description="Optional markdown template name to auto-generate section content",
+    )
+    template_data: dict[str, Any] | None = Field(
+        default=None,
+        description="Structured context passed to the selected template",
+    )
+    format_options: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional formatting helpers (e.g., auto headings, list coercion)",
+    )
     content_merge_mode: Literal["replace", "merge", "append", "prepend"] | None = Field(
         default="replace",
         description="How to merge content with existing: replace, merge (placeholder-based), append, prepend",
@@ -249,13 +265,15 @@ class ProposedChanges(BaseModel):
                         error="insight_id is required for modifications",
                     )
                 )
-            elif change.insight_id not in existing_insight_ids:
+            elif change.insight_id not in existing_insight_ids and change.insight_id not in insights_being_added:
+                # Allow modifying insights that are being added in the same operation
+                # (e.g., attach_chart linking to a newly added insight)
                 errors.append(
                     ValidationErrorDetail(
                         field=f"insights_to_modify[{idx}].insight_id",
                         value=change.insight_id,
                         error="insight_id not found",
-                        available_ids=list(existing_insight_ids)[:10],
+                        available_ids=list(existing_insight_ids | insights_being_added)[:10],
                     )
                 )
             else:

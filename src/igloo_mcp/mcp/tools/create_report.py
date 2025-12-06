@@ -17,10 +17,9 @@ from igloo_mcp.mcp.validation_helpers import validate_text_field
 
 VALID_TEMPLATES = (
     "default",
-    "monthly_sales",
-    "quarterly_review",
     "deep_dive",
     "analyst_v1",
+    "empty",
 )
 
 try:
@@ -54,7 +53,8 @@ class CreateReportTool(MCPTool):
             "Initialize a new living report for accumulating insights over time. "
             "Use AFTER running queries and gathering initial findings—the report is your "
             "'notebook' for consolidating discoveries. "
-            "Start with template='default' for flexibility, or 'analyst_v1' when citations are mandatory."
+            "All templates include citation support. Use 'default' for standard reports, "
+            "'deep_dive' for detailed technical analysis, or 'analyst_v1' for blockchain analysis."
         )
 
     @property
@@ -69,17 +69,9 @@ class CreateReportTool(MCPTool):
     def usage_examples(self) -> list[dict[str, Any]]:
         return [
             {
-                "description": "Create a simple report with default template",
+                "description": "Create a report with default template (recommended)",
                 "parameters": {
                     "title": "Q1 Revenue Analysis",
-                },
-            },
-            {
-                "description": "Create report with template and tags",
-                "parameters": {
-                    "title": "Monthly Sales Report",
-                    "template": "monthly_sales",
-                    "tags": ["sales", "monthly", "revenue"],
                 },
             },
             {
@@ -92,11 +84,18 @@ class CreateReportTool(MCPTool):
                 },
             },
             {
-                "description": "Create analyst report with citation enforcement",
+                "description": "Create analyst report for blockchain analysis",
                 "parameters": {
                     "title": "Q1 Network Analysis",
                     "template": "analyst_v1",
                     "tags": ["network", "analysis", "q1"],
+                },
+            },
+            {
+                "description": "Create empty report (no pre-configured sections)",
+                "parameters": {
+                    "title": "Custom Report",
+                    "template": "empty",
                 },
             },
         ]
@@ -165,11 +164,10 @@ class CreateReportTool(MCPTool):
                 f"Invalid template '{template}'. Must be one of: {', '.join(VALID_TEMPLATES)}",
                 validation_errors=[f"Invalid template: {template}"],
                 hints=[
-                    "Use template='default' for empty report",
-                    "Use template='monthly_sales' for sales reports",
-                    "Use template='quarterly_review' for quarterly reviews",
-                    "Use template='deep_dive' for detailed analysis",
-                    "Use template='analyst_v1' for blockchain analysis with citation enforcement",
+                    "Use template='default' for standard reports with exec summary, analysis, recommendations",
+                    "Use template='deep_dive' for detailed technical analysis",
+                    "Use template='analyst_v1' for blockchain/protocol analysis",
+                    "Use template='empty' for maximum flexibility (no pre-configured sections)",
                 ],
                 context={"request_id": request_id, "title": title},
             )
@@ -290,18 +288,19 @@ class CreateReportTool(MCPTool):
                     "type": "string",
                     "description": (
                         "Report template to use. Defaults to 'default' if not specified. "
-                        "Available templates: default (empty report), monthly_sales, quarterly_review, "
-                        "deep_dive, analyst_v1 (blockchain analysis with citation enforcement)."
+                        "Available templates: default (exec summary, analysis, recommendations), "
+                        "deep_dive (overview, methodology, findings, recommendations), "
+                        "analyst_v1 (blockchain/protocol analysis structure), "
+                        "empty (no pre-configured sections)."
                     ),
                     "enum": [
                         "default",
-                        "monthly_sales",
-                        "quarterly_review",
                         "deep_dive",
                         "analyst_v1",
+                        "empty",
                     ],
                     "default": "default",
-                    "examples": ["default", "monthly_sales", "deep_dive", "analyst_v1"],
+                    "examples": ["default", "deep_dive", "analyst_v1", "empty"],
                 },
                 "tags": {
                     "type": "array",

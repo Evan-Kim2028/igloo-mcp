@@ -251,13 +251,13 @@ class TestDefaultValues:
 
     def test_different_defaults(self):
         """Should support different default values per tool."""
-        # execute_query default: full
+        # execute_query default: summary
         result = validate_response_mode(
             response_mode=None,
-            valid_modes=("minimal", "standard", "full"),
-            default="full",
+            valid_modes=("full", "summary", "schema_only", "sample"),
+            default="summary",
         )
-        assert result == "full"
+        assert result == "summary"
 
         # health_check default: standard
         result = validate_response_mode(

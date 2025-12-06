@@ -192,6 +192,13 @@ class RenderReportTool(MCPTool):
                 include_preview=include_preview,
                 preview_max_chars=preview_max_chars,
             )
+        elif format == "markdown":
+            result = self._render_markdown(
+                report_id=resolved_report_id,
+                options=options or {},
+                include_preview=include_preview,
+                preview_max_chars=preview_max_chars,
+            )
         else:
             result = self.report_service.render_report(
                 report_id=resolved_report_id,
@@ -295,9 +302,9 @@ class RenderReportTool(MCPTool):
                 "format": {
                     "type": "string",
                     "description": "Output format for rendering",
-                    "enum": ["html", "pdf", "markdown", "docx"],
+                    "enum": ["html", "pdf", "markdown", "docx", "html_standalone"],
                     "default": "html",
-                    "examples": ["html", "pdf", "markdown"],
+                    "examples": ["html", "pdf", "markdown", "html_standalone"],
                 },
                 "regenerate_outline_view": {
                     "type": "boolean",
@@ -316,7 +323,7 @@ class RenderReportTool(MCPTool):
                 },
                 "options": {
                     "type": "object",
-                    "description": "Additional Quarto rendering options",
+                    "description": "Rendering options (format-specific)",
                     "properties": {
                         "toc": {
                             "type": "boolean",
@@ -332,6 +339,61 @@ class RenderReportTool(MCPTool):
                             "type": "string",
                             "description": "HTML theme (e.g., 'default', 'cerulean', 'cosmo')",
                             "examples": ["default", "cerulean", "cosmo"],
+                        },
+                        "style_preset": {
+                            "type": "string",
+                            "description": "Standalone HTML style preset (compact, professional, wide, print).",
+                            "enum": ["compact", "default", "professional", "wide", "print"],
+                            "default": "professional",
+                        },
+                        "css_options": {
+                            "type": "object",
+                            "description": "Fine-grained CSS overrides for html_standalone rendering.",
+                            "properties": {
+                                "max_width": {"type": "string", "description": "Body max-width (e.g., '1400px')."},
+                                "body_padding": {"type": "string", "description": "Body padding (CSS shorthand)."},
+                                "line_height": {"type": "number", "description": "Body line-height."},
+                                "paragraph_spacing": {"type": "string", "description": "Spacing between paragraphs."},
+                                "list_indent": {"type": "string", "description": "Indent for lists."},
+                                "table_cell_padding": {"type": "string", "description": "Padding for table cells."},
+                                "font_family": {"type": "string", "description": "Body font stack."},
+                                "heading_color": {"type": "string", "description": "Color for section headings."},
+                            },
+                            "additionalProperties": False,
+                        },
+                        "custom_css": {
+                            "type": "string",
+                            "description": "Raw CSS appended to the standalone HTML stylesheet.",
+                        },
+                        "include_frontmatter": {
+                            "type": "boolean",
+                            "description": "Include YAML frontmatter for static site generators (markdown format).",
+                            "default": True,
+                        },
+                        "include_toc": {
+                            "type": "boolean",
+                            "description": "Include table of contents in markdown output.",
+                            "default": True,
+                        },
+                        "image_mode": {
+                            "type": "string",
+                            "description": (
+                                "How to handle images in markdown: 'relative' (copy to images/), "
+                                "'base64' (embed), 'absolute' (keep paths)."
+                            ),
+                            "enum": ["relative", "base64", "absolute"],
+                            "default": "relative",
+                        },
+                        "platform": {
+                            "type": "string",
+                            "description": "Target platform for markdown output.",
+                            "enum": ["github", "gitlab", "generic"],
+                            "default": "generic",
+                        },
+                        "output_filename": {
+                            "type": "string",
+                            "description": "Output filename for markdown (default: 'report.md').",
+                            "default": "report.md",
                         },
                     },
                     "additionalProperties": True,
@@ -366,6 +428,7 @@ class RenderReportTool(MCPTool):
         try:
             # Load outline and prepare data
             outline = self.report_service.get_report_outline(report_id)
+            outline = self.report_service._prepare_outline_for_render(outline)
             storage = self.report_service.global_storage.get_report_storage(report_id)
             report_dir = storage.report_dir
 
@@ -375,31 +438,31 @@ class RenderReportTool(MCPTool):
                 citation_map = self.report_service._build_citation_map(outline)
                 hints["citation_map"] = citation_map
 
-                # Build citation_details from query provenance
+                # Build citation_details from query provenance using batch lookup
                 query_provenance: dict[str, Any] = {}
+
+                # Collect all execution_ids first for batch lookup
+                execution_ids_to_resolve: list[str] = []
                 for insight in outline.insights:
                     references = insight.citations or insight.supporting_queries
                     for query in references:
                         if query.execution_id:
-                            try:
-                                from igloo_mcp.living_reports.models import DatasetSource
+                            execution_ids_to_resolve.append(query.execution_id)
 
-                                source = DatasetSource(
-                                    execution_id=query.execution_id,
-                                    sql_sha256=query.sql_sha256,
-                                )
-                                history_record = self.report_service.history_index._resolve_history_record(source)
-                                if history_record:
-                                    query_provenance[query.execution_id] = {
-                                        "execution_id": query.execution_id,
-                                        "timestamp": history_record.get("timestamp") or history_record.get("ts"),
-                                        "duration_ms": history_record.get("duration_ms"),
-                                        "rowcount": history_record.get("rowcount"),
-                                        "status": history_record.get("status"),
-                                        "statement_preview": history_record.get("statement_preview"),
-                                    }
-                            except Exception:
-                                pass
+                # Batch lookup - single operation instead of N individual lookups
+                history_records = self.report_service.history_index.get_records_batch(execution_ids_to_resolve)
+
+                # Build provenance from batch results
+                for exec_id, history_record in history_records.items():
+                    query_provenance[exec_id] = {
+                        "execution_id": exec_id,
+                        "timestamp": history_record.get("timestamp") or history_record.get("ts"),
+                        "duration_ms": history_record.get("duration_ms"),
+                        "rowcount": history_record.get("rowcount"),
+                        "status": history_record.get("status"),
+                        "statement_preview": history_record.get("statement_preview"),
+                    }
+
                 hints["query_provenance"] = query_provenance
                 hints["citation_details"] = query_provenance
             except Exception:
@@ -423,6 +486,121 @@ class RenderReportTool(MCPTool):
                     "format": "html_standalone",
                     "output_path": render_result["output_path"],
                     "size_bytes": render_result["size_bytes"],
+                },
+                "warnings": render_result.get("warnings", []),
+            }
+
+            # Include preview if requested
+            if include_preview:
+                try:
+                    from pathlib import Path
+
+                    output_path = Path(render_result["output_path"])
+                    if output_path.exists():
+                        content = output_path.read_text(encoding="utf-8")
+                        if len(content) > preview_max_chars:
+                            content = content[:preview_max_chars] + "\n\n[Content truncated]"
+                        result["preview"] = content
+                        result["output"]["preview"] = content
+                except Exception:
+                    pass
+
+            return result
+
+        except Exception as e:
+            return {
+                "status": "render_failed",
+                "report_id": report_id,
+                "error": str(e),
+            }
+
+    def _render_markdown(
+        self,
+        report_id: str,
+        options: dict[str, Any],
+        include_preview: bool = False,
+        preview_max_chars: int = 2000,
+    ) -> dict[str, Any]:
+        """Render report to Markdown format for GitHub/GitLab publishing.
+
+        Args:
+            report_id: Report ID to render
+            options: Rendering options:
+                - include_frontmatter: bool (default: True)
+                - include_toc: bool (default: True)
+                - image_mode: 'relative' | 'base64' | 'absolute' (default: 'relative')
+                - platform: 'github' | 'gitlab' | 'generic' (default: 'generic')
+                - output_filename: str (default: 'report.md')
+            include_preview: Include truncated preview in response
+            preview_max_chars: Maximum characters for preview
+
+        Returns:
+            Rendering result dictionary
+        """
+        from igloo_mcp.living_reports.renderers import MarkdownRenderer
+
+        try:
+            # Load outline and prepare data
+            outline = self.report_service.get_report_outline(report_id)
+            outline = self.report_service._prepare_outline_for_render(outline)
+            storage = self.report_service.global_storage.get_report_storage(report_id)
+            report_dir = storage.report_dir
+
+            # Build hints (citation_map, query_provenance)
+            hints: dict[str, Any] = {}
+            try:
+                citation_map = self.report_service._build_citation_map(outline)
+                hints["citation_map"] = citation_map
+
+                # Build citation_details from query provenance using batch lookup
+                query_provenance: dict[str, Any] = {}
+
+                # Collect all execution_ids first for batch lookup
+                execution_ids_to_resolve: list[str] = []
+                for insight in outline.insights:
+                    references = insight.citations or insight.supporting_queries
+                    for query in references:
+                        if query.execution_id:
+                            execution_ids_to_resolve.append(query.execution_id)
+
+                # Batch lookup - single operation instead of N individual lookups
+                history_records = self.report_service.history_index.get_records_batch(execution_ids_to_resolve)
+
+                # Build provenance from batch results
+                for exec_id, history_record in history_records.items():
+                    query_provenance[exec_id] = {
+                        "execution_id": exec_id,
+                        "timestamp": history_record.get("timestamp") or history_record.get("ts"),
+                        "duration_ms": history_record.get("duration_ms"),
+                        "rowcount": history_record.get("rowcount"),
+                        "status": history_record.get("status"),
+                        "statement_preview": history_record.get("statement_preview"),
+                    }
+
+                hints["query_provenance"] = query_provenance
+                hints["citation_details"] = query_provenance
+            except Exception:
+                pass
+
+            # Render using markdown renderer
+            renderer = MarkdownRenderer()
+            render_result = renderer.render(
+                report_dir=report_dir,
+                outline=outline,
+                datasets={},
+                hints=hints,
+                options=options,
+            )
+
+            # Build response
+            result: dict[str, Any] = {
+                "status": "success",
+                "report_id": report_id,
+                "output": {
+                    "format": "markdown",
+                    "output_path": render_result["output_path"],
+                    "size_bytes": render_result["size_bytes"],
+                    "images_copied": render_result.get("images_copied", 0),
                 },
                 "warnings": render_result.get("warnings", []),
             }

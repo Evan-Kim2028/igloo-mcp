@@ -1,9 +1,23 @@
 ---
 title: "{{ outline.title }}"
-format: {{ format }}
-{% if options.toc %}toc: true{% endif %}
-{% if options.code_folding %}code-fold: true{% endif %}
+format:
+  {{ format }}:
+    toc: {{ 'true' if options.toc else 'false' }}
+    css: styles.css
+    theme:
+      light: flatly
+      dark: darkly
+    mainfont: system-ui, -apple-system, sans-serif
+    fontsize: 1rem
+    linestretch: 1.75
+{% if options.code_folding %}
+    code-fold: true
+{% endif %}
 ---
+
+{% set citation_map = hints.get('citation_map', {}) if hints else {} %}
+{% set citation_details = hints.get('citation_details', {}) if hints else {} %}
+{% set query_provenance = query_provenance if query_provenance else (hints.get('query_provenance', {}) if hints else {}) %}
 
 {% if outline.metadata.get('summary') %}
 {{ outline.metadata.summary }}
@@ -11,8 +25,6 @@ format: {{ format }}
 
 {% if outline.metadata.get('template') == 'analyst_v1' %}
 {# Analyst mode rendering #}
-{% set citation_map = hints.get('citation_map', {}) if hints else {} %}
-{% set citation_details = hints.get('citation_details', {}) if hints else {} %}
 
 {# Executive Summary Section #}
 {% set exec_summary_ids = outline.metadata.get('executive_summary_insight_ids', []) %}
@@ -49,14 +61,12 @@ format: {{ format }}
 
 ## {{ section.title }}
 
-{% if section.notes %}
-{{ section.notes }}
-{% endif %}
-{% if section.content %}
-{% if section.content_format == 'html' %}
+{% set prose = section.content if section.content else section.notes %}
+{% if prose %}
+{% if section.content and section.content_format == 'html' %}
 {{ section.content | safe }}
 {% else %}
-{{ section.content }}
+{{ prose }}
 {% endif %}
 {% endif %}
 
@@ -95,17 +105,28 @@ format: {{ format }}
 
 {% else %}
 {# Default rendering mode #}
+{% set sorted_sections = outline.sections %}
+{% if sorted_sections|length > 0 %}
+## Table of Contents
+
+{% for section in sorted_sections %}
+- [{{ section.title }}](#section-{{ section.section_id }})
+{% endfor %}
+{% if query_provenance %}
+- [Data Sources](#data-sources)
+{% endif %}
+
+{% endif %}
 {% for section in outline.sections %}
+<a id="section-{{ section.section_id }}"></a>
 ## {{ section.title }}
 
-{% if section.notes %}
-{{ section.notes }}
-{% endif %}
-{% if section.content %}
-{% if section.content_format == 'html' %}
+{% set prose = section.content if section.content else section.notes %}
+{% if prose %}
+{% if section.content and section.content_format == 'html' %}
 {{ section.content | safe }}
 {% else %}
-{{ section.content }}
+{{ prose }}
 {% endif %}
 {% endif %}
 
@@ -169,4 +190,15 @@ print(df.to_markdown(index=False))
 {% endif %}
 {% endfor %}
 {% endfor %}
+{% endif %}
+
+{% if query_provenance %}
+<a id="data-sources"></a>
+## Data Sources
+
+{% for exec_id, details in query_provenance.items() %}
+- `{{ exec_id }}`{% if details.timestamp %} — Executed: {{ details.timestamp }}{% endif %}{% if details.duration_ms %} | Duration: {{ "%.2f"|format(details.duration_ms / 1000.0) }}s{% endif %}{% if details.rowcount is not none and details.rowcount is defined %} | Rows: {{ "{:,}"|format(details.rowcount) }}{% endif %}
+  {% if details.statement_preview %}`{{ details.statement_preview[:120] }}{% if details.statement_preview|length > 120 %}...{% endif %}`{% endif %}
+{% endfor %}
+
 {% endif %}

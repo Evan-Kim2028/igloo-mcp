@@ -28,7 +28,7 @@ class TestBug89CitationEnforcement:
         tool = EvolveReportTool(config, report_service)
 
         # Create report with default template
-        report_service.create_report(title="Test Report", template="default")
+        report_service.create_report(title="Test Report", template="empty")
 
         # Attempt to add insight without citations
         changes = {
@@ -94,7 +94,7 @@ class TestBug89CitationEnforcement:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_service.create_report(title="Test Report", template="default")
+        report_service.create_report(title="Test Report", template="empty")
 
         changes = {
             "insights_to_add": [
@@ -126,7 +126,7 @@ class TestBug89CitationEnforcement:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test Report", template="default")
+        report_id = report_service.create_report(title="Test Report", template="empty")
 
         changes = {
             "insights_to_add": [
@@ -162,7 +162,7 @@ class TestBug88MetadataUpdates:
         tool = EvolveReportTool(config, report_service)
 
         # Create report
-        report_id = report_service.create_report(title="Old Title", template="default")
+        report_id = report_service.create_report(title="Old Title", template="empty")
         original_title = "Old Title"
 
         # Change title
@@ -187,7 +187,7 @@ class TestBug88MetadataUpdates:
         tool = EvolveReportTool(config, report_service)
 
         # Create report with initial metadata
-        report_id = report_service.create_report(title="Test Report", template="default")
+        report_id = report_service.create_report(title="Test Report", template="empty")
 
         # Add some initial metadata
         await tool.execute(
@@ -223,7 +223,7 @@ class TestBug88MetadataUpdates:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Old Title", template="default")
+        report_id = report_service.create_report(title="Old Title", template="empty")
 
         result = await tool.execute(
             report_selector="Old Title",
@@ -249,7 +249,7 @@ class TestBug88MetadataUpdates:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test Report", template="default")
+        report_id = report_service.create_report(title="Test Report", template="empty")
         original_outline = report_service.get_report_outline(report_id)
         original_version = original_outline.outline_version
 
@@ -269,7 +269,7 @@ class TestBug88MetadataUpdates:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test Report", template="default")
+        report_id = report_service.create_report(title="Test Report", template="empty")
 
         result = await tool.execute(report_selector="Test Report", instruction="", status_change="archived")
 

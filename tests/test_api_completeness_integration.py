@@ -211,7 +211,7 @@ class TestTimingMetricsIntegration:
         # Create report
         create_result = await create_tool.execute(
             title="Timing Test",
-            template="monthly_sales",
+            template="deep_dive",
         )
 
         create_timing = create_result["timing"]
@@ -282,7 +282,7 @@ class TestIdTrackingLifecycle:
         # Create with template (has sections)
         create_result = await create_tool.execute(
             title="Lifecycle Test",
-            template="monthly_sales",
+            template="deep_dive",
         )
 
         initial_sections = create_result["section_ids_added"]
@@ -458,7 +458,7 @@ class TestEndToEndWorkflows:
         # Step 1: Create report
         create_result = await create_tool.execute(
             title="E2E Workflow Test",
-            template="quarterly_review",
+            template="analyst_v1",
             request_id=workflow_id,
         )
 

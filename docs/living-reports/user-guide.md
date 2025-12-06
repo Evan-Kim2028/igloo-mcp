@@ -895,6 +895,55 @@ my_changes = examples["examples"]["add_insight"]
 # Modify and use in evolve_report...
 ```
 
+### Discover Section Templates
+
+Use `schema_type="section_templates"` to discover available templates for structured content:
+
+```python
+# Discover available section templates
+templates = get_report_schema(schema_type="section_templates")
+
+# See all available template names (including aliases)
+print(templates["available_names"])
+# ['findings', 'findings_list', 'metrics', 'methodology', 'executive_summary', ...]
+
+# Get full details for each template
+for name, info in templates["templates"].items():
+    print(f"{name}: {info['description']}")
+    print(f"  Required: {info['required_fields']}")
+    print(f"  Example: {info['example_template_data']}")
+```
+
+**Available Templates**:
+| Template | Description |
+|----------|-------------|
+| `findings` | Key findings with metrics and action items |
+| `metrics` | Metrics table with optional callouts |
+| `bullet_list` | Simple bullet point list |
+| `executive_summary` | Executive summary with key takeaways |
+| `action_items` | Action items with owners and due dates |
+| `methodology` | Data sources and analysis approach |
+
+**Using templates in evolve_report**:
+```python
+evolve_report(
+    report_selector="Q1 Analysis",
+    instruction="Add methodology section",
+    proposed_changes={
+        "sections_to_add": [{
+            "title": "Methodology",
+            "order": 1,
+            "template": "methodology",
+            "template_data": {
+                "data_sources": ["Snowflake warehouse", "On-chain data"],
+                "time_period": "Q1 2025",
+                "approach": "Aggregated daily metrics with 7-day moving averages"
+            }
+        }]
+    }
+)
+```
+
 **Benefits**: First-time-right submissions, fewer validation errors.
 
 See [get_report_schema Tool Documentation](../api/tools/get_report_schema.md) for complete details.

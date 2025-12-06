@@ -128,7 +128,7 @@ class TestBug57InlineInsights:
         report_service = ReportService(reports_root=tmp_path / "reports")
 
         # Create a test report - returns report_id string
-        report_id = report_service.create_report(title="Test Report for Bug 57", template="default")
+        report_id = report_service.create_report(title="Test Report for Bug 57", template="empty")
 
         tool = EvolveReportTool(config, report_service)
 
@@ -164,7 +164,7 @@ class TestBug57InlineInsights:
         report_service = ReportService(reports_root=tmp_path / "reports")
 
         # Create a test report - returns report_id string
-        report_id = report_service.create_report(title="Test Report for Bug 57 Modify", template="default")
+        report_id = report_service.create_report(title="Test Report for Bug 57 Modify", template="empty")
 
         # Add a section first
         result1 = await EvolveReportTool(config, report_service).execute(
@@ -209,7 +209,7 @@ class TestBug58SupportingQueriesOptional:
         report_service = ReportService(reports_root=tmp_path / "reports")
 
         # Create a test report - returns report_id string
-        report_id = report_service.create_report(title="Test Report for Bug 58", template="default")
+        report_id = report_service.create_report(title="Test Report for Bug 58", template="empty")
 
         tool = EvolveReportTool(config, report_service)
 
@@ -243,7 +243,7 @@ class TestBug59StaleWarnings:
         report_service = ReportService(reports_root=tmp_path / "reports")
 
         # Create a test report - returns report_id string
-        report_id = report_service.create_report(title="Test Report for Bug 59", template="default")
+        report_id = report_service.create_report(title="Test Report for Bug 59", template="empty")
 
         tool = EvolveReportTool(config, report_service)
 
@@ -284,7 +284,7 @@ class TestBug60RenderPreview:
         report_service = ReportService(reports_root=tmp_path / "reports")
 
         # Create a test report - returns report_id string
-        report_id = report_service.create_report(title="Test Report for Bug 60", template="default")
+        report_id = report_service.create_report(title="Test Report for Bug 60", template="empty")
 
         tool = RenderReportTool(config, report_service)
 
@@ -304,7 +304,7 @@ class TestBug60RenderPreview:
         report_service = ReportService(reports_root=tmp_path / "reports")
 
         # Create a test report - returns report_id string
-        report_id = report_service.create_report(title="Test Report Output Path", template="default")
+        report_id = report_service.create_report(title="Test Report Output Path", template="empty")
 
         tool = RenderReportTool(config, report_service)
 

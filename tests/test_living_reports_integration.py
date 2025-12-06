@@ -17,11 +17,11 @@ async def test_full_lifecycle_create_evolve_render_revert(tmp_path, monkeypatch)
     service = ReportService(reports_root=tmp_path / "reports")
 
     # 1. Create with template
-    report_id = service.create_report("Q1 Report", template="quarterly_review")
+    report_id = service.create_report("Q1 Report", template="analyst_v1")
 
     # Verify template was applied
     outline = service.get_report_outline(report_id)
-    assert len(outline.sections) == 4
+    assert len(outline.sections) == 5  # analyst_v1 has 5 sections
     assert outline.sections[0].title == "Executive Summary"
 
     # 2. Evolve - add insight
@@ -133,7 +133,7 @@ def test_fork_and_synthesize_workflow(tmp_path):
     service = ReportService(reports_root=tmp_path / "reports")
 
     # Create base report with template (has sections)
-    base_id = service.create_report("Base Report", template="monthly_sales")
+    base_id = service.create_report("Base Report", template="deep_dive")
 
     # Add content to base - reference insight in section
     outline = service.get_report_outline(base_id)
@@ -217,8 +217,8 @@ def test_template_to_advanced_workflow(tmp_path):
 
     # Verify template structure
     outline = service.get_report_outline(report_id)
-    assert len(outline.sections) == 3
-    assert outline.sections[0].title == "Topic Overview"
+    assert len(outline.sections) == 4  # deep_dive has 4 sections
+    assert outline.sections[0].title == "Overview"
 
     # Evolve by adding insights
     insight1_id = str(uuid.uuid4())
@@ -279,7 +279,7 @@ async def test_mcp_tool_integration_workflow(tmp_path):
     render_tool = RenderReportTool(get_config(), service)
 
     # Create report via service with a template that has sections
-    report_id = service.create_report("MCP Test Report", template="monthly_sales")
+    report_id = service.create_report("MCP Test Report", template="deep_dive")
 
     # Get a section ID to reference the insight
     outline = service.get_report_outline(report_id)

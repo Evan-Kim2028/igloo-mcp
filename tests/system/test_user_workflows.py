@@ -126,7 +126,7 @@ async def test_quarterly_analysis_complete_workflow(
     # Step 4: Create report from template
     result = await stack["tools"]["create_report"].execute(
         title="Q4 2024 Quarterly Report",
-        template="quarterly_review",
+        template="analyst_v1",
         tags=["Q4_2024", "quarterly"],
         description="Comprehensive Q4 2024 performance analysis",
     )
@@ -136,7 +136,7 @@ async def test_quarterly_analysis_complete_workflow(
 
     # Verify template was applied
     outline = stack["report_service"].get_report_outline(report_id)
-    assert len(outline.sections) == 4  # quarterly_review has 4 sections
+    assert len(outline.sections) == 5  # analyst_v1 has 5 sections
     assert outline.sections[0].title == "Executive Summary"
 
     # Step 5: Add insights with citations
@@ -504,7 +504,7 @@ async def test_concurrent_agent_collaboration(full_service_stack):
     # Setup: Create report with multiple sections
     result = await stack["tools"]["create_report"].execute(
         title="Collaborative Analysis",
-        template="quarterly_review",
+        template="analyst_v1",
     )
     report_id = result["report_id"]
 

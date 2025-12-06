@@ -29,6 +29,7 @@ from .search_catalog import SearchCatalogTool
 from .search_citations import SearchCitationsTool
 from .search_report import SearchReportTool
 from .test_connection import ConnectionTestTool
+from .validate_report import ValidateReportTool
 
 __all__ = [
     "BuildCatalogTool",
@@ -48,4 +49,5 @@ __all__ = [
     "SearchCatalogTool",
     "SearchCitationsTool",
     "SearchReportTool",
+    "ValidateReportTool",
 ]

@@ -84,6 +84,7 @@ OP_REMOVE_INSIGHT = "remove_insight"
 OP_ADD_SECTION = "add_section"
 OP_MODIFY_SECTION = "modify_section"
 OP_REMOVE_SECTION = "remove_section"
+OP_REORDER_SECTIONS = "reorder_sections"
 OP_UPDATE_TITLE = "update_title"
 OP_UPDATE_METADATA = "update_metadata"
 OP_ATTACH_CHART = "attach_chart"
@@ -95,6 +96,7 @@ VALID_OPERATIONS = {
     OP_ADD_SECTION,
     OP_MODIFY_SECTION,
     OP_REMOVE_SECTION,
+    OP_REORDER_SECTIONS,
     OP_UPDATE_TITLE,
     OP_UPDATE_METADATA,
     OP_ATTACH_CHART,
@@ -445,6 +447,72 @@ class EvolveReportBatchTool(MCPTool):
                 "request_id": request_id,
             }
 
+        # Handle reorder_sections operations separately (service-level operation)
+        reorder_ops = [op for op in operations if op.get("type") == OP_REORDER_SECTIONS]
+        reorder_results = []
+        for reorder_op in reorder_ops:
+            section_order = reorder_op.get("section_order", [])
+            if section_order:
+                reorder_result = self.report_service.reorder_sections(
+                    report_id=report_id,
+                    section_order=section_order,
+                    actor="agent",
+                )
+                reorder_results.append(reorder_result)
+
+        # Handle auto_copy for charts before applying changes
+        import shutil
+        from pathlib import Path
+
+        chart_copy_results = []
+        charts_to_update = proposed_changes.get("metadata_updates", {}).get("charts", {})
+        if charts_to_update:
+            storage = self.report_service.global_storage.get_report_storage(report_id)
+            report_dir = storage.report_dir
+            report_files_dir = report_dir / "report_files"
+
+            for chart_id, chart_meta in charts_to_update.items():
+                if chart_meta.get("_auto_copy"):
+                    original_path = Path(chart_meta.get("original_path", ""))
+                    if original_path.exists():
+                        # Create report_files directory if needed
+                        report_files_dir.mkdir(parents=True, exist_ok=True)
+
+                        # Handle name conflicts
+                        dest_path = report_files_dir / original_path.name
+                        counter = 1
+                        while dest_path.exists():
+                            stem = original_path.stem
+                            suffix = original_path.suffix
+                            dest_path = report_files_dir / f"{stem}_{counter}{suffix}"
+                            counter += 1
+
+                        try:
+                            shutil.copy2(original_path, dest_path)
+                            # Update path in metadata to relative path
+                            chart_meta["path"] = f"report_files/{dest_path.name}"
+                            chart_meta["copied"] = True
+                            chart_copy_results.append(
+                                {
+                                    "chart_id": chart_id,
+                                    "original_path": str(original_path),
+                                    "new_path": str(dest_path),
+                                    "copied": True,
+                                }
+                            )
+                        except OSError as e:
+                            chart_copy_results.append(
+                                {
+                                    "chart_id": chart_id,
+                                    "original_path": str(original_path),
+                                    "error": str(e),
+                                    "copied": False,
+                                }
+                            )
+
+                # Remove internal flag before storing
+                chart_meta.pop("_auto_copy", None)
+
         # Import and use the evolve report tool to apply changes
         from igloo_mcp.mcp.tools.evolve_report import EvolveReportTool
 
@@ -468,6 +536,14 @@ class EvolveReportBatchTool(MCPTool):
             "operations_summary": self._summarize_operations(operations),
             "total_duration_ms": round(total_duration, 2),
         }
+
+        # Add reorder results if any
+        if reorder_results:
+            result["batch_info"]["reorder_results"] = reorder_results
+
+        # Add chart copy results if any
+        if chart_copy_results:
+            result["batch_info"]["chart_copy_results"] = chart_copy_results
 
         logger.info(
             "evolve_report_batch_completed",
@@ -538,8 +614,7 @@ class EvolveReportBatchTool(MCPTool):
                 changes["title_change"] = op_data.get("title")
 
             elif op_type == OP_ATTACH_CHART:
-                # Handle chart attachment
-                import os
+                # Handle chart attachment with optional auto-copy
                 from datetime import datetime
                 from pathlib import Path
 
@@ -549,35 +624,41 @@ class EvolveReportBatchTool(MCPTool):
                     continue
 
                 # Convert to absolute path
-                chart_path = os.path.abspath(chart_path)
-                path_obj = Path(chart_path)
+                chart_path_obj = Path(chart_path).resolve()
 
                 # Validate file exists
-                if not path_obj.exists():
+                if not chart_path_obj.exists():
                     # Will be caught by validation later
                     continue
 
                 # Generate chart_id if not provided
                 chart_id = op_data.get("chart_id", str(uuid.uuid4()))
 
+                # Check if auto_copy is requested
+                auto_copy = op_data.get("auto_copy", False)
+
                 # Detect format from extension
-                chart_format = path_obj.suffix.lstrip(".").lower() or "unknown"
+                chart_format = chart_path_obj.suffix.lstrip(".").lower() or "unknown"
 
                 # Get file size
                 try:
-                    size_bytes = path_obj.stat().st_size
+                    size_bytes = chart_path_obj.stat().st_size
                 except OSError:
                     size_bytes = 0
 
-                # Build chart metadata
-                chart_metadata = {
-                    "path": chart_path,
+                # Determine final path and whether file is external
+                # We'll need the report_dir for this, which we get from the outline later
+                # For now, mark as needing auto-copy and store original path
+                chart_metadata: dict[str, Any] = {
+                    "original_path": str(chart_path_obj),
+                    "path": str(chart_path_obj),  # Will be updated if auto_copy
                     "format": chart_format,
                     "created_at": datetime.now(UTC).isoformat(),
                     "size_bytes": size_bytes,
                     "linked_insights": op_data.get("insight_ids", []),
                     "source": op_data.get("source", "custom"),
                     "description": op_data.get("description", ""),
+                    "_auto_copy": auto_copy,  # Internal flag for processing
                 }
 
                 # Add to metadata_updates.charts

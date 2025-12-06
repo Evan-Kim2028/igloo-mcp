@@ -57,6 +57,32 @@ class ReportService:
             self._history_index = HistoryIndex(history_path)
         return self._history_index
 
+    def _prepare_outline_for_render(self, outline: Outline) -> Outline:
+        """Return a normalized copy of the outline with prose fields de-duplicated."""
+        normalized = outline.model_copy(deep=True)
+        enumerated_sections = list(enumerate(normalized.sections))
+        enumerated_sections.sort(
+            key=lambda item: (
+                item[1].order is None,
+                item[1].order if item[1].order is not None else item[0],
+                item[0],
+            )
+        )
+        normalized.sections = [section for _, section in enumerated_sections]
+        for idx, section in enumerate(normalized.sections):
+            content = (section.content or "").strip()
+            notes = (section.notes or "").strip()
+            section.content = content or None
+            if section.content:
+                section.notes = None
+            else:
+                section.notes = notes or None
+            if not section.content_format:
+                section.content_format = "markdown"
+            if section.order is None:
+                section.order = idx
+        return normalized
+
     def create_report(
         self,
         title: str,
@@ -917,6 +943,91 @@ class ReportService:
 
         return citation_map
 
+    def _get_next_order(self, outline: Outline) -> int:
+        """Get next available order value for a new section.
+
+        Args:
+            outline: Report outline to check existing orders
+
+        Returns:
+            Next available order value (max existing + 1, or 0 if no sections)
+        """
+        existing = [s.order for s in outline.sections if s.order is not None]
+        return max(existing, default=-1) + 1
+
+    def _check_duplicate_orders(self, outline: Outline) -> list[str]:
+        """Check for duplicate order values and return warnings.
+
+        Args:
+            outline: Report outline to check
+
+        Returns:
+            List of warning messages (empty if no duplicates)
+        """
+        orders = [s.order for s in outline.sections if s.order is not None]
+        duplicates = [o for o in set(orders) if orders.count(o) > 1]
+        if duplicates:
+            return [
+                f"Sections have duplicate order values: {sorted(set(duplicates))}. "
+                "Rendering order may be unpredictable. Use reorder_sections to fix."
+            ]
+        return []
+
+    def reorder_sections(
+        self,
+        report_id: str,
+        section_order: list[str],
+        actor: str = "cli",
+    ) -> dict[str, Any]:
+        """Reorder sections by section_id list.
+
+        Assigns order values 0, 1, 2, ... based on position in the provided list.
+        Sections not in the list retain their current order but are shifted to
+        come after the reordered sections.
+
+        Args:
+            report_id: Report identifier
+            section_order: List of section_ids in desired order
+            actor: Who is performing the reorder
+
+        Returns:
+            Dictionary with:
+            - reordered: Number of sections reordered
+            - new_order: Final section order (all section_ids)
+            - warnings: List of warning messages
+        """
+        outline = self.get_report_outline(report_id)
+        section_map = {s.section_id: s for s in outline.sections}
+        warnings: list[str] = []
+
+        # Track which sections were explicitly ordered
+        ordered_ids = set()
+        for idx, sid in enumerate(section_order):
+            if sid in section_map:
+                section_map[sid].order = idx
+                ordered_ids.add(sid)
+            else:
+                warnings.append(f"Section ID not found: {sid}")
+
+        # Shift unordered sections to come after ordered ones
+        next_order = len(section_order)
+        for section in outline.sections:
+            if section.section_id not in ordered_ids:
+                section.order = next_order
+                next_order += 1
+
+        # Update the outline
+        self.update_report_outline(report_id, outline, actor=actor)
+
+        # Return final order
+        final_order = [s.section_id for s in sorted(outline.sections, key=lambda s: s.order)]
+
+        return {
+            "reordered": len(ordered_ids),
+            "new_order": final_order,
+            "warnings": warnings,
+        }
+
     def render_report(
         self,
         report_id: str,
@@ -985,6 +1096,7 @@ class ReportService:
         # Load report data
         try:
             outline = self.get_report_outline(resolved_id)
+            outline = self._prepare_outline_for_render(outline)
             storage = self.global_storage.get_report_storage(resolved_id)
             report_dir = storage.report_dir
             qmd_path = report_dir / "report.qmd"
@@ -996,35 +1108,34 @@ class ReportService:
                 with open(dataset_sources_path, encoding="utf-8") as f:
                     datasets = json.load(f)
 
-            # Resolve query history for traceability
-            query_provenance = {}
+            # Resolve query history for traceability using batch lookup
+            query_provenance: dict[str, dict[str, Any]] = {}
             try:
-                from .models import DatasetSource
+                # Collect all execution_ids first for batch lookup
+                execution_ids_to_resolve: list[str] = []
+                exec_id_to_sql_sha: dict[str, str | None] = {}
 
                 for insight in outline.insights:
                     references = insight.citations or insight.supporting_queries
                     for query in references:
                         if query.execution_id:
-                            try:
-                                # Convert to DatasetSource for resolution
-                                source = DatasetSource(
-                                    execution_id=query.execution_id,
-                                    sql_sha256=query.sql_sha256,
-                                )
-                                history_record = self.history_index._resolve_history_record(source)
-                                if history_record:
-                                    query_provenance[query.execution_id] = {
-                                        "execution_id": query.execution_id,
-                                        "timestamp": history_record.get("timestamp") or history_record.get("ts"),
-                                        "duration_ms": history_record.get("duration_ms"),
-                                        "rowcount": history_record.get("rowcount"),
-                                        "status": history_record.get("status"),
-                                        "statement_preview": history_record.get("statement_preview"),
-                                        "sql_sha256": history_record.get("sql_sha256") or query.sql_sha256,
-                                    }
-                            except Exception:
-                                # Gracefully handle resolution failures
-                                pass
+                            execution_ids_to_resolve.append(query.execution_id)
+                            exec_id_to_sql_sha[query.execution_id] = getattr(query, "sql_sha256", None)
+
+                # Batch lookup - single dict comprehension instead of N individual lookups
+                history_records = self.history_index.get_records_batch(execution_ids_to_resolve)
+
+                # Build provenance from batch results
+                for exec_id, history_record in history_records.items():
+                    query_provenance[exec_id] = {
+                        "execution_id": exec_id,
+                        "timestamp": history_record.get("timestamp") or history_record.get("ts"),
+                        "duration_ms": history_record.get("duration_ms"),
+                        "rowcount": history_record.get("rowcount"),
+                        "status": history_record.get("status"),
+                        "statement_preview": history_record.get("statement_preview"),
+                        "sql_sha256": history_record.get("sql_sha256") or exec_id_to_sql_sha.get(exec_id),
+                    }
             except Exception:
                 # Don't fail rendering if provenance resolution fails
                 pass

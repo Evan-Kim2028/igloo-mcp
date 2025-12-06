@@ -7,6 +7,7 @@ Sections now support optional prose content fields:
 This is a minimum viable test suite covering the critical functionality.
 """
 
+import datetime as dt
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Prose Content Test", template="default")
+        report_id = report_service.create_report(title="Prose Content Test", template="empty")
 
         tool = EvolveReportTool(config, report_service)
 
@@ -60,7 +61,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         result = await tool.execute(
@@ -91,7 +92,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         # Add section with initial content
@@ -123,12 +124,136 @@ class TestSectionProseContentSmoke:
         assert section.content == "Updated content with **bold** text"
 
     @pytest.mark.asyncio
+    async def test_setting_content_clears_notes(self, tmp_path: Path):
+        """Setting formatted content should drop legacy notes field automatically."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Notes Cleanup", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        add_result = await tool.execute(
+            report_selector=report_id,
+            instruction="Seed notes",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Overview",
+                        "order": 1,
+                        "notes": "Raw scratch notes",
+                    }
+                ]
+            },
+        )
+        section_id = add_result["summary"]["section_ids_added"][0]
+
+        outline = report_service.get_report_outline(report_id)
+        assert outline.sections[0].notes == "Raw scratch notes"
+        assert outline.sections[0].content is None
+
+        await tool.execute(
+            report_selector=report_id,
+            instruction="Promote to content",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": section_id,
+                        "content": "## Clean Content\n\nUp-leveled summary.",
+                    }
+                ]
+            },
+        )
+
+        updated_outline = report_service.get_report_outline(report_id)
+        section = updated_outline.sections[0]
+        assert section.content == "## Clean Content\n\nUp-leveled summary."
+        assert section.notes is None
+
+    @pytest.mark.asyncio
+    async def test_section_and_insight_timestamps_update_on_changes(self, tmp_path: Path):
+        """Sections and insights should track created/updated timestamps."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Timestamp Test", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        add_result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add section and inline insight",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Exec Summary",
+                        "order": 1,
+                        "content": "Initial content",
+                        "insights": [
+                            {
+                                "summary": "Finding",
+                                "importance": 7,
+                                "citations": [
+                                    {
+                                        "source": "query",
+                                        "execution_id": "exec-ts-1",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
+
+        assert add_result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+        insight = outline.get_insight(outline.sections[0].insight_ids[0])
+
+        section_created = dt.datetime.fromisoformat(section.created_at)
+        section_updated = dt.datetime.fromisoformat(section.updated_at)
+        insight_created = dt.datetime.fromisoformat(insight.created_at)
+        insight_updated = dt.datetime.fromisoformat(insight.updated_at)
+
+        assert section_updated >= section_created
+        assert insight_updated >= insight_created
+
+        modify_result = await tool.execute(
+            report_selector=report_id,
+            instruction="Update section and insight",
+            proposed_changes={
+                "sections_to_modify": [
+                    {
+                        "section_id": section.section_id,
+                        "content": "Updated content",
+                    }
+                ],
+                "insights_to_modify": [
+                    {
+                        "insight_id": insight.insight_id,
+                        "importance": 9,
+                    }
+                ],
+            },
+        )
+
+        assert modify_result["status"] == "success"
+        updated_outline = report_service.get_report_outline(report_id)
+        updated_section = updated_outline.sections[0]
+        updated_insight = updated_outline.get_insight(insight.insight_id)
+
+        assert updated_section.created_at == section.created_at
+        assert dt.datetime.fromisoformat(updated_section.updated_at) > section_updated
+
+        assert updated_insight.created_at == insight.created_at
+        assert dt.datetime.fromisoformat(updated_insight.updated_at) > insight_updated
+
+    @pytest.mark.asyncio
     async def test_html_and_plain_content_formats(self, tmp_path: Path):
         """Test that html and plain content formats are supported."""
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         # Add HTML section
@@ -178,7 +303,7 @@ class TestSectionProseContentSmoke:
         report_service = ReportService(reports_root=tmp_path / "reports")
 
         # Create report with prose content
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         evolve_tool = EvolveReportTool(config, report_service)
         await evolve_tool.execute(
@@ -206,3 +331,525 @@ class TestSectionProseContentSmoke:
         preview = result["preview"]
         assert "Q4 Performance" in preview
         assert "Revenue exceeded targets" in preview
+
+    @pytest.mark.asyncio
+    async def test_notes_only_sections_render_in_html(self, tmp_path: Path):
+        """Notes-only sections should still appear when rendering via Quarto dry run."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Notes Render", template="empty")
+        evolve_tool = EvolveReportTool(config, report_service)
+        await evolve_tool.execute(
+            report_selector=report_id,
+            instruction="Add notes",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Scratch",
+                        "order": 1,
+                        "notes": "Temporary finding awaiting formatting.",
+                    }
+                ]
+            },
+        )
+
+        render_tool = RenderReportTool(config, report_service)
+        result = await render_tool.execute(report_selector=report_id, format="html", dry_run=True, include_preview=True)
+
+        assert result["status"] == "success"
+        assert "Temporary finding awaiting formatting." in result["preview"]
+
+    @pytest.mark.asyncio
+    async def test_section_template_generation_and_feedback(self, tmp_path: Path):
+        """Sections can be generated from markdown templates with clean formatting."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Templates", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add templated findings",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "North Star",
+                        "order": 1,
+                        "template": "findings_list",
+                        "template_data": {
+                            "heading": "North Star Metrics",
+                            "findings": [
+                                {
+                                    "title": "Activation climbed",
+                                    "metric": {"name": "Activation", "value": "62%", "trend": "+4 pp"},
+                                    "description": "Week-over-week activation improved on the new onboarding path.",
+                                }
+                            ],
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        assert result["summary"]["sections_added"] == 1
+        feedback = result["formatting_feedback"]
+        assert feedback["score"] == 100
+
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+        assert "## North Star Metrics" in section.content
+        assert "### 1. Activation climbed" in section.content
+
+    @pytest.mark.asyncio
+    async def test_formatting_feedback_detects_wall_of_text(self, tmp_path: Path):
+        """Dense unstructured prose should surface formatting warnings."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Formatting", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        long_paragraph = (
+            "This is a very long paragraph without any markdown structure that keeps going and going to simulate a "
+            "wall of text focused on burying the reader in detail without providing headings or bullet lists. "
+        ) * 20
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add messy prose",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Dense Notes",
+                        "order": 1,
+                        "content": long_paragraph,
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        feedback = result["formatting_feedback"]
+        assert feedback["score"] < 100
+        assert any("very long paragraphs" in warning for warning in feedback["warnings"])
+        assert feedback["section_feedback"], "Section-specific feedback should be populated"
+
+    @pytest.mark.asyncio
+    async def test_executive_summary_template(self, tmp_path: Path):
+        """Executive summary template should generate structured content."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Exec Summary", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add executive summary",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Executive Summary",
+                        "order": 1,
+                        "template": "executive_summary",
+                        "template_data": {
+                            "headline": "Q4 Performance Summary",
+                            "context": "This quarter saw significant growth across all business units.",
+                            "key_points": [
+                                {"title": "Revenue Growth", "detail": "Up 25% YoY"},
+                                {"title": "Customer Retention", "detail": "Improved to 95%"},
+                                "Expanded into 3 new markets",
+                            ],
+                            "recommendation": "Continue investment in customer success initiatives.",
+                            "conclusion": "Overall, Q4 exceeded expectations.",
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+
+        assert "## Q4 Performance Summary" in section.content
+        assert "### Key Takeaways" in section.content
+        assert "**Revenue Growth**" in section.content
+        assert "### Recommendation" in section.content
+        assert "> Continue investment" in section.content
+
+    @pytest.mark.asyncio
+    async def test_action_items_template_with_table(self, tmp_path: Path):
+        """Action items template with owner/due data should render as table."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Action Items", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add action items",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Next Steps",
+                        "order": 1,
+                        "template": "action_items",
+                        "template_data": {
+                            "heading": "Follow-up Actions",
+                            "actions": [
+                                {
+                                    "description": "Review Q4 metrics",
+                                    "owner": "Alice",
+                                    "due": "2024-01-20",
+                                    "priority": "High",
+                                },
+                                {
+                                    "description": "Schedule team retrospective",
+                                    "owner": "Bob",
+                                    "due": "2024-01-25",
+                                    "priority": "Medium",
+                                },
+                            ],
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+
+        assert "## Follow-up Actions" in section.content
+        assert "| # | Action | Owner | Due | Priority |" in section.content
+        assert "Alice" in section.content
+        assert "High" in section.content
+
+    @pytest.mark.asyncio
+    async def test_action_items_template_simple_list(self, tmp_path: Path):
+        """Action items without owner/due data should render as numbered list."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Simple Actions", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add simple actions",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Next Steps",
+                        "order": 1,
+                        "template": "action_items",
+                        "template_data": {
+                            "actions": [
+                                "Complete documentation review",
+                                "Submit final report",
+                                "Schedule follow-up meeting",
+                            ],
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+
+        assert "## Action Items" in section.content
+        assert "1. Complete documentation review" in section.content
+        assert "2. Submit final report" in section.content
+        # Should NOT have table headers for simple list
+        assert "| # | Action |" not in section.content
+
+
+class TestSectionTemplateEdgeCases:
+    """Edge case tests for section templates - empty/null/special character handling."""
+
+    @pytest.mark.asyncio
+    async def test_findings_template_empty_findings_array_raises(self, tmp_path: Path):
+        """findings template with empty findings array should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="findings template requires"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with empty findings",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Empty Findings",
+                            "order": 1,
+                            "template": "findings_list",
+                            "template_data": {
+                                "findings": [],
+                            },
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_findings_template_missing_findings_raises(self, tmp_path: Path):
+        """findings template without findings key should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="findings template requires"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section without findings",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Missing Findings",
+                            "order": 1,
+                            "template": "findings_list",
+                            "template_data": {},
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_findings_template_special_characters(self, tmp_path: Path):
+        """findings template should handle special characters in content."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Special Chars", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add findings with special characters",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Special Characters Test",
+                        "order": 1,
+                        "template": "findings_list",
+                        "template_data": {
+                            "heading": "Test <script>alert('xss')</script>",
+                            "findings": [
+                                {
+                                    "title": "Finding with | pipe & ampersand",
+                                    "description": 'Has <html> tags and "quotes"',
+                                    "metric": {
+                                        "name": "O'Brien's Metric",
+                                        "value": "$1,000 < $2,000",
+                                        "trend": "↑ +50%",
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+
+        # Content should be generated (markdown)
+        assert section.content is not None
+        # Special characters should be preserved in markdown (not escaped yet)
+        assert "<script>" in section.content or "&lt;script&gt;" in section.content
+
+    @pytest.mark.asyncio
+    async def test_bullet_list_empty_items_raises(self, tmp_path: Path):
+        """bullet_list template with empty items should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="bullet_list template requires"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with empty items",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Empty Bullets",
+                            "order": 1,
+                            "template": "bullet_list",
+                            "template_data": {
+                                "items": [],
+                            },
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_executive_summary_template_minimal(self, tmp_path: Path):
+        """executive_summary template should work with minimal data."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Minimal Summary", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add minimal executive summary",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Executive Summary",
+                        "order": 1,
+                        "template": "executive_summary",
+                        "template_data": {},  # All fields optional
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+
+        # Should use section title as headline
+        assert "## Executive Summary" in section.content
+
+    @pytest.mark.asyncio
+    async def test_action_items_mixed_formats(self, tmp_path: Path):
+        """action_items template should handle mixed string and dict actions."""
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Mixed Actions", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        result = await tool.execute(
+            report_selector=report_id,
+            instruction="Add mixed action items",
+            proposed_changes={
+                "sections_to_add": [
+                    {
+                        "title": "Actions",
+                        "order": 1,
+                        "template": "action_items",
+                        "template_data": {
+                            "actions": [
+                                {"description": "With owner", "owner": "Alice"},
+                                "Simple string action",
+                            ],
+                        },
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(report_id)
+        section = outline.sections[0]
+
+        # Should render as table when any action has metadata fields
+        assert section.content is not None
+
+    @pytest.mark.asyncio
+    async def test_metrics_template_empty_metrics_raises(self, tmp_path: Path):
+        """metrics template with empty metrics should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="metrics template requires"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with empty metrics",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Empty Metrics",
+                            "order": 1,
+                            "template": "metrics",
+                            "template_data": {
+                                "metrics": [],
+                            },
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_unknown_template_raises(self, tmp_path: Path):
+        """Unknown template name should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="Unknown section template"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with unknown template",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Unknown Template",
+                            "order": 1,
+                            "template": "nonexistent_template",
+                            "template_data": {},
+                        }
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_template_data_without_template_raises(self, tmp_path: Path):
+        """template_data without template should raise error."""
+        from igloo_mcp.mcp.exceptions import MCPExecutionError
+
+        config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
+        report_service = ReportService(reports_root=tmp_path / "reports")
+
+        report_id = report_service.create_report(title="Edge Cases", template="empty")
+        tool = EvolveReportTool(config, report_service)
+
+        with pytest.raises(MCPExecutionError, match="template_data provided without template"):
+            await tool.execute(
+                report_selector=report_id,
+                instruction="Add section with template_data but no template",
+                proposed_changes={
+                    "sections_to_add": [
+                        {
+                            "title": "Missing Template",
+                            "order": 1,
+                            "template_data": {"key": "value"},
+                        }
+                    ]
+                },
+            )

@@ -72,6 +72,36 @@ class HistoryIndex:
             return self._by_sql_sha[source.sql_sha256]
         return None
 
+    def get_record_by_execution_id(self, execution_id: str) -> dict[str, Any] | None:
+        """Get a history record by execution_id directly.
+
+        This is a lightweight alternative to _resolve_history_record that avoids
+        creating a DatasetSource object for simple lookups.
+
+        Args:
+            execution_id: The execution ID to look up
+
+        Returns:
+            The history record if found, None otherwise
+        """
+        return self._by_execution_id.get(execution_id)
+
+    def get_records_batch(self, execution_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Batch lookup of history records by execution_id.
+
+        More efficient than calling get_record_by_execution_id in a loop
+        when you need multiple records, as it returns a single dict.
+
+        Args:
+            execution_ids: List of execution IDs to look up
+
+        Returns:
+            Dictionary mapping execution_id to history record (only found records)
+        """
+        return {
+            exec_id: record for exec_id in execution_ids if (record := self._by_execution_id.get(exec_id)) is not None
+        }
+
     @staticmethod
     def _resolve_manifest_path(cache_manifest: str, repo_root: Path | None) -> Path:
         candidate = Path(cache_manifest).expanduser()
