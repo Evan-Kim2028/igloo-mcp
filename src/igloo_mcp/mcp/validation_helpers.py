@@ -522,14 +522,22 @@ def validate_response_mode(
         mode = response_mode.lower()
     elif legacy_param_value is not None:
         mode = legacy_param_value.lower()
-        # Log deprecation warning
+        # Emit Python deprecation warning for proper migration path
         if legacy_param_name:
+            import warnings
+
+            warnings.warn(
+                f"{legacy_param_name} is deprecated, use response_mode instead. Will be removed in v0.6.0.",
+                DeprecationWarning,
+                stacklevel=3,  # stacklevel=3 to show caller's code, not this validation function
+            )
+            # Also log deprecation for observability
             logger.warning(
                 f"{legacy_param_name} is deprecated, use response_mode instead",
                 extra={
                     "deprecated_param": legacy_param_name,
                     "deprecated_value": legacy_param_value,
-                    "removal_planned": "v0.5.0",
+                    "removal_planned": "v0.6.0",
                 },
             )
     else:

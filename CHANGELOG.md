@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-12-06
+
+### 🐛 Bug Fixes
+
+#### P0: Audit Trail Creation (#145)
+- **Fixed**: `audit.jsonl` files not being created during report operations
+- **Root cause**: `ReportStorage.__init__` wasn't creating parent `report_dir` before subdirectories
+- **Impact**: Audit trail is critical for compliance, debugging, and tracking report evolution history
+- **Solution**: Added `report_dir.mkdir(parents=True, exist_ok=True)` before creating subdirectories
+- **Tests**: Unskipped and fixed 2 audit trail tests in `test_api_completeness_id_tracking.py`
+
+#### P0: Deprecation Warning for result_mode (#146)
+- **Added**: Python `warnings.warn()` deprecation warning when legacy `result_mode` parameter is used
+- **Message**: "result_mode is deprecated, use response_mode instead. Will be removed in v0.6.0."
+- **Impact**: Users now get runtime warnings to migrate from deprecated parameters
+- **Coverage**: Added comprehensive test suite with 7 tests covering all legacy parameter names
+
+### 📝 Documentation
+- Updated issue tracker with proper categorization of P0, P1, and infrastructure issues
+- Consolidated 8 issues into epics for better organization
+
+### 🧪 Testing
+- All 1164 tests passing
+- Added `tests/test_deprecation_warnings.py` with comprehensive coverage
+- Fixed 2 audit trail tests that were previously skipped
+
 ## [0.4.0] - 2025-12-06
 
 ### 🎨 Major Feature: Living Reports Rendering Overhaul
