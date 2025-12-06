@@ -68,7 +68,7 @@ class CheckResult:
         self.fix_action = fix_action
 
     def to_dict(self) -> dict[str, Any]:
-        result = {
+        result: dict[str, Any] = {
             "status": self.status,
             "message": self.message,
         }
@@ -452,7 +452,8 @@ class ValidateReportTool(MCPTool):
             # Link orphaned insights to first section
             first_section = min(outline.sections, key=lambda s: s.order)
             for item in orphaned:
-                first_section.insight_ids.append(item["insight_id"])
+                insight_id_val: str = str(item["insight_id"])  # Type cast for mypy
+                first_section.insight_ids.append(insight_id_val)
             return CheckResult(
                 CHECK_FIXED,
                 f"Linked {len(orphaned)} orphaned insights to '{first_section.title}'",
