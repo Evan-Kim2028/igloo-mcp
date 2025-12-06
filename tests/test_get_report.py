@@ -23,7 +23,7 @@ class TestGetReportTool:
         # Create a test report
         report_id = report_service.create_report(
             title="Test Report",
-            template="default",
+            template="empty",
             tags=["test", "sample"],
         )
 
@@ -51,7 +51,7 @@ class TestGetReportTool:
         # Create report and add section via evolve
         report_id = report_service.create_report(
             title="Test Report",
-            template="default",
+            template="empty",
         )
 
         # Add a section
@@ -103,7 +103,7 @@ class TestGetReportTool:
         # Create report with insights
         report_id = report_service.create_report(
             title="Test Report",
-            template="default",
+            template="empty",
         )
 
         # Add section and insights
@@ -162,7 +162,7 @@ class TestGetReportTool:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test Report", template="default")
+        report_id = report_service.create_report(title="Test Report", template="empty")
 
         from igloo_mcp.mcp.exceptions import MCPValidationError
 
@@ -200,7 +200,7 @@ class TestGetReportTool:
         tool = GetReportTool(config, report_service)
 
         # Create report with sections and insights
-        report_id = report_service.create_report(title="Full Test", template="quarterly_review")
+        report_id = report_service.create_report(title="Full Test", template="analyst_v1")
 
         # Add an insight
         from igloo_mcp.living_reports.models import Insight
@@ -224,7 +224,7 @@ class TestGetReportTool:
         assert result["status"] == "success"
         assert "outline" in result
         assert result["outline"]["report_id"] == report_id
-        assert len(result["outline"]["sections"]) == 4  # quarterly_review template
+        assert len(result["outline"]["sections"]) == 5  # analyst_v1 template
         assert len(result["outline"]["insights"]) == 1
         assert result["outline"]["insights"][0]["insight_id"] == insight_id
 
@@ -234,10 +234,10 @@ class TestGetReportTool:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="quarterly_review")
+        report_id = report_service.create_report(title="Test", template="analyst_v1")
 
         # Search for sections with partial titles
-        # quarterly_review has: "Executive Summary", "Key Metrics", "Strategic Initiatives", "Next Quarter Goals"
+        # analyst_v1 has: "Executive Summary", "Methodology", "Key Findings", "Detailed Analysis", "Recommendations"
         result = await tool.execute(
             report_selector=report_id,
             mode="sections",
@@ -248,11 +248,10 @@ class TestGetReportTool:
         )
 
         assert result["status"] == "success"
-        # Should match "Executive Summary" and "Key Metrics"
-        assert result["total_matched"] >= 2
+        # Should match "Executive Summary" (contains "Summary")
+        assert result["total_matched"] >= 1
         titles = [s["title"] for s in result["sections"]]
-        assert any("Executive" in t for t in titles)
-        assert any("Metrics" in t for t in titles)
+        assert any("Executive" in t or "Summary" in t for t in titles)
 
     async def test_get_report_sections_by_id(self, tmp_path: Path):
         """Test section retrieval by exact IDs."""
@@ -260,7 +259,7 @@ class TestGetReportTool:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="quarterly_review")
+        report_id = report_service.create_report(title="Test", template="analyst_v1")
         outline = report_service.get_report_outline(report_id)
 
         # Get specific sections by ID
@@ -285,7 +284,7 @@ class TestGetReportTool:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Add multiple insights with different attributes
         from igloo_mcp.living_reports.models import Insight, Section
@@ -347,7 +346,7 @@ class TestGetReportTool:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Add section with prose content
         from igloo_mcp.living_reports.models import Section
@@ -385,7 +384,7 @@ class TestGetReportTool:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Add insights with citations
         from igloo_mcp.living_reports.models import DatasetSource, Insight, Section

@@ -664,12 +664,12 @@ data-importance="{insight.importance}">
         }}
 
         .insight-high {{
-            background: #fef3c7;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
             border-color: var(--warning);
         }}
 
         .insight-medium {{
-            background: var(--surface);
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
             border-color: var(--primary-color);
         }}
 

@@ -38,17 +38,15 @@ _spec.loader.exec_module(_templates_mod)
 TEMPLATES = _templates_mod.TEMPLATES
 get_template = _templates_mod.get_template
 default = _templates_mod.default
-monthly_sales = _templates_mod.monthly_sales
-quarterly_review = _templates_mod.quarterly_review
 deep_dive = _templates_mod.deep_dive
 analyst_v1 = _templates_mod.analyst_v1
+empty = _templates_mod.empty
 
 __all__ = [
     "TEMPLATES",
     "analyst_v1",
     "deep_dive",
     "default",
+    "empty",
     "get_template",
-    "monthly_sales",
-    "quarterly_review",
 ]

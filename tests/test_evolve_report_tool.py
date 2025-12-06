@@ -41,7 +41,7 @@ class TestEvolveReportToolIntegration:
         """Create a test report and return its ID."""
         report_id = report_service.create_report(
             title="Test Report",
-            template="default",
+            template="empty",
             tags=["test"],
         )
         return report_id

@@ -99,7 +99,7 @@ class TestWorkflowIntegration:
         assert "add_section_with_insights" in schema_result["examples"]
 
         # Step 2: Adapt example to actual report
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
         example = schema_result["examples"]["add_section_with_insights"]
 
         # Step 3: evolve_report with constructed change
@@ -119,7 +119,7 @@ class TestWorkflowIntegration:
         get_tool = GetReportTool(config, report_service)
 
         # Create report with varied content
-        report_id = report_service.create_report(title="Complex Report", template="default")
+        report_id = report_service.create_report(title="Complex Report", template="empty")
         outline = report_service.get_report_outline(report_id)
 
         # Add 5 sections
@@ -212,8 +212,8 @@ class TestWorkflowIntegration:
         # Step 4: get_report to verify structure
         verify_result = await get_tool.execute(report_selector=report_id, mode="summary")
 
-        # deep_dive has 3 sections + 1 we added = 4
-        assert verify_result["summary"]["total_sections"] == 4
+        # deep_dive has 4 sections + 1 we added = 5
+        assert verify_result["summary"]["total_sections"] == 5
         assert verify_result["summary"]["total_insights"] == 1
 
     async def test_token_efficient_modification_workflow(self, tmp_path: Path):
@@ -277,7 +277,7 @@ class TestWorkflowIntegration:
 
         # Turn 1: get_report (summary) - overview
         summary = await get_tool.execute(report_selector=report_id, mode="summary")
-        assert summary["summary"]["total_sections"] == 3
+        assert summary["summary"]["total_sections"] == 4  # deep_dive has 4 sections
 
         # Turn 2: evolve_report (add new section with insight)
         # Using inline insights to avoid section_id validation issues
@@ -319,8 +319,8 @@ class TestWorkflowIntegration:
 
         # Verify: get_report shows all sections
         final_summary = await get_tool.execute(report_selector=report_id, mode="summary")
-        # 3 from template + 2 we added = 5
-        assert final_summary["summary"]["total_sections"] == 5
+        # 4 from template + 2 we added = 6
+        assert final_summary["summary"]["total_sections"] == 6
         assert final_summary["summary"]["total_insights"] == 2
 
     async def test_render_verification_workflow(self, tmp_path: Path):
@@ -334,7 +334,7 @@ class TestWorkflowIntegration:
         render_tool = RenderReportTool(config, report_service)
 
         # Step 1: create_report
-        create_result = await create_tool.execute(title="Render Test", template="default")
+        create_result = await create_tool.execute(title="Render Test", template="empty")
         report_id = create_result["report_id"]
 
         # Step 2: evolve_report (build content) - use inline insights

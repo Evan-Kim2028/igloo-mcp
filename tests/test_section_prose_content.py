@@ -27,7 +27,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Prose Content Test", template="default")
+        report_id = report_service.create_report(title="Prose Content Test", template="empty")
 
         tool = EvolveReportTool(config, report_service)
 
@@ -61,7 +61,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         result = await tool.execute(
@@ -92,7 +92,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         # Add section with initial content
@@ -129,7 +129,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Notes Cleanup", template="default")
+        report_id = report_service.create_report(title="Notes Cleanup", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         add_result = await tool.execute(
@@ -175,7 +175,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Timestamp Test", template="default")
+        report_id = report_service.create_report(title="Timestamp Test", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         add_result = await tool.execute(
@@ -253,7 +253,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         # Add HTML section
@@ -303,7 +303,7 @@ class TestSectionProseContentSmoke:
         report_service = ReportService(reports_root=tmp_path / "reports")
 
         # Create report with prose content
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         evolve_tool = EvolveReportTool(config, report_service)
         await evolve_tool.execute(
@@ -338,7 +338,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Notes Render", template="default")
+        report_id = report_service.create_report(title="Notes Render", template="empty")
         evolve_tool = EvolveReportTool(config, report_service)
         await evolve_tool.execute(
             report_selector=report_id,
@@ -366,7 +366,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Templates", template="default")
+        report_id = report_service.create_report(title="Templates", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         result = await tool.execute(
@@ -409,7 +409,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Formatting", template="default")
+        report_id = report_service.create_report(title="Formatting", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         long_paragraph = (
@@ -443,7 +443,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Exec Summary", template="default")
+        report_id = report_service.create_report(title="Exec Summary", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         result = await tool.execute(
@@ -487,7 +487,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Action Items", template="default")
+        report_id = report_service.create_report(title="Action Items", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         result = await tool.execute(
@@ -536,7 +536,7 @@ class TestSectionProseContentSmoke:
         config = Config(snowflake=SnowflakeConfig(profile="TEST_PROFILE"))
         report_service = ReportService(reports_root=tmp_path / "reports")
 
-        report_id = report_service.create_report(title="Simple Actions", template="default")
+        report_id = report_service.create_report(title="Simple Actions", template="empty")
         tool = EvolveReportTool(config, report_service)
 
         result = await tool.execute(

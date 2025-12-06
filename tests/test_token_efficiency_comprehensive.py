@@ -35,7 +35,7 @@ class TestTokenEfficiencyMeasurements:
         }
 
         # Get all three response levels with fresh reports
-        report_id1 = report_service.create_report(title="Test1", template="default")
+        report_id1 = report_service.create_report(title="Test1", template="empty")
         minimal_result = await tool.execute(
             report_selector=report_id1,
             instruction="Add sections",
@@ -43,7 +43,7 @@ class TestTokenEfficiencyMeasurements:
             response_detail="minimal",
         )
 
-        report_id2 = report_service.create_report(title="Test2", template="default")
+        report_id2 = report_service.create_report(title="Test2", template="empty")
         standard_result = await tool.execute(
             report_selector=report_id2,
             instruction="Add sections",
@@ -51,7 +51,7 @@ class TestTokenEfficiencyMeasurements:
             response_detail="standard",
         )
 
-        report_id3 = report_service.create_report(title="Test3", template="default")
+        report_id3 = report_service.create_report(title="Test3", template="empty")
         full_result = await tool.execute(
             report_selector=report_id3,
             instruction="Add sections",
@@ -106,7 +106,7 @@ class TestTokenEfficiencyMeasurements:
         tool = GetReportTool(config, report_service)
 
         # Create report with 10 sections, 20 insights
-        report_id = report_service.create_report(title="Large Report", template="default")
+        report_id = report_service.create_report(title="Large Report", template="empty")
         outline = report_service.get_report_outline(report_id)
 
         for i in range(10):
@@ -147,7 +147,7 @@ class TestTokenEfficiencyMeasurements:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         result = await tool.execute(
             report_selector=report_id,
@@ -182,7 +182,7 @@ class TestTokenEfficiencyBackwardCompatibility:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Call WITHOUT response_detail parameter
         result = await tool.execute(

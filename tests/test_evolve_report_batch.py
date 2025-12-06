@@ -51,7 +51,7 @@ def test_report_id(report_service):
     """Create a test report and return its ID."""
     return report_service.create_report(
         title="Test Report for Batch",
-        template="default",
+        template="empty",
         tags=["test", "batch"],
     )
 
@@ -61,7 +61,7 @@ def test_report_with_content(report_service):
     """Create a test report with existing sections and insights."""
     report_id = report_service.create_report(
         title="Report with Content",
-        template="default",
+        template="empty",
     )
 
     # Add a section and insight manually

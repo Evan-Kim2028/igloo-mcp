@@ -156,7 +156,7 @@ class TestCLIReportCreate:
 
             args = argparse.Namespace(
                 title="Monthly Sales",
-                template="monthly_sales",
+                template="deep_dive",
                 tags=["sales", "monthly"],
             )
 
@@ -167,7 +167,7 @@ class TestCLIReportCreate:
             assert result == 0
             captured = capsys.readouterr()
             assert "Monthly Sales" in captured.out
-            assert "monthly_sales" in captured.out
+            assert "deep_dive" in captured.out
 
     def test_report_create_error_handling(self, tmp_path, capsys):
         """Create report handles errors."""

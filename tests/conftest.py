@@ -221,7 +221,7 @@ def report_service_with_report(report_service):
 
     Returns (service, report_id) tuple.
     """
-    outline = report_service.create_report(title="Test Report", template="default")
+    outline = report_service.create_report(title="Test Report", template="empty")
     return report_service, outline.report_id
 
 

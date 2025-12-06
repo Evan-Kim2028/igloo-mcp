@@ -110,7 +110,7 @@ class TestBackwardCompatibility:
         service = ReportService(reports_root=reports_root)
 
         # Old way should still work
-        report_id = service.create_report(title="Test Report", template="default")
+        report_id = service.create_report(title="Test Report", template="empty")
 
         assert report_id is not None
         assert isinstance(report_id, str)

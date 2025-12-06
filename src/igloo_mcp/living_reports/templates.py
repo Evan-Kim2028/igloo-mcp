@@ -2,6 +2,8 @@
 
 Templates provide starting points for common report types,
 giving LLM agents a clear structure to populate with content.
+
+All templates enforce citation requirements by default.
 """
 
 import uuid
@@ -9,47 +11,16 @@ import uuid
 from .models import Section
 
 
-def monthly_sales() -> list[Section]:
-    """Monthly sales report template.
+def default() -> list[Section]:
+    """Default template with standard report structure.
+
+    Provides a clean, professional structure suitable for most analysis reports.
+    All insights should include citations for data provenance.
 
     Sections:
-    - Revenue Overview: High-level revenue metrics and trends
-    - Top Products: Best-performing products or categories
-    - Trends & Insights: Patterns and noteworthy observations
-    """
-    return [
-        Section(
-            section_id=str(uuid.uuid4()),
-            title="Revenue Overview",
-            order=0,
-            insight_ids=[],
-            notes="High-level revenue metrics and trends for the month",
-        ),
-        Section(
-            section_id=str(uuid.uuid4()),
-            title="Top Products",
-            order=1,
-            insight_ids=[],
-            notes="Best-performing products or categories",
-        ),
-        Section(
-            section_id=str(uuid.uuid4()),
-            title="Trends & Insights",
-            order=2,
-            insight_ids=[],
-            notes="Key patterns and noteworthy observations",
-        ),
-    ]
-
-
-def quarterly_review() -> list[Section]:
-    """Quarterly business review template.
-
-    Sections:
-    - Executive Summary: High-level overview for stakeholders
-    - Key Metrics: Critical KPIs and performance indicators
-    - Strategic Initiatives: Progress on major projects
-    - Next Quarter Goals: Forward-looking objectives
+    - Executive Summary: High-level overview and key takeaways
+    - Analysis: Detailed findings and examination
+    - Recommendations: Actionable next steps
     """
     return [
         Section(
@@ -57,28 +28,24 @@ def quarterly_review() -> list[Section]:
             title="Executive Summary",
             order=0,
             insight_ids=[],
-            notes="High-level overview for executive stakeholders",
+            notes="High-level overview and key takeaways",
+            metadata={"category": "summary"},
         ),
         Section(
             section_id=str(uuid.uuid4()),
-            title="Key Metrics",
+            title="Analysis",
             order=1,
             insight_ids=[],
-            notes="Critical KPIs and performance indicators",
+            notes="Detailed findings and examination",
+            metadata={"category": "analysis"},
         ),
         Section(
             section_id=str(uuid.uuid4()),
-            title="Strategic Initiatives",
+            title="Recommendations",
             order=2,
             insight_ids=[],
-            notes="Progress on major strategic projects",
-        ),
-        Section(
-            section_id=str(uuid.uuid4()),
-            title="Next Quarter Goals",
-            order=3,
-            insight_ids=[],
-            notes="Forward-looking objectives and priorities",
+            notes="Actionable next steps and recommendations",
+            metadata={"category": "recommendations"},
         ),
     ]
 
@@ -86,85 +53,112 @@ def quarterly_review() -> list[Section]:
 def deep_dive() -> list[Section]:
     """Single-topic deep dive template.
 
+    For in-depth technical analysis of a specific topic or system.
+    All insights should include citations for data provenance.
+
     Sections:
-    - Topic Overview: Introduction and context
-    - Analysis: Detailed examination and findings
+    - Overview: Introduction and background context
+    - Methodology: Data sources and analysis approach
+    - Findings: Detailed examination and key discoveries
     - Recommendations: Actionable next steps
     """
     return [
         Section(
             section_id=str(uuid.uuid4()),
-            title="Topic Overview",
+            title="Overview",
             order=0,
             insight_ids=[],
             notes="Introduction and background context",
+            metadata={"category": "overview"},
         ),
         Section(
             section_id=str(uuid.uuid4()),
-            title="Analysis",
+            title="Methodology",
             order=1,
             insight_ids=[],
-            notes="Detailed examination and key findings",
+            notes="Data sources and analysis approach",
+            metadata={"category": "methodology"},
+        ),
+        Section(
+            section_id=str(uuid.uuid4()),
+            title="Findings",
+            order=2,
+            insight_ids=[],
+            notes="Detailed examination and key discoveries",
+            metadata={"category": "findings"},
         ),
         Section(
             section_id=str(uuid.uuid4()),
             title="Recommendations",
-            order=2,
+            order=3,
             insight_ids=[],
-            notes="Actionable recommendations and next steps",
+            notes="Actionable next steps and recommendations",
+            metadata={"category": "recommendations"},
         ),
     ]
 
 
 def analyst_v1() -> list[Section]:
-    """Analyst report template with standard blockchain analysis sections.
+    """Analyst report template for blockchain/protocol analysis.
+
+    Specialized structure for on-chain data analysis.
+    All insights should include citations for data provenance.
 
     Sections:
-    - Network Activity: Network-level metrics and activity patterns
-    - DEX Trading: Decentralized exchange trading analysis
-    - Objects: On-chain objects and contract analysis
-    - Events: Significant events and transactions
+    - Executive Summary: High-level overview for stakeholders
+    - Methodology: Data sources, time range, and analysis approach
+    - Key Findings: Primary discoveries and insights
+    - Detailed Analysis: In-depth examination of findings
+    - Recommendations: Actionable next steps
     """
     return [
         Section(
             section_id=str(uuid.uuid4()),
-            title="Network Activity",
+            title="Executive Summary",
             order=0,
             insight_ids=[],
-            notes="Network-level metrics and activity patterns",
-            metadata={"category": "network_activity"},
+            notes="High-level overview for stakeholders",
+            metadata={"category": "summary"},
         ),
         Section(
             section_id=str(uuid.uuid4()),
-            title="DEX Trading",
+            title="Methodology",
             order=1,
             insight_ids=[],
-            notes="Decentralized exchange trading analysis",
-            metadata={"category": "dex_trading"},
+            notes="Data sources, time range, and analysis approach",
+            metadata={"category": "methodology"},
         ),
         Section(
             section_id=str(uuid.uuid4()),
-            title="Objects",
+            title="Key Findings",
             order=2,
             insight_ids=[],
-            notes="On-chain objects and contract analysis",
-            metadata={"category": "objects"},
+            notes="Primary discoveries and insights",
+            metadata={"category": "findings"},
         ),
         Section(
             section_id=str(uuid.uuid4()),
-            title="Events",
+            title="Detailed Analysis",
             order=3,
             insight_ids=[],
-            notes="Significant events and transactions",
-            metadata={"category": "events"},
+            notes="In-depth examination of findings",
+            metadata={"category": "analysis"},
+        ),
+        Section(
+            section_id=str(uuid.uuid4()),
+            title="Recommendations",
+            order=4,
+            insight_ids=[],
+            notes="Actionable next steps and recommendations",
+            metadata={"category": "recommendations"},
         ),
     ]
 
 
-def default() -> list[Section]:
-    """Default template - empty report.
+def empty() -> list[Section]:
+    """Empty template - no pre-configured sections.
 
-    Returns empty section list for maximum flexibility.
+    For maximum flexibility when you want to build structure from scratch.
     """
     return []
 
@@ -172,10 +166,9 @@ def default() -> list[Section]:
 # Template registry for lookup
 TEMPLATES = {
     "default": default,
-    "monthly_sales": monthly_sales,
-    "quarterly_review": quarterly_review,
     "deep_dive": deep_dive,
     "analyst_v1": analyst_v1,
+    "empty": empty,
 }
 
 
@@ -183,7 +176,7 @@ def get_template(name: str) -> list[Section]:
     """Get template sections by name.
 
     Args:
-        name: Template name (default, monthly_sales, quarterly_review, deep_dive)
+        name: Template name (default, deep_dive, analyst_v1, empty)
 
     Returns:
         List of pre-configured sections

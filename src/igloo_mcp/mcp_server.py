@@ -593,12 +593,13 @@ def register_igloo_mcp(
             Field(
                 description=(
                     "Report template to use. Defaults to 'default' if not specified. "
-                    "Available templates: default (empty report), monthly_sales, "
-                    "quarterly_review, deep_dive, analyst_v1 (blockchain analysis with "
-                    "citation enforcement)."
+                    "Available templates: default (exec summary, analysis, recommendations), "
+                    "deep_dive (overview, methodology, findings, recommendations), "
+                    "analyst_v1 (blockchain analysis with "
+                    "citation enforcement), empty (no sections)."
                 ),
                 default="default",
-                pattern="^(default|monthly_sales|quarterly_review|deep_dive|analyst_v1)$",
+                pattern="^(default|deep_dive|analyst_v1|empty)$",
             ),
         ] = "default",
         tags: Annotated[

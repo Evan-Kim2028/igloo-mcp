@@ -22,7 +22,7 @@ class TestGetReportModesCoverage:
         tool = GetReportTool(config, report_service)
 
         # Create report with sections and insights
-        report_id = report_service.create_report(title="Full Test", template="quarterly_review")
+        report_id = report_service.create_report(title="Full Test", template="analyst_v1")
 
         # Add an insight
         outline = report_service.get_report_outline(report_id)
@@ -46,10 +46,10 @@ class TestGetReportModesCoverage:
         assert result["title"] == "Full Test"
         assert "sections" in result
         assert "insights" in result
-        assert len(result["sections"]) == 4  # quarterly_review template
+        assert len(result["sections"]) == 5  # analyst_v1 template
         assert len(result["insights"]) == 1
         assert result["insights"][0]["insight_id"] == insight_id
-        assert result["total_sections"] == 4
+        assert result["total_sections"] == 5  # analyst_v1 has 5 sections
         assert result["total_insights"] == 1
 
     async def test_get_report_sections_by_title_fuzzy_match(self, tmp_path: Path):
@@ -58,7 +58,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="quarterly_review")
+        report_id = report_service.create_report(title="Test", template="analyst_v1")
 
         # Search for sections with partial titles
         result = await tool.execute(
@@ -68,11 +68,10 @@ class TestGetReportModesCoverage:
         )
 
         assert result["status"] == "success"
-        # Should match "Executive Summary" and "Key Metrics"
-        assert result["total_matched"] >= 2
+        # Should match "Executive Summary" (contains "Summary")
+        assert result["total_matched"] >= 1
         titles = [s["title"] for s in result["sections"]]
-        assert any("Executive" in t for t in titles)
-        assert any("Metrics" in t for t in titles)
+        assert any("Executive" in t or "Summary" in t for t in titles)
 
     async def test_get_report_sections_by_id(self, tmp_path: Path):
         """Test section retrieval by exact IDs."""
@@ -80,7 +79,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="quarterly_review")
+        report_id = report_service.create_report(title="Test", template="analyst_v1")
         outline = report_service.get_report_outline(report_id)
 
         # Get specific sections by ID
@@ -105,7 +104,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Add multiple insights with different attributes
         outline = report_service.get_report_outline(report_id)
@@ -165,7 +164,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Add section with prose content
         outline = report_service.get_report_outline(report_id)
@@ -201,7 +200,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Add insights with citations
         outline = report_service.get_report_outline(report_id)
@@ -242,7 +241,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Add 25 sections
         outline = report_service.get_report_outline(report_id)
@@ -282,7 +281,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Add 30 insights
         outline = report_service.get_report_outline(report_id)
@@ -315,7 +314,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Request non-existent section IDs
         non_existent_id = str(uuid.uuid4())
@@ -332,7 +331,7 @@ class TestGetReportModesCoverage:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = GetReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Empty", template="default")
+        report_id = report_service.create_report(title="Empty", template="empty")
 
         # Test all modes with empty report
         summary_result = await tool.execute(report_selector=report_id, mode="summary")

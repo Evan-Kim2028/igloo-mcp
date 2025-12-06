@@ -22,7 +22,7 @@ class TestEvolveReportResponseDetail:
         tool = EvolveReportTool(config, report_service)
 
         # Create report
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Add section with minimal response
         result = await tool.execute(
@@ -53,7 +53,7 @@ class TestEvolveReportResponseDetail:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         result = await tool.execute(
             report_selector=report_id,
@@ -81,7 +81,7 @@ class TestEvolveReportResponseDetail:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         result = await tool.execute(
             report_selector=report_id,
@@ -107,7 +107,7 @@ class TestEvolveReportResponseDetail:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = EvolveReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         from igloo_mcp.mcp.exceptions import MCPValidationError
 
@@ -210,7 +210,7 @@ class TestRenderReportPreviewMaxChars:
         tool = RenderReportTool(config, report_service)
 
         # Create a report
-        report_id = report_service.create_report(title="Test Report", template="default")
+        report_id = report_service.create_report(title="Test Report", template="empty")
 
         # Render with small preview (dry run to avoid Quarto dependency)
         result = await tool.execute(
@@ -232,7 +232,7 @@ class TestRenderReportPreviewMaxChars:
         report_service = ReportService(reports_root=tmp_path / "reports")
         tool = RenderReportTool(config, report_service)
 
-        report_id = report_service.create_report(title="Test", template="default")
+        report_id = report_service.create_report(title="Test", template="empty")
 
         # Render with default preview_max_chars
         result = await tool.execute(

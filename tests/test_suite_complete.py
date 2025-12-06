@@ -66,10 +66,9 @@ def test_template_system_complete():
     # Check all expected templates exist
     expected_templates = {
         "default",
-        "monthly_sales",
-        "quarterly_review",
         "deep_dive",
         "analyst_v1",
+        "empty",
     }
     assert set(TEMPLATES.keys()) == expected_templates
 
@@ -78,7 +77,7 @@ def test_template_system_complete():
         sections = get_template(template_name)
         assert isinstance(sections, list)
 
-        if template_name != "default":
+        if template_name not in {"empty"}:
             assert len(sections) > 0
             # Check each section has required fields
             for section in sections:
@@ -86,7 +85,7 @@ def test_template_system_complete():
                 assert hasattr(section, "title")
                 assert hasattr(section, "order")
         else:
-            # Default template should be empty
+            # Empty template should have no sections
             assert len(sections) == 0
 
 

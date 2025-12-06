@@ -349,7 +349,7 @@ class TestErrorHintsActionability:
         # Should mention template parameter specifically
         assert any("template" in hint.lower() for hint in hints)
         # Should include example values
-        assert any("default" in hint.lower() or "monthly_sales" in hint.lower() for hint in hints)
+        assert any("default" in hint.lower() or "deep_dive" in hint.lower() for hint in hints)
 
     @pytest.mark.asyncio
     async def test_selector_error_hints_include_suggestions(self, tmp_path):

@@ -60,12 +60,12 @@ class TestCreateReportIdTracking:
         """Test that section_ids_added is populated when using templates."""
         result = await create_tool.execute(
             title="Test Report",
-            template="monthly_sales",
+            template="deep_dive",
         )
 
         assert "section_ids_added" in result
         assert isinstance(result["section_ids_added"], list)
-        assert len(result["section_ids_added"]) > 0  # monthly_sales has sections
+        assert len(result["section_ids_added"]) > 0  # deep_dive has sections
 
         # Verify sections exist in the report
         report_id = result["report_id"]
@@ -93,17 +93,16 @@ class TestCreateReportIdTracking:
         assert result["insight_ids_added"] == created_insight_ids
 
     @pytest.mark.asyncio
-    async def test_empty_arrays_for_default_template(self, create_tool):
-        """Test that empty arrays are returned for default template (no sections)."""
+    async def test_empty_arrays_for_empty_template(self, create_tool):
+        """Test that empty arrays are returned for empty template (no sections)."""
         result = await create_tool.execute(
             title="Empty Report",
-            template="default",
+            template="empty",
         )
 
         assert "section_ids_added" in result
         assert "insight_ids_added" in result
-
-        # Default template should have no sections/insights
+        # Empty template should have no sections/insights
         assert result["section_ids_added"] == []
         assert result["insight_ids_added"] == []
 
@@ -203,7 +202,7 @@ class TestEvolveReportIdTracking:
         # Create report with sections
         report_id = report_service.create_report(
             title="Test Report",
-            template="monthly_sales",
+            template="deep_dive",
             actor="test",
         )
 
@@ -270,7 +269,7 @@ class TestEvolveReportIdTracking:
         # Create report with sections
         report_id = report_service.create_report(
             title="Test Report",
-            template="monthly_sales",
+            template="deep_dive",
             actor="test",
         )
 
@@ -321,7 +320,7 @@ class TestAuditTrailIdTracking:
         # Create report with sections
         report_id = report_service.create_report(
             title="Test Report",
-            template="monthly_sales",
+            template="deep_dive",
             actor="test",
         )
 
@@ -412,7 +411,7 @@ class TestResponseSymmetry:
         """Test that create_report returns all created IDs."""
         result = await create_tool.execute(
             title="Symmetry Test",
-            template="monthly_sales",
+            template="deep_dive",
         )
 
         # If sections are added, their IDs should be returned
@@ -433,7 +432,7 @@ class TestResponseSymmetry:
         # Create report
         report_id = report_service.create_report(
             title="Test Report",
-            template="monthly_sales",
+            template="deep_dive",
             actor="test",
         )
 
