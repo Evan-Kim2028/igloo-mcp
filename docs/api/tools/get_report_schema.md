@@ -21,7 +21,7 @@ This is the **single source of truth** for report structures - auto-generated fr
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `schema_type` | string | "proposed_changes" | Schema to return: `proposed_changes`, `insight`, `section`, `outline`, or `all` |
+| `schema_type` | string | "proposed_changes" | Schema to return: `proposed_changes`, `insight`, `section`, `outline`, `section_templates`, or `all` |
 | `format` | string | "json_schema" | Output format: `json_schema`, `examples`, or `compact` |
 
 ## Schema Types
@@ -34,6 +34,56 @@ Complete schema for `evolve_report` payloads. Includes all operation types:
 - `status_change`
 
 **Use when**: You need to construct `evolve_report` payloads.
+
+### `section_templates` (New in v0.4.0)
+
+Discover available section content templates for structured markdown generation.
+
+**Use when**: You want to use templates like `findings`, `metrics`, or `methodology` in `evolve_report`.
+
+**Example**:
+```python
+result = get_report_schema(schema_type="section_templates")
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "schema_type": "section_templates",
+  "description": "Section content templates generate formatted markdown for common section types...",
+  "available_names": ["action_items", "actions", "bullet", "bullet_list", "exec_summary",
+                      "executive_summary", "findings", "findings_list", "methodology",
+                      "metrics", "metrics_snapshot", "next_steps", "summary_bullets"],
+  "templates": {
+    "findings": {
+      "description": "Key findings with optional metrics and action items",
+      "aliases": ["findings_list"],
+      "required_fields": ["findings"],
+      "optional_fields": ["heading"],
+      "example_template_data": {
+        "heading": "Key Findings",
+        "findings": [{"title": "Revenue Growth", "metric": {...}}]
+      }
+    },
+    "metrics": {...},
+    "bullet_list": {...},
+    "executive_summary": {...},
+    "action_items": {...},
+    "methodology": {...}
+  }
+}
+```
+
+**Available Templates**:
+| Template | Aliases | Required Fields | Description |
+|----------|---------|-----------------|-------------|
+| `findings` | `findings_list` | `findings` | Key findings with metrics and action items |
+| `metrics` | `metrics_snapshot` | `metrics` | Metrics table with optional callouts |
+| `bullet_list` | `bullet`, `summary_bullets` | `items` | Simple bullet point list |
+| `executive_summary` | `exec_summary` | _(none)_ | Executive summary with key takeaways |
+| `action_items` | `next_steps`, `actions` | `actions` | Action items with owners and due dates |
+| `methodology` | _(none)_ | _(none)_ | Data sources and analysis approach |
 
 ### `insight`
 
