@@ -15,6 +15,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from io import StringIO
+from pathlib import Path
 from typing import Any
 
 from .config import get_config
@@ -27,7 +28,27 @@ class SnowCLIError(RuntimeError):
 
 
 def _ensure_snow_available() -> None:
-    if shutil.which("snow") is None:
+    # Prefer PATH lookup, but fall back to the current virtualenv's bin dir.
+    # In some environments (e.g. MCP harness / isolated PATH), console scripts
+    # like `snow` may exist in the venv but not be discoverable via PATH.
+    snow_path = shutil.which("snow")
+    if snow_path is None:
+        candidates: list[str] = []
+
+        venv = os.getenv("VIRTUAL_ENV")
+        if venv:
+            candidates.append(os.path.join(venv, "bin", "snow"))
+
+        # If running inside the repo without an activated venv, fall back to a
+        # local .venv in the current working directory.
+        candidates.append(str(Path.cwd() / ".venv" / "bin" / "snow"))
+
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                snow_path = candidate
+                break
+
+    if snow_path is None:
         raise SnowCLIError(
             "`snow` CLI not found. Install with `pip install snowflake-cli` and configure a profile.",
         )
@@ -58,8 +79,21 @@ class SnowCLI:
         }
 
     def _base_args(self, ctx_overrides: dict[str, str | None] | None = None) -> list[str]:
+        snow_bin = shutil.which("snow")
+        if snow_bin is None:
+            candidates: list[str] = []
+            venv = os.getenv("VIRTUAL_ENV")
+            if venv:
+                candidates.append(os.path.join(venv, "bin", "snow"))
+            candidates.append(str(Path.cwd() / ".venv" / "bin" / "snow"))
+            for candidate in candidates:
+                if os.path.exists(candidate):
+                    snow_bin = candidate
+                    break
+        snow_bin = snow_bin or "snow"
+
         # Use --connection/-c to select the configured connection name
-        args = ["snow", "sql", "--connection", self.profile]
+        args = [snow_bin, "sql", "--connection", self.profile]
         ctx = {**self.default_ctx}
         if ctx_overrides:
             ctx.update({k: v for k, v in ctx_overrides.items() if v})

@@ -132,6 +132,13 @@ class CatalogService:
             # Query Snowflake INFORMATION_SCHEMA to build real catalog
             totals = self._build_real_catalog(catalog_data, database, account_scope)
 
+            # Hotfix safety: if we appear to be connected but got an empty catalog,
+            # surface it as an error to avoid silently writing empty artifacts.
+            if totals.databases == 0 and (database is not None or account_scope is False):
+                raise RuntimeError(
+                    "Catalog build returned zero objects; this usually indicates a Snowflake CLI execution issue"
+                )
+
             # Write catalog file
             if output_format == "json":
                 catalog_file = output_path / "catalog.json"
@@ -243,13 +250,17 @@ class CatalogService:
         totals = CatalogTotals()
 
         try:
+            # Always pass through the selected database for IN DATABASE queries;
+            # otherwise SnowCLI will override context to cfg.snowflake.database.
+            ctx_db_overrides: dict[str, str | None] = {"database": database} if database else {}
+
             # Query databases
             if account_scope:
                 db_query = "SHOW DATABASES"
             else:
                 db_query = f"SHOW DATABASES LIKE '{database}'" if database else "SHOW DATABASES"
 
-            db_result = self.cli.run_query(db_query, output_format="json")
+            db_result = self.cli.run_query(db_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if db_result.rows:
                 catalog_data["databases"] = db_result.rows
                 totals.databases = len(db_result.rows)
@@ -260,7 +271,7 @@ class CatalogService:
             else:
                 schema_query = f"SHOW SCHEMAS IN DATABASE {database}" if database else "SHOW SCHEMAS"
 
-            schema_result = self.cli.run_query(schema_query, output_format="json")
+            schema_result = self.cli.run_query(schema_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if schema_result.rows:
                 catalog_data["schemas"] = schema_result.rows
                 totals.schemas = len(schema_result.rows)
@@ -271,7 +282,7 @@ class CatalogService:
             else:
                 table_query = f"SHOW TABLES IN DATABASE {database}" if database else "SHOW TABLES"
 
-            table_result = self.cli.run_query(table_query, output_format="json")
+            table_result = self.cli.run_query(table_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if table_result.rows:
                 catalog_data["tables"] = table_result.rows
                 totals.tables = len(table_result.rows)
@@ -282,7 +293,7 @@ class CatalogService:
             else:
                 view_query = f"SHOW VIEWS IN DATABASE {database}" if database else "SHOW VIEWS"
 
-            view_result = self.cli.run_query(view_query, output_format="json")
+            view_result = self.cli.run_query(view_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if view_result.rows:
                 catalog_data["views"] = view_result.rows
                 totals.views = len(view_result.rows)
@@ -293,7 +304,7 @@ class CatalogService:
             else:
                 mv_query = f"SHOW MATERIALIZED VIEWS IN DATABASE {database}" if database else "SHOW MATERIALIZED VIEWS"
 
-            mv_result = self.cli.run_query(mv_query, output_format="json")
+            mv_result = self.cli.run_query(mv_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if mv_result.rows:
                 catalog_data["materialized_views"] = mv_result.rows
                 totals.materialized_views = len(mv_result.rows)
@@ -304,7 +315,7 @@ class CatalogService:
             else:
                 dt_query = f"SHOW DYNAMIC TABLES IN DATABASE {database}" if database else "SHOW DYNAMIC TABLES"
 
-            dt_result = self.cli.run_query(dt_query, output_format="json")
+            dt_result = self.cli.run_query(dt_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if dt_result.rows:
                 catalog_data["dynamic_tables"] = dt_result.rows
                 totals.dynamic_tables = len(dt_result.rows)
@@ -315,7 +326,7 @@ class CatalogService:
             else:
                 task_query = f"SHOW TASKS IN DATABASE {database}" if database else "SHOW TASKS"
 
-            task_result = self.cli.run_query(task_query, output_format="json")
+            task_result = self.cli.run_query(task_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if task_result.rows:
                 catalog_data["tasks"] = task_result.rows
                 totals.tasks = len(task_result.rows)
@@ -368,7 +379,7 @@ class CatalogService:
                     ORDER BY FUNCTION_CATALOG, FUNCTION_SCHEMA, FUNCTION_NAME
                     """
 
-            func_result = self.cli.run_query(func_query, output_format="json")
+            func_result = self.cli.run_query(func_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if func_result.rows:
                 catalog_data["functions"] = func_result.rows
                 totals.functions = len(func_result.rows)
@@ -379,7 +390,7 @@ class CatalogService:
             else:
                 proc_query = f"SHOW PROCEDURES IN DATABASE {database}" if database else "SHOW PROCEDURES"
 
-            proc_result = self.cli.run_query(proc_query, output_format="json")
+            proc_result = self.cli.run_query(proc_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if proc_result.rows:
                 catalog_data["procedures"] = proc_result.rows
                 totals.procedures = len(proc_result.rows)
@@ -429,7 +440,7 @@ class CatalogService:
                     ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
                     """
 
-            col_result = self.cli.run_query(col_query, output_format="json")
+            col_result = self.cli.run_query(col_query, output_format="json", ctx_overrides=ctx_db_overrides)
             if col_result.rows:
                 catalog_data["columns"] = col_result.rows
                 totals.columns = len(col_result.rows)
