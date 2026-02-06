@@ -1,6 +1,6 @@
 [project]
 name = "igloo_mcp"
-version = "0.4.2"
+version = "0.4.3"
 description = "Igloo MCP - Snowflake MCP Server for agentic native workflows"
 readme = "README.md"
 authors = [

@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.4.3] - 2026-02-06
+
+### ✨ Added
+
+- Exposed `health_check` wrapper parameters for progressive disclosure and selective checks:
+  - `response_mode` / deprecated `detail_level`
+  - `include_cortex`, `include_profile`, `include_catalog`
+- Exposed `get_catalog_summary` wrapper progressive disclosure parameters:
+  - `response_mode` / deprecated `mode`
+- Exposed `search_catalog` wrapper parameter:
+  - `search_all_databases`
+- Added execute-query connectivity circuit breaker diagnostics and health wiring:
+  - `execute_query` now exposes circuit status for diagnostics
+  - `health_check` now includes `query_circuit_breaker` status when available
+- Added configurable timeout support to `build_dependency_graph` with timeout source metadata:
+  - Supports per-call `timeout_seconds`
+  - Falls back to `IGLOO_MCP_TOOL_TIMEOUT_SECONDS` or default `60s`
+  - Includes `timeout.source` (`parameter`, `env`, `default`) in responses and timeout errors
+
+### 🔄 Changed
+
+- `execute_query` now mirrors `response_mode` and `response_mode_info` in responses for non-full modes and file-export responses while keeping legacy `result_mode` / `result_mode_info` for backward compatibility.
+- Updated token-truncation hint text in `execute_query` to use `response_mode='full'`.
+- `execute_query` now fails fast when its connectivity circuit breaker is open, while only counting connection-like failures toward breaker state.
+
+### 📝 Documentation
+
+- Updated tool docs for:
+  - `execute_query` (`output_format`, `minimal` mode, response aliases)
+  - `build_catalog` (`include_ddl`, `timeout_seconds`, timeout source metadata)
+  - `search_catalog` (`response_mode`, compact example, mode-specific metadata note)
+  - `health_check` (response mode parameters)
+  - `get_catalog_summary` (response mode parameters, removed outdated `database` parameter reference)
+- Updated MCP user guide tool parameter matrix to reflect current wrapper surfaces.
+- Updated progressive disclosure guide to reflect standardized vs tool-specific response modes.
+- Added `IGLOO_MCP_TOOL_TIMEOUT_SECONDS` to environment variable reference.
+- Added execute-query circuit breaker environment variables to configuration docs.
+- Updated `build_dependency_graph` docs with timeout controls and timeout source response metadata.
+
 ## [0.4.1] - 2025-12-06
 
 ### 🐛 Bug Fixes
