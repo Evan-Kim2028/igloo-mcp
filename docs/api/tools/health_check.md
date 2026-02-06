@@ -6,6 +6,8 @@ Get comprehensive health status for the MCP server and Snowflake connection.
 
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
+| `response_mode` | string | ❌ No | `"minimal"` | Response verbosity: `minimal`, `standard`, or `full`. |
+| `detail_level` | string | ❌ No | - | **DEPRECATED** alias for `response_mode`. |
 | `include_cortex` | boolean | ❌ No | true | Check Cortex AI availability |
 | `include_profile` | boolean | ❌ No | true | Validate profile configuration |
 | `include_catalog` | boolean | ❌ No | false | Check catalog resource status |
@@ -76,6 +78,7 @@ Get comprehensive health status for the MCP server and Snowflake connection.
 - **`timing`**: Performance metrics with `total_duration_ms` only
 
 - `system` now reflects the consolidated `get_comprehensive_health` response with `healthy`, `error_count`, `metrics.uptime_seconds`, and recent errors populated. Older monitors that only expose `get_health_status()` are still supported.
+- If configured, `query_circuit_breaker` shows `execute_query` circuit state (`closed`, `open`, `half_open`, or `disabled`) and retry timing metadata.
 
 ### Storage Paths Diagnostics (Full Mode Only)
 
@@ -97,6 +100,8 @@ When `response_mode="full"`, the response includes a `diagnostics.storage_paths`
   }
 }
 ```
+
+When available, full diagnostics also include `diagnostics.query_circuit_breaker` mirroring the current `execute_query` circuit breaker status.
 
 **Storage Scope Modes:**
 - `global`: All data stored in `~/.igloo_mcp/` (default, persistent across projects)

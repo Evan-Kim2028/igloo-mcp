@@ -5,6 +5,7 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -14,13 +15,14 @@ import anyio
 from igloo_mcp.catalog import CatalogService
 from igloo_mcp.config import Config
 from igloo_mcp.constants import CATALOG_CONCURRENCY, MAX_DDL_CONCURRENCY
-from igloo_mcp.mcp.exceptions import MCPValidationError
+from igloo_mcp.mcp.exceptions import MCPExecutionError, MCPValidationError
 from igloo_mcp.path_utils import validate_safe_path
 
 from .base import MCPTool, ensure_request_id, tool_error_handler
 from .schema_utils import (
     boolean_schema,
     enum_schema,
+    integer_schema,
     snowflake_identifier_schema,
     string_schema,
 )
@@ -31,6 +33,10 @@ except ImportError:
     from mcp.server.fastmcp.utilities.logging import get_logger
 
 logger = get_logger(__name__)
+
+DEFAULT_TOOL_TIMEOUT_SECONDS = 60
+MIN_TOOL_TIMEOUT_SECONDS = 1
+MAX_TOOL_TIMEOUT_SECONDS = 3600
 
 
 class BuildCatalogTool(MCPTool):
@@ -94,6 +100,7 @@ class BuildCatalogTool(MCPTool):
         account: bool = False,
         format: str = "json",
         include_ddl: bool = True,
+        timeout_seconds: int | str | None = None,
         request_id: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
@@ -118,6 +125,7 @@ class BuildCatalogTool(MCPTool):
             account: Include entire account (default: False)
             format: Output format - 'json' or 'jsonl' (default: json)
             include_ddl: Include object DDL in catalog (default: True)
+            timeout_seconds: Optional timeout for catalog build. Uses env/default fallback when omitted.
             request_id: Optional request correlation ID for tracing (auto-generated if not provided)
 
         Returns:
@@ -141,6 +149,15 @@ class BuildCatalogTool(MCPTool):
 
         # Warnings collection
         warnings: list[dict[str, Any]] = []
+        effective_timeout_seconds, timeout_source, timeout_warning = _resolve_tool_timeout(timeout_seconds)
+        if timeout_warning:
+            warnings.append(
+                {
+                    "code": "INVALID_TOOL_TIMEOUT_ENV",
+                    "severity": "warning",
+                    "message": timeout_warning,
+                }
+            )
 
         # Determine if using unified storage (when output_dir is default)
         # Handle both relative and normalized paths, and check if it's the default
@@ -196,25 +213,43 @@ class BuildCatalogTool(MCPTool):
                 "account": account,
                 "format": format,
                 "use_unified_storage": use_unified_storage,
+                "timeout_seconds": effective_timeout_seconds,
+                "timeout_source": timeout_source,
                 "request_id": request_id,
             },
         )
 
         # Timing: Catalog build operation
         catalog_start = time.time()
-        result = await anyio.to_thread.run_sync(
-            lambda: self.catalog_service.build(
-                output_dir=output_dir,
-                database=database,
-                account_scope=account,
-                output_format=format,
-                include_ddl=include_ddl,
-                max_ddl_concurrency=MAX_DDL_CONCURRENCY,
-                catalog_concurrency=CATALOG_CONCURRENCY,
-                export_sql=False,
-                use_unified_storage=use_unified_storage,
-            )
-        )
+        try:
+            with anyio.fail_after(effective_timeout_seconds):
+                result = await anyio.to_thread.run_sync(
+                    lambda: self.catalog_service.build(
+                        output_dir=output_dir,
+                        database=database,
+                        account_scope=account,
+                        output_format=format,
+                        include_ddl=include_ddl,
+                        max_ddl_concurrency=MAX_DDL_CONCURRENCY,
+                        catalog_concurrency=CATALOG_CONCURRENCY,
+                        export_sql=False,
+                        use_unified_storage=use_unified_storage,
+                    ),
+                    abandon_on_cancel=True,
+                )
+        except TimeoutError as exc:
+            raise MCPExecutionError(
+                f"Catalog build timed out after {effective_timeout_seconds} seconds.",
+                operation="build_catalog",
+                hints=[
+                    "Increase timeout_seconds for large databases (e.g. 180-600)",
+                    "Set IGLOO_MCP_TOOL_TIMEOUT_SECONDS to change default timeout globally",
+                ],
+                context={
+                    "effective_timeout_seconds": effective_timeout_seconds,
+                    "timeout_source": timeout_source,
+                },
+            ) from exc
         catalog_duration = (time.time() - catalog_start) * 1000
 
         # Log the actual resolved path for unified storage
@@ -230,6 +265,8 @@ class BuildCatalogTool(MCPTool):
                 "database": database or "current",
                 "account": account,
                 "request_id": request_id,
+                "timeout_seconds": effective_timeout_seconds,
+                "timeout_source": timeout_source,
                 "catalog_duration_ms": catalog_duration,
                 "total_duration_ms": total_duration,
                 "totals": {
@@ -252,6 +289,10 @@ class BuildCatalogTool(MCPTool):
             "database": database or "current",
             "account_scope": account,
             "format": format,
+            "timeout": {
+                "seconds": effective_timeout_seconds,
+                "source": timeout_source,
+            },
             "totals": {
                 "databases": result.totals.databases,
                 "schemas": result.totals.schemas,
@@ -306,6 +347,29 @@ class BuildCatalogTool(MCPTool):
                     default=True,
                     examples=[True, False],
                 ),
+                "timeout_seconds": {
+                    "title": "Timeout Seconds",
+                    "description": (
+                        "Optional timeout for catalog build operations. "
+                        "If omitted, uses IGLOO_MCP_TOOL_TIMEOUT_SECONDS when set, "
+                        f"otherwise defaults to {DEFAULT_TOOL_TIMEOUT_SECONDS}."
+                    ),
+                    "default": None,
+                    "anyOf": [
+                        integer_schema(
+                            "Catalog build timeout in seconds.",
+                            minimum=MIN_TOOL_TIMEOUT_SECONDS,
+                            maximum=MAX_TOOL_TIMEOUT_SECONDS,
+                            examples=[60, 180, 300],
+                        ),
+                        {
+                            "type": "string",
+                            "pattern": r"^[0-9]+$",
+                            "description": "Numeric string timeout (e.g., '180').",
+                            "examples": ["60", "180", "300"],
+                        },
+                    ],
+                },
                 "request_id": {
                     "type": "string",
                     "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
@@ -327,3 +391,55 @@ class BuildCatalogTool(MCPTool):
                 },
             ],
         }
+
+
+def _coerce_positive_timeout(value: int | str) -> int:
+    if isinstance(value, bool):
+        raise MCPValidationError(
+            "timeout_seconds must be an integer value in seconds.",
+            validation_errors=["Boolean values are not valid timeout seconds."],
+        )
+
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        raise MCPValidationError(
+            "timeout_seconds must be an integer value in seconds.",
+            validation_errors=[f"Invalid timeout value: {value!r}"],
+        ) from None
+
+    if not numeric.is_integer():
+        raise MCPValidationError(
+            "timeout_seconds must be an integer value in seconds.",
+            validation_errors=[f"Invalid timeout value: {value!r}"],
+        )
+
+    timeout_int = int(numeric)
+    if not MIN_TOOL_TIMEOUT_SECONDS <= timeout_int <= MAX_TOOL_TIMEOUT_SECONDS:
+        raise MCPValidationError(
+            f"timeout_seconds must be between {MIN_TOOL_TIMEOUT_SECONDS} and {MAX_TOOL_TIMEOUT_SECONDS}",
+            validation_errors=[f"Invalid timeout value: {timeout_int}"],
+            hints=[f"Use a timeout between {MIN_TOOL_TIMEOUT_SECONDS} and {MAX_TOOL_TIMEOUT_SECONDS} seconds"],
+        )
+    return timeout_int
+
+
+def _resolve_tool_timeout(timeout_seconds: int | str | None) -> tuple[int, str, str | None]:
+    if timeout_seconds is not None:
+        return _coerce_positive_timeout(timeout_seconds), "parameter", None
+
+    env_raw = os.environ.get("IGLOO_MCP_TOOL_TIMEOUT_SECONDS")
+    if env_raw:
+        try:
+            return _coerce_positive_timeout(env_raw), "env", None
+        except MCPValidationError:
+            return (
+                DEFAULT_TOOL_TIMEOUT_SECONDS,
+                "default",
+                (
+                    "IGLOO_MCP_TOOL_TIMEOUT_SECONDS is invalid; "
+                    f"falling back to default timeout ({DEFAULT_TOOL_TIMEOUT_SECONDS}s)."
+                ),
+            )
+
+    return DEFAULT_TOOL_TIMEOUT_SECONDS, "default", None

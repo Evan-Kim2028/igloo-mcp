@@ -10,6 +10,7 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 - Session parameter overrides
 - Verbose or compact error messages
 - Profile health validation
+- Connectivity circuit breaker protection for repeated Snowflake outages
 
 ## Parameters
 
@@ -19,7 +20,8 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 | `reason` | string | ✅ Yes | - | Short reason for running the query (min length 5). Stored in Snowflake `QUERY_TAG` and local history; avoid sensitive information. |
 | `timeout_seconds` | integer | ❌ No | 120 | Query timeout in seconds (1-3600) |
 | `verbose_errors` | boolean | ❌ No | false | Include detailed optimization hints |
-| `response_mode` | string | ❌ No | "summary" | Control response verbosity: `summary` (default - 5 sample rows), `full` (all rows), `schema_only` (structure only), or `sample` (10 rows). Significantly reduces token usage. See [Progressive Disclosure](../PROGRESSIVE_DISCLOSURE.md). |
+| `output_format` | string | ❌ No | "inline" | Result delivery mode: `inline` (default), `csv`, `json`, or `jsonl`. File formats write query rows to scratchpad output and return metadata + file path. |
+| `response_mode` | string | ❌ No | "summary" | Control response verbosity: `minimal` (metadata only), `summary` (default - 5 sample rows), `schema_only` (structure only), `sample` (10 rows), or `full` (all rows). Significantly reduces token usage. See [Progressive Disclosure](../PROGRESSIVE_DISCLOSURE.md). |
 | `result_mode` | string | ❌ No | - | **DEPRECATED** - Use `response_mode` instead. |
 | `warehouse` | string | ❌ No | profile | Warehouse override (Snowflake identifier) |
 | `database` | string | ❌ No | profile | Database override (Snowflake identifier) |
@@ -129,6 +131,16 @@ The `execute_query` tool allows you to run SQL queries against Snowflake with:
 
 These fields travel with tool responses, query history JSONL, and cache manifests so downstream agents can reason about the dataset without re-running any queries. When result sets are truncated, the metadata reflects the sampled subset.
 
+## Connectivity Circuit Breaker
+
+`execute_query` includes an environment-configurable circuit breaker for repeated Snowflake connectivity failures (for example network outages or connection refusals). It does not trip on SQL compilation/permission errors.
+
+- `IGLOO_MCP_CIRCUIT_BREAKER_ENABLED` (default `true`)
+- `IGLOO_MCP_CIRCUIT_BREAKER_FAILURE_THRESHOLD` (default `5`)
+- `IGLOO_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS` (default `60`)
+
+When the breaker is open, live queries fail fast with retry guidance and `health_check(response_mode="full")` exposes breaker diagnostics.
+
 ## Result Modes (Token Efficiency)
 
 The `response_mode` parameter controls response verbosity to reduce token usage in LLM contexts.
@@ -138,6 +150,7 @@ The `response_mode` parameter controls response verbosity to reduce token usage 
 | Mode | Rows Returned | Use Case | Token Savings |
 |------|---------------|----------|-----------------|
 | `full` | All rows | Complete data retrieval | baseline |
+| `minimal` | 0 rows + execution metadata | Validation checks, quick rowcount confirmation | Maximum |
 | `summary` | 5 sample rows + key_metrics | Quick analysis with metrics (default) | Maximum |
 | `schema_only` | 0 rows (schema + metrics only) | Schema discovery | Maximum |
 | `sample` | 10 sample rows | Quick preview/validation | High |
@@ -162,7 +175,8 @@ result = execute_query(
 
 ### Response Format
 
-All non-full modes add `response_mode` and `response_mode_info` to the response:
+All non-full modes add `response_mode` and `response_mode_info` to the response.
+For backward compatibility, legacy aliases `result_mode` and `result_mode_info` are also included:
 
 ```json
 {

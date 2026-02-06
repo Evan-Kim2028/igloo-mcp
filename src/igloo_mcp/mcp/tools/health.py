@@ -6,6 +6,7 @@ Part of v1.9.0 Phase 1 - consolidates health_check, check_profile_config, and ge
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -45,6 +46,7 @@ class HealthCheckTool(MCPTool):
         snowflake_service: Any,
         health_monitor: Any | None = None,
         resource_manager: Any | None = None,
+        query_circuit_breaker_status_provider: Callable[[], dict[str, Any]] | None = None,
     ):
         """Initialize health check tool.
 
@@ -53,11 +55,14 @@ class HealthCheckTool(MCPTool):
             snowflake_service: Snowflake service instance
             health_monitor: Optional health monitoring instance
             resource_manager: Optional resource manager instance
+            query_circuit_breaker_status_provider: Optional callback returning
+                execute_query circuit breaker status.
         """
         self.config = config
         self.snowflake_service = snowflake_service
         self.health_monitor = health_monitor
         self.resource_manager = resource_manager
+        self.query_circuit_breaker_status_provider = query_circuit_breaker_status_provider
 
     @property
     def name(self) -> str:
@@ -169,6 +174,9 @@ class HealthCheckTool(MCPTool):
         if self.health_monitor:
             results["system"] = self._get_system_health()
 
+        if self.query_circuit_breaker_status_provider:
+            results["query_circuit_breaker"] = self._get_query_circuit_breaker_status()
+
         # Overall status
         has_critical_failures = not results["connection"].get("connected", False) or (
             include_profile and results.get("profile", {}).get("status") == "invalid"
@@ -206,6 +214,7 @@ class HealthCheckTool(MCPTool):
                     "snowflake": snowflake_health,
                     "catalog": catalog_health,
                     "profile": profile_health,
+                    "query_circuit_breaker": results.get("query_circuit_breaker", {}).get("state", "unavailable"),
                 },
                 "timestamp": datetime.now(UTC).isoformat(),
                 "timing": {
@@ -259,6 +268,19 @@ class HealthCheckTool(MCPTool):
                     "Check ~/.snowflake/config.toml or run test_connection"
                 )
 
+            breaker_state = results.get("query_circuit_breaker", {}).get("state")
+            if breaker_state == "open":
+                retry_after = results.get("query_circuit_breaker", {}).get("time_until_retry_seconds")
+                if isinstance(retry_after, (int, float)):
+                    remediation["query_circuit_breaker"] = (
+                        f"execute_query circuit breaker is open. Retry in ~{round(float(retry_after), 2)}s "
+                        "or resolve Snowflake connectivity issues."
+                    )
+                else:
+                    remediation["query_circuit_breaker"] = (
+                        "execute_query circuit breaker is open. Resolve Snowflake connectivity issues and retry."
+                    )
+
             if remediation:
                 response["remediation"] = remediation
                 response["next_steps"] = "Address remediation items to improve system health"
@@ -283,6 +305,8 @@ class HealthCheckTool(MCPTool):
 
             # Add storage paths information
             diagnostics["storage_paths"] = self._get_storage_paths()
+            if "query_circuit_breaker" in results:
+                diagnostics["query_circuit_breaker"] = results["query_circuit_breaker"]
 
             if diagnostics:
                 response["diagnostics"] = diagnostics
@@ -500,6 +524,27 @@ class HealthCheckTool(MCPTool):
         except Exception as e:
             return {
                 "status": "error",
+                "error": str(e),
+            }
+
+    def _get_query_circuit_breaker_status(self) -> dict[str, Any]:
+        """Get execute_query circuit breaker status from provider callback."""
+        if not self.query_circuit_breaker_status_provider:
+            return {"enabled": False, "state": "unavailable"}
+
+        try:
+            status = self.query_circuit_breaker_status_provider()
+            if not isinstance(status, dict):
+                return {
+                    "enabled": False,
+                    "state": "error",
+                    "error": "Invalid circuit breaker status payload",
+                }
+            return status
+        except Exception as e:
+            return {
+                "enabled": False,
+                "state": "error",
                 "error": str(e),
             }
 

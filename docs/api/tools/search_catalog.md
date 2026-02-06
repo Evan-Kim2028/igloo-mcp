@@ -17,6 +17,7 @@ object names or column names and returns at most `limit` matches.
 |------|------|----------|---------|-------------|
 | `catalog_dir` | string | ❌ No | `./data_catalogue` | Directory containing `catalog.json` or `catalog.jsonl`. Default resolves to unified storage at `~/.igloo_mcp/catalogs/{database}/` when used with `build_catalog` default. |
 | `search_all_databases` | boolean | ❌ No | `false` | If `true` and `catalog_dir` is default, search across all database catalogs in unified storage. |
+| `response_mode` | string | ❌ No | `compact` | Result verbosity: `compact` (names only), `standard` (adds comments + column summary), `full` (includes full columns + raw metadata). |
 | `object_types` | array[string] | ❌ No | — | Optional list of object types (`table`, `view`, `function`, …). |
 | `database` | string | ❌ No | — | Filter results to a specific database. |
 | `schema` | string | ❌ No | — | Filter results to a specific schema. |
@@ -32,6 +33,7 @@ object names or column names and returns at most `limit` matches.
   "status": "success",
   "request_id": "650e8400-e29b-41d4-a716-446655440001",
   "catalog_dir": "./artifacts/catalog",
+  "response_mode": "compact",
   "total_matches": 3,
   "limit": 20,
   "results": [
@@ -39,11 +41,7 @@ object names or column names and returns at most `limit` matches.
       "object_type": "table",
       "database": "ANALYTICS",
       "schema": "REPORTING",
-      "name": "SALES_FACT",
-      "columns": [
-        {"name": "ID", "data_type": "NUMBER"},
-        {"name": "REGION", "data_type": "VARCHAR"}
-      ]
+      "name": "SALES_FACT"
     }
   ],
   "timing": {
@@ -66,5 +64,5 @@ object names or column names and returns at most `limit` matches.
 
 - If the catalog directory does not contain a build artifact, the tool returns
   an error instructing the user to run `build_catalog`.
-- Column metadata is surfaced when available so downstream tools can inspect
-  schemas without rerunning catalog queries.
+- Column metadata is surfaced in `response_mode="full"` and summarized in
+  `response_mode="standard"` for token-efficient schema inspection.

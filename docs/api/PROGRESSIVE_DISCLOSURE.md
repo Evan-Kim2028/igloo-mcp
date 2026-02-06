@@ -1,10 +1,21 @@
 # Progressive Disclosure
 
-Control response verbosity across all tools using the standardized `response_mode` parameter.
+Control response verbosity on tools that support `response_mode`.
 
 ## Overview
 
-All tools support `response_mode` for token efficiency:
+Core tools with standardized `minimal|standard|full` modes:
+- `health_check`
+- `get_catalog_summary`
+- `get_report`
+- `evolve_report`
+- `evolve_report_batch`
+
+Some tools provide specialized response modes for their domain:
+- `execute_query`: `minimal|summary|schema_only|sample|full`
+- `search_catalog`: `compact|standard|full`
+
+Standardized mode meanings:
 
 | Value | Description | Token Range | Use Case |
 |-------|-------------|-------------|----------|
@@ -19,7 +30,7 @@ All tools support `response_mode` for token efficiency:
 ### `minimal`
 
 Returns only essential data:
-- **execute_query**: Row count + schema (no data)
+- **execute_query**: Execution metadata only (no rows)
 - **health_check**: Component status only
 - **get_catalog_summary**: Object counts only
 - **get_report**: Metadata (title, ID, counts)
@@ -49,10 +60,19 @@ Complete data:
 
 | Mode | Description | Savings |
 |------|-------------|---------|
+| `minimal` | Execution metadata only, no rows | Maximum |
 | `schema_only` | Column schema only, no rows | Maximum |
 | `summary` | 5 sample rows + metrics | High |
 | `sample` | 10 sample rows | Moderate |
 | `full` | All query results | baseline |
+
+### search_catalog
+
+| Mode | Description | Savings |
+|------|-------------|---------|
+| `compact` | Object names and location fields only | Maximum |
+| `standard` | Adds comments + column summary | High |
+| `full` | Full columns + raw metadata payloads | baseline |
 
 ### get_report
 

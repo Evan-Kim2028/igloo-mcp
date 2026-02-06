@@ -82,6 +82,61 @@ class CircuitBreaker:
         if self.failure_count >= self.config.failure_threshold:
             self.state = CircuitState.OPEN
 
+    def allow_request(self) -> bool:
+        """Check whether a request can proceed under current breaker state.
+
+        Returns True when the breaker is closed, or when an open breaker
+        has reached recovery timeout and transitions to half-open.
+        """
+        with self._lock:
+            if self.state != CircuitState.OPEN:
+                return True
+            if self._should_attempt_reset():
+                self.state = CircuitState.HALF_OPEN
+                return True
+            return False
+
+    def record_success(self) -> None:
+        """Record a successful protected operation."""
+        with self._lock:
+            self._on_success()
+
+    def record_failure(self) -> None:
+        """Record a failed protected operation."""
+        with self._lock:
+            self._on_failure()
+
+    @property
+    def is_open(self) -> bool:
+        """Whether the circuit is currently open."""
+        with self._lock:
+            return self.state == CircuitState.OPEN
+
+    def time_until_retry_seconds(self) -> float:
+        """Return remaining time before the next half-open attempt is allowed."""
+        with self._lock:
+            if self.state != CircuitState.OPEN or self.last_failure_time is None:
+                return 0.0
+            elapsed = time.time() - self.last_failure_time
+            return max(0.0, self.config.recovery_timeout - elapsed)
+
+    def get_status(self) -> dict[str, Any]:
+        """Return a thread-safe status snapshot for diagnostics."""
+        with self._lock:
+            status: dict[str, Any] = {
+                "state": self.state.value,
+                "failure_count": self.failure_count,
+                "failure_threshold": self.config.failure_threshold,
+                "recovery_timeout_seconds": self.config.recovery_timeout,
+                "is_open": self.state == CircuitState.OPEN,
+            }
+            if self.last_failure_time is not None:
+                status["last_failure_time"] = self.last_failure_time
+                if self.state == CircuitState.OPEN:
+                    elapsed = time.time() - self.last_failure_time
+                    status["time_until_retry_seconds"] = max(0.0, self.config.recovery_timeout - elapsed)
+            return status
+
 
 def circuit_breaker(
     failure_threshold: int = 5,

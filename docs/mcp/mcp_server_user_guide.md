@@ -76,13 +76,13 @@ The MCP server exposes these tools to AI assistants:
 
 | Tool | Description | Key Parameters | Returns |
 |------|-------------|----------------|---------|
-| `execute_query` | Execute SQL queries against Snowflake with safety checks, timeouts, and cancellation | `statement`, `timeout_seconds`, `verbose_errors`, `reason`, `warehouse`, `database`, `schema`, `role` | `{ statement, rowcount, rows, query_id?, duration_ms? }` |
-| `build_catalog` | Generate comprehensive data catalogs | `output_dir`, `database`, `account`, `format` | Catalog totals and output location |
-| `get_catalog_summary` | Retrieve existing catalog summaries | `catalog_dir` | Catalog statistics and metadata |
-| `search_catalog` | Search locally cached catalog artifacts | `catalog_dir`, `object_types`, `database`, `schema`, `name_contains`, `column_contains`, `limit` | Matching catalog entries with column metadata |
-| `build_dependency_graph` | Create object dependency graphs | `database`, `schema`, `account`, `format` | Dependency graph in JSON or DOT |
+| `execute_query` | Execute SQL queries against Snowflake with safety checks, timeouts, and cancellation | `statement`, `reason`, `timeout_seconds`, `response_mode`, `output_format`, `warehouse`, `database`, `schema`, `role` | Query results/metadata with token-aware response modes or file export metadata |
+| `build_catalog` | Generate comprehensive data catalogs | `output_dir`, `database`, `account`, `format`, `include_ddl`, `timeout_seconds` | Catalog totals, resolved output path, and timeout source metadata |
+| `get_catalog_summary` | Retrieve existing catalog summaries | `catalog_dir`, `response_mode` | Catalog statistics with minimal/standard/full detail |
+| `search_catalog` | Search locally cached catalog artifacts | `catalog_dir`, `response_mode`, `search_all_databases`, `object_types`, `database`, `schema`, `name_contains`, `column_contains`, `limit` | Matching catalog entries with compact/standard/full metadata |
+| `build_dependency_graph` | Create object dependency graphs | `database`, `schema`, `account`, `format`, `timeout_seconds` | Dependency graph in JSON or DOT with timeout source metadata |
 | `test_connection` | Test Snowflake connection | — | Connection status |
-| `health_check` | Comprehensive server health | — | System, profile, and resource health |
+| `health_check` | Comprehensive server health | `response_mode`, `include_cortex`, `include_profile`, `include_catalog` | System, profile, and resource health with optional diagnostics |
 | `evolve_report` | Evolve a living report using LLM assistance | `report_selector`, `instruction`, `constraints`, `dry_run` | Validation or evolution result for the report |
 | `render_report` | Render reports to various formats | `report_selector`, `format`, `persist_output` | Rendered report content or file path |
 

@@ -10,6 +10,7 @@ import pytest
 
 from igloo_mcp.mcp.tools.execute_query import (
     RESULT_MODE_FULL,
+    RESULT_MODE_MINIMAL,
     RESULT_MODE_SAMPLE,
     RESULT_MODE_SAMPLE_SIZE,
     RESULT_MODE_SCHEMA_ONLY,
@@ -34,6 +35,7 @@ class TestApplyResultMode:
                 "sampled_rows": 100,
                 "num_columns": 3,
             },
+            "cache": {"hit": False, "cache_key": "abc123"},
             "statement": "SELECT * FROM test_table",
             "query_id": "test-query-id",
             "duration_ms": 150,
@@ -53,11 +55,16 @@ class TestApplyResultMode:
 
         assert len(result["rows"]) == RESULT_MODE_SUMMARY_SAMPLE_SIZE
         assert result["result_mode"] == "summary"
+        assert result["response_mode"] == "summary"
         assert result["result_mode_info"]["mode"] == "summary"
+        assert result["response_mode_info"]["mode"] == "summary"
+        assert result["response_mode_info"] == result["result_mode_info"]
         assert result["result_mode_info"]["total_rows"] == 100
         assert result["result_mode_info"]["rows_returned"] == RESULT_MODE_SUMMARY_SAMPLE_SIZE
         assert result["result_mode_info"]["sample_size"] == RESULT_MODE_SUMMARY_SAMPLE_SIZE
         assert "hint" in result["result_mode_info"]
+        assert result["cache"] == {"hit": False}
+        assert "token_estimate" in result
 
     def test_schema_only_mode_returns_no_rows(self, sample_result: dict) -> None:
         """Schema only mode should return empty rows but preserve metadata."""
@@ -65,13 +72,16 @@ class TestApplyResultMode:
 
         assert len(result["rows"]) == 0
         assert result["result_mode"] == "schema_only"
+        assert result["response_mode"] == "schema_only"
         assert result["result_mode_info"]["mode"] == "schema_only"
+        assert result["response_mode_info"]["mode"] == "schema_only"
         assert result["result_mode_info"]["total_rows"] == 100
         assert result["result_mode_info"]["rows_returned"] == 0
         # Columns should still be present
         assert result["columns"] == ["id", "name", "value"]
         # Key metrics should still be present
         assert result["key_metrics"] is not None
+        assert "token_estimate" in result
 
     def test_sample_mode_returns_limited_rows(self, sample_result: dict) -> None:
         """Sample mode should return only RESULT_MODE_SAMPLE_SIZE rows."""
@@ -79,10 +89,30 @@ class TestApplyResultMode:
 
         assert len(result["rows"]) == RESULT_MODE_SAMPLE_SIZE
         assert result["result_mode"] == "sample"
+        assert result["response_mode"] == "sample"
         assert result["result_mode_info"]["mode"] == "sample"
+        assert result["response_mode_info"]["mode"] == "sample"
         assert result["result_mode_info"]["total_rows"] == 100
         assert result["result_mode_info"]["rows_returned"] == RESULT_MODE_SAMPLE_SIZE
         assert result["result_mode_info"]["sample_size"] == RESULT_MODE_SAMPLE_SIZE
+        assert "token_estimate" in result
+
+    def test_minimal_mode_returns_execution_metadata_only(self, sample_result: dict) -> None:
+        """Minimal mode should strip row payloads and keep execution essentials."""
+        sample_result["cache"] = {"hit": False, "cache_key": "abc"}
+        sample_result["audit_info"] = {"execution_id": "exec123", "cache_hit": False}
+
+        result = _apply_result_mode(dict(sample_result), RESULT_MODE_MINIMAL)
+
+        assert result["status"] == "success"
+        assert result["rowcount"] == 100
+        assert result["result_mode"] == RESULT_MODE_MINIMAL
+        assert result["response_mode"] == RESULT_MODE_MINIMAL
+        assert result["response_mode_info"] == result["result_mode_info"]
+        assert "rows" not in result
+        assert result["cache"] == {"hit": False}
+        assert result["audit_info"]["execution_id"] == "exec123"
+        assert "token_estimate" in result
 
     def test_small_result_with_summary_mode(self) -> None:
         """Summary mode with fewer rows than sample size should return all rows."""
@@ -122,10 +152,20 @@ class TestApplyResultMode:
             "columns": ["id", "name"],
         }
 
-        for mode in [RESULT_MODE_FULL, RESULT_MODE_SUMMARY, RESULT_MODE_SCHEMA_ONLY, RESULT_MODE_SAMPLE]:
+        all_modes = [
+            RESULT_MODE_FULL,
+            RESULT_MODE_MINIMAL,
+            RESULT_MODE_SUMMARY,
+            RESULT_MODE_SCHEMA_ONLY,
+            RESULT_MODE_SAMPLE,
+        ]
+        for mode in all_modes:
             result = _apply_result_mode(dict(empty_result), mode)
-            assert len(result["rows"]) == 0
             assert result["rowcount"] == 0
+            if mode == RESULT_MODE_MINIMAL:
+                assert "rows" not in result
+            else:
+                assert len(result["rows"]) == 0
 
     def test_preserves_other_fields(self, sample_result: dict) -> None:
         """Result mode filtering should preserve other result fields."""
@@ -172,6 +212,7 @@ class TestResultModeConstants:
     def test_mode_constants_are_strings(self) -> None:
         """Mode constants should be lowercase strings."""
         assert RESULT_MODE_FULL == "full"
+        assert RESULT_MODE_MINIMAL == "minimal"
         assert RESULT_MODE_SUMMARY == "summary"
         assert RESULT_MODE_SCHEMA_ONLY == "schema_only"
         assert RESULT_MODE_SAMPLE == "sample"
@@ -269,7 +310,7 @@ class TestResultModeValidation:
         from igloo_mcp.mcp.exceptions import MCPValidationError
 
         # Simulate validation that happens in execute_query
-        valid_result_modes = {"full", "summary", "schema_only", "sample"}
+        valid_result_modes = {"full", "minimal", "summary", "schema_only", "sample"}
         user_input = "summery"  # Common typo
         effective_result_mode = user_input.lower()
 
@@ -295,6 +336,7 @@ class TestResultModeValidation:
             assert "summary" in validation_msg
             assert "schema_only" in validation_msg
             assert "sample" in validation_msg
+            assert "minimal" in validation_msg
             # Should have helpful phrasing
             assert "must be one of" in validation_msg
 
@@ -304,10 +346,10 @@ class TestResultModeValidation:
         This verifies the UX improvement where we lowercase user input
         before validation, making the API more forgiving.
         """
-        valid_result_modes = {"full", "summary", "schema_only", "sample"}
+        valid_result_modes = {"full", "minimal", "summary", "schema_only", "sample"}
 
         # These should all be valid after lowercasing
-        test_cases = ["SUMMARY", "Summary", "FuLl", "SCHEMA_ONLY", "sAmPlE"]
+        test_cases = ["SUMMARY", "Summary", "FuLl", "SCHEMA_ONLY", "sAmPlE", "MiNiMaL"]
 
         for user_input in test_cases:
             effective_result_mode = user_input.lower()

@@ -46,7 +46,6 @@ from mcp_server_snowflake.utils import (  # type: ignore[import-untyped]
 )
 
 from .config import Config, ConfigError, apply_config_overrides, get_config, load_config
-from .constants import MAX_QUERY_TIMEOUT_SECONDS, MIN_QUERY_TIMEOUT_SECONDS
 from .context import create_service_context
 
 # Lineage functionality removed - not part of igloo-mcp
@@ -326,7 +325,18 @@ def register_igloo_mcp(
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
     build_dependency_graph_inst = BuildDependencyGraphTool(dependency_service)
     test_connection_inst = ConnectionTestTool(config, snowflake_service)
-    health_check_inst = HealthCheckTool(config, snowflake_service, _health_monitor)
+    circuit_breaker_provider = getattr(
+        execute_query_inst,
+        "get_circuit_breaker_status",
+        lambda: {"enabled": False, "state": "unavailable"},
+    )
+    health_check_inst = HealthCheckTool(
+        config,
+        snowflake_service,
+        _health_monitor,
+        resource_manager=_resource_manager,
+        query_circuit_breaker_status_provider=circuit_breaker_provider,
+    )
     get_catalog_summary_inst = GetCatalogSummaryTool(catalog_service)
     search_catalog_inst = SearchCatalogTool()
 
@@ -364,8 +374,8 @@ def register_igloo_mcp(
                 description=(
                     "Query timeout in seconds (default: 30s from config). "
                     "Accepts either an integer or a numeric string. "
-                    f"Must resolve to a value between {MIN_QUERY_TIMEOUT_SECONDS} and "
-                    f"{MAX_QUERY_TIMEOUT_SECONDS}. Maximum timeout is configurable via "
+                    "Must resolve to a value between 1 and 3600. "
+                    "Range defaults can be overridden with "
                     "IGLOO_MCP_MAX_QUERY_TIMEOUT_SECONDS environment variable."
                 ),
                 default=None,
@@ -378,6 +388,13 @@ def register_igloo_mcp(
                 default=False,
             ),
         ] = False,
+        output_format: Annotated[
+            str | None,
+            Field(
+                description="Result delivery mode: inline (default), csv, json, or jsonl file output.",
+                default=None,
+            ),
+        ] = None,
         post_query_insight: Annotated[
             dict[str, Any] | str | None,
             Field(
@@ -388,15 +405,21 @@ def register_igloo_mcp(
                 default=None,
             ),
         ] = None,
+        response_mode: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Preferred verbosity control. Options: minimal, summary, schema_only, sample, full. "
+                    "Use minimal/summary for token efficiency."
+                ),
+                default=None,
+            ),
+        ] = None,
         result_mode: Annotated[
             str | None,
             Field(
                 description=(
-                    "Control response verbosity to reduce token usage. Options: "
-                    "'full' (default) - return all rows; "
-                    "'summary' - return key_metrics + 5 sample rows only; "
-                    "'schema_only' - return column names/types only, no rows; "
-                    "'sample' - return first 10 rows only."
+                    "DEPRECATED alias for response_mode. Options: minimal, summary, schema_only, sample, full."
                 ),
                 default=None,
             ),
@@ -427,7 +450,9 @@ def register_igloo_mcp(
                 reason=reason,
                 timeout_seconds=timeout_int,
                 verbose_errors=verbose_errors,
+                output_format=output_format,
                 post_query_insight=post_query_insight,
+                response_mode=response_mode,
                 result_mode=result_mode,
                 ctx=ctx,
             )
@@ -876,6 +901,16 @@ def register_igloo_mcp(
         account: Annotated[bool, Field(description="Include entire account", default=False)] = False,
         format: Annotated[str, Field(description="Output format (json/jsonl)", default="json")] = "json",
         include_ddl: Annotated[bool, Field(description="Include object DDL", default=True)] = True,
+        timeout_seconds: Annotated[
+            int | str | None,
+            Field(
+                description=(
+                    "Optional timeout for catalog build in seconds. "
+                    "Falls back to IGLOO_MCP_TOOL_TIMEOUT_SECONDS or 60s default."
+                ),
+                default=None,
+            ),
+        ] = None,
         request_id: Annotated[
             str | None,
             Field(
@@ -891,6 +926,7 @@ def register_igloo_mcp(
             account=account,
             format=format,
             include_ddl=include_ddl,
+            timeout_seconds=timeout_seconds,
             request_id=request_id,
         )
 
@@ -900,6 +936,23 @@ def register_igloo_mcp(
         schema: Annotated[str | None, Field(description="Specific schema", default=None)] = None,
         account: Annotated[bool, Field(description="Include account-level metadata", default=False)] = False,
         format: Annotated[str, Field(description="Output format (json/dot)", default="json")] = "json",
+        timeout_seconds: Annotated[
+            int | str | None,
+            Field(
+                description=(
+                    "Optional timeout for dependency graph build in seconds. "
+                    "Falls back to IGLOO_MCP_TOOL_TIMEOUT_SECONDS or 60s default."
+                ),
+                default=None,
+            ),
+        ] = None,
+        request_id: Annotated[
+            str | None,
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
     ) -> dict[str, Any]:
         """Build dependency graph - delegates to BuildDependencyGraphTool."""
         return await build_dependency_graph_inst.execute(
@@ -907,6 +960,8 @@ def register_igloo_mcp(
             schema=schema,
             account=account,
             format=format,
+            timeout_seconds=timeout_seconds,
+            request_id=request_id,
         )
 
     @server.tool(name="test_connection", description="Validate Snowflake connectivity")
@@ -924,6 +979,41 @@ def register_igloo_mcp(
 
     @server.tool(name="health_check", description="Get comprehensive health status")
     async def health_check_tool(
+        response_mode: Annotated[
+            str | None,
+            Field(
+                description="Response verbosity: minimal (default), standard, or full.",
+                default=None,
+            ),
+        ] = None,
+        detail_level: Annotated[
+            str | None,
+            Field(
+                description="DEPRECATED alias for response_mode.",
+                default=None,
+            ),
+        ] = None,
+        include_cortex: Annotated[
+            bool,
+            Field(
+                description="Include Cortex availability checks.",
+                default=True,
+            ),
+        ] = True,
+        include_profile: Annotated[
+            bool,
+            Field(
+                description="Include Snowflake profile validation checks.",
+                default=True,
+            ),
+        ] = True,
+        include_catalog: Annotated[
+            bool,
+            Field(
+                description="Include catalog health checks.",
+                default=False,
+            ),
+        ] = False,
         request_id: Annotated[
             str | None,
             Field(
@@ -933,7 +1023,14 @@ def register_igloo_mcp(
         ] = None,
     ) -> dict[str, Any]:
         """Get health status - delegates to HealthCheckTool."""
-        return await health_check_inst.execute(request_id=request_id)
+        return await health_check_inst.execute(
+            response_mode=response_mode,
+            detail_level=detail_level,
+            include_cortex=include_cortex,
+            include_profile=include_profile,
+            include_catalog=include_catalog,
+            request_id=request_id,
+        )
 
     @server.tool(name="get_catalog_summary", description="Read catalog summary JSON")
     async def get_catalog_summary_tool(
@@ -941,6 +1038,20 @@ def register_igloo_mcp(
             str,
             Field(description="Catalog directory", default="./data_catalogue"),
         ] = "./data_catalogue",
+        response_mode: Annotated[
+            str | None,
+            Field(
+                description="Response verbosity: minimal, standard (default), or full.",
+                default=None,
+            ),
+        ] = None,
+        mode: Annotated[
+            str | None,
+            Field(
+                description="DEPRECATED alias for response_mode.",
+                default=None,
+            ),
+        ] = None,
         request_id: Annotated[
             str | None,
             Field(
@@ -950,7 +1061,12 @@ def register_igloo_mcp(
         ] = None,
     ) -> dict[str, Any]:
         """Get catalog summary - delegates to GetCatalogSummaryTool."""
-        return await get_catalog_summary_inst.execute(catalog_dir=catalog_dir, request_id=request_id)
+        return await get_catalog_summary_inst.execute(
+            catalog_dir=catalog_dir,
+            response_mode=response_mode,
+            mode=mode,
+            request_id=request_id,
+        )
 
     @server.tool(name="search_catalog", description="Search locally built catalog artifacts")
     async def search_catalog_tool(
@@ -961,6 +1077,16 @@ def register_igloo_mcp(
                 default="./data_catalogue",
             ),
         ] = "./data_catalogue",
+        response_mode: Annotated[
+            str,
+            Field(
+                description=(
+                    "Response verbosity: 'compact' (default), 'standard', or 'full'. "
+                    "Use compact for token-efficient discovery."
+                ),
+                default="compact",
+            ),
+        ] = "compact",
         object_types: Annotated[
             list[str] | None,
             Field(description="Optional list of object types to include", default=None),
@@ -987,6 +1113,13 @@ def register_igloo_mcp(
                 default=None,
             ),
         ] = None,
+        search_all_databases: Annotated[
+            bool,
+            Field(
+                description="If true and catalog_dir is default, search all unified catalog databases.",
+                default=False,
+            ),
+        ] = False,
         limit: Annotated[
             int,
             Field(
@@ -1006,11 +1139,13 @@ def register_igloo_mcp(
     ) -> dict[str, Any]:
         return await search_catalog_inst.execute(
             catalog_dir=catalog_dir,
+            response_mode=response_mode,
             object_types=object_types,
             database=database,
             schema=schema,
             name_contains=name_contains,
             column_contains=column_contains,
+            search_all_databases=search_all_databases,
             limit=limit,
             request_id=request_id,
         )

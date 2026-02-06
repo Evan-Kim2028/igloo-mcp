@@ -5,6 +5,7 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import os
@@ -37,6 +38,7 @@ except ImportError:  # pragma: no cover
 import contextlib
 
 from igloo_mcp.cache import QueryResultCache
+from igloo_mcp.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from igloo_mcp.config import Config
 from igloo_mcp.constants import (
     ALLOWED_SESSION_PARAMETERS,
@@ -57,7 +59,7 @@ from igloo_mcp.logging import (
     truncate_insight_for_storage,
 )
 from igloo_mcp.mcp.error_utils import wrap_execution_error, wrap_timeout_error
-from igloo_mcp.mcp.exceptions import MCPValidationError
+from igloo_mcp.mcp.exceptions import MCPExecutionError, MCPValidationError
 from igloo_mcp.mcp.utils import json_compatible
 from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.mcp_health import MCPHealthMonitor
@@ -155,11 +157,63 @@ def _relative_sql_path(repo_root: Path, artifact_path: Path | None) -> str | Non
 
 # Result mode constants
 RESULT_MODE_FULL = "full"
+RESULT_MODE_MINIMAL = "minimal"
 RESULT_MODE_SUMMARY = "summary"
 RESULT_MODE_SCHEMA_ONLY = "schema_only"
 RESULT_MODE_SAMPLE = "sample"
 RESULT_MODE_SAMPLE_SIZE = 10  # Default sample size for 'sample' mode
 RESULT_MODE_SUMMARY_SAMPLE_SIZE = 5  # Sample size for 'summary' mode
+
+OUTPUT_FORMAT_INLINE = "inline"
+OUTPUT_FORMAT_CSV = "csv"
+OUTPUT_FORMAT_JSON = "json"
+OUTPUT_FORMAT_JSONL = "jsonl"
+SUPPORTED_OUTPUT_FORMATS = (
+    OUTPUT_FORMAT_INLINE,
+    OUTPUT_FORMAT_CSV,
+    OUTPUT_FORMAT_JSON,
+    OUTPUT_FORMAT_JSONL,
+)
+
+QUERY_CIRCUIT_BREAKER_ENABLED_ENV = "IGLOO_MCP_CIRCUIT_BREAKER_ENABLED"
+QUERY_CIRCUIT_BREAKER_FAILURE_THRESHOLD_ENV = "IGLOO_MCP_CIRCUIT_BREAKER_FAILURE_THRESHOLD"
+QUERY_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_ENV = "IGLOO_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS"
+
+DEFAULT_QUERY_CIRCUIT_BREAKER_ENABLED = True
+DEFAULT_QUERY_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
+DEFAULT_QUERY_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS = 60.0
+
+CONNECTIVITY_ERROR_CLASS_NAMES = {"connectionerror", "interfaceerror", "operationalerror"}
+CONNECTIVITY_ERROR_KEYWORDS = (
+    "connection failed",
+    "connection refused",
+    "connection reset",
+    "network",
+    "timed out",
+    "timeout",
+    "unable to connect",
+    "cannot connect",
+    "service unavailable",
+    "temporarily unavailable",
+    "broken pipe",
+    "eof",
+    "session no longer exists",
+    "session has been terminated",
+    "could not connect",
+    "dns",
+    "host unreachable",
+)
+NON_CONNECTIVITY_ERROR_KEYWORDS = (
+    "sql compilation error",
+    "syntax error",
+    "invalid identifier",
+    "object does not exist",
+    "does not exist or not authorized",
+    "insufficient privileges",
+    "access denied",
+    "permission denied",
+    "invalid argument",
+)
 
 
 def _build_hint(rowcount: int, sample_size: int) -> str | None:
@@ -179,7 +233,91 @@ def _build_hint(rowcount: int, sample_size: int) -> str | None:
     return f"Showing first {sample_size} of {rowcount} rows. Use response_mode='full' to retrieve all rows"
 
 
-def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
+def _estimate_response_tokens(payload: Any) -> int:
+    try:
+        body = json.dumps(payload, ensure_ascii=False, default=str)
+    except (TypeError, ValueError):
+        body = str(payload)
+    return max(1, (len(body) + 3) // 4)
+
+
+def _compact_cache_metadata(result: dict[str, Any]) -> None:
+    cache = result.get("cache")
+    if isinstance(cache, dict):
+        result["cache"] = {"hit": bool(cache.get("hit"))}
+
+
+def _attach_token_estimate(result: dict[str, Any], mode: str, full_token_estimate: int) -> None:
+    response_tokens = _estimate_response_tokens(result)
+    result["token_estimate"] = {
+        "mode": mode,
+        "response_tokens": response_tokens,
+        "savings_vs_full": max(0, full_token_estimate - response_tokens),
+    }
+
+
+def _sync_response_mode_aliases(result: dict[str, Any]) -> None:
+    """Mirror response_mode fields from legacy result_mode keys.
+
+    The tool historically emitted result_mode/result_mode_info. We now expose
+    response_mode/response_mode_info as the primary public contract while
+    keeping legacy keys for backward compatibility.
+    """
+    if "result_mode" in result and "response_mode" not in result:
+        result["response_mode"] = result["result_mode"]
+    if "result_mode_info" in result and "response_mode_info" not in result:
+        result["response_mode_info"] = result["result_mode_info"]
+
+
+def _read_bool_env(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if normalized in {"0", "false", "no", "off", "disabled"}:
+        return False
+    logger.warning(f"Invalid boolean value for {name}: {raw!r}. Using default {default}.")
+    return default
+
+
+def _read_int_env(name: str, default: int, *, minimum: int = 1) -> int:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        parsed = int(raw)
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid integer value for {name}: {raw!r}. Using default {default}.")
+        return default
+    if parsed < minimum:
+        logger.warning(f"{name} must be >= {minimum}; got {parsed}. Using default {default}.")
+        return default
+    return parsed
+
+
+def _read_float_env(name: str, default: float, *, minimum: float = 0.0) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        parsed = float(raw)
+    except (TypeError, ValueError):
+        logger.warning(f"Invalid float value for {name}: {raw!r}. Using default {default}.")
+        return default
+    if parsed < minimum:
+        logger.warning(f"{name} must be >= {minimum}; got {parsed}. Using default {default}.")
+        return default
+    return parsed
+
+
+def _apply_result_mode(
+    result: dict[str, Any],
+    mode: str,
+    *,
+    full_token_estimate: int | None = None,
+) -> dict[str, Any]:
     """Apply result_mode filtering to reduce response size for token efficiency.
 
     This function modifies the query result based on the requested mode to reduce
@@ -190,6 +328,7 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
         result: Full query result dict containing rows, columns, rowcount, etc.
         mode: Result mode to apply. Options:
               - 'full': No filtering, return all rows (pass-through)
+              - 'minimal': Return only execution metadata and rowcount (~98% reduction)
               - 'summary': Return key_metrics + 5 sample rows (~90% reduction)
               - 'schema_only': Return schema/metrics only, no rows (~95% reduction)
               - 'sample': Return first 10 rows in result order (~60-80% reduction)
@@ -211,6 +350,8 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
     if mode == RESULT_MODE_FULL:
         return result
 
+    full_tokens = full_token_estimate if full_token_estimate is not None else _estimate_response_tokens(result)
+
     # Get original rows for filtering
     rows = result.get("rows", [])
     rowcount = result.get("rowcount", len(rows))
@@ -218,6 +359,38 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
 
     # Add result_mode to response so caller knows what they got
     result["result_mode"] = mode
+
+    if mode == RESULT_MODE_MINIMAL:
+        minimal = {
+            "status": "success",
+            "rowcount": rowcount,
+            "duration_ms": result.get("duration_ms"),
+            "result_mode": RESULT_MODE_MINIMAL,
+            "result_mode_info": {
+                "mode": RESULT_MODE_MINIMAL,
+                "total_rows": rowcount,
+                "rows_returned": 0,
+                "hint": "Use response_mode='summary' or response_mode='full' to inspect rows",
+            },
+        }
+        if "query_id" in result:
+            minimal["query_id"] = result.get("query_id")
+        if "cache" in result and isinstance(result["cache"], dict):
+            minimal["cache"] = {"hit": bool(result["cache"].get("hit"))}
+        audit_info = result.get("audit_info")
+        if isinstance(audit_info, dict):
+            minimal_audit = {
+                key: audit_info[key] for key in ("execution_id", "cache_hit", "warnings") if key in audit_info
+            }
+            if minimal_audit:
+                minimal["audit_info"] = minimal_audit
+        if result.get("session_context"):
+            minimal["session_context"] = result["session_context"]
+        result.clear()
+        result.update(minimal)
+        _sync_response_mode_aliases(result)
+        _attach_token_estimate(result, mode, full_tokens)
+        return result
 
     if mode == RESULT_MODE_SCHEMA_ONLY:
         # Return only schema info, no rows
@@ -228,6 +401,9 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
             "rows_returned": 0,
             "hint": "Use response_mode='full' to retrieve all rows",
         }
+        _sync_response_mode_aliases(result)
+        _compact_cache_metadata(result)
+        _attach_token_estimate(result, mode, full_tokens)
         return result
 
     if mode == RESULT_MODE_SAMPLE:
@@ -242,6 +418,9 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
             "sample_size": RESULT_MODE_SAMPLE_SIZE,
             "hint": _build_hint(rowcount, RESULT_MODE_SAMPLE_SIZE),
         }
+        _sync_response_mode_aliases(result)
+        _compact_cache_metadata(result)
+        _attach_token_estimate(result, mode, full_tokens)
         return result
 
     if mode == RESULT_MODE_SUMMARY:
@@ -255,7 +434,7 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
 
             logger.warning(
                 f"Result truncated: {rowcount} rows → {RESULT_MODE_SUMMARY_SAMPLE_SIZE} rows "
-                f"({truncation_pct:.1f}% data loss). Use result_mode='full' for all data.",
+                f"({truncation_pct:.1f}% data loss). Use response_mode='full' for all data.",
                 extra={
                     "total_rows": rowcount,
                     "returned_rows": RESULT_MODE_SUMMARY_SAMPLE_SIZE,
@@ -280,6 +459,9 @@ def _apply_result_mode(result: dict[str, Any], mode: str) -> dict[str, Any]:
             "columns_count": len(columns),
             "hint": _build_hint(rowcount, RESULT_MODE_SUMMARY_SAMPLE_SIZE),
         }
+        _sync_response_mode_aliases(result)
+        _compact_cache_metadata(result)
+        _attach_token_estimate(result, mode, full_tokens)
         # Ensure key_metrics is present (already computed by _ensure_default_insights)
         return result
 
@@ -323,6 +505,7 @@ class ExecuteQueryTool(MCPTool):
         if not os.environ.get("IGLOO_MCP_CACHE_MODE") and not os.environ.get("IGLOO_MCP_CACHE_ROOT"):
             self._cache_enabled = False
             self._cache_mode = "disabled"
+        self._query_circuit_breaker = self._init_query_circuit_breaker()
 
     @property
     def name(self) -> str:
@@ -356,6 +539,94 @@ class ExecuteQueryTool(MCPTool):
         warnings.append("Artifact root unavailable; SQL artifacts and cache will be disabled.")
         return None, warnings
 
+    def _init_query_circuit_breaker(self) -> CircuitBreaker | None:
+        enabled = _read_bool_env(QUERY_CIRCUIT_BREAKER_ENABLED_ENV, DEFAULT_QUERY_CIRCUIT_BREAKER_ENABLED)
+        if not enabled:
+            return None
+
+        failure_threshold = _read_int_env(
+            QUERY_CIRCUIT_BREAKER_FAILURE_THRESHOLD_ENV,
+            DEFAULT_QUERY_CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+            minimum=1,
+        )
+        recovery_timeout = _read_float_env(
+            QUERY_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_ENV,
+            DEFAULT_QUERY_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS,
+            minimum=1.0,
+        )
+        return CircuitBreaker(
+            CircuitBreakerConfig(
+                failure_threshold=failure_threshold,
+                recovery_timeout=recovery_timeout,
+            )
+        )
+
+    def get_circuit_breaker_status(self) -> dict[str, Any]:
+        """Expose execute_query circuit breaker status for diagnostics."""
+        if self._query_circuit_breaker is None:
+            return {"enabled": False, "state": "disabled"}
+        status = self._query_circuit_breaker.get_status()
+        status["enabled"] = True
+        return status
+
+    def _ensure_circuit_allows_query(self, *, timeout: int, overrides: dict[str, Any]) -> None:
+        breaker = self._query_circuit_breaker
+        if breaker is None:
+            return
+
+        if breaker.allow_request():
+            return
+
+        retry_after_seconds = round(breaker.time_until_retry_seconds(), 2)
+        status = self.get_circuit_breaker_status()
+        raise MCPExecutionError(
+            "Query execution temporarily blocked after repeated Snowflake connectivity failures.",
+            operation="execute_query",
+            hints=[
+                "Wait for the retry window, then run execute_query again.",
+                "Run health_check(response_mode='full') to inspect circuit breaker and connectivity diagnostics.",
+                "Verify Snowflake connectivity with test_connection if failures persist.",
+            ],
+            context={
+                "timeout_seconds": timeout,
+                "warehouse": overrides.get("warehouse"),
+                "database": overrides.get("database"),
+                "schema": overrides.get("schema"),
+                "role": overrides.get("role"),
+                "retry_after_seconds": retry_after_seconds,
+                "circuit_breaker": status,
+            },
+        )
+
+    @staticmethod
+    def _iter_exception_chain(error: BaseException) -> list[BaseException]:
+        chain: list[BaseException] = []
+        seen: set[int] = set()
+        current: BaseException | None = error
+        while current is not None and id(current) not in seen:
+            chain.append(current)
+            seen.add(id(current))
+            current = current.__cause__ or current.__context__
+        return chain
+
+    @classmethod
+    def _is_connectivity_failure(cls, error: BaseException) -> bool:
+        chain = cls._iter_exception_chain(error)
+        messages = [str(exc).lower() for exc in chain if str(exc)]
+        class_names = {exc.__class__.__name__.lower() for exc in chain}
+
+        # SQL/user errors should not trip connectivity protection.
+        if any(keyword in message for message in messages for keyword in NON_CONNECTIVITY_ERROR_KEYWORDS):
+            return False
+
+        if any(name in CONNECTIVITY_ERROR_CLASS_NAMES for name in class_names):
+            return True
+
+        if any(isinstance(exc, (ConnectionError, OSError)) for exc in chain):
+            return True
+
+        return any(keyword in message for message in messages for keyword in CONNECTIVITY_ERROR_KEYWORDS)
+
     def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Path | None:
         if self._artifact_root is None:
             self._transient_audit_warnings.append("SQL artifact root is unavailable; statement text was not persisted.")
@@ -364,6 +635,164 @@ class ExecuteQueryTool(MCPTool):
         if artifact_path is None:
             self._transient_audit_warnings.append("Failed to persist SQL text for audit history.")
         return artifact_path
+
+    @staticmethod
+    def _normalize_output_format(output_format: str | None) -> str:
+        if output_format is None:
+            return OUTPUT_FORMAT_INLINE
+
+        normalized = output_format.strip().lower()
+        if normalized not in SUPPORTED_OUTPUT_FORMATS:
+            raise MCPValidationError(
+                f"Invalid output_format '{output_format}'",
+                validation_errors=[
+                    f"output_format must be one of: {', '.join(SUPPORTED_OUTPUT_FORMATS)}",
+                ],
+                hints=[
+                    "Use output_format='inline' for standard responses",
+                    "Use output_format='csv' or 'jsonl' for token-efficient large exports",
+                ],
+            )
+        return normalized
+
+    @staticmethod
+    def _infer_export_columns(rows: list[Any]) -> list[str]:
+        columns: list[str] = []
+        seen: set[str] = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for key in row:
+                key_str = str(key)
+                if key_str not in seen:
+                    columns.append(key_str)
+                    seen.add(key_str)
+        return columns
+
+    def _resolve_query_output_dir(self) -> Path:
+        if self._artifact_root is not None:
+            output_dir = (self._artifact_root / "scratchpad" / "query_results").resolve()
+        else:
+            output_dir = (Path.home() / ".igloo_mcp" / "scratchpad" / "query_results").resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        return output_dir
+
+    def _write_query_output_file(
+        self,
+        *,
+        rows: list[Any],
+        columns: list[str],
+        output_format: str,
+        execution_id: str,
+    ) -> Path:
+        output_dir = self._resolve_query_output_dir()
+        filename = f"query_{execution_id[:8]}_{int(time.time())}.{output_format}"
+        output_path = (output_dir / filename).resolve()
+
+        if output_format == OUTPUT_FORMAT_JSON:
+            output_path.write_text(
+                json.dumps(rows, ensure_ascii=False, default=str),
+                encoding="utf-8",
+            )
+            return output_path
+
+        if output_format == OUTPUT_FORMAT_JSONL:
+            with output_path.open("w", encoding="utf-8") as handle:
+                for row in rows:
+                    handle.write(json.dumps(row, ensure_ascii=False, default=str))
+                    handle.write("\n")
+            return output_path
+
+        # CSV output
+        csv_columns = columns or self._infer_export_columns(rows)
+        if not csv_columns and rows:
+            first = rows[0]
+            if isinstance(first, (list, tuple)):
+                csv_columns = [f"column_{idx}" for idx in range(len(first))]
+            else:
+                csv_columns = ["value"]
+
+        with output_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=csv_columns)
+            if csv_columns:
+                writer.writeheader()
+            for row in rows:
+                if isinstance(row, dict):
+                    normalized = {column: row.get(column) for column in csv_columns}
+                elif isinstance(row, (list, tuple)):
+                    normalized = {
+                        csv_columns[idx] if idx < len(csv_columns) else f"column_{idx}": value
+                        for idx, value in enumerate(row)
+                    }
+                else:
+                    normalized = {"value": row}
+                writer.writerow(json_compatible(normalized))
+        return output_path
+
+    def _build_file_output_response(
+        self,
+        *,
+        result: dict[str, Any],
+        output_format: str,
+        execution_id: str,
+        result_mode: str,
+        full_token_estimate: int,
+    ) -> dict[str, Any]:
+        rows = result.get("rows") or []
+        columns = result.get("columns") or self._infer_export_columns(rows)
+
+        try:
+            output_path = self._write_query_output_file(
+                rows=rows,
+                columns=columns,
+                output_format=output_format,
+                execution_id=execution_id,
+            )
+            file_size = output_path.stat().st_size
+        except (OSError, PermissionError, ValueError, TypeError) as exc:
+            raise MCPExecutionError(
+                f"Failed to export query results as {output_format}",
+                operation="execute_query",
+                original_error=exc,
+                hints=[
+                    "Verify artifact root permissions and disk space",
+                    "Use output_format='inline' to avoid file output",
+                ],
+            ) from exc
+
+        rowcount = int(result.get("rowcount") or len(rows))
+        response: dict[str, Any] = {
+            "status": "success",
+            "rowcount": rowcount,
+            "row_count": rowcount,
+            "duration_ms": result.get("duration_ms"),
+            "query_id": result.get("query_id"),
+            "output_format": output_format,
+            "output_file": str(output_path),
+            "file_size_bytes": file_size,
+            "columns": columns,
+            "result_mode": result_mode,
+            "result_mode_info": {
+                "mode": "file_export",
+                "inline_rows_returned": 0,
+                "hint": "Read the output_file path for full query results",
+            },
+        }
+        _sync_response_mode_aliases(response)
+        if isinstance(result.get("cache"), dict):
+            response["cache"] = {"hit": bool(result["cache"].get("hit"))}
+        if result.get("audit_info"):
+            response["audit_info"] = result["audit_info"]
+        if result.get("session_context"):
+            response["session_context"] = result["session_context"]
+
+        response_tokens = _estimate_response_tokens(response)
+        response["token_estimate"] = {
+            "mode": result_mode,
+            "response_tokens": response_tokens,
+            "savings_vs_full": max(0, full_token_estimate - response_tokens),
+        }
+        return response
 
     def _resolve_cache_context(self, overrides: dict[str, str | None]) -> tuple[dict[str, str | None], bool]:
         """Return effective session context for caching and a flag indicating success.
@@ -604,7 +1033,7 @@ class ExecuteQueryTool(MCPTool):
                     ),
                     "warehouse": "ANALYTICS_WH",
                     "timeout_seconds": 480,
-                    "response_mode": "sync",
+                    "response_mode": "full",
                 },
             },
         ]
@@ -657,6 +1086,7 @@ class ExecuteQueryTool(MCPTool):
         reason: str | None = None,
         normalized_insight: Insight | None = None,
         result_mode: str = "summary",
+        output_format: str = OUTPUT_FORMAT_INLINE,
         ctx: Context | None = None,
         *,
         execution_id_override: str | None = None,
@@ -859,10 +1289,22 @@ class ExecuteQueryTool(MCPTool):
                 columns=cache_hit_metadata.get("columns"),
                 include_full=(result_mode == "full"),
             )
+            full_token_estimate = _estimate_response_tokens(result)
+            if output_format != OUTPUT_FORMAT_INLINE:
+                return self._build_file_output_response(
+                    result=result,
+                    output_format=output_format,
+                    execution_id=execution_id,
+                    result_mode=result_mode,
+                    full_token_estimate=full_token_estimate,
+                )
+
             # Apply result_mode filtering before returning
-            return _apply_result_mode(result, result_mode)
+            return _apply_result_mode(result, result_mode, full_token_estimate=full_token_estimate)
 
         # Execute query with session context management
+
+        self._ensure_circuit_allows_query(timeout=timeout, overrides=overrides)
 
         try:
             result = await anyio.to_thread.run_sync(  # type: ignore[arg-type]
@@ -872,6 +1314,9 @@ class ExecuteQueryTool(MCPTool):
                 timeout,
                 reason,
             )
+
+            if self._query_circuit_breaker is not None:
+                self._query_circuit_breaker.record_success()
 
             key_metrics, derived_insights = self._ensure_default_insights(result)
 
@@ -990,9 +1435,18 @@ class ExecuteQueryTool(MCPTool):
                 columns=result.get("columns"),
                 include_full=(result_mode == "full"),
             )
+            full_token_estimate = _estimate_response_tokens(result)
+            if output_format != OUTPUT_FORMAT_INLINE:
+                return self._build_file_output_response(
+                    result=result,
+                    output_format=output_format,
+                    execution_id=execution_id,
+                    result_mode=result_mode,
+                    full_token_estimate=full_token_estimate,
+                )
 
             # Apply result_mode filtering before returning
-            return _apply_result_mode(result, result_mode)
+            return _apply_result_mode(result, result_mode, full_token_estimate=full_token_estimate)
 
         except TimeoutError as e:
             # Persist timeout history
@@ -1026,7 +1480,7 @@ class ExecuteQueryTool(MCPTool):
                 logger.debug(f"Failed to record timeout in history: {e}", exc_info=True)
 
             # Use standardized timeout error wrapper
-            context = {
+            context: dict[str, Any] = {
                 "timeout_seconds": timeout,
                 "warehouse": overrides.get("warehouse"),
                 "database": overrides.get("database"),
@@ -1045,6 +1499,12 @@ class ExecuteQueryTool(MCPTool):
             raise timeout_error
         except Exception as e:  # Broad catch-all for any query execution failure
             error_message = str(e)
+            connectivity_failure = self._is_connectivity_failure(e)
+            circuit_status: dict[str, Any] | None = None
+
+            if connectivity_failure and self._query_circuit_breaker is not None:
+                self._query_circuit_breaker.record_failure()
+                circuit_status = self.get_circuit_breaker_status()
 
             if self.health_monitor:
                 self.health_monitor.record_error(f"Query execution failed: {error_message[:200]}")
@@ -1093,6 +1553,18 @@ class ExecuteQueryTool(MCPTool):
                 "Verify database/schema context",
                 "Check permissions for the objects referenced",
             ]
+            if circuit_status is not None:
+                context["circuit_breaker"] = circuit_status
+                hints.append(
+                    "Connectivity failures are tracked by a circuit breaker; run health_check(response_mode='full') "
+                    "to inspect state and retry window."
+                )
+                if circuit_status.get("state") == "open":
+                    retry_after = circuit_status.get("time_until_retry_seconds")
+                    if isinstance(retry_after, (int, float)):
+                        hints.append(
+                            f"Circuit breaker is open. Retry after approximately {round(float(retry_after), 2)}s."
+                        )
             if verbose_errors:
                 query_preview = statement[:STATEMENT_PREVIEW_LENGTH]
                 if len(statement) > STATEMENT_PREVIEW_LENGTH:
@@ -1125,6 +1597,7 @@ class ExecuteQueryTool(MCPTool):
         schema: str | None = None,
         role: str | None = None,
         timeout_seconds: int | None = None,
+        output_format: str | None = None,
         verbose_errors: bool = False,
         reason: str | None = None,
         post_query_insight: dict[str, Any] | str | None = None,
@@ -1150,12 +1623,16 @@ class ExecuteQueryTool(MCPTool):
             schema: Optional schema override (default: from profile)
             role: Optional role override (default: from profile)
             timeout_seconds: Query timeout in seconds (1-3600, default: 120)
+            output_format: Delivery format for results.
+                          "inline" (default): return rows in MCP response.
+                          "csv"/"json"/"jsonl": write rows to file and return path + metadata.
             verbose_errors: Include all error hints (default: False for compact errors)
             reason: Required. Short description for audit trail (min 5 chars).
                    Stored in Snowflake QUERY_TAG and local history.
             post_query_insight: Optional summary or structured JSON describing results.
                               Stored in history and cache artifacts.
             response_mode: Control response verbosity for token efficiency.
+                          "minimal": Return execution metadata only (~98% reduction).
                           "summary" (default): Return key_metrics + 5 sample rows (~90% reduction).
                           "full": Return all rows.
                           "schema_only": Return column schema only, no rows (~95% reduction).
@@ -1167,7 +1644,7 @@ class ExecuteQueryTool(MCPTool):
         Returns:
             Dict containing query results and metadata. When response_mode is not "full",
             includes additional fields:
-                - result_mode: Mode used ("summary", "schema_only", or "sample")
+                - result_mode: Mode used ("minimal", "summary", "schema_only", or "sample")
                 - result_mode_info: Filtering metadata with total_rows, rows_returned,
                                    sample_size, and hint for retrieving response_mode='full'
 
@@ -1190,9 +1667,10 @@ class ExecuteQueryTool(MCPTool):
             response_mode,
             legacy_param_name="result_mode",
             legacy_param_value=result_mode,
-            valid_modes=("full", "summary", "schema_only", "sample"),
+            valid_modes=("full", "minimal", "summary", "schema_only", "sample"),
             default="summary",
         )
+        effective_output_format = self._normalize_output_format(output_format)
 
         coerced_timeout: int | None = None
         if timeout_seconds is not None:
@@ -1245,6 +1723,7 @@ class ExecuteQueryTool(MCPTool):
             reason=reason,
             normalized_insight=normalized_insight,
             result_mode=effective_result_mode,
+            output_format=effective_output_format,
             ctx=ctx,
         )
 
@@ -1764,19 +2243,32 @@ class ExecuteQueryTool(MCPTool):
                         },
                     ],
                 },
+                "output_format": {
+                    "title": "Output Format",
+                    "type": "string",
+                    "enum": list(SUPPORTED_OUTPUT_FORMATS),
+                    "default": OUTPUT_FORMAT_INLINE,
+                    "description": (
+                        "Control query result delivery mode. "
+                        "'inline' (default): include rows in the MCP response. "
+                        "'csv'/'json'/'jsonl': write rows to a scratchpad file and return path + metadata only."
+                    ),
+                    "examples": ["inline", "csv", "jsonl"],
+                },
                 "response_mode": {
                     "title": "Response Mode",
                     "type": "string",
-                    "enum": ["schema_only", "summary", "sample", "full"],
+                    "enum": ["minimal", "schema_only", "summary", "sample", "full"],
                     "default": "summary",
                     "description": (
                         "Control response verbosity for token efficiency. "
+                        "'minimal': execution metadata only (98% token savings). "
                         "'summary' (default): 5 sample rows + key_metrics (90% token savings). "
                         "'full': all rows. "
                         "'schema_only': columns only (95% savings). "
                         "'sample': 10 rows (60-80% savings)."
                     ),
-                    "examples": ["summary", "full", "schema_only", "sample"],
+                    "examples": ["minimal", "summary", "full", "schema_only", "sample"],
                 },
             },
         }

@@ -9,10 +9,11 @@ Retrieves summary information about a built catalog, including statistics and me
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `catalog_dir` | string | ❌ No | ./data_catalogue | Directory containing catalog artifacts. Default resolves to unified storage at `~/.igloo_mcp/catalogs/{database}/` when used with `build_catalog` default. |
-| `database` | string | ❌ No | — | Optional database name to resolve unified storage path. Only used when `catalog_dir` is default. |
+| `response_mode` | string | ❌ No | `standard` | Response verbosity: `minimal`, `standard`, or `full`. |
+| `mode` | string | ❌ No | — | **DEPRECATED** alias for `response_mode`. |
 | `request_id` | string | ❌ No | auto-generated | Request correlation ID for distributed tracing (UUID4). Auto-generated if not provided. |
 
-> **Unified Storage**: When `catalog_dir` is the default (`./data_catalogue`), the tool attempts to resolve to unified storage location. Provide the full path to a specific catalog directory, or use the `database` parameter to resolve unified storage automatically.
+> **Unified Storage**: When `catalog_dir` is the default (`./data_catalogue`), the tool attempts to resolve to unified storage location for the active context. Provide an explicit catalog path to target a specific database directory.
 
 ## Discovery Metadata
 
@@ -20,7 +21,7 @@ Retrieves summary information about a built catalog, including statistics and me
 - **Tags:** `catalog`, `summary`, `metadata`
 - **Usage Examples:**
   1. Retrieve summary from unified storage (default resolves to `~/.igloo_mcp/catalogs/{database}/`).
-  2. Load summary from unified storage with explicit database: `get_catalog_summary(database="ANALYTICS")`.
+  2. Return minimal counts only: `get_catalog_summary(response_mode="minimal")`.
   3. Load summary from custom directory: `get_catalog_summary(catalog_dir="./artifacts/catalog")`.
 
 ## Returns

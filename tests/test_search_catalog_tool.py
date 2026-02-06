@@ -38,7 +38,51 @@ async def test_search_catalog_tables(tmp_path: Path) -> None:
     table_names = {entry["name"] for entry in result["results"]}
     assert "SALES_FACT" in table_names
     first = result["results"][0]
+    assert result["response_mode"] == "compact"
+    assert {"object_type", "database", "schema", "name"} <= set(first.keys())
+    assert "columns" not in first
+
+
+@pytest.mark.anyio
+async def test_search_catalog_full_mode_includes_detailed_metadata(tmp_path: Path) -> None:
+    service = _catalog_service_with_fixture_cli()
+    catalog_dir = tmp_path / "catalog"
+    service.build(output_dir=str(catalog_dir), database="ANALYTICS")
+
+    tool = SearchCatalogTool()
+    result = await tool.execute(
+        catalog_dir=str(catalog_dir),
+        object_types=["table"],
+        response_mode="full",
+        limit=1,
+    )
+
+    assert result["status"] == "success"
+    assert result["response_mode"] == "full"
+    first = result["results"][0]
     assert "columns" in first
+    assert "raw" in first
+
+
+@pytest.mark.anyio
+async def test_search_catalog_standard_mode_includes_column_summary(tmp_path: Path) -> None:
+    service = _catalog_service_with_fixture_cli()
+    catalog_dir = tmp_path / "catalog"
+    service.build(output_dir=str(catalog_dir), database="ANALYTICS")
+
+    tool = SearchCatalogTool()
+    result = await tool.execute(
+        catalog_dir=str(catalog_dir),
+        object_types=["table"],
+        response_mode="standard",
+        limit=1,
+    )
+
+    assert result["status"] == "success"
+    assert result["response_mode"] == "standard"
+    first = result["results"][0]
+    assert "column_count" in first
+    assert "column_names" in first
 
 
 @pytest.mark.anyio
@@ -72,3 +116,18 @@ async def test_search_catalog_missing_dir(tmp_path: Path) -> None:
 
     assert "not found" in str(exc_info.value).lower()
     assert "build_catalog" in str(exc_info.value).lower()
+
+
+@pytest.mark.anyio
+async def test_search_catalog_rejects_invalid_response_mode(tmp_path: Path) -> None:
+    from igloo_mcp.mcp.exceptions import MCPValidationError
+
+    service = _catalog_service_with_fixture_cli()
+    catalog_dir = tmp_path / "catalog"
+    service.build(output_dir=str(catalog_dir), database="ANALYTICS")
+
+    tool = SearchCatalogTool()
+    with pytest.raises(MCPValidationError) as exc_info:
+        await tool.execute(catalog_dir=str(catalog_dir), response_mode="verbose")
+
+    assert "response_mode" in str(exc_info.value).lower()

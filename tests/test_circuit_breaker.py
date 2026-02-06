@@ -95,6 +95,48 @@ def test_circuit_breaker_open_state():
         breaker.call(any_func)
 
 
+def test_circuit_breaker_allow_request_transitions_half_open():
+    """Open breaker should reject until timeout, then allow half-open probe."""
+    config = CircuitBreakerConfig(
+        failure_threshold=1,
+        recovery_timeout=0.1,
+        expected_exception=CircuitBreakerTestException,
+    )
+    breaker = CircuitBreaker(config)
+
+    with pytest.raises(CircuitBreakerTestException):
+
+        def failing_func():
+            raise CircuitBreakerTestException("boom")
+
+        breaker.call(failing_func)
+
+    assert breaker.state == CircuitState.OPEN
+    assert breaker.allow_request() is False
+
+    time.sleep(0.15)
+    assert breaker.allow_request() is True
+    assert breaker.state == CircuitState.HALF_OPEN
+
+
+def test_circuit_breaker_manual_record_methods():
+    """Manual record_success/record_failure should update state safely."""
+    config = CircuitBreakerConfig(failure_threshold=2, expected_exception=CircuitBreakerTestException)
+    breaker = CircuitBreaker(config)
+
+    breaker.record_failure()
+    assert breaker.failure_count == 1
+    assert breaker.state == CircuitState.CLOSED
+
+    breaker.record_failure()
+    assert breaker.failure_count == 2
+    assert breaker.state == CircuitState.OPEN
+
+    breaker.record_success()
+    assert breaker.failure_count == 0
+    assert breaker.state == CircuitState.CLOSED
+
+
 def test_circuit_breaker_recovery():
     """Test circuit breaker recovery after timeout."""
     config = CircuitBreakerConfig(

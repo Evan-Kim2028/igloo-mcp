@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import threading
+import typing
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -105,7 +106,7 @@ def _register_with_stub_execute(
         lambda *args, **kwargs: execute_stub,
     )
 
-    dummy_tool = SimpleNamespace(execute=lambda *_, **__: None)
+    dummy_tool = SimpleNamespace(execute=AsyncMock(return_value={"status": "ok"}))
     for attr in (
         "BuildCatalogTool",
         "BuildDependencyGraphTool",
@@ -125,6 +126,73 @@ def _register_with_stub_execute(
         service,
     )
     return server, execute_mock, context
+
+
+def _register_with_wrapper_stubs(monkeypatch: pytest.MonkeyPatch):
+    """Register tools with dedicated execute mocks for wrapper passthrough tests."""
+    server = CapturingServer()
+    service = StubService()
+    config = Config.from_env()
+    original_create = mcp_server.create_service_context
+    context = original_create(existing_config=config)
+
+    monkeypatch.setattr("igloo_mcp.mcp_server.get_config", lambda: config)
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.create_service_context",
+        lambda *, existing_config=None: context,
+    )
+
+    execute_query_mock = AsyncMock(return_value={"rows": []})
+    health_mock = AsyncMock(return_value={"status": "healthy"})
+    catalog_summary_mock = AsyncMock(return_value={"status": "success"})
+    search_catalog_mock = AsyncMock(return_value={"status": "success"})
+
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.ExecuteQueryTool",
+        lambda *args, **kwargs: SimpleNamespace(execute=execute_query_mock),
+    )
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.HealthCheckTool",
+        lambda *args, **kwargs: SimpleNamespace(execute=health_mock),
+    )
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.GetCatalogSummaryTool",
+        lambda *args, **kwargs: SimpleNamespace(execute=catalog_summary_mock),
+    )
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.SearchCatalogTool",
+        lambda *args, **kwargs: SimpleNamespace(execute=search_catalog_mock),
+    )
+
+    dummy_tool = SimpleNamespace(execute=AsyncMock(return_value={"status": "ok"}))
+    for attr in (
+        "BuildCatalogTool",
+        "BuildDependencyGraphTool",
+        "ConnectionTestTool",
+        "CreateReportTool",
+        "EvolveReportTool",
+        "EvolveReportBatchTool",
+        "RenderReportTool",
+        "SearchReportTool",
+        "GetReportTool",
+        "GetReportSchemaTool",
+        "SearchCitationsTool",
+    ):
+        monkeypatch.setattr(
+            f"igloo_mcp.mcp_server.{attr}",
+            lambda *args, **kwargs: dummy_tool,
+        )
+
+    mcp_server.register_igloo_mcp(
+        server,
+        service,
+    )
+    return server, {
+        "execute_query": execute_query_mock,
+        "health_check": health_mock,
+        "get_catalog_summary": catalog_summary_mock,
+        "search_catalog": search_catalog_mock,
+    }
 
 
 def test_execute_query_sync_applies_overrides():
@@ -257,6 +325,78 @@ def test_register_igloo_mcp_registers_once():
     assert server.names == list(dict.fromkeys(server.names))
 
 
+def test_execute_query_wrapper_type_hints_resolve(monkeypatch: pytest.MonkeyPatch):
+    """Regression: execute_query annotation evaluation should not raise NameError (#156)."""
+    server, _, _ = _register_with_stub_execute(monkeypatch)
+    execute_tool = server.tools["execute_query"]
+
+    hints = typing.get_type_hints(execute_tool, include_extras=True)
+    assert "timeout_seconds" in hints
+
+
+@pytest.mark.asyncio
+async def test_health_check_wrapper_passes_response_controls(monkeypatch: pytest.MonkeyPatch):
+    server, mocks = _register_with_wrapper_stubs(monkeypatch)
+    tool = server.tools["health_check"]
+
+    await tool(
+        response_mode="full",
+        detail_level="standard",
+        include_cortex=False,
+        include_profile=False,
+        include_catalog=True,
+        request_id="req-health",
+    )
+
+    kwargs = mocks["health_check"].await_args.kwargs
+    assert kwargs["response_mode"] == "full"
+    assert kwargs["detail_level"] == "standard"
+    assert kwargs["include_cortex"] is False
+    assert kwargs["include_profile"] is False
+    assert kwargs["include_catalog"] is True
+    assert kwargs["request_id"] == "req-health"
+
+
+@pytest.mark.asyncio
+async def test_get_catalog_summary_wrapper_passes_response_mode(monkeypatch: pytest.MonkeyPatch):
+    server, mocks = _register_with_wrapper_stubs(monkeypatch)
+    tool = server.tools["get_catalog_summary"]
+
+    await tool(
+        catalog_dir="./data_catalogue",
+        response_mode="full",
+        mode="standard",
+        request_id="req-summary",
+    )
+
+    kwargs = mocks["get_catalog_summary"].await_args.kwargs
+    assert kwargs["catalog_dir"] == "./data_catalogue"
+    assert kwargs["response_mode"] == "full"
+    assert kwargs["mode"] == "standard"
+    assert kwargs["request_id"] == "req-summary"
+
+
+@pytest.mark.asyncio
+async def test_search_catalog_wrapper_passes_search_all_databases(monkeypatch: pytest.MonkeyPatch):
+    server, mocks = _register_with_wrapper_stubs(monkeypatch)
+    tool = server.tools["search_catalog"]
+
+    await tool(
+        catalog_dir="./data_catalogue",
+        response_mode="compact",
+        search_all_databases=True,
+        limit=10,
+        request_id="req-search",
+    )
+
+    kwargs = mocks["search_catalog"].await_args.kwargs
+    assert kwargs["catalog_dir"] == "./data_catalogue"
+    assert kwargs["response_mode"] == "compact"
+    assert kwargs["search_all_databases"] is True
+    assert kwargs["limit"] == 10
+    assert kwargs["request_id"] == "req-search"
+
+
 def test_register_igloo_mcp_sets_up_context(monkeypatch):
     """Test that register_igloo_mcp properly sets up service context.
 
@@ -297,6 +437,58 @@ def test_register_igloo_mcp_sets_up_context(monkeypatch):
     mcp_server.register_igloo_mcp(server, service)
     assert mcp_server._health_monitor is ctx.health_monitor
     assert mcp_server._resource_manager is ctx.resource_manager
+
+
+def test_register_igloo_mcp_wires_health_tool_breaker_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    server = CapturingServer()
+    service = StubService()
+    config = Config.from_env()
+    original_create = mcp_server.create_service_context
+    context = original_create(existing_config=config)
+
+    monkeypatch.setattr("igloo_mcp.mcp_server.get_config", lambda: config)
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.create_service_context",
+        lambda *, existing_config=None: context,
+    )
+
+    execute_stub = SimpleNamespace(
+        execute=AsyncMock(return_value={"rows": []}),
+        get_circuit_breaker_status=MagicMock(return_value={"enabled": True, "state": "closed"}),
+    )
+    health_ctor = MagicMock(return_value=SimpleNamespace(execute=AsyncMock(return_value={"status": "healthy"})))
+
+    monkeypatch.setattr("igloo_mcp.mcp_server.ExecuteQueryTool", lambda *args, **kwargs: execute_stub)
+    monkeypatch.setattr("igloo_mcp.mcp_server.HealthCheckTool", health_ctor)
+
+    dummy_tool = SimpleNamespace(execute=AsyncMock(return_value={"status": "ok"}))
+    for attr in (
+        "BuildCatalogTool",
+        "BuildDependencyGraphTool",
+        "ConnectionTestTool",
+        "GetCatalogSummaryTool",
+        "SearchCatalogTool",
+        "CreateReportTool",
+        "EvolveReportTool",
+        "EvolveReportBatchTool",
+        "RenderReportTool",
+        "SearchReportTool",
+        "GetReportTool",
+        "GetReportSchemaTool",
+        "SearchCitationsTool",
+    ):
+        monkeypatch.setattr(
+            f"igloo_mcp.mcp_server.{attr}",
+            lambda *args, **kwargs: dummy_tool,
+        )
+
+    mcp_server.register_igloo_mcp(server, service)
+
+    kwargs = health_ctor.call_args.kwargs
+    assert kwargs["resource_manager"] is context.resource_manager
+    provider = kwargs["query_circuit_breaker_status_provider"]
+    assert callable(provider)
+    assert provider() == {"enabled": True, "state": "closed"}
 
 
 @pytest.mark.asyncio

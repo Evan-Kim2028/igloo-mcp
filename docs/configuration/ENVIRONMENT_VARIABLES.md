@@ -13,6 +13,10 @@ Complete reference for all environment variables supported by igloo-mcp.
 | `SNOWFLAKE_ROLE` | - | Override role |
 | `IGLOO_MCP_CACHE_MODE` | `"enabled"` | Result caching mode |
 | `IGLOO_MCP_MAX_QUERY_TIMEOUT_SECONDS` | `3600` | Maximum query timeout |
+| `IGLOO_MCP_CIRCUIT_BREAKER_ENABLED` | `true` | Enable execute_query connectivity circuit breaker |
+| `IGLOO_MCP_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `5` | Consecutive connectivity failures before breaker opens |
+| `IGLOO_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS` | `60` | Seconds to wait before half-open retry |
+| `IGLOO_MCP_TOOL_TIMEOUT_SECONDS` | `60` | Default timeout for long-running tools like `build_catalog` |
 | `LOG_LEVEL` | `"INFO"` | Logging verbosity |
 
 ---
@@ -119,6 +123,42 @@ export IGLOO_MCP_MAX_QUERY_TIMEOUT_SECONDS=7200  # 2 hours
 
 ---
 
+### `IGLOO_MCP_CIRCUIT_BREAKER_ENABLED`
+- **Default**: `true`
+- **Type**: Boolean
+- **Description**: Enables a connectivity-focused circuit breaker for `execute_query`. When open, live Snowflake queries fail fast until recovery timeout elapses.
+
+**Example**:
+```bash
+export IGLOO_MCP_CIRCUIT_BREAKER_ENABLED=false  # Disable during troubleshooting
+```
+
+---
+
+### `IGLOO_MCP_CIRCUIT_BREAKER_FAILURE_THRESHOLD`
+- **Default**: `5`
+- **Type**: Integer
+- **Description**: Number of consecutive Snowflake connectivity failures before the `execute_query` circuit opens.
+
+**Example**:
+```bash
+export IGLOO_MCP_CIRCUIT_BREAKER_FAILURE_THRESHOLD=3
+```
+
+---
+
+### `IGLOO_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS`
+- **Default**: `60`
+- **Type**: Float
+- **Description**: Number of seconds an open `execute_query` circuit remains open before allowing a half-open retry.
+
+**Example**:
+```bash
+export IGLOO_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS=120
+```
+
+---
+
 ### `IGLOO_MCP_MIN_REASON_LENGTH`
 - **Default**: `5`
 - **Type**: Integer
@@ -192,6 +232,18 @@ export IGLOO_MCP_CACHE_TTL_HOURS=168  # Weekly refresh
 ---
 
 ## Catalog Building
+
+### `IGLOO_MCP_TOOL_TIMEOUT_SECONDS`
+- **Default**: `60`
+- **Type**: Integer
+- **Description**: Default timeout in seconds for long-running tools (for example, `build_catalog`) when `timeout_seconds` is not provided per call.
+
+**Example**:
+```bash
+export IGLOO_MCP_TOOL_TIMEOUT_SECONDS=300  # 5 minutes for large catalog builds
+```
+
+---
 
 ### `IGLOO_MCP_CATALOG_CONCURRENCY`
 - **Default**: `16`

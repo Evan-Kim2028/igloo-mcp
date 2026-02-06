@@ -306,6 +306,34 @@ async def test_health_check_minimal_mode_excludes_storage_paths(monkeypatch: pyt
 
 
 @pytest.mark.asyncio
+async def test_health_check_includes_query_circuit_breaker_status() -> None:
+    config = Config.from_env()
+    service = StubSnowflakeService()
+    breaker_status = {
+        "enabled": True,
+        "state": "open",
+        "failure_count": 3,
+        "failure_threshold": 5,
+        "recovery_timeout_seconds": 60.0,
+        "time_until_retry_seconds": 42.5,
+    }
+
+    tool = HealthCheckTool(
+        config=config,
+        snowflake_service=service,
+        query_circuit_breaker_status_provider=lambda: breaker_status,
+    )
+
+    minimal = await tool.execute(response_mode="minimal", include_profile=False, include_cortex=False)
+    assert minimal["components"]["query_circuit_breaker"] == "open"
+
+    full = await tool.execute(response_mode="full", include_profile=False, include_cortex=False)
+    assert full["checks"]["query_circuit_breaker"] == breaker_status
+    assert full["diagnostics"]["query_circuit_breaker"] == breaker_status
+    assert "query_circuit_breaker" in full.get("remediation", {})
+
+
+@pytest.mark.asyncio
 async def test_storage_paths_reflect_repo_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test storage paths correctly reflect repo scope configuration."""
     config = Config.from_env()

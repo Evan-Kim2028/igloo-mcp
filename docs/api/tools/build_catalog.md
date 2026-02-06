@@ -47,6 +47,8 @@ You can also configure the catalog root directory using the `IGLOO_MCP_CATALOG_R
 | `database` | string | ❌ No | current | Specific database to catalog (Snowflake identifier) |
 | `account` | boolean | ❌ No | false | Include entire account (ACCOUNT_USAGE) |
 | `format` | string | ❌ No | json | Output format (`json` or `jsonl`) |
+| `include_ddl` | boolean | ❌ No | true | Include DDL (`CREATE ...`) metadata in catalog artifacts. |
+| `timeout_seconds` | integer \| string | ❌ No | 60 | Optional catalog build timeout override (1-3600). Falls back to `IGLOO_MCP_TOOL_TIMEOUT_SECONDS` when set. |
 | `request_id` | string | ❌ No | auto-generated | Request correlation ID for distributed tracing (UUID4). Auto-generated if not provided. Use for multi-step workflows and log correlation. |
 
 > If `account` is `true`, omit `database`. Identifiers support both unquoted names (e.g., `ANALYTICS`) and quoted names (e.g., `"Sales Analytics"`).
@@ -71,6 +73,10 @@ When using unified storage (default), the `output_dir` in the response shows the
   "database": "ANALYTICS",
   "account_scope": false,
   "format": "json",
+  "timeout": {
+    "seconds": 60,
+    "source": "default"
+  },
   "totals": {
     "databases": 1,
     "schemas": 15,
@@ -101,6 +107,7 @@ When using unified storage (default), the `output_dir` in the response shows the
   - Structure: `[{"code": string, "message": string, "severity": "low|medium|high", "context": {}}]`
 
 > **Note**: The `output_dir` in the response reflects the actual directory where files were saved, which may differ from the input parameter when using unified storage.
+> **Timeout source**: Response `timeout.source` is one of `parameter`, `env`, or `default`.
 
 ## Error Handling
 

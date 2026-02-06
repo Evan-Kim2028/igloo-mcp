@@ -70,6 +70,14 @@ def test_execute_query_schema(base_config: Config) -> None:
     assert verbose["type"] == "boolean"
     assert verbose["default"] is False
 
+    output_format = props["output_format"]
+    assert output_format["default"] == "inline"
+    assert output_format["enum"] == ["inline", "csv", "json", "jsonl"]
+
+    response_mode = props["response_mode"]
+    assert response_mode["default"] == "summary"
+    assert response_mode["enum"] == ["minimal", "schema_only", "summary", "sample", "full"]
+
     # Discovery metadata
     assert tool.category == "query"
     assert {"sql", "execute"}.issubset(set(tool.tags))
@@ -104,6 +112,10 @@ def test_build_catalog_schema(base_config: Config) -> None:
     assert fmt["enum"] == ["json", "jsonl"]
     assert fmt["default"] == "json"
 
+    timeout = props["timeout_seconds"]
+    assert timeout["default"] is None
+    assert "anyOf" in timeout
+
     assert "allOf" in schema
     assert any("account" in cond.get("if", {}).get("properties", {}) for cond in schema["allOf"])
 
@@ -137,6 +149,10 @@ def test_build_dependency_graph_schema() -> None:
     assert fmt["enum"] == ["json", "dot"]
     assert fmt["default"] == "json"
 
+    timeout_prop = props["timeout_seconds"]
+    assert "anyOf" in timeout_prop
+    assert timeout_prop["default"] is None
+
     assert tool.category == "metadata"
     assert {"dependencies", "lineage"}.issubset(set(tool.tags))
     assert tool.usage_examples
@@ -156,6 +172,7 @@ async def test_build_dependency_graph_execute_passes_scope() -> None:
         schema="REPORTING",
         account_scope=False,
         format="dot",
+        timeout_seconds="45",
     )
 
     service.build_dependency_graph.assert_called_once_with(
@@ -165,7 +182,11 @@ async def test_build_dependency_graph_execute_passes_scope() -> None:
         format="dot",
         output_dir="./dependencies",
     )
-    assert result == {"status": "success"}
+    assert result["status"] == "success"
+    assert result["timeout"]["seconds"] == 45
+    assert result["timeout"]["source"] == "parameter"
+    assert result["warnings"]
+    assert any("account_scope is deprecated" in warning["message"] for warning in result["warnings"])
 
 
 def test_get_catalog_summary_schema() -> None:
