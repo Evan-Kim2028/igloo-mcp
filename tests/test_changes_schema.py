@@ -224,6 +224,69 @@ def test_new_insight_validation():
     assert "summary" in errors[0].error
 
 
+def test_check_for_unrecognized_keys_detects_common_llm_mistakes():
+    """Test that check_for_unrecognized_keys catches common LLM key name mistakes."""
+    # "sections" instead of "sections_to_add" — the most common mistake
+    warnings = ProposedChanges.check_for_unrecognized_keys({
+        "sections": [{"title": "Overview"}],
+        "insights": [{"summary": "Finding"}],
+    })
+    assert len(warnings) == 2
+    assert any("sections_to_add" in w for w in warnings)
+    assert any("insights_to_add" in w for w in warnings)
+
+
+def test_check_for_unrecognized_keys_passes_valid_keys():
+    """Test that check_for_unrecognized_keys returns no warnings for valid keys."""
+    warnings = ProposedChanges.check_for_unrecognized_keys({
+        "sections_to_add": [{"title": "Overview"}],
+        "insights_to_add": [{"summary": "Finding", "importance": 8}],
+    })
+    assert warnings == []
+
+
+def test_check_for_unrecognized_keys_passes_empty_dict():
+    """Test that empty dict produces no warnings."""
+    warnings = ProposedChanges.check_for_unrecognized_keys({})
+    assert warnings == []
+
+
+def test_check_for_unrecognized_keys_unknown_key_no_alias():
+    """Test that completely unknown keys get a generic message with valid key list."""
+    warnings = ProposedChanges.check_for_unrecognized_keys({
+        "foobar": "baz",
+    })
+    assert len(warnings) == 1
+    assert "foobar" in warnings[0]
+    assert "Valid keys:" in warnings[0]
+
+
+def test_has_any_operations_empty():
+    """Test has_any_operations returns False for empty ProposedChanges."""
+    changes = ProposedChanges()
+    assert changes.has_any_operations() is False
+
+
+def test_has_any_operations_with_sections():
+    """Test has_any_operations returns True when sections_to_add is populated."""
+    changes = ProposedChanges(
+        sections_to_add=[SectionChange(section_id=str(uuid.uuid4()), title="Test")]
+    )
+    assert changes.has_any_operations() is True
+
+
+def test_has_any_operations_with_title_change():
+    """Test has_any_operations returns True for title_change."""
+    changes = ProposedChanges(title_change="New Title")
+    assert changes.has_any_operations() is True
+
+
+def test_has_any_operations_with_status_change():
+    """Test has_any_operations returns True for status_change."""
+    changes = ProposedChanges(status_change="archived")
+    assert changes.has_any_operations() is True
+
+
 def test_new_section_validation():
     """Test validation for new sections requiring title."""
     changes = ProposedChanges(

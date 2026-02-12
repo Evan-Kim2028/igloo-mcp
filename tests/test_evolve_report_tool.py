@@ -350,6 +350,66 @@ class TestEvolveReportToolIntegration:
         # The fallback should still work (may generate minimal/no-op changes)
         assert result["status"] in ("success", "validation_failed")
 
+    async def test_evolve_report_unrecognized_keys_returns_error(self, evolve_tool, test_report_id):
+        """Test that unrecognized keys in proposed_changes produce a validation error instead of silent no-op.
+
+        Regression test: LLMs often send {"sections": [...]} instead of {"sections_to_add": [...]}.
+        Previously this silently succeeded with 0 changes. Now it should fail with actionable guidance.
+        """
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add overview section",
+            proposed_changes={
+                "sections": [
+                    {
+                        "action": "add",
+                        "title": "Overview",
+                        "insights": [
+                            {"title": "Key finding", "body": "Some analysis", "importance": 8}
+                        ],
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "validation_failed"
+        assert result["error_type"] == "unrecognized_keys"
+        assert any("sections" in issue and "sections_to_add" in issue for issue in result["validation_issues"])
+
+    async def test_evolve_report_unrecognized_keys_with_valid_ops_still_succeeds(
+        self, evolve_tool, test_report_id
+    ):
+        """Test that unrecognized keys alongside valid operations still succeed (with a warning logged).
+
+        If a caller sends both valid keys and some extra unknown keys, the valid operations
+        should still be applied as long as they result in actual changes.
+        """
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add section with extra unknown keys",
+            proposed_changes={
+                "sections_to_add": [{"title": "Valid Section", "order": 0}],
+                "some_unknown_key": "ignored_value",
+            },
+        )
+
+        # The valid operation should still succeed
+        assert result["status"] == "success"
+
+    async def test_evolve_report_empty_proposed_changes_still_allowed(self, evolve_tool, test_report_id):
+        """Test that truly empty {} proposed_changes is still allowed (no unrecognized keys)."""
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add revenue section",
+            proposed_changes={},
+        )
+
+        # Empty dict has no unrecognized keys, so no error from the new check
+        assert result["status"] in ("success", "validation_failed")
+        # If it fails, it should NOT be due to unrecognized_keys
+        if result["status"] == "validation_failed":
+            assert result.get("error_type") != "unrecognized_keys"
+
     async def test_evolve_report_request_id_tracking(self, evolve_tool, test_report_id):
         """Test request_id is tracked through the operation."""
         custom_request_id = str(uuid.uuid4())

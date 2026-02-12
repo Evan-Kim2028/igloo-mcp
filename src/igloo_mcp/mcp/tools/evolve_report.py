@@ -258,6 +258,15 @@ class EvolveReportTool(MCPTool):
             else:
                 proposed_changes = {**proposed_changes, "status_change": status_change}
 
+        # Pre-parse check: detect unrecognized keys BEFORE fallback replacement.
+        # Only check when the caller actually provided a non-empty dict — empty {} is
+        # the legitimate fallback trigger and should not be flagged.
+        unrecognized_warnings = (
+            ProposedChanges.check_for_unrecognized_keys(proposed_changes)
+            if proposed_changes
+            else []
+        )
+
         if not proposed_changes:
             proposed_changes = self._generate_proposed_changes(
                 self.report_service.get_report_outline(self.report_service.resolve_report_selector(report_selector)),
@@ -384,6 +393,33 @@ class EvolveReportTool(MCPTool):
                     "proposed_changes": proposed_changes,
                     "request_id": request_id,
                     "error_type": "schema_validation",
+                }
+
+            # Fail early if input had unrecognized keys AND resulted in no operations
+            # This catches the case where an LLM sends e.g. {"sections": [...]} instead of {"sections_to_add": [...]}
+            if unrecognized_warnings and not changes_obj.has_any_operations():
+                validation_duration = (time.time() - validation_start) * 1000
+                logger.warning(
+                    "evolve_report_unrecognized_keys_no_op",
+                    extra={
+                        "report_id": report_id,
+                        "unrecognized_keys": unrecognized_warnings,
+                        "request_id": request_id,
+                        "validation_duration_ms": validation_duration,
+                    },
+                )
+                return {
+                    "status": "validation_failed",
+                    "report_id": report_id,
+                    "validation_issues": unrecognized_warnings,
+                    "validation_errors": unrecognized_warnings,
+                    "proposed_changes": proposed_changes,
+                    "request_id": request_id,
+                    "error_type": "unrecognized_keys",
+                    "hint": (
+                        "proposed_changes contained unrecognized keys that were silently ignored, "
+                        "resulting in no operations. Use get_report_schema to see the expected format."
+                    ),
                 }
 
             # Semantic validation
@@ -835,8 +871,6 @@ class EvolveReportTool(MCPTool):
         """
         return {
             "schema_version": CURRENT_CHANGES_SCHEMA_VERSION,
-            "type": "noop",
-            "description": instruction or "No-op changes generated",
             "insights_to_add": [],
             "sections_to_add": [],
             "insights_to_modify": [],

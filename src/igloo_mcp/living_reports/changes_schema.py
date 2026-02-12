@@ -173,6 +173,37 @@ class SectionChange(BaseModel):
         return v
 
 
+# Known top-level keys in ProposedChanges for detecting unrecognized input
+_PROPOSED_CHANGES_RECOGNIZED_KEYS: frozenset[str] = frozenset({
+    "schema_version",
+    "insights_to_add",
+    "insights_to_modify",
+    "insights_to_remove",
+    "sections_to_add",
+    "sections_to_modify",
+    "sections_to_remove",
+    "title_change",
+    "metadata_updates",
+    "status_change",
+})
+
+# Common misspellings / alternative key names that LLMs tend to generate
+_PROPOSED_CHANGES_KNOWN_ALIASES: dict[str, str] = {
+    "sections": "sections_to_add",
+    "insights": "insights_to_add",
+    "add_sections": "sections_to_add",
+    "add_insights": "insights_to_add",
+    "modify_sections": "sections_to_modify",
+    "modify_insights": "insights_to_modify",
+    "remove_sections": "sections_to_remove",
+    "remove_insights": "insights_to_remove",
+    "new_sections": "sections_to_add",
+    "new_insights": "insights_to_add",
+    "title": "title_change",
+    "status": "status_change",
+}
+
+
 class ProposedChanges(BaseModel):
     """Versioned schema for report evolution changes."""
 
@@ -192,6 +223,47 @@ class ProposedChanges(BaseModel):
         default=None,
         description="Optional status change for the report",
     )
+
+    @classmethod
+    def check_for_unrecognized_keys(cls, raw_input: dict[str, Any]) -> list[str]:
+        """Check raw input dict for unrecognized keys that would be silently dropped.
+
+        Returns a list of warning strings. Empty list means no issues.
+        Call this BEFORE constructing ProposedChanges to catch LLM formatting errors.
+        """
+        warnings = []
+        unrecognized = set(raw_input.keys()) - _PROPOSED_CHANGES_RECOGNIZED_KEYS
+        if not unrecognized:
+            return warnings
+
+        for key in sorted(unrecognized):
+            suggestion = _PROPOSED_CHANGES_KNOWN_ALIASES.get(key)
+            if suggestion:
+                warnings.append(
+                    f"Unrecognized key '{key}' in proposed_changes (did you mean '{suggestion}'?). "
+                    f"This key was silently ignored."
+                )
+            else:
+                warnings.append(
+                    f"Unrecognized key '{key}' in proposed_changes. "
+                    f"Valid keys: {', '.join(sorted(_PROPOSED_CHANGES_RECOGNIZED_KEYS - {'schema_version'}))}"
+                )
+
+        return warnings
+
+    def has_any_operations(self) -> bool:
+        """Return True if this ProposedChanges contains at least one operation."""
+        return bool(
+            self.insights_to_add
+            or self.insights_to_modify
+            or self.insights_to_remove
+            or self.sections_to_add
+            or self.sections_to_modify
+            or self.sections_to_remove
+            or self.title_change is not None
+            or self.metadata_updates
+            or self.status_change is not None
+        )
 
     def validate_against_outline(self, outline) -> list[ValidationErrorDetail]:
         """Validate changes against current outline state.
