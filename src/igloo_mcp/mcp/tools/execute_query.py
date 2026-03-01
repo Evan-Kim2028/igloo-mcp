@@ -850,6 +850,10 @@ class ExecuteQueryTool(MCPTool):
         return warnings
 
     async def _ensure_profile_health(self) -> None:
+        auth_mode = str(getattr(self.snowflake_service, "auth_mode", "snowflake-labs")).lower()
+        if auth_mode == "keypair":
+            return
+
         if not self.health_monitor:
             return
 

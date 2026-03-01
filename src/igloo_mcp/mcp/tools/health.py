@@ -367,6 +367,14 @@ class HealthCheckTool(MCPTool):
 
     async def _check_profile(self) -> dict[str, Any]:
         """Validate profile configuration."""
+        auth_mode = str(getattr(self.snowflake_service, "auth_mode", "snowflake-labs")).lower()
+        if auth_mode == "keypair":
+            return {
+                "status": "skipped",
+                "mode": auth_mode,
+                "message": "Profile validation is not used in keypair auth mode.",
+            }
+
         profile = self.config.snowflake.profile
 
         try:
