@@ -143,13 +143,20 @@ AUTH_PROVIDER_SPECS: dict[str, AuthProviderSpec] = {
 }
 
 
-def _arg_or_env(args: argparse.Namespace, key: str, env_name: str | None = None) -> str | None:
+def _arg_or_env(
+    args: argparse.Namespace,
+    key: str,
+    env_name: str | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> str | None:
     env_key = env_name or f"SNOWFLAKE_{key.upper()}"
     value = getattr(args, key, None)
     value = None if not isinstance(value, str) else value.strip() or None
     if value:
         return value
-    env_val = os.environ.get(env_key)
+    env_map = os.environ if env is None else env
+    env_val = env_map.get(env_key)
     if env_val is None:
         return None
     env_val = env_val.strip()
@@ -157,13 +164,15 @@ def _arg_or_env(args: argparse.Namespace, key: str, env_name: str | None = None)
 
 
 def _has_keypair_credentials(args: argparse.Namespace, env: Mapping[str, str] | None = None) -> bool:
-    env_map = dict(env or os.environ)
-    account = (_arg_or_env(args, "account") or env_map.get("SNOWFLAKE_ACCOUNT") or "").strip()
-    user = (_arg_or_env(args, "user") or env_map.get("SNOWFLAKE_USER") or "").strip()
+    env_map = dict(os.environ if env is None else env)
+    account = (_arg_or_env(args, "account", env=env_map) or env_map.get("SNOWFLAKE_ACCOUNT") or "").strip()
+    user = (_arg_or_env(args, "user", env=env_map) or env_map.get("SNOWFLAKE_USER") or "").strip()
     private_key_file = (
-        _arg_or_env(args, "private_key_file") or env_map.get("SNOWFLAKE_PRIVATE_KEY_FILE") or ""
+        _arg_or_env(args, "private_key_file", env=env_map) or env_map.get("SNOWFLAKE_PRIVATE_KEY_FILE") or ""
     ).strip()
-    private_key_inline = (_arg_or_env(args, "private_key") or env_map.get("SNOWFLAKE_PRIVATE_KEY") or "").strip()
+    private_key_inline = (
+        _arg_or_env(args, "private_key", env=env_map) or env_map.get("SNOWFLAKE_PRIVATE_KEY") or ""
+    ).strip()
     has_secret = bool(private_key_file or private_key_inline)
     return bool(account and user and has_secret)
 
@@ -174,9 +183,11 @@ def resolve_effective_auth_mode(
     env: Mapping[str, str] | None = None,
 ) -> str:
     """Resolve effective auth mode from CLI/env with auto detection."""
-    env_map = dict(env or os.environ)
+    env_map = dict(os.environ if env is None else env)
     requested = (
-        _arg_or_env(args, "auth_mode", AUTH_MODE_ENV) or env_map.get(AUTH_MODE_ENV) or AUTH_MODE_SNOWFLAKE_LABS
+        _arg_or_env(args, "auth_mode", AUTH_MODE_ENV, env=env_map)
+        or env_map.get(AUTH_MODE_ENV)
+        or AUTH_MODE_SNOWFLAKE_LABS
     ).strip()
     requested = requested.lower()
 

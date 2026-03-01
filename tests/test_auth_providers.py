@@ -64,6 +64,18 @@ def test_resolve_effective_auth_mode_invalid_raises():
         resolve_effective_auth_mode(args, env={})
 
 
+def test_resolve_effective_auth_mode_respects_explicit_empty_env(monkeypatch):
+    monkeypatch.setenv("IGLOO_MCP_AUTH_MODE", AUTH_MODE_AUTO)
+    monkeypatch.setenv("SNOWFLAKE_ACCOUNT", "HOST_ACCOUNT")
+    monkeypatch.setenv("SNOWFLAKE_USER", "HOST_USER")
+    monkeypatch.setenv("SNOWFLAKE_PRIVATE_KEY", "HOST_KEY")
+
+    args = _args(auth_mode=None, account=None, user=None, private_key=None, private_key_file=None)
+
+    # Explicit env={} should not inherit host process environment.
+    assert resolve_effective_auth_mode(args, env={}) == AUTH_MODE_SNOWFLAKE_LABS
+
+
 def test_build_keypair_connection_params_requires_account_user_and_key():
     args = _args(auth_mode=AUTH_MODE_KEYPAIR)
     with pytest.raises(ValueError, match="SNOWFLAKE_ACCOUNT"):
