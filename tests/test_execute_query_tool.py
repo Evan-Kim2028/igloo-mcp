@@ -402,4 +402,74 @@ async def test_execute_query_circuit_breaker_can_be_disabled(monkeypatch):
         await tool.execute(statement="SELECT 1", reason="disabled breaker test 2")
 
     assert tool._execute_query_sync.call_count == 2
-    assert tool.get_circuit_breaker_status() == {"enabled": False, "state": "disabled"}
+    status = tool.get_circuit_breaker_status()
+    assert status["enabled"] is False
+    assert status["state"] == "disabled"
+    assert status["provider"] == "snowflake-labs"
+    assert status["retry_policy"]["enabled"] is False
+
+
+@pytest.mark.anyio
+async def test_execute_query_snowflake_labs_defaults_to_no_retry(monkeypatch):
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", "disabled")
+    monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "disabled")
+
+    service = Mock()
+    service.auth_mode = "snowflake-labs"
+
+    config = replace(Config.from_env(), sql_permissions=SQLPermissions())
+    tool = ExecuteQueryTool(
+        config=config,
+        snowflake_service=service,
+        query_service=Mock(),
+        health_monitor=None,
+    )
+    tool._execute_query_sync = Mock(side_effect=ConnectionError("connection refused"))
+
+    with pytest.raises(MCPExecutionError):
+        await tool.execute(statement="SELECT 1", reason="no retry expected")
+
+    assert tool._execute_query_sync.call_count == 1
+
+
+@pytest.mark.anyio
+async def test_execute_query_keypair_retries_connectivity_failures(monkeypatch):
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", "disabled")
+    monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "disabled")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_INITIAL_BACKOFF_SECONDS", "0")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_MAX_BACKOFF_SECONDS", "0")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_MAX_ATTEMPTS", "2")
+
+    service = Mock()
+    service.auth_mode = "keypair"
+
+    config = replace(Config.from_env(), sql_permissions=SQLPermissions())
+    tool = ExecuteQueryTool(
+        config=config,
+        snowflake_service=service,
+        query_service=Mock(),
+        health_monitor=None,
+    )
+
+    outcomes = [
+        ConnectionError("connection reset"),
+        {
+            "statement": "SELECT 1",
+            "rowcount": 1,
+            "rows": [{"A": 1}],
+        },
+    ]
+
+    def _side_effect(*args, **kwargs):
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    tool._execute_query_sync = Mock(side_effect=_side_effect)
+
+    result = await tool.execute(statement="SELECT 1", reason="retry keypair connectivity")
+
+    assert result["rowcount"] == 1
+    assert result["retry"]["retries_used"] == 1
+    assert tool._execute_query_sync.call_count == 2

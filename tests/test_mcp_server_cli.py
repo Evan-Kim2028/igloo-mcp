@@ -99,6 +99,81 @@ async def test_create_combined_lifespan_handles_health(monkeypatch: pytest.Monke
     assert "igloo_mcp" in created["service_config"]
 
 
+@pytest.mark.anyio
+async def test_create_combined_lifespan_keypair_skips_profile_and_patch(monkeypatch: pytest.MonkeyPatch):
+    module = __import__("igloo_mcp.mcp_server", fromlist=[""])
+    args = SimpleNamespace(
+        service_config_file=None,
+        profile="DEV",
+        enable_cli_bridge=False,
+        _effective_auth_mode="keypair",
+    )
+
+    def make_fake_keypair_lifespan(_args):
+        @asynccontextmanager
+        async def cm(_server):
+            yield SimpleNamespace(name="snow_service_keypair")
+
+        return cm
+
+    class StubMonitor:
+        def __init__(self, server_start_time):
+            self.errors: list[str] = []
+            self.profile_calls = 0
+
+        def get_profile_health(self, profile, force_refresh):
+            self.profile_calls += 1
+            return SimpleNamespace(is_valid=True, profile_name=profile)
+
+        def record_error(self, message):
+            self.errors.append(message)
+
+        def check_connection_health(self, service):
+            return SimpleNamespace(value="healthy")
+
+    class StubResourceManager:
+        def __init__(self, health_monitor):
+            pass
+
+    async def run_sync(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("igloo_mcp.mcp_server.create_keypair_lifespan", make_fake_keypair_lifespan)
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.create_snowflake_lifespan",
+        lambda _args: (_ for _ in ()).throw(AssertionError("snowflake-labs lifespan should not be used")),
+    )
+    monkeypatch.setattr("igloo_mcp.mcp_server.MCPHealthMonitor", StubMonitor)
+    monkeypatch.setattr("igloo_mcp.mcp_server.MCPResourceManager", StubResourceManager)
+    monkeypatch.setattr("igloo_mcp.mcp_server.anyio.to_thread.run_sync", run_sync)
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.get_config",
+        lambda: (_ for _ in ()).throw(AssertionError("profile validation should be skipped in keypair mode")),
+    )
+
+    patch_calls: list[object] = []
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server._patch_sql_validation_middleware",
+        lambda server: patch_calls.append(server),
+    )
+
+    register_calls: list[tuple] = []
+
+    def fake_register(*a, **kwargs):
+        register_calls.append((a, kwargs))
+
+    monkeypatch.setattr("igloo_mcp.mcp_server.register_igloo_mcp", fake_register)
+
+    lifespan = module.create_combined_lifespan(args)
+    server = SimpleNamespace()
+    async with lifespan(server) as service:
+        assert service.name == "snow_service_keypair"
+        assert service.auth_mode == "keypair"
+
+    assert patch_calls == []
+    assert register_calls
+
+
 def test_main_happy_path(monkeypatch: pytest.MonkeyPatch):
     module = __import__("igloo_mcp.mcp_server", fromlist=[""])
     args = SimpleNamespace(
@@ -136,6 +211,46 @@ def test_main_happy_path(monkeypatch: pytest.MonkeyPatch):
     module.main([])
     assert run_calls == [{"transport": "stdio"}]
     assert __import__("os").environ["SNOWFLAKE_DEFAULT_CONNECTION_NAME"] == "DEV"
+
+
+def test_main_keypair_mode_skips_profile_validation(monkeypatch: pytest.MonkeyPatch):
+    module = __import__("igloo_mcp.mcp_server", fromlist=[""])
+    args = SimpleNamespace(
+        log_level="INFO",
+        transport="stdio",
+        name="server",
+        instructions="hi",
+        enable_cli_bridge=False,
+        auth_mode="keypair",
+    )
+    monkeypatch.setattr("igloo_mcp.mcp_server.parse_arguments", lambda argv=None: args)
+    monkeypatch.setattr("igloo_mcp.mcp_server.warn_deprecated_params", lambda: None)
+    monkeypatch.setattr("igloo_mcp.mcp_server.configure_logging", lambda level: None)
+    monkeypatch.setattr("igloo_mcp.mcp_server._apply_config_overrides", lambda args: None)
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.validate_and_resolve_profile",
+        lambda: (_ for _ in ()).throw(AssertionError("profile validation should not run")),
+    )
+
+    @asynccontextmanager
+    async def fake_lifespan(server):
+        yield "service"
+
+    monkeypatch.setattr("igloo_mcp.mcp_server.create_combined_lifespan", lambda args: fake_lifespan)
+
+    run_calls = []
+
+    class StubFastMCP:
+        def __init__(self, *a, **kw):
+            pass
+
+        def run(self, **kwargs):
+            run_calls.append(kwargs)
+
+    monkeypatch.setattr("igloo_mcp.mcp_server.FastMCP", StubFastMCP)
+
+    module.main([])
+    assert run_calls == [{"transport": "stdio"}]
 
 
 def test_main_profile_validation_failure(monkeypatch: pytest.MonkeyPatch):

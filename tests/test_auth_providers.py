@@ -8,7 +8,11 @@ from igloo_mcp.auth.providers import (
     AUTH_MODE_AUTO,
     AUTH_MODE_KEYPAIR,
     AUTH_MODE_SNOWFLAKE_LABS,
+    AuthProviderSpec,
     _build_keypair_connection_params,
+    attach_provider_runtime_metadata,
+    get_auth_provider_spec,
+    get_service_provider_spec,
     resolve_effective_auth_mode,
 )
 
@@ -89,3 +93,39 @@ def test_build_keypair_connection_params_uses_file_and_defaults_authenticator(tm
     assert params["database"] == "DB"
     assert params["schema"] == "SCHEMA"
     assert params["role"] == "ROLE"
+
+
+def test_get_auth_provider_spec_returns_capability_matrix():
+    keypair = get_auth_provider_spec(AUTH_MODE_KEYPAIR)
+    assert keypair.mode == AUTH_MODE_KEYPAIR
+    assert keypair.capabilities.supports_profile_validation is False
+    assert keypair.capabilities.supports_retry_handling is True
+    assert keypair.reliability.retry_attempts >= 1
+
+    labs = get_auth_provider_spec(AUTH_MODE_SNOWFLAKE_LABS)
+    assert labs.mode == AUTH_MODE_SNOWFLAKE_LABS
+    assert labs.capabilities.supports_profile_validation is True
+    assert labs.capabilities.supports_sql_validation_middleware_patch is True
+
+
+def test_attach_provider_runtime_metadata_sets_service_fields():
+    class StubService:
+        pass
+
+    service = StubService()
+    spec = attach_provider_runtime_metadata(service, mode=AUTH_MODE_KEYPAIR)
+    assert isinstance(spec, AuthProviderSpec)
+    assert service.auth_mode == AUTH_MODE_KEYPAIR
+    assert service.provider_spec == spec
+    assert service.provider_capabilities == spec.capabilities
+    assert service.provider_reliability == spec.reliability
+
+
+def test_get_service_provider_spec_uses_existing_provider_spec():
+    class StubService:
+        pass
+
+    service = StubService()
+    attached = attach_provider_runtime_metadata(service, mode=AUTH_MODE_SNOWFLAKE_LABS)
+    resolved = get_service_provider_spec(service)
+    assert resolved is attached

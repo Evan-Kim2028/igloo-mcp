@@ -46,7 +46,9 @@ from .auth import (
     AUTH_MODE_ENV,
     AUTH_MODE_SNOWFLAKE_LABS,
     SUPPORTED_AUTH_MODES,
+    attach_provider_runtime_metadata,
     create_keypair_lifespan,
+    get_auth_provider_spec,
     resolve_effective_auth_mode,
 )
 from .config import Config, ConfigError, apply_config_overrides, get_config, load_config
@@ -1303,9 +1305,14 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
 def create_combined_lifespan(args: argparse.Namespace):
     effective_auth_mode = getattr(args, "_effective_auth_mode", None) or resolve_effective_auth_mode(args)
+    provider_spec = get_auth_provider_spec(effective_auth_mode)
 
     # Create a temporary config file only for the upstream snowflake-labs provider.
-    if effective_auth_mode == AUTH_MODE_SNOWFLAKE_LABS and not getattr(args, "service_config_file", None):
+    if (
+        provider_spec.capabilities.supports_profile_validation
+        and provider_spec.mode == AUTH_MODE_SNOWFLAKE_LABS
+        and not getattr(args, "service_config_file", None)
+    ):
         import tempfile
 
         import yaml  # type: ignore[import-untyped]
@@ -1323,7 +1330,7 @@ def create_combined_lifespan(args: argparse.Namespace):
             os.close(temp_fd)
             raise
 
-    if effective_auth_mode == AUTH_MODE_SNOWFLAKE_LABS:
+    if provider_spec.mode == AUTH_MODE_SNOWFLAKE_LABS:
         # Keep symbol usage explicit so tests can monkeypatch this factory directly.
         snowflake_lifespan = create_snowflake_lifespan(args)
     else:
@@ -1340,7 +1347,7 @@ def create_combined_lifespan(args: argparse.Namespace):
         _resource_manager = MCPResourceManager(health_monitor=_health_monitor)
 
         # Perform early profile validation for profile-based auth only.
-        if effective_auth_mode == AUTH_MODE_SNOWFLAKE_LABS:
+        if provider_spec.capabilities.supports_profile_validation:
             try:
                 config = get_config()
                 if config.snowflake.profile:
@@ -1359,6 +1366,7 @@ def create_combined_lifespan(args: argparse.Namespace):
                 _health_monitor.record_error(f"Early profile validation failed: {e}")
 
         async with snowflake_lifespan(server) as snowflake_service:
+            resolved_provider_spec = attach_provider_runtime_metadata(snowflake_service, mode=provider_spec.mode)
             # Test Snowflake connection during startup
             try:
                 connection_health = await anyio.to_thread.run_sync(
@@ -1373,7 +1381,7 @@ def create_combined_lifespan(args: argparse.Namespace):
                 _health_monitor.record_error(f"Connection health check failed: {e}")
 
             # Patch upstream middleware only when using the snowflake-labs provider.
-            if effective_auth_mode == AUTH_MODE_SNOWFLAKE_LABS:
+            if resolved_provider_spec.capabilities.supports_sql_validation_middleware_patch:
                 # The upstream server's initialize_middleware adds CheckQueryType middleware
                 # that validates ALL tool calls. We need to ensure it only validates execute_query.
                 _patch_sql_validation_middleware(server)
@@ -1402,9 +1410,10 @@ def main(argv: list[str] | None = None) -> None:
     _apply_config_overrides(args)
     effective_auth_mode = resolve_effective_auth_mode(args)
     args._effective_auth_mode = effective_auth_mode  # type: ignore[attr-defined]
-    logger.info("Selected auth mode: %s", effective_auth_mode)
+    provider_spec = get_auth_provider_spec(effective_auth_mode)
+    logger.info("Selected auth mode: %s", provider_spec.mode)
 
-    if effective_auth_mode == AUTH_MODE_SNOWFLAKE_LABS:
+    if provider_spec.capabilities.supports_profile_validation:
         # Validate Snowflake profile configuration before starting server.
         try:
             # Use the enhanced validation function
@@ -1447,7 +1456,7 @@ def main(argv: list[str] | None = None) -> None:
             logger.error(f"❌ Unexpected error during profile validation: {e}")
             raise SystemExit(1) from e
     else:
-        logger.info("Skipping Snowflake profile validation (auth_mode=%s).", effective_auth_mode)
+        logger.info("Skipping Snowflake profile validation (auth_mode=%s).", provider_spec.mode)
 
     server = FastMCP(
         args.name,

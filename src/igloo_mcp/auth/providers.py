@@ -13,6 +13,7 @@ import os
 import threading
 from collections.abc import Mapping
 from contextlib import asynccontextmanager, contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -38,14 +39,114 @@ AUTH_MODE_AUTO = "auto"
 SUPPORTED_AUTH_MODES = (AUTH_MODE_SNOWFLAKE_LABS, AUTH_MODE_KEYPAIR, AUTH_MODE_AUTO)
 AUTH_MODE_ENV = "IGLOO_MCP_AUTH_MODE"
 
+DEFAULT_RETRYABLE_ERROR_KEYWORDS = (
+    "temporarily unavailable",
+    "please retry",
+    "try again",
+    "connection reset",
+    "connection aborted",
+    "service unavailable",
+    "gateway timeout",
+    "too many requests",
+    "rate limit",
+    "session no longer exists",
+    "session has been terminated",
+    "lock timeout",
+    "deadlock",
+)
+DEFAULT_NON_RETRYABLE_ERROR_KEYWORDS = (
+    "sql compilation error",
+    "syntax error",
+    "invalid identifier",
+    "object does not exist",
+    "insufficient privileges",
+    "access denied",
+    "permission denied",
+    "not authorized",
+)
+
+
+@dataclass(frozen=True)
+class AuthProviderCapabilities:
+    """Capability matrix for a concrete auth provider implementation."""
+
+    supports_profile_validation: bool
+    supports_sql_validation_middleware_patch: bool
+    supports_timeout_cancellation: bool
+    supports_retry_handling: bool
+    supports_circuit_breaker: bool
+
+
+@dataclass(frozen=True)
+class AuthProviderReliability:
+    """Provider-level reliability defaults used by execute_query."""
+
+    retry_attempts: int
+    retry_initial_backoff_seconds: float
+    retry_backoff_multiplier: float
+    retry_max_backoff_seconds: float
+    cancel_grace_seconds: float
+    circuit_breaker_failure_threshold: int
+    circuit_breaker_recovery_timeout_seconds: float
+    retryable_error_keywords: tuple[str, ...] = DEFAULT_RETRYABLE_ERROR_KEYWORDS
+    non_retryable_error_keywords: tuple[str, ...] = DEFAULT_NON_RETRYABLE_ERROR_KEYWORDS
+
+
+@dataclass(frozen=True)
+class AuthProviderSpec:
+    """Resolved provider spec for a given auth mode."""
+
+    mode: str
+    capabilities: AuthProviderCapabilities
+    reliability: AuthProviderReliability
+
+
+AUTH_PROVIDER_SPECS: dict[str, AuthProviderSpec] = {
+    AUTH_MODE_SNOWFLAKE_LABS: AuthProviderSpec(
+        mode=AUTH_MODE_SNOWFLAKE_LABS,
+        capabilities=AuthProviderCapabilities(
+            supports_profile_validation=True,
+            supports_sql_validation_middleware_patch=True,
+            supports_timeout_cancellation=True,
+            supports_retry_handling=True,
+            supports_circuit_breaker=True,
+        ),
+        reliability=AuthProviderReliability(
+            retry_attempts=1,
+            retry_initial_backoff_seconds=0.5,
+            retry_backoff_multiplier=2.0,
+            retry_max_backoff_seconds=2.0,
+            cancel_grace_seconds=5.0,
+            circuit_breaker_failure_threshold=5,
+            circuit_breaker_recovery_timeout_seconds=60.0,
+        ),
+    ),
+    AUTH_MODE_KEYPAIR: AuthProviderSpec(
+        mode=AUTH_MODE_KEYPAIR,
+        capabilities=AuthProviderCapabilities(
+            supports_profile_validation=False,
+            supports_sql_validation_middleware_patch=False,
+            supports_timeout_cancellation=True,
+            supports_retry_handling=True,
+            supports_circuit_breaker=True,
+        ),
+        reliability=AuthProviderReliability(
+            retry_attempts=2,
+            retry_initial_backoff_seconds=0.5,
+            retry_backoff_multiplier=2.0,
+            retry_max_backoff_seconds=4.0,
+            cancel_grace_seconds=5.0,
+            circuit_breaker_failure_threshold=5,
+            circuit_breaker_recovery_timeout_seconds=60.0,
+        ),
+    ),
+}
+
 
 def _arg_or_env(args: argparse.Namespace, key: str, env_name: str | None = None) -> str | None:
     env_key = env_name or f"SNOWFLAKE_{key.upper()}"
     value = getattr(args, key, None)
-    if isinstance(value, str):
-        value = value.strip() or None
-    elif value is not None:
-        value = str(value)
+    value = None if not isinstance(value, str) else value.strip() or None
     if value:
         return value
     env_val = os.environ.get(env_key)
@@ -57,12 +158,12 @@ def _arg_or_env(args: argparse.Namespace, key: str, env_name: str | None = None)
 
 def _has_keypair_credentials(args: argparse.Namespace, env: Mapping[str, str] | None = None) -> bool:
     env_map = dict(env or os.environ)
-    account = (getattr(args, "account", None) or env_map.get("SNOWFLAKE_ACCOUNT") or "").strip()
-    user = (getattr(args, "user", None) or env_map.get("SNOWFLAKE_USER") or "").strip()
+    account = (_arg_or_env(args, "account") or env_map.get("SNOWFLAKE_ACCOUNT") or "").strip()
+    user = (_arg_or_env(args, "user") or env_map.get("SNOWFLAKE_USER") or "").strip()
     private_key_file = (
-        getattr(args, "private_key_file", None) or env_map.get("SNOWFLAKE_PRIVATE_KEY_FILE") or ""
+        _arg_or_env(args, "private_key_file") or env_map.get("SNOWFLAKE_PRIVATE_KEY_FILE") or ""
     ).strip()
-    private_key_inline = (getattr(args, "private_key", None) or env_map.get("SNOWFLAKE_PRIVATE_KEY") or "").strip()
+    private_key_inline = (_arg_or_env(args, "private_key") or env_map.get("SNOWFLAKE_PRIVATE_KEY") or "").strip()
     has_secret = bool(private_key_file or private_key_inline)
     return bool(account and user and has_secret)
 
@@ -74,7 +175,9 @@ def resolve_effective_auth_mode(
 ) -> str:
     """Resolve effective auth mode from CLI/env with auto detection."""
     env_map = dict(env or os.environ)
-    requested = (getattr(args, "auth_mode", None) or env_map.get(AUTH_MODE_ENV) or AUTH_MODE_SNOWFLAKE_LABS).strip()
+    requested = (
+        _arg_or_env(args, "auth_mode", AUTH_MODE_ENV) or env_map.get(AUTH_MODE_ENV) or AUTH_MODE_SNOWFLAKE_LABS
+    ).strip()
     requested = requested.lower()
 
     if requested not in SUPPORTED_AUTH_MODES:
@@ -85,6 +188,48 @@ def resolve_effective_auth_mode(
     if requested == AUTH_MODE_AUTO:
         return AUTH_MODE_KEYPAIR if _has_keypair_credentials(args, env_map) else AUTH_MODE_SNOWFLAKE_LABS
     return requested
+
+
+def get_auth_provider_spec(mode: str | None) -> AuthProviderSpec:
+    """Return the normalized provider spec for an auth mode."""
+    normalized = (mode or AUTH_MODE_SNOWFLAKE_LABS).strip().lower()
+    if normalized == AUTH_MODE_AUTO:
+        normalized = AUTH_MODE_SNOWFLAKE_LABS
+    spec = AUTH_PROVIDER_SPECS.get(normalized)
+    if spec is not None:
+        return spec
+    logger.warning("Unknown auth mode %r; falling back to %s.", normalized, AUTH_MODE_SNOWFLAKE_LABS)
+    return AUTH_PROVIDER_SPECS[AUTH_MODE_SNOWFLAKE_LABS]
+
+
+def attach_provider_runtime_metadata(
+    service: Any,
+    *,
+    mode: str | None = None,
+) -> AuthProviderSpec:
+    """Attach provider metadata to a service instance for downstream tools."""
+    resolved_mode = mode or getattr(service, "auth_mode", AUTH_MODE_SNOWFLAKE_LABS)
+    spec = get_auth_provider_spec(str(resolved_mode))
+    assignments = {
+        "auth_mode": spec.mode,
+        "provider_spec": spec,
+        "provider_capabilities": spec.capabilities,
+        "provider_reliability": spec.reliability,
+    }
+    for key, value in assignments.items():
+        try:
+            setattr(service, key, value)
+        except (AttributeError, TypeError):
+            logger.debug("Could not set provider metadata field %s on %s", key, type(service).__name__, exc_info=True)
+    return spec
+
+
+def get_service_provider_spec(service: Any) -> AuthProviderSpec:
+    """Get provider spec from a service, attaching defaults when absent."""
+    existing = getattr(service, "provider_spec", None)
+    if isinstance(existing, AuthProviderSpec):
+        return existing
+    return attach_provider_runtime_metadata(service, mode=getattr(service, "auth_mode", None))
 
 
 def _build_keypair_connection_params(args: argparse.Namespace) -> dict[str, Any]:
@@ -136,6 +281,9 @@ class KeyPairSnowflakeService:
 
     def __init__(self, connection_params: dict[str, Any]):
         self.auth_mode = AUTH_MODE_KEYPAIR
+        self.provider_spec = get_auth_provider_spec(AUTH_MODE_KEYPAIR)
+        self.provider_capabilities = self.provider_spec.capabilities
+        self.provider_reliability = self.provider_spec.reliability
         self.connection_params = dict(connection_params)
         self.transport = "stdio"
         self.endpoint = "/mcp"
