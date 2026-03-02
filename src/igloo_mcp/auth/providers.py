@@ -339,7 +339,8 @@ class KeyPairSnowflakeService:
         with connection.cursor() as cursor:
             if cursor is None:  # pragma: no cover - defensive for connector protocol typing
                 raise RuntimeError("Failed to acquire Snowflake cursor for keypair connection health probe.")
-            cursor.execute("SELECT 'igloo_mcp_keypair_auth'").fetchone()
+            cursor.execute("SELECT 'igloo_mcp_keypair_auth'")
+            cursor.fetchone()
         return connection
 
     def _ensure_connection(self, session_parameters: dict[str, Any] | None = None):
