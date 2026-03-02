@@ -364,9 +364,7 @@ class TestEvolveReportToolIntegration:
                     {
                         "action": "add",
                         "title": "Overview",
-                        "insights": [
-                            {"title": "Key finding", "body": "Some analysis", "importance": 8}
-                        ],
+                        "insights": [{"title": "Key finding", "body": "Some analysis", "importance": 8}],
                     }
                 ]
             },
@@ -376,9 +374,7 @@ class TestEvolveReportToolIntegration:
         assert result["error_type"] == "unrecognized_keys"
         assert any("sections" in issue and "sections_to_add" in issue for issue in result["validation_issues"])
 
-    async def test_evolve_report_unrecognized_keys_with_valid_ops_still_succeeds(
-        self, evolve_tool, test_report_id
-    ):
+    async def test_evolve_report_unrecognized_keys_with_valid_ops_still_succeeds(self, evolve_tool, test_report_id):
         """Test that unrecognized keys alongside valid operations still succeed (with a warning logged).
 
         If a caller sends both valid keys and some extra unknown keys, the valid operations

@@ -1296,6 +1296,11 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
     args = parser.parse_args(argv)
 
+    if getattr(args, "auth_mode", None) not in SUPPORTED_AUTH_MODES:
+        parser.error(
+            f"argument --auth-mode: invalid choice: '{args.auth_mode}' (choose from {', '.join(SUPPORTED_AUTH_MODES)})"
+        )
+
     # Mirror CLI behaviour for env overrides
     if not getattr(args, "service_config_file", None):
         args.service_config_file = os.environ.get("SERVICE_CONFIG_FILE")
@@ -1408,7 +1413,11 @@ def main(argv: list[str] | None = None) -> None:
     warn_deprecated_params()
     configure_logging(level=args.log_level)
     _apply_config_overrides(args)
-    effective_auth_mode = resolve_effective_auth_mode(args)
+    try:
+        effective_auth_mode = resolve_effective_auth_mode(args)
+    except ValueError as e:
+        logger.error("❌ Invalid auth mode configuration: %s", e)
+        raise SystemExit(2) from e
     args._effective_auth_mode = effective_auth_mode  # type: ignore[attr-defined]
     provider_spec = get_auth_provider_spec(effective_auth_mode)
     logger.info("Selected auth mode: %s", provider_spec.mode)

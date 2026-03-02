@@ -192,9 +192,7 @@ def resolve_effective_auth_mode(
     requested = requested.lower()
 
     if requested not in SUPPORTED_AUTH_MODES:
-        raise ValueError(
-            f"Unsupported auth_mode '{requested}'. Supported values: {', '.join(SUPPORTED_AUTH_MODES)}"
-        )
+        raise ValueError(f"Unsupported auth_mode '{requested}'. Supported values: {', '.join(SUPPORTED_AUTH_MODES)}")
 
     if requested == AUTH_MODE_AUTO:
         return AUTH_MODE_KEYPAIR if _has_keypair_credentials(args, env_map) else AUTH_MODE_SNOWFLAKE_LABS
@@ -298,7 +296,11 @@ class KeyPairSnowflakeService:
         self.connection_params = dict(connection_params)
         self.transport = "stdio"
         self.endpoint = "/mcp"
-        self.query_tag = {"origin": "igloo_mcp", "name": "mcp_server", "auth_mode": AUTH_MODE_KEYPAIR}
+        self.query_tag: dict[str, Any] = {
+            "origin": "igloo_mcp",
+            "name": "mcp_server",
+            "auth_mode": AUTH_MODE_KEYPAIR,
+        }
         self.tag_major_version = 1
         self.tag_minor_version = 0
         self._lock = threading.RLock()
@@ -335,6 +337,8 @@ class KeyPairSnowflakeService:
         )
         # Zero-compute ping for deterministic startup parity with upstream provider.
         with connection.cursor() as cursor:
+            if cursor is None:  # pragma: no cover - defensive for connector protocol typing
+                raise RuntimeError("Failed to acquire Snowflake cursor for keypair connection health probe.")
             cursor.execute("SELECT 'igloo_mcp_keypair_auth'").fetchone()
         return connection
 

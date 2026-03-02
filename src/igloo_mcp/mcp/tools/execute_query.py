@@ -225,6 +225,7 @@ NON_CONNECTIVITY_ERROR_KEYWORDS = (
     "permission denied",
     "invalid argument",
 )
+RETRY_SAFE_STATEMENT_TYPES = frozenset({"select", "show", "describe", "use"})
 
 
 @dataclass(frozen=True)
@@ -774,10 +775,22 @@ class ExecuteQueryTool(MCPTool):
             "connectivity": False,
         }
 
-    def _should_retry_failure(self, *, classification: dict[str, Any], attempt_number: int) -> bool:
-        if not self._retry_policy.enabled:
+    @staticmethod
+    def _is_retry_safe_statement_type(statement_type: str | None) -> bool:
+        canonical = (statement_type or "").replace("_", "").strip().lower()
+        return canonical in RETRY_SAFE_STATEMENT_TYPES
+
+    def _should_retry_failure(
+        self,
+        *,
+        classification: dict[str, Any],
+        attempt_number: int,
+        retry_enabled: bool,
+        max_attempts: int,
+    ) -> bool:
+        if not retry_enabled:
             return False
-        if attempt_number >= self._retry_policy.max_attempts:
+        if attempt_number >= max_attempts:
             return False
         return bool(classification.get("retryable"))
 
@@ -1034,7 +1047,7 @@ class ExecuteQueryTool(MCPTool):
             ],
         )
 
-    def _enforce_sql_permissions(self, statement: str) -> None:
+    def _enforce_sql_permissions(self, statement: str) -> str:
         allow_list = self.config.sql_permissions.get_allow_list()
         disallow_list = self.config.sql_permissions.get_disallow_list()
 
@@ -1053,6 +1066,7 @@ class ExecuteQueryTool(MCPTool):
                     "Use SELECT statements for read-only queries",
                 ],
             )
+        return stmt_type
 
     def _ensure_default_insights(self, result: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
         key_metrics = result.get("key_metrics")
@@ -1256,6 +1270,8 @@ class ExecuteQueryTool(MCPTool):
         if validate_profile:
             await self._ensure_profile_health()
 
+        statement_type = "Unknown"
+
         if validate_statement:
             # Validate SQL statement length
             if len(statement) > MAX_SQL_STATEMENT_LENGTH:
@@ -1267,7 +1283,15 @@ class ExecuteQueryTool(MCPTool):
                         "Use CTEs or views to simplify complex queries",
                     ],
                 )
-            self._enforce_sql_permissions(statement)
+            statement_type = self._enforce_sql_permissions(statement)
+
+        retry_safe_statement = self._is_retry_safe_statement_type(statement_type)
+        retry_enabled = self._retry_policy.enabled and retry_safe_statement
+        retry_max_attempts = self._retry_policy.max_attempts if retry_enabled else 1
+        if self._retry_policy.enabled and not retry_safe_statement:
+            self._transient_audit_warnings.append(
+                "Automatic retries are disabled for non-read-only statements to avoid duplicate side effects."
+            )
 
         # Prepare session context overrides
         overrides_input = {
@@ -1464,7 +1488,8 @@ class ExecuteQueryTool(MCPTool):
         retry_categories: list[str] = []
 
         try:
-            for attempt_number in range(1, self._retry_policy.max_attempts + 1):
+            for attempt_number in range(1, retry_max_attempts + 1):
+                retry_attempts_used = max(0, attempt_number - 1)
                 self._ensure_circuit_allows_query(timeout=timeout, overrides=overrides)
                 try:
                     result = await anyio.to_thread.run_sync(  # type: ignore[arg-type]
@@ -1474,7 +1499,6 @@ class ExecuteQueryTool(MCPTool):
                         timeout,
                         reason,
                     )
-                    retry_attempts_used = max(0, attempt_number - 1)
                     break
                 except TimeoutError:
                     # Do not retry local timeout cancellations to avoid duplicate work.
@@ -1482,21 +1506,26 @@ class ExecuteQueryTool(MCPTool):
                 except Exception as exc:
                     classification = self._classify_failure(exc)
                     retry_categories.append(str(classification.get("category", "unknown")))
-                    if not self._should_retry_failure(classification=classification, attempt_number=attempt_number):
+                    if not self._should_retry_failure(
+                        classification=classification,
+                        attempt_number=attempt_number,
+                        retry_enabled=retry_enabled,
+                        max_attempts=retry_max_attempts,
+                    ):
                         raise
 
                     delay_seconds = self._compute_retry_delay_seconds(attempt_number)
                     self._transient_audit_warnings.append(
                         "Retrying query after "
                         f"{classification.get('category', 'transient')} failure "
-                        f"(attempt {attempt_number}/{self._retry_policy.max_attempts}, "
+                        f"(attempt {attempt_number}/{retry_max_attempts}, "
                         f"backoff {round(delay_seconds, 3)}s)."
                     )
                     logger.warning(
                         "execute_query retrying after %s failure (attempt %s/%s, backoff %.3fs)",
                         classification.get("category", "transient"),
                         attempt_number,
-                        self._retry_policy.max_attempts,
+                        retry_max_attempts,
                         delay_seconds,
                     )
                     if delay_seconds > 0:
@@ -1508,8 +1537,8 @@ class ExecuteQueryTool(MCPTool):
                 self._query_circuit_breaker.record_success()
 
             result["retry"] = {
-                "enabled": self._retry_policy.enabled,
-                "max_attempts": self._retry_policy.max_attempts,
+                "enabled": retry_enabled,
+                "max_attempts": retry_max_attempts,
                 "attempts_used": retry_attempts_used + 1,
                 "retries_used": retry_attempts_used,
                 "categories": retry_categories,
@@ -1685,8 +1714,8 @@ class ExecuteQueryTool(MCPTool):
                 "role": overrides.get("role"),
                 "provider": self._provider_spec.mode,
                 "retry": {
-                    "enabled": self._retry_policy.enabled,
-                    "max_attempts": self._retry_policy.max_attempts,
+                    "enabled": retry_enabled,
+                    "max_attempts": retry_max_attempts,
                     "retries_used": retry_attempts_used,
                     "categories": retry_categories,
                 },
@@ -1701,6 +1730,11 @@ class ExecuteQueryTool(MCPTool):
                 self.health_monitor.record_error(str(timeout_error))
             self._collect_audit_warnings()
             raise timeout_error
+        except MCPExecutionError as e:
+            if self.health_monitor:
+                self.health_monitor.record_error(f"Query execution failed: {str(e)[:200]}")
+            self._collect_audit_warnings()
+            raise
         except Exception as e:  # Broad catch-all for any query execution failure
             error_message = str(e)
             failure_classification = self._classify_failure(e)
@@ -1755,8 +1789,8 @@ class ExecuteQueryTool(MCPTool):
                 "provider": self._provider_spec.mode,
                 "failure_category": failure_classification.get("category", "unknown"),
                 "retry": {
-                    "enabled": self._retry_policy.enabled,
-                    "max_attempts": self._retry_policy.max_attempts,
+                    "enabled": retry_enabled,
+                    "max_attempts": retry_max_attempts,
                     "retries_used": retry_attempts_used,
                     "categories": retry_categories,
                 },
@@ -1768,8 +1802,7 @@ class ExecuteQueryTool(MCPTool):
             ]
             if retry_attempts_used > 0:
                 hints.append(
-                    f"Retried {retry_attempts_used} time(s) before failing "
-                    f"(max_attempts={self._retry_policy.max_attempts})."
+                    f"Retried {retry_attempts_used} time(s) before failing (max_attempts={retry_max_attempts})."
                 )
             if circuit_status is not None:
                 context["circuit_breaker"] = circuit_status

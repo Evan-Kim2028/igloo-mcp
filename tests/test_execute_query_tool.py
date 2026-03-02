@@ -473,3 +473,96 @@ async def test_execute_query_keypair_retries_connectivity_failures(monkeypatch):
     assert result["rowcount"] == 1
     assert result["retry"]["retries_used"] == 1
     assert tool._execute_query_sync.call_count == 2
+
+
+@pytest.mark.anyio
+async def test_execute_query_non_read_only_statement_disables_retry(monkeypatch):
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", "disabled")
+    monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "disabled")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_MAX_ATTEMPTS", "3")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_INITIAL_BACKOFF_SECONDS", "0")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_MAX_BACKOFF_SECONDS", "0")
+
+    service = Mock()
+    service.auth_mode = "keypair"
+
+    config = replace(
+        Config.from_env(),
+        sql_permissions=SQLPermissions(insert=True),
+    )
+    tool = ExecuteQueryTool(
+        config=config,
+        snowflake_service=service,
+        query_service=Mock(),
+        health_monitor=None,
+    )
+    tool._execute_query_sync = Mock(side_effect=ConnectionError("connection reset"))
+
+    with pytest.raises(MCPExecutionError) as exc_info:
+        await tool.execute(statement="INSERT INTO demo VALUES (1)", reason="verify mutating retry safety")
+
+    assert tool._execute_query_sync.call_count == 1
+    assert exc_info.value.context["retry"]["enabled"] is False
+    assert exc_info.value.context["retry"]["max_attempts"] == 1
+    assert exc_info.value.context["retry"]["retries_used"] == 0
+
+
+@pytest.mark.anyio
+async def test_execute_query_circuit_breaker_open_preserves_structured_error(monkeypatch):
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", "disabled")
+    monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "disabled")
+    monkeypatch.setenv("IGLOO_MCP_CIRCUIT_BREAKER_ENABLED", "true")
+    monkeypatch.setenv("IGLOO_MCP_CIRCUIT_BREAKER_FAILURE_THRESHOLD", "1")
+    monkeypatch.setenv("IGLOO_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS", "3600")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_ENABLED", "false")
+
+    config = replace(Config.from_env(), sql_permissions=SQLPermissions())
+    tool = ExecuteQueryTool(
+        config=config,
+        snowflake_service=Mock(),
+        query_service=Mock(),
+        health_monitor=None,
+    )
+    tool._execute_query_sync = Mock(side_effect=ConnectionError("connection refused"))
+
+    with pytest.raises(MCPExecutionError):
+        await tool.execute(statement="SELECT 1", reason="open breaker seed")
+
+    with pytest.raises(MCPExecutionError) as exc_info:
+        await tool.execute(statement="SELECT 1", reason="open breaker check")
+
+    error = exc_info.value
+    assert "temporarily blocked" in str(error)
+    assert "retry_after_seconds" in error.context
+    assert "circuit_breaker" in error.context
+    assert error.context["circuit_breaker"]["state"] == "open"
+
+
+@pytest.mark.anyio
+async def test_execute_query_retry_context_counts_retries_on_terminal_failure(monkeypatch):
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", "disabled")
+    monkeypatch.setenv("IGLOO_MCP_CACHE_MODE", "disabled")
+    monkeypatch.setenv("IGLOO_MCP_CIRCUIT_BREAKER_ENABLED", "false")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_INITIAL_BACKOFF_SECONDS", "0")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_MAX_BACKOFF_SECONDS", "0")
+    monkeypatch.setenv("IGLOO_MCP_QUERY_RETRY_MAX_ATTEMPTS", "2")
+
+    service = Mock()
+    service.auth_mode = "keypair"
+
+    config = replace(Config.from_env(), sql_permissions=SQLPermissions())
+    tool = ExecuteQueryTool(
+        config=config,
+        snowflake_service=service,
+        query_service=Mock(),
+        health_monitor=None,
+    )
+    tool._execute_query_sync = Mock(side_effect=ConnectionError("network timeout"))
+
+    with pytest.raises(MCPExecutionError) as exc_info:
+        await tool.execute(statement="SELECT 1", reason="retry failure accounting")
+
+    assert tool._execute_query_sync.call_count == 2
+    assert exc_info.value.context["retry"]["enabled"] is True
+    assert exc_info.value.context["retry"]["max_attempts"] == 2
+    assert exc_info.value.context["retry"]["retries_used"] == 1

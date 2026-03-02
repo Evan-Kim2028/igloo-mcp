@@ -29,6 +29,16 @@ def test_parse_arguments_with_login_params(monkeypatch: pytest.MonkeyPatch):
     assert args.service_config_file == "/tmp/config.yml"
 
 
+def test_parse_arguments_rejects_invalid_auth_mode_from_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("igloo_mcp.mcp_server.get_login_params", lambda: {})
+    monkeypatch.setenv("IGLOO_MCP_AUTH_MODE", "not-real")
+
+    with pytest.raises(SystemExit) as exc_info:
+        __import__("igloo_mcp.mcp_server", fromlist=[""]).parse_arguments([])
+
+    assert exc_info.value.code == 2
+
+
 @pytest.mark.anyio
 async def test_create_combined_lifespan_handles_health(monkeypatch: pytest.MonkeyPatch, tmp_path):
     module = __import__("igloo_mcp.mcp_server", fromlist=[""])
