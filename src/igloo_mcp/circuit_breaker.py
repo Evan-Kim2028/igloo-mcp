@@ -65,10 +65,10 @@ class CircuitBreaker:
             with self._lock:
                 self._on_success()
             return result
-        except self.config.expected_exception as e:
+        except self.config.expected_exception:
             with self._lock:
                 self._on_failure()
-            raise e
+            raise
 
     def _should_attempt_reset(self) -> bool:
         """Check if enough time has passed to attempt a reset."""
