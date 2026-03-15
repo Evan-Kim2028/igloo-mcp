@@ -316,7 +316,7 @@ class HealthCheckTool(MCPTool):
         try:
             result = await anyio.to_thread.run_sync(self._test_connection_sync)
             return {
-                "status": "connected",
+                "status": "healthy",
                 "connected": True,
                 "profile": self.config.snowflake.profile,
                 "warehouse": result.get("warehouse"),
@@ -474,9 +474,9 @@ class HealthCheckTool(MCPTool):
         try:
             resources = self.resource_manager.list_resources()
             return {
-                "status": "available",
+                "status": "healthy",
                 "resource_count": len(resources) if resources else 0,
-                "has_catalog": len(resources) > 0 if resources else False,
+                "exists": len(resources) > 0 if resources else False,
             }
         except Exception as e:
             return {
