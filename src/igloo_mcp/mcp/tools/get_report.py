@@ -185,6 +185,7 @@ class GetReportTool(MCPTool):
             self.report_service.index.rebuild_from_filesystem()
             selector = ReportSelector(self.report_service.index)
             report_id = selector.resolve(report_selector, strict=False)
+            selector_duration = (time.time() - selector_start) * 1000
         except SelectorResolutionError as e:
             selector_duration = (time.time() - selector_start) * 1000
             error_dict = e.to_dict()
@@ -292,7 +293,7 @@ class GetReportTool(MCPTool):
             response["duration_ms"] = round(total_duration, 2)
         else:
             response["timing"] = {
-                "selector_duration_ms": round((time.time() - selector_start) * 1000, 2),
+                "selector_duration_ms": round(selector_duration, 2),
                 "retrieval_duration_ms": round(retrieval_duration, 2),
                 "total_duration_ms": round(total_duration, 2),
             }
