@@ -13,14 +13,13 @@ from typing import Any
 from pydantic import ValidationError
 
 from igloo_mcp.error_handling import ErrorContext
+from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.exceptions import (
     MCPExecutionError,
     MCPSelectorError,
     MCPToolError,
     MCPValidationError,
 )
-
-from igloo_mcp.mcp.compat import get_logger
 
 logger = get_logger(__name__)
 
@@ -154,6 +153,7 @@ def wrap_execution_error(
         hints: Optional actionable suggestions
         context: Optional additional context
         verbose: If False, truncate hints to DEFAULT_MAX_HINTS (default: True)
+        error_code: Machine-readable error code (default: "EXECUTION_ERROR")
 
     Returns:
         MCPExecutionError instance

@@ -15,6 +15,7 @@ import anyio
 from igloo_mcp.catalog import CatalogService
 from igloo_mcp.config import Config
 from igloo_mcp.constants import CATALOG_CONCURRENCY, MAX_DDL_CONCURRENCY
+from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.exceptions import MCPExecutionError, MCPValidationError
 from igloo_mcp.path_utils import validate_safe_path
 
@@ -26,8 +27,6 @@ from .schema_utils import (
     snowflake_identifier_schema,
     string_schema,
 )
-
-from igloo_mcp.mcp.compat import get_logger
 
 logger = get_logger(__name__)
 

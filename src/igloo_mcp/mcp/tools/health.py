@@ -14,6 +14,7 @@ import anyio
 
 from igloo_mcp.auth import get_service_provider_spec
 from igloo_mcp.config import Config
+from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.profile_utils import (
     ProfileValidationError,
@@ -23,8 +24,6 @@ from igloo_mcp.profile_utils import (
 
 from .base import MCPTool, ensure_request_id, tool_error_handler
 from .schema_utils import boolean_schema
-
-from igloo_mcp.mcp.compat import get_logger
 
 logger = get_logger(__name__)
 

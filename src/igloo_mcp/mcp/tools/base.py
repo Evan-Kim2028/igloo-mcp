@@ -6,7 +6,6 @@ Part of v1.8.0 Phase 2.2 - MCP server simplification.
 from __future__ import annotations
 
 import functools
-import logging
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
@@ -21,7 +20,6 @@ from typing import (
 from pydantic import BaseModel, ValidationError
 
 from igloo_mcp.mcp.compat import get_logger
-
 from igloo_mcp.mcp.error_utils import (
     handle_generic_exception_decorator,
     handle_mcp_exception_decorator,

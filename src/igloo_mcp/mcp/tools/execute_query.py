@@ -5,6 +5,7 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import hashlib
 import json
@@ -18,11 +19,6 @@ from pathlib import Path
 from typing import Any
 
 import anyio
-
-from igloo_mcp.mcp.compat import Context, get_logger
-
-
-import contextlib
 
 from igloo_mcp.auth import (
     AuthProviderReliability,
@@ -39,8 +35,6 @@ from igloo_mcp.constants import (
     MIN_QUERY_TIMEOUT_SECONDS,
     RESULT_KEEP_FIRST_ROWS,
     RESULT_KEEP_LAST_ROWS,
-    RESULT_SIZE_LIMIT_MB,
-    RESULT_TRUNCATION_THRESHOLD,
     STATEMENT_PREVIEW_LENGTH,
 )
 from igloo_mcp.logging import (
@@ -49,6 +43,7 @@ from igloo_mcp.logging import (
     normalize_insight,
     truncate_insight_for_storage,
 )
+from igloo_mcp.mcp.compat import Context, get_logger
 from igloo_mcp.mcp.error_utils import wrap_execution_error, wrap_timeout_error
 from igloo_mcp.mcp.exceptions import MCPExecutionError, MCPValidationError
 from igloo_mcp.mcp.utils import json_compatible
@@ -2006,7 +2001,9 @@ class ExecuteQueryTool(MCPTool):
 
         # Dry-run mode: wrap in EXPLAIN USING JSON and return the query plan
         if dry_run:
-            explain_stmt = f"EXPLAIN USING JSON {statement}"
+            # Strip trailing semicolons/whitespace — EXPLAIN doesn't accept them
+            clean_stmt = statement.rstrip().rstrip(";").rstrip()
+            explain_stmt = f"EXPLAIN USING JSON {clean_stmt}"
             result = await self._execute_impl(
                 statement=explain_stmt,
                 warehouse=warehouse,
@@ -2350,15 +2347,13 @@ class ExecuteQueryTool(MCPTool):
                                     if total_fetched <= 50:
                                         size_sample_bytes += len(json.dumps(row, ensure_ascii=False, default=str))
                                         size_sample_count += 1
-                                elif total_fetched == keep_first + 1:
+                                else:
                                     # We've exceeded head capacity — switch to tail buffer mode
                                     needs_truncation = True
                                     tail_buffer.append(row)
-                                else:
-                                    tail_buffer.append(row)
                                     # Keep tail buffer bounded to save memory
                                     if len(tail_buffer) > keep_last:
-                                        # Sample a mid-stream row for better size estimation
+                                        # Sample evicted rows for better size estimation
                                         if size_sample_count < 100:
                                             evicted = tail_buffer.pop(0)
                                             size_sample_bytes += len(

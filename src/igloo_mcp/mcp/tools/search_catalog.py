@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from igloo_mcp.catalog import CatalogIndex
+from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.exceptions import (
     MCPSelectorError,
     MCPValidationError,
@@ -24,8 +25,6 @@ from .schema_utils import (
     snowflake_identifier_schema,
     string_schema,
 )
-
-from igloo_mcp.mcp.compat import get_logger
 
 logger = get_logger(__name__)
 

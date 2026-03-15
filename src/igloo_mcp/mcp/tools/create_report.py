@@ -11,9 +11,12 @@ from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.service import ReportService
+from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.exceptions import MCPExecutionError, MCPValidationError
 from igloo_mcp.mcp.tools.base import MCPTool, ensure_request_id, tool_error_handler
 from igloo_mcp.mcp.validation_helpers import validate_text_field
+
+logger = get_logger(__name__)
 
 VALID_TEMPLATES = (
     "default",
@@ -21,10 +24,6 @@ VALID_TEMPLATES = (
     "analyst_v1",
     "empty",
 )
-
-from igloo_mcp.mcp.compat import get_logger
-
-logger = get_logger(__name__)
 
 
 class CreateReportTool(MCPTool):
