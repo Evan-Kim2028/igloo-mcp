@@ -85,7 +85,7 @@ from .profile_utils import (
     get_profile_summary,
     validate_and_resolve_profile,
 )
-from .service_layer import CatalogService, DependencyService, QueryService
+from .service_layer import CatalogService, DependencyService
 from .session_utils import (
     SessionContext,
     apply_session_context,
@@ -317,7 +317,6 @@ def register_igloo_mcp(
 
     config = get_config()
     context = create_service_context(existing_config=config)
-    query_service = QueryService(context=context)
     catalog_service = CatalogService(context=context)
     dependency_service = DependencyService(context=context)
     global _health_monitor, _resource_manager, _catalog_service
@@ -327,7 +326,7 @@ def register_igloo_mcp(
     # snow_cli bridge removed - no longer needed
 
     # Instantiate all extracted tool classes
-    execute_query_inst = ExecuteQueryTool(config, snowflake_service, query_service, _health_monitor)
+    execute_query_inst = ExecuteQueryTool(config, snowflake_service, _health_monitor)
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
     build_dependency_graph_inst = BuildDependencyGraphTool(dependency_service)
     test_connection_inst = ConnectionTestTool(config, snowflake_service)

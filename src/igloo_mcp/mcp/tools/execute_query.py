@@ -5,7 +5,6 @@ Part of v1.8.0 Phase 2.2 - extracted from mcp_server.py.
 
 from __future__ import annotations
 
-import contextlib
 import csv
 import hashlib
 import json
@@ -55,7 +54,6 @@ from igloo_mcp.path_utils import (
     resolve_artifact_root,
 )
 from igloo_mcp.post_query_insights import build_default_insights
-from igloo_mcp.service_layer import QueryService
 from igloo_mcp.session_utils import (
     apply_session_context,
     ensure_session_lock,
@@ -341,7 +339,8 @@ def _escape_sql_value(value: Any) -> str:
     if isinstance(value, (int, float)):
         return str(value)
     value_str = str(value)
-    return f"'{value_str.replace(chr(39), chr(39) + chr(39))}'"
+    escaped = value_str.replace("'", "''")
+    return f"'{escaped}'"
 
 
 def _apply_result_mode(
@@ -500,7 +499,6 @@ class ExecuteQueryTool(MCPTool):
         self,
         config: Config,
         snowflake_service: Any,
-        query_service: QueryService,
         health_monitor: MCPHealthMonitor | None = None,
     ):
         """Initialize execute query tool.
@@ -508,7 +506,6 @@ class ExecuteQueryTool(MCPTool):
         Args:
             config: Application configuration
             snowflake_service: Snowflake service instance from mcp-server-snowflake
-            query_service: Query service for execution
             health_monitor: Optional health monitoring instance
         """
         self.config = config
@@ -524,6 +521,7 @@ class ExecuteQueryTool(MCPTool):
         self._artifact_root, artifact_warnings = self._init_artifact_root()
         self._static_audit_warnings: list[str] = list(artifact_warnings)
         self._transient_audit_warnings: list[str] = []
+        self._warnings_lock = threading.Lock()
         self.cache = QueryResultCache.from_env(artifact_root=self._artifact_root)
         self._cache_enabled = self.cache.enabled
         self._cache_mode = self.cache.mode
@@ -850,11 +848,15 @@ class ExecuteQueryTool(MCPTool):
 
     def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Path | None:
         if self._artifact_root is None:
-            self._transient_audit_warnings.append("SQL artifact root is unavailable; statement text was not persisted.")
+            with self._warnings_lock:
+                self._transient_audit_warnings.append(
+                    "SQL artifact root is unavailable; statement text was not persisted."
+                )
             return None
         artifact_path = _write_sql_artifact(self._artifact_root, sql_sha256, statement)
         if artifact_path is None:
-            self._transient_audit_warnings.append("Failed to persist SQL text for audit history.")
+            with self._warnings_lock:
+                self._transient_audit_warnings.append("Failed to persist SQL text for audit history.")
         return artifact_path
 
     @staticmethod
@@ -1046,9 +1048,10 @@ class ExecuteQueryTool(MCPTool):
             success = True
         except (AttributeError, KeyError, TypeError) as e:
             logger.debug(f"Failed to snapshot session defaults: {e}", exc_info=True)
-            self._transient_audit_warnings.append(
-                "Failed to snapshot session defaults; skipping cache for this execution."
-            )
+            with self._warnings_lock:
+                self._transient_audit_warnings.append(
+                    "Failed to snapshot session defaults; skipping cache for this execution."
+                )
 
         effective: dict[str, str | None] = {}
         for key in ("warehouse", "database", "schema", "role"):
@@ -1065,9 +1068,10 @@ class ExecuteQueryTool(MCPTool):
         if self._static_audit_warnings:
             warnings.extend(self._static_audit_warnings)
             self._static_audit_warnings = []
-        if self._transient_audit_warnings:
-            warnings.extend(self._transient_audit_warnings)
-            self._transient_audit_warnings = []
+        with self._warnings_lock:
+            if self._transient_audit_warnings:
+                warnings.extend(self._transient_audit_warnings)
+                self._transient_audit_warnings = []
         warnings.extend(self.history.pop_warnings())
         warnings.extend(self.cache.pop_warnings())
         return warnings
@@ -1449,7 +1453,8 @@ class ExecuteQueryTool(MCPTool):
             except (OSError, PermissionError, ValueError, KeyError) as e:
                 cache_hit = None
                 logger.debug(f"Query cache lookup failed: {e}", exc_info=True)
-                self._transient_audit_warnings.append("Query cache lookup failed; continuing with live execution.")
+                with self._warnings_lock:
+                    self._transient_audit_warnings.append("Query cache lookup failed; continuing with live execution.")
 
             if cache_hit:
                 cache_rows = cache_hit.rows
@@ -1690,7 +1695,8 @@ class ExecuteQueryTool(MCPTool):
                     )
                 except (OSError, PermissionError, ValueError) as e:
                     logger.debug(f"Failed to persist query cache: {e}", exc_info=True)
-                    self._transient_audit_warnings.append("Failed to persist query cache entry.")
+                    with self._warnings_lock:
+                        self._transient_audit_warnings.append("Failed to persist query cache entry.")
 
             if manifest_path is not None:
                 manifest_rel = _relative_sql_path(self._repo_root, manifest_path)
@@ -2434,10 +2440,14 @@ class ExecuteQueryTool(MCPTool):
                         result_box["session"] = session_snapshot.to_mapping()
                     except (AttributeError, TypeError):
                         result_box["session"] = None
-                    with contextlib.suppress(Exception):
+                    try:
                         _restore_session_parameters(previous_parameters)
-                    with contextlib.suppress(Exception):
+                    except Exception:
+                        logger.debug("Failed to restore session parameters", exc_info=True)
+                    try:
                         restore_session_context(cursor, original)
+                    except Exception:
+                        logger.debug("Failed to restore session context", exc_info=True)
                     done.set()
 
             worker = threading.Thread(target=run_query, daemon=True)
