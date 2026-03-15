@@ -336,7 +336,15 @@ def _escape_tag(tag_value: str) -> str:
 
 def _escape_sql_value(value: Any) -> str:
     """Escape SQL value for use in SQL statement."""
-    if isinstance(value, (int, float)):
+    if isinstance(value, bool):
+        return "'TRUE'" if value else "'FALSE'"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        import math
+
+        if math.isnan(value) or math.isinf(value):
+            raise ValueError(f"Cannot use {value!r} as a SQL value")
         return str(value)
     value_str = str(value)
     escaped = value_str.replace("'", "''")
@@ -499,6 +507,7 @@ class ExecuteQueryTool(MCPTool):
         self,
         config: Config,
         snowflake_service: Any,
+        *,
         health_monitor: MCPHealthMonitor | None = None,
     ):
         """Initialize execute query tool.
@@ -2038,6 +2047,7 @@ class ExecuteQueryTool(MCPTool):
         if len(statement) > MAX_SQL_STATEMENT_LENGTH:
             raise MCPValidationError(
                 f"SQL statement exceeds maximum length of {MAX_SQL_STATEMENT_LENGTH} characters",
+                error_code="STATEMENT_TOO_LONG",
                 validation_errors=[f"Statement length: {len(statement)} characters"],
                 hints=[
                     "Break the query into smaller parts",
@@ -2352,11 +2362,13 @@ class ExecuteQueryTool(MCPTool):
                         # For small results (<=threshold) we keep everything.
                         # For large results we keep first N + last N rows without loading
                         # the entire result set into memory.
+                        from collections import deque
+
                         keep_first = RESULT_KEEP_FIRST_ROWS
                         keep_last = RESULT_KEEP_LAST_ROWS
                         chunk_size = 2000
                         head_rows: list[dict[str, Any]] = []
-                        tail_buffer: list[dict[str, Any]] = []
+                        tail_buffer: deque[dict[str, Any]] = deque(maxlen=keep_last)
                         total_fetched = 0
                         size_sample_bytes = 0
                         size_sample_count = 0
@@ -2379,18 +2391,13 @@ class ExecuteQueryTool(MCPTool):
                                 else:
                                     # We've exceeded head capacity — switch to tail buffer mode
                                     needs_truncation = True
+                                    # Sample rows being evicted for size estimation
+                                    if len(tail_buffer) == keep_last and size_sample_count < 100:
+                                        evicted = tail_buffer[0]
+                                        size_sample_bytes += len(json.dumps(evicted, ensure_ascii=False, default=str))
+                                        size_sample_count += 1
+                                    # deque(maxlen) auto-evicts oldest in O(1)
                                     tail_buffer.append(row)
-                                    # Keep tail buffer bounded to save memory
-                                    if len(tail_buffer) > keep_last:
-                                        # Sample evicted rows for better size estimation
-                                        if size_sample_count < 100:
-                                            evicted = tail_buffer.pop(0)
-                                            size_sample_bytes += len(
-                                                json.dumps(evicted, ensure_ascii=False, default=str)
-                                            )
-                                            size_sample_count += 1
-                                        else:
-                                            tail_buffer.pop(0)
 
                         result_box["columns"] = column_names
 
@@ -2403,19 +2410,20 @@ class ExecuteQueryTool(MCPTool):
                             avg_row_bytes = size_sample_bytes / max(size_sample_count, 1)
                             estimated_total_mb = (avg_row_bytes * total_fetched) / (1024 * 1024)
 
+                            tail_rows = list(tail_buffer)
                             result_box["rows"] = [
                                 *head_rows,
                                 {"__truncated__": True, "__message__": "Large result set truncated"},
-                                *tail_buffer[-keep_last:],
+                                *tail_rows,
                             ]
                             result_box["rowcount"] = total_fetched
                             result_box["truncated"] = True
                             result_box["original_rowcount"] = total_fetched
-                            result_box["returned_rowcount"] = len(result_box["rows"])
+                            result_box["returned_rowcount"] = len(head_rows) + len(tail_rows)
                             result_box["truncation_info"] = {
                                 "original_size_mb": round(estimated_total_mb, 2),
                                 "truncated_for_context_window": True,
-                                "rows_kept": f"first {len(head_rows)} + last {len(tail_buffer[-keep_last:])}",
+                                "rows_kept": f"first {len(head_rows)} + last {len(tail_rows)}",
                                 "export_suggestions": [
                                     "Use output_format='csv' or 'jsonl' for complete results as a file",
                                     "Add LIMIT clause to reduce result size",

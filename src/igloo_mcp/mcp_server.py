@@ -326,7 +326,7 @@ def register_igloo_mcp(
     # snow_cli bridge removed - no longer needed
 
     # Instantiate all extracted tool classes
-    execute_query_inst = ExecuteQueryTool(config, snowflake_service, _health_monitor)
+    execute_query_inst = ExecuteQueryTool(config, snowflake_service, health_monitor=_health_monitor)
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
     build_dependency_graph_inst = BuildDependencyGraphTool(dependency_service)
     test_connection_inst = ConnectionTestTool(config, snowflake_service)
