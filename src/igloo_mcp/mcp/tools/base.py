@@ -20,16 +20,7 @@ from typing import (
 
 from pydantic import BaseModel, ValidationError
 
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    try:
-        from mcp.server.fastmcp.utilities.logging import get_logger
-    except ImportError:
-        # Fallback to standard logging if FastMCP logging unavailable
-        def get_logger(name: str) -> logging.Logger:
-            return logging.getLogger(name)
-
+from igloo_mcp.mcp.compat import get_logger
 
 from igloo_mcp.mcp.error_utils import (
     handle_generic_exception_decorator,

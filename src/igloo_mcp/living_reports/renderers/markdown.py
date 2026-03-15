@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import base64
 import shutil
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -134,7 +134,7 @@ class MarkdownRenderer:
         """
         frontmatter: dict[str, Any] = {
             "title": outline.title,
-            "date": datetime.now().strftime("%Y-%m-%d"),
+            "date": datetime.now(UTC).strftime("%Y-%m-%d"),
             "generator": "igloo-mcp",
         }
 

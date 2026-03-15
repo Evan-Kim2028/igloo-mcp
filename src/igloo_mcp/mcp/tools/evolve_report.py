@@ -50,10 +50,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    from mcp.server.fastmcp.utilities.logging import get_logger
+from igloo_mcp.mcp.compat import get_logger
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.changes_schema import (

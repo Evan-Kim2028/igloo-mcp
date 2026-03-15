@@ -238,6 +238,15 @@ class ConfigLoader:
         "LOG_LEVEL": ("log_level", str),
     }
 
+    # Minimum acceptable values for numeric runtime settings.
+    _RUNTIME_MINIMUMS: ClassVar[dict[str, int | float]] = {
+        "max_concurrent_queries": 1,
+        "connection_pool_size": 1,
+        "retry_attempts": 0,
+        "retry_delay": 0.0,
+        "timeout_seconds": 1,
+    }
+
     _RUNTIME_CASTERS: ClassVar[dict[str, type]] = {
         "max_concurrent_queries": int,
         "connection_pool_size": int,
@@ -290,9 +299,13 @@ class ConfigLoader:
                 continue
             raw_value = env[env_key]
             try:
-                runtime[field_name] = caster(raw_value)
+                value = caster(raw_value)
             except (TypeError, ValueError) as exc:
                 raise ConfigError(f"Invalid value for {env_key}: {raw_value!r}") from exc
+            minimum = self._RUNTIME_MINIMUMS.get(field_name)
+            if minimum is not None and value < minimum:
+                raise ConfigError(f"Value for {env_key} must be >= {minimum}, got {value!r}")
+            runtime[field_name] = value
 
         return ConfigOverrides(snowflake=snowflake, values=runtime)
 

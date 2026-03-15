@@ -12,10 +12,7 @@ from igloo_mcp.config import Config
 from .base import MCPTool, tool_error_handler
 from .health import HealthCheckTool
 
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    from mcp.server.fastmcp.utilities.logging import get_logger
+from igloo_mcp.mcp.compat import get_logger
 
 logger = get_logger(__name__)
 

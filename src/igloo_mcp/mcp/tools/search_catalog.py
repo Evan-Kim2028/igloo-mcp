@@ -25,10 +25,7 @@ from .schema_utils import (
     string_schema,
 )
 
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    from mcp.server.fastmcp.utilities.logging import get_logger
+from igloo_mcp.mcp.compat import get_logger
 
 logger = get_logger(__name__)
 

@@ -19,21 +19,7 @@ from typing import Any
 
 import anyio
 
-try:  # pragma: no cover - imported for typing/runtime compatibility only
-    from fastmcp import Context
-    from fastmcp.utilities.logging import get_logger
-except ImportError:  # pragma: no cover
-    try:
-        from mcp.server.fastmcp import Context  # type: ignore[import-untyped,assignment]
-        from mcp.server.fastmcp.utilities.logging import (
-            get_logger,  # type: ignore[import-untyped]
-        )
-    except ImportError:  # pragma: no cover
-        Context = Any  # type: ignore[misc,assignment]
-        import logging
-
-        def get_logger(name: str) -> logging.Logger:
-            return logging.getLogger(name)
+from igloo_mcp.mcp.compat import Context, get_logger
 
 
 import contextlib
@@ -407,10 +393,11 @@ def _apply_result_mode(
                 minimal["audit_info"] = minimal_audit
         if result.get("session_context"):
             minimal["session_context"] = result["session_context"]
+        # Replace contents atomically to avoid leaving dict empty if update() fails
+        _sync_response_mode_aliases(minimal)
+        _attach_token_estimate(minimal, mode, full_tokens)
         result.clear()
         result.update(minimal)
-        _sync_response_mode_aliases(result)
-        _attach_token_estimate(result, mode, full_tokens)
         return result
 
     if mode == RESULT_MODE_SCHEMA_ONLY:
@@ -2177,7 +2164,7 @@ class ExecuteQueryTool(MCPTool):
                         else:
                             cursor.execute("ALTER SESSION UNSET QUERY_TAG")
                 except (AttributeError, TypeError):
-                    logger.debug(
+                    logger.warning(
                         "Failed to restore QUERY_TAG session parameter",
                         exc_info=True,
                     )
@@ -2190,7 +2177,7 @@ class ExecuteQueryTool(MCPTool):
                         else:
                             cursor.execute("ALTER SESSION UNSET STATEMENT_TIMEOUT_IN_SECONDS")
                 except (AttributeError, TypeError, ValueError) as e:
-                    logger.debug(f"Failed to restore STATEMENT_TIMEOUT_IN_SECONDS: {e}", exc_info=True)
+                    logger.warning(f"Failed to restore STATEMENT_TIMEOUT_IN_SECONDS: {e}", exc_info=True)
 
             def run_query() -> None:
                 try:

@@ -169,21 +169,22 @@ class ParallelQueryExecutor:
                     logger.exception(
                         f"❌ {object_name} failed after {attempt + 1} attempts: {error_msg}",
                     )
-                return QueryResult(
-                    object_name=object_name,
-                    query=query,
-                    success=False,
-                    error=error_msg,
-                    execution_time=execution_time,
-                )
+                    return QueryResult(
+                        object_name=object_name,
+                        query=query,
+                        success=False,
+                        error=error_msg,
+                        execution_time=execution_time,
+                    )
 
-        fallback_error_msg = "Query execution ended without producing a result after exhausting retries."
+        # Unreachable in practice: the loop always returns on success or final
+        # failure.  Kept as a defensive fallback for safety.
         execution_time = time.time() - start_time
         return QueryResult(
             object_name=object_name,
             query=query,
             success=False,
-            error=fallback_error_msg,
+            error="Query execution ended without producing a result after exhausting retries.",
             execution_time=execution_time,
             row_count=0,
         )
@@ -204,47 +205,43 @@ class ParallelQueryExecutor:
         cli = SnowCLI()
         logger.info("🔗 Using Snowflake CLI for parallel execution...")
 
-        try:
-            # Execute queries in parallel using ThreadPoolExecutor
-            results: dict[str, QueryResult] = {}
-            logger.info(f"⚡ Executing {len(queries)} queries in parallel...")
+        # Execute queries in parallel using ThreadPoolExecutor
+        results: dict[str, QueryResult] = {}
+        logger.info(f"⚡ Executing {len(queries)} queries in parallel...")
 
-            with ThreadPoolExecutor(
-                max_workers=self.config.max_concurrent_queries,
-            ) as executor:
-                # Submit all queries
-                future_to_object = {
-                    executor.submit(
-                        self._execute_single_query,
-                        query,
-                        object_name,
-                        cli,
-                    ): object_name
-                    for object_name, query in queries.items()
-                }
+        with ThreadPoolExecutor(
+            max_workers=self.config.max_concurrent_queries,
+        ) as executor:
+            # Submit all queries
+            future_to_object = {
+                executor.submit(
+                    self._execute_single_query,
+                    query,
+                    object_name,
+                    cli,
+                ): object_name
+                for object_name, query in queries.items()
+            }
 
-                # Process completed queries
-                for future in as_completed(
-                    future_to_object,
-                    timeout=self.config.timeout_seconds,
-                ):
-                    object_name = future_to_object[future]
-                    try:
-                        result = future.result()
-                        results[object_name] = result
-                    except Exception as e:
-                        logger.exception(f"Unexpected error for {object_name}: {e}")
-                        results[object_name] = QueryResult(
-                            object_name=object_name,
-                            query=queries[object_name],
-                            success=False,
-                            error=f"Unexpected error: {e!s}",
-                        )
+            # Process completed queries
+            for future in as_completed(
+                future_to_object,
+                timeout=self.config.timeout_seconds,
+            ):
+                object_name = future_to_object[future]
+                try:
+                    result = future.result()
+                    results[object_name] = result
+                except Exception as e:
+                    logger.exception(f"Unexpected error for {object_name}: {e}")
+                    results[object_name] = QueryResult(
+                        object_name=object_name,
+                        query=queries[object_name],
+                        success=False,
+                        error=f"Unexpected error: {e!s}",
+                    )
 
-            return results
-
-        finally:
-            pass
+        return results
 
     def execute_single_query(
         self,

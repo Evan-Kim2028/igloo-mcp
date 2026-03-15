@@ -42,6 +42,19 @@ class SnowRestConfig:
     host_override: str | None = None
 
 
+def _default_poll_interval() -> float:
+    """Read poll interval from environment, falling back to 0.5 seconds."""
+    raw = os.environ.get("IGLOO_MCP_REST_POLL_INTERVAL")
+    if raw:
+        try:
+            val = float(raw)
+            if val > 0:
+                return val
+        except (TypeError, ValueError):
+            pass
+    return 0.5
+
+
 class SnowRestClient:
     STATEMENTS_PATH = "/api/v2/statements"
 
@@ -51,12 +64,12 @@ class SnowRestClient:
         *,
         default_context: dict[str, str | None] | None = None,
         request_timeout: int = 120,
-        poll_interval: float = 0.5,
+        poll_interval: float | None = None,
     ) -> None:
         self.config = config
         self.default_context = default_context or {}
         self.request_timeout = request_timeout
-        self.poll_interval = poll_interval
+        self.poll_interval = poll_interval if poll_interval is not None else _default_poll_interval()
         self._private_key = _load_private_key(config.private_key_path)
         self._token: str | None = None
         self._token_expiry: float = 0.0

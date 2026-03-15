@@ -22,10 +22,7 @@ from igloo_mcp.path_utils import resolve_catalog_path, validate_safe_path
 from .base import MCPTool, ensure_request_id, tool_error_handler
 from .schema_utils import string_schema
 
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    from mcp.server.fastmcp.utilities.logging import get_logger
+from igloo_mcp.mcp.compat import get_logger
 
 logger = get_logger(__name__)
 

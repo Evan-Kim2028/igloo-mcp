@@ -47,7 +47,12 @@ class CircuitBreaker:
         self._lock = threading.RLock()  # Reentrant lock for thread safety
 
     def call(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
-        """Execute a function through the circuit breaker."""
+        """Execute a function through the circuit breaker.
+
+        The lock is held only for state checks and transitions, NOT during
+        the actual function execution.  This avoids blocking other threads
+        for the duration of potentially slow Snowflake queries.
+        """
         with self._lock:
             if self.state == CircuitState.OPEN:
                 if self._should_attempt_reset():
@@ -55,13 +60,15 @@ class CircuitBreaker:
                 else:
                     raise CircuitBreakerError(f"Circuit breaker is open. Last failure: {self.last_failure_time}")
 
-            try:
-                result = func(*args, **kwargs)
+        try:
+            result = func(*args, **kwargs)
+            with self._lock:
                 self._on_success()
-                return result
-            except self.config.expected_exception as e:
+            return result
+        except self.config.expected_exception as e:
+            with self._lock:
                 self._on_failure()
-                raise e
+            raise e
 
     def _should_attempt_reset(self) -> bool:
         """Check if enough time has passed to attempt a reset."""
