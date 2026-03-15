@@ -436,13 +436,13 @@ def _apply_result_mode(
         sample_rows = rows[:RESULT_MODE_SUMMARY_SAMPLE_SIZE]
         result["rows"] = sample_rows
 
-        # DATA INTEGRITY: Warn when truncating results to prevent silent data loss
+        # Log truncation at debug level — summary mode truncation is normal operation,
+        # not a warning.  The result_mode_info already communicates this to the caller.
         if rowcount > RESULT_MODE_SUMMARY_SAMPLE_SIZE:
             truncation_pct = (1 - RESULT_MODE_SUMMARY_SAMPLE_SIZE / rowcount) * 100
-
-            logger.warning(
-                f"Result truncated: {rowcount} rows → {RESULT_MODE_SUMMARY_SAMPLE_SIZE} rows "
-                f"({truncation_pct:.1f}% data loss). Use response_mode='full' for all data.",
+            logger.debug(
+                f"Summary mode: {rowcount} rows → {RESULT_MODE_SUMMARY_SAMPLE_SIZE} rows "
+                f"({truncation_pct:.1f}% filtered). Use response_mode='full' for all data.",
                 extra={
                     "total_rows": rowcount,
                     "returned_rows": RESULT_MODE_SUMMARY_SAMPLE_SIZE,
@@ -450,14 +450,6 @@ def _apply_result_mode(
                     "result_mode": mode,
                 },
             )
-
-            # CRITICAL: Warn for catastrophic data loss on large datasets
-            if rowcount > 1000:
-                logger.error(
-                    f"LARGE DATASET TRUNCATION: {rowcount} rows truncated to "
-                    f"{RESULT_MODE_SUMMARY_SAMPLE_SIZE}. This may cause data loss in downstream processing!",
-                    extra={"severity": "high", "rowcount": rowcount, "sample_size": RESULT_MODE_SUMMARY_SAMPLE_SIZE},
-                )
 
         result["result_mode_info"] = {
             "mode": "summary",
@@ -1014,6 +1006,56 @@ class ExecuteQueryTool(MCPTool):
         warnings.extend(self.history.pop_warnings())
         warnings.extend(self.cache.pop_warnings())
         return warnings
+
+    def _build_history_payload(
+        self,
+        *,
+        status: str,
+        execution_id: str,
+        statement: str,
+        timeout: int,
+        overrides: dict[str, Any],
+        sql_sha256: str | None,
+        history_artifacts: dict[str, str],
+        reason: str | None,
+        normalized_insight: Insight | None,
+        cache_key: str | None,
+        referenced_objects: list[dict[str, Any]],
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build a history payload with common fields across success/timeout/error paths."""
+        completed_ts = time.time()
+        payload: dict[str, Any] = {
+            "ts": completed_ts,
+            "timestamp": self._iso_timestamp(completed_ts),
+            "execution_id": execution_id,
+            "status": status,
+            "profile": self.config.snowflake.profile,
+            "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
+            "timeout_seconds": timeout,
+            "overrides": overrides,
+        }
+        if sql_sha256 is not None:
+            payload["sql_sha256"] = sql_sha256
+        if history_artifacts:
+            payload["artifacts"] = dict(history_artifacts)
+        if reason:
+            payload["reason"] = reason
+        if normalized_insight:
+            payload["post_query_insight"] = truncate_insight_for_storage(normalized_insight)
+        if cache_key:
+            payload["cache_key"] = cache_key
+        self._enrich_payload_with_objects(payload, referenced_objects)
+        if extra:
+            payload.update(extra)
+        return payload
+
+    def _record_history(self, payload: dict[str, Any], *, label: str = "query") -> None:
+        """Best-effort write to JSONL history."""
+        try:
+            self.history.record(payload)
+        except (OSError, PermissionError, ValueError) as e:
+            logger.debug(f"Failed to record {label} in history: {e}", exc_info=True)
 
     async def _ensure_profile_health(self) -> None:
         if not self._provider_spec.capabilities.supports_profile_validation:
@@ -1591,47 +1633,36 @@ class ExecuteQueryTool(MCPTool):
                 if rows_rel:
                     history_artifacts.setdefault("cache_rows", rows_rel)
 
-            try:
-                completed_ts = time.time()
-                payload = {
-                    "ts": completed_ts,
-                    "timestamp": self._iso_timestamp(completed_ts),
-                    "execution_id": execution_id,
-                    "status": "success",
-                    "profile": self.config.snowflake.profile,
-                    "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
-                    "rowcount": result.get("rowcount", 0),
-                    "timeout_seconds": timeout,
-                    "overrides": overrides,
-                    "query_id": result.get("query_id"),
-                    "duration_ms": result.get("duration_ms"),
-                    "session_context": session_context,
-                }
-                if sql_sha256 is not None:
-                    payload["sql_sha256"] = sql_sha256
-                # Track response mode for telemetry
-                payload["response_mode_requested"] = result_mode
-                if history_artifacts:
-                    payload["artifacts"] = dict(history_artifacts)
-                if reason:
-                    payload["reason"] = reason
-                # Include truncated insight in history (for storage)
-                if normalized_insight:
-                    payload["post_query_insight"] = truncate_insight_for_storage(normalized_insight)
-                if cache_key:
-                    payload["cache_key"] = cache_key
-                if manifest_path is not None:
-                    payload["cache_manifest"] = str(manifest_path)
-                if result.get("columns"):
-                    payload["columns"] = result.get("columns")
-                if key_metrics:
-                    payload["key_metrics"] = key_metrics
-                if derived_insights:
-                    payload["insights"] = derived_insights
-                self._enrich_payload_with_objects(payload, referenced_objects)
-                self.history.record(payload)
-            except (OSError, PermissionError, ValueError) as e:
-                logger.debug(f"Failed to record query success in history: {e}", exc_info=True)
+            success_extra: dict[str, Any] = {
+                "rowcount": result.get("rowcount", 0),
+                "query_id": result.get("query_id"),
+                "duration_ms": result.get("duration_ms"),
+                "session_context": session_context,
+                "response_mode_requested": result_mode,
+            }
+            if manifest_path is not None:
+                success_extra["cache_manifest"] = str(manifest_path)
+            if result.get("columns"):
+                success_extra["columns"] = result.get("columns")
+            if key_metrics:
+                success_extra["key_metrics"] = key_metrics
+            if derived_insights:
+                success_extra["insights"] = derived_insights
+            payload = self._build_history_payload(
+                status="success",
+                execution_id=execution_id,
+                statement=statement,
+                timeout=timeout,
+                overrides=overrides,
+                sql_sha256=sql_sha256,
+                history_artifacts=history_artifacts,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                cache_key=cache_key,
+                referenced_objects=referenced_objects,
+                extra=success_extra,
+            )
+            self._record_history(payload, label="query success")
 
             result.setdefault(
                 "cache",
@@ -1676,34 +1707,21 @@ class ExecuteQueryTool(MCPTool):
 
         except TimeoutError as e:
             # Persist timeout history
-            try:
-                completed_ts = time.time()
-                payload = {
-                    "ts": completed_ts,
-                    "timestamp": self._iso_timestamp(completed_ts),
-                    "execution_id": execution_id,
-                    "status": "timeout",
-                    "profile": self.config.snowflake.profile,
-                    "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
-                    "timeout_seconds": timeout,
-                    "overrides": overrides,
-                    "error": str(e),
-                }
-                if sql_sha256 is not None:
-                    payload["sql_sha256"] = sql_sha256
-                if history_artifacts:
-                    payload["artifacts"] = dict(history_artifacts)
-                if reason:
-                    payload["reason"] = reason
-                # Include truncated insight in history (for storage)
-                if normalized_insight:
-                    payload["post_query_insight"] = truncate_insight_for_storage(normalized_insight)
-                if cache_key:
-                    payload["cache_key"] = cache_key
-                self._enrich_payload_with_objects(payload, referenced_objects)
-                self.history.record(payload)
-            except (OSError, PermissionError, ValueError) as e:
-                logger.debug(f"Failed to record timeout in history: {e}", exc_info=True)
+            payload = self._build_history_payload(
+                status="timeout",
+                execution_id=execution_id,
+                statement=statement,
+                timeout=timeout,
+                overrides=overrides,
+                sql_sha256=sql_sha256,
+                history_artifacts=history_artifacts,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                cache_key=cache_key,
+                referenced_objects=referenced_objects,
+                extra={"error": str(e)},
+            )
+            self._record_history(payload, label="timeout")
 
             # Use standardized timeout error wrapper
             context: dict[str, Any] = {
@@ -1749,34 +1767,21 @@ class ExecuteQueryTool(MCPTool):
                 self.health_monitor.record_error(f"Query execution failed: {error_message[:200]}")
 
             # Persist failure history
-            try:
-                completed_ts = time.time()
-                payload = {
-                    "ts": completed_ts,
-                    "timestamp": self._iso_timestamp(completed_ts),
-                    "execution_id": execution_id,
-                    "status": "error",
-                    "profile": self.config.snowflake.profile,
-                    "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
-                    "timeout_seconds": timeout,
-                    "overrides": overrides,
-                    "error": error_message,
-                }
-                if sql_sha256 is not None:
-                    payload["sql_sha256"] = sql_sha256
-                if history_artifacts:
-                    payload["artifacts"] = dict(history_artifacts)
-                if reason:
-                    payload["reason"] = reason
-                # Include truncated insight in history (for storage)
-                if normalized_insight:
-                    payload["post_query_insight"] = truncate_insight_for_storage(normalized_insight)
-                if cache_key:
-                    payload["cache_key"] = cache_key
-                self._enrich_payload_with_objects(payload, referenced_objects)
-                self.history.record(payload)
-            except (OSError, PermissionError, ValueError) as history_err:
-                logger.debug(f"Failed to record error in history: {history_err}", exc_info=True)
+            payload = self._build_history_payload(
+                status="error",
+                execution_id=execution_id,
+                statement=statement,
+                timeout=timeout,
+                overrides=overrides,
+                sql_sha256=sql_sha256,
+                history_artifacts=history_artifacts,
+                reason=reason,
+                normalized_insight=normalized_insight,
+                cache_key=cache_key,
+                referenced_objects=referenced_objects,
+                extra={"error": error_message},
+            )
+            self._record_history(payload, label="query error")
 
             # Use standardized execution error wrapper
             context = {
@@ -1958,11 +1963,11 @@ class ExecuteQueryTool(MCPTool):
                 ],
             )
 
-        # Always validate profile + SQL up front so async paths fail fast.
+        # Validate profile + SQL up front so async paths fail fast.
         await self._ensure_profile_health()
         self._enforce_sql_permissions(statement)
 
-        # Use synchronous execution
+        # Use synchronous execution (skip re-validation since we just did it above)
         return await self._execute_impl(
             statement=statement,
             warehouse=warehouse,
@@ -1976,6 +1981,8 @@ class ExecuteQueryTool(MCPTool):
             result_mode=effective_result_mode,
             output_format=effective_output_format,
             ctx=ctx,
+            validate_profile=False,
+            validate_statement=False,
         )
 
     def _execute_query_sync(
@@ -2242,11 +2249,21 @@ class ExecuteQueryTool(MCPTool):
 
                         # Smart truncation for large outputs to prevent context window overflow
                         if len(processed_rows) > RESULT_TRUNCATION_THRESHOLD:
-                            import json
-
-                            # Sample data size estimation
-                            sample_size = len(json.dumps(processed_rows[:100]))
-                            estimated_total_size = sample_size * (len(processed_rows) / 100)
+                            # Sample from start, middle, and end for more representative size estimate
+                            n = len(processed_rows)
+                            sample_indices = (
+                                list(range(min(50, n)))
+                                + list(range(n // 2, min(n // 2 + 25, n)))
+                                + list(range(max(n - 25, 0), n))
+                            )
+                            seen: set[int] = set()
+                            sample_rows_for_est = []
+                            for idx in sample_indices:
+                                if idx not in seen:
+                                    seen.add(idx)
+                                    sample_rows_for_est.append(processed_rows[idx])
+                            sample_size = len(json.dumps(sample_rows_for_est))
+                            estimated_total_size = sample_size * (n / len(sample_rows_for_est))
 
                             # If estimated output is too large, truncate with metadata
                             size_limit_bytes = RESULT_SIZE_LIMIT_MB * 1024 * 1024
