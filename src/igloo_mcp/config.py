@@ -94,53 +94,39 @@ class SQLPermissions:
     truncate: bool = False  # Blocked by default - use DELETE with WHERE
     unknown: bool = False  # Reject unparseable SQL by default
 
+    # All controllable statement types, in declaration order.
+    _STATEMENT_TYPES: ClassVar[tuple[str, ...]] = (
+        "select",
+        "show",
+        "describe",
+        "use",
+        "insert",
+        "update",
+        "create",
+        "alter",
+        "delete",
+        "drop",
+        "truncate",
+        "unknown",
+    )
+
+    def _permission_items(self) -> list[tuple[str, bool]]:
+        """Return (stmt_type, is_allowed) pairs for all statement types."""
+        return [(t, getattr(self, t)) for t in self._STATEMENT_TYPES]
+
     def get_allow_list(self) -> list[str]:
         """Get list of allowed SQL statement types.
 
         Returns lowercase statement types to match upstream validation.
         """
-        allowed = []
-        for stmt_type, is_allowed in [
-            ("select", self.select),
-            ("show", self.show),
-            ("describe", self.describe),
-            ("use", self.use),
-            ("insert", self.insert),
-            ("update", self.update),
-            ("create", self.create),
-            ("alter", self.alter),
-            ("delete", self.delete),
-            ("drop", self.drop),
-            ("truncate", self.truncate),
-            ("unknown", self.unknown),
-        ]:
-            if is_allowed:
-                allowed.append(stmt_type)
-        return allowed
+        return [t for t, allowed in self._permission_items() if allowed]
 
     def get_disallow_list(self) -> list[str]:
         """Get list of disallowed SQL statement types.
 
         Returns lowercase statement types to match upstream validation.
         """
-        disallowed = []
-        for stmt_type, is_allowed in [
-            ("select", self.select),
-            ("show", self.show),
-            ("describe", self.describe),
-            ("use", self.use),
-            ("insert", self.insert),
-            ("update", self.update),
-            ("create", self.create),
-            ("alter", self.alter),
-            ("delete", self.delete),
-            ("drop", self.drop),
-            ("truncate", self.truncate),
-            ("unknown", self.unknown),
-        ]:
-            if not is_allowed:
-                disallowed.append(stmt_type)
-        return disallowed
+        return [t for t, allowed in self._permission_items() if not allowed]
 
 
 @dataclass(frozen=True)

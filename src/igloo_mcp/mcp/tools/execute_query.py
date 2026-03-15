@@ -314,6 +314,36 @@ def _read_float_env(name: str, default: float, *, minimum: float = 0.0) -> float
     return parsed
 
 
+def _validate_session_parameter_name(name: str) -> bool:
+    """Validate that session parameter name is in the whitelist."""
+    return name.upper() in ALLOWED_SESSION_PARAMETERS
+
+
+def _escape_sql_identifier(identifier: str) -> str:
+    r"""Escape SQL identifier for use in LIKE clause.
+
+    Escapes single quotes (' -> ''), backslashes, and LIKE wildcards (%, _).
+    """
+    escaped = identifier.replace("'", "''")
+    escaped = escaped.replace("\\", "\\\\")
+    escaped = escaped.replace("%", "\\%")
+    escaped = escaped.replace("_", "\\_")
+    return escaped
+
+
+def _escape_tag(tag_value: str) -> str:
+    """Escape tag value for use in SQL string literal."""
+    return tag_value.replace("'", "''")
+
+
+def _escape_sql_value(value: Any) -> str:
+    """Escape SQL value for use in SQL statement."""
+    if isinstance(value, (int, float)):
+        return str(value)
+    value_str = str(value)
+    return f"'{value_str.replace(chr(39), chr(39) + chr(39))}'"
+
+
 def _apply_result_mode(
     result: dict[str, Any],
     mode: str,
@@ -2169,43 +2199,6 @@ class ExecuteQueryTool(MCPTool):
             }
             query_id_box: dict[str, str | None] = {"id": None}
             done = threading.Event()
-
-            def _validate_session_parameter_name(name: str) -> bool:
-                """Validate that session parameter name is in the whitelist."""
-                return name.upper() in ALLOWED_SESSION_PARAMETERS
-
-            def _escape_sql_identifier(identifier: str) -> str:
-                r"""Escape SQL identifier for use in LIKE clause.
-
-                Escapes:
-                - Single quotes (' -> '')
-                - LIKE wildcards (% -> \%, _ -> \_)
-
-                Args:
-                    identifier: SQL identifier to escape
-
-                Returns:
-                    Escaped identifier safe for LIKE clause
-                """
-                # Escape single quotes first
-                escaped = identifier.replace("'", "''")
-                # Escape LIKE wildcards (must escape backslash first if present)
-                escaped = escaped.replace("\\", "\\\\")
-                escaped = escaped.replace("%", "\\%")
-                escaped = escaped.replace("_", "\\_")
-                return escaped
-
-            def _escape_tag(tag_value: str) -> str:
-                """Escape tag value for use in SQL string literal."""
-                return tag_value.replace("'", "''")
-
-            def _escape_sql_value(value: Any) -> str:
-                """Escape SQL value for use in SQL statement."""
-                if isinstance(value, (int, float)):
-                    return str(value)
-                value_str = str(value)
-                # Escape single quotes and wrap in quotes
-                return f"'{value_str.replace(chr(39), chr(39) + chr(39))}'"
 
             def _get_session_parameter(name: str) -> str | None:
                 """Get session parameter value with SQL injection protection."""

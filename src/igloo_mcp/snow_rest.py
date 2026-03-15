@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -73,6 +74,7 @@ class SnowRestClient:
         self._private_key = _load_private_key(config.private_key_path)
         self._token: str | None = None
         self._token_expiry: float = 0.0
+        self._token_lock = threading.Lock()
         host = config.host_override or f"{config.account}.snowflakecomputing.com"
         self.base_url = f"https://{host.strip()}"
 
@@ -233,16 +235,24 @@ class SnowRestClient:
         except urllib.error.URLError as exc:  # pragma: no cover
             raise SnowRestError(str(exc)) from exc
 
+    _TOKEN_REFRESH_BUFFER_SECONDS = 60
+
     def _get_token(self) -> str:
         now = time.time()
-        if self._token and now < self._token_expiry - 60:
+        if self._token and now < self._token_expiry - self._TOKEN_REFRESH_BUFFER_SECONDS:
             return self._token
-        self._token = self._generate_token()
-        return self._token
+        with self._token_lock:
+            # Double-check after acquiring lock (another thread may have refreshed)
+            if self._token and time.time() < self._token_expiry - self._TOKEN_REFRESH_BUFFER_SECONDS:
+                return self._token
+            self._token = self._generate_token()
+            return self._token
+
+    _TOKEN_LIFETIME_MINUTES = 55
 
     def _generate_token(self) -> str:
         now = datetime.now(UTC)
-        expires = now + timedelta(minutes=55)
+        expires = now + timedelta(minutes=self._TOKEN_LIFETIME_MINUTES)
         account = self.config.account.upper()
         user = self.config.user.upper()
         parsed = urllib.parse.urlparse(self.base_url)
