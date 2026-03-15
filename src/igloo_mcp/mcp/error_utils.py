@@ -20,17 +20,7 @@ from igloo_mcp.mcp.exceptions import (
     MCPValidationError,
 )
 
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    try:
-        from mcp.server.fastmcp.utilities.logging import get_logger
-    except ImportError:
-        import logging
-
-        def get_logger(name: str) -> logging.Logger:
-            return logging.getLogger(name)
-
+from igloo_mcp.mcp.compat import get_logger
 
 logger = get_logger(__name__)
 
@@ -103,6 +93,7 @@ def wrap_timeout_error(
 
     return MCPExecutionError(
         message,
+        error_code="QUERY_TIMEOUT",
         operation=operation,
         hints=hints,
         context=context or {},
@@ -152,6 +143,7 @@ def wrap_execution_error(
     hints: list[str] | None = None,
     context: dict[str, Any] | None = None,
     verbose: bool = True,  # Default True for backward compatibility with tests
+    error_code: str = "EXECUTION_ERROR",
 ) -> MCPExecutionError:
     """Create a standardized execution error.
 
@@ -175,6 +167,7 @@ def wrap_execution_error(
 
     return MCPExecutionError(
         message,
+        error_code=error_code,
         operation=operation,
         original_error=original_error,
         hints=hints,

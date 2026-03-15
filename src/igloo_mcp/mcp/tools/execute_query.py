@@ -669,6 +669,7 @@ class ExecuteQueryTool(MCPTool):
         status = self.get_circuit_breaker_status()
         raise MCPExecutionError(
             "Query execution temporarily blocked after repeated Snowflake connectivity failures.",
+            error_code="CIRCUIT_BREAKER_OPEN",
             operation="execute_query",
             hints=[
                 "Wait for the retry window, then run execute_query again.",
@@ -785,6 +786,29 @@ class ExecuteQueryTool(MCPTool):
         except Exception:
             logger.debug("Failed to invalidate provider connection after connectivity failure", exc_info=True)
 
+    @classmethod
+    def _classify_error_code(cls, error: BaseException) -> str:
+        """Classify a Snowflake error into a structured error code.
+
+        Examines the exception chain to determine the most specific error code.
+        Falls back to CONNECTION_FAILED for connectivity errors and
+        EXECUTION_ERROR for unclassifiable errors.
+        """
+        messages = [str(exc).lower() for exc in cls._iter_exception_chain(error) if str(exc)]
+        combined = " ".join(messages)
+
+        if "insufficient privileges" in combined or "access denied" in combined or "permission denied" in combined:
+            return "PERMISSION_DENIED"
+        if "object does not exist" in combined or "does not exist or not authorized" in combined:
+            return "OBJECT_NOT_FOUND"
+        if "syntax error" in combined or "sql compilation error" in combined or "invalid identifier" in combined:
+            return "SYNTAX_ERROR"
+
+        if cls._is_connectivity_failure(error):
+            return "CONNECTION_FAILED"
+
+        return "EXECUTION_ERROR"
+
     def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Path | None:
         if self._artifact_root is None:
             self._transient_audit_warnings.append("SQL artifact root is unavailable; statement text was not persisted.")
@@ -803,6 +827,7 @@ class ExecuteQueryTool(MCPTool):
         if normalized not in SUPPORTED_OUTPUT_FORMATS:
             raise MCPValidationError(
                 f"Invalid output_format '{output_format}'",
+                error_code="INVALID_PARAMETER",
                 validation_errors=[
                     f"output_format must be one of: {', '.join(SUPPORTED_OUTPUT_FORMATS)}",
                 ],
@@ -910,6 +935,7 @@ class ExecuteQueryTool(MCPTool):
         except (OSError, PermissionError, ValueError, TypeError) as exc:
             raise MCPExecutionError(
                 f"Failed to export query results as {output_format}",
+                error_code="EXPORT_FAILED",
                 operation="execute_query",
                 original_error=exc,
                 hints=[
@@ -1077,6 +1103,7 @@ class ExecuteQueryTool(MCPTool):
         self.health_monitor.record_error(f"Profile validation failed: {error_msg}")
         raise MCPValidationError(
             f"Snowflake profile validation failed: {error_msg}",
+            error_code="PROFILE_INVALID",
             validation_errors=[
                 f"Profile: {self.config.snowflake.profile}",
                 f"Available: {available}",
@@ -1101,6 +1128,7 @@ class ExecuteQueryTool(MCPTool):
                 )
             raise MCPValidationError(
                 error_msg,
+                error_code="INVALID_SQL",
                 validation_errors=[f"Statement type: {stmt_type}"],
                 hints=[
                     "Set IGLOO_MCP_SQL_PERMISSIONS='write' to enable write operations",
@@ -1318,6 +1346,7 @@ class ExecuteQueryTool(MCPTool):
             if len(statement) > MAX_SQL_STATEMENT_LENGTH:
                 raise MCPValidationError(
                     f"SQL statement exceeds maximum length of {MAX_SQL_STATEMENT_LENGTH} characters",
+                    error_code="STATEMENT_TOO_LONG",
                     validation_errors=[f"Statement length: {len(statement)} characters"],
                     hints=[
                         "Break the query into smaller parts",
@@ -1834,12 +1863,14 @@ class ExecuteQueryTool(MCPTool):
             else:
                 hints.append("Use verbose_errors=true for detailed information")
 
+            classified_code = self._classify_error_code(e)
             execution_error = wrap_execution_error(
                 message=f"Query execution failed: {error_message[:150] if not verbose_errors else error_message}",
                 operation="execute_query",
                 original_error=e,
                 hints=hints,
                 context=context,
+                error_code=classified_code,
             )
             self._collect_audit_warnings()
             raise execution_error
@@ -1859,6 +1890,7 @@ class ExecuteQueryTool(MCPTool):
         post_query_insight: dict[str, Any] | str | None = None,
         result_mode: str | None = None,
         response_mode: str | None = None,
+        dry_run: bool = False,
         ctx: Context | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
@@ -1871,6 +1903,7 @@ class ExecuteQueryTool(MCPTool):
         - Result caching with SHA-256 indexing
         - Token-efficient response modes
         - Auto-generated insights and key metrics
+        - Dry-run mode (EXPLAIN) for query plan inspection
 
         Args:
             statement: SQL statement to execute (max 1MB)
@@ -1893,6 +1926,9 @@ class ExecuteQueryTool(MCPTool):
                           "full": Return all rows.
                           "schema_only": Return column schema only, no rows (~95% reduction).
                           "sample": Return first 10 rows only (~60-80% reduction).
+            dry_run: If True, run EXPLAIN on the statement instead of executing it.
+                    Returns the query plan without reading/writing any data. Useful for
+                    validating SQL, estimating cost, and inspecting execution strategy.
             result_mode: DEPRECATED - use response_mode instead
             ctx: Optional MCP context for request correlation
             **kwargs: Additional arguments (for backward compatibility)
@@ -1946,6 +1982,7 @@ class ExecuteQueryTool(MCPTool):
                 raise MCPValidationError(
                     f"timeout_seconds must be between {MIN_QUERY_TIMEOUT_SECONDS} "
                     f"and {MAX_QUERY_TIMEOUT_SECONDS} seconds",
+                    error_code="INVALID_PARAMETER",
                     validation_errors=[f"Invalid timeout: {coerced_timeout}"],
                     hints=[
                         f"Use a timeout between {MIN_QUERY_TIMEOUT_SECONDS} and {MAX_QUERY_TIMEOUT_SECONDS} seconds",
@@ -1966,6 +2003,52 @@ class ExecuteQueryTool(MCPTool):
         # Validate profile + SQL up front so async paths fail fast.
         await self._ensure_profile_health()
         self._enforce_sql_permissions(statement)
+
+        # Dry-run mode: wrap in EXPLAIN USING JSON and return the query plan
+        if dry_run:
+            explain_stmt = f"EXPLAIN USING JSON {statement}"
+            result = await self._execute_impl(
+                statement=explain_stmt,
+                warehouse=warehouse,
+                database=database,
+                schema=schema,
+                role=role,
+                timeout_seconds=coerced_timeout,
+                verbose_errors=verbose_errors,
+                reason=f"[dry_run] {reason}" if reason else "[dry_run]",
+                normalized_insight=None,
+                result_mode="full",
+                output_format=OUTPUT_FORMAT_INLINE,
+                ctx=ctx,
+                validate_profile=False,
+                validate_statement=False,
+            )
+            # Parse the JSON plan from the EXPLAIN output
+            plan = None
+            rows = result.get("rows") or []
+            if rows:
+                first_row = rows[0]
+                # Snowflake EXPLAIN USING JSON returns a single column with the plan
+                plan_text = None
+                if isinstance(first_row, dict):
+                    plan_text = next(iter(first_row.values()), None)
+                if isinstance(plan_text, str):
+                    try:
+                        plan = json.loads(plan_text)
+                    except (json.JSONDecodeError, TypeError):
+                        plan = plan_text
+                elif plan_text is not None:
+                    plan = plan_text
+
+            return {
+                "status": "success",
+                "dry_run": True,
+                "query_plan": plan,
+                "original_statement": statement[:STATEMENT_PREVIEW_LENGTH],
+                "query_id": result.get("query_id"),
+                "duration_ms": result.get("duration_ms"),
+                "session_context": result.get("session_context"),
+            }
 
         # Use synchronous execution (skip re-validation since we just did it above)
         return await self._execute_impl(
@@ -2213,7 +2296,6 @@ class ExecuteQueryTool(MCPTool):
                     # Only fetch rows if a result set is present
                     has_result_set = getattr(cursor, "description", None) is not None
                     if has_result_set:
-                        raw_rows = cursor.fetchall()
                         description = getattr(cursor, "description", None) or []
                         column_names = []
                         for idx, col in enumerate(description):
@@ -2226,69 +2308,96 @@ class ExecuteQueryTool(MCPTool):
                                 name = f"column_{idx}"
                             column_names.append(str(name))
 
-                        processed_rows = []
-                        for raw in raw_rows:
+                        def _process_raw_row(raw: Any) -> dict[str, Any]:
                             if isinstance(raw, dict):
                                 record = raw
                             elif hasattr(raw, "_asdict"):
-                                record = raw._asdict()  # type: ignore[assignment]
+                                record = raw._asdict()
                             elif isinstance(raw, (list, tuple)):
                                 record = {}
-                                for idx, value in enumerate(raw):
-                                    key = column_names[idx] if idx < len(column_names) else f"column_{idx}"
+                                for i, value in enumerate(raw):
+                                    key = column_names[i] if i < len(column_names) else f"column_{i}"
                                     record[key] = value
                             else:
-                                # Fallback for scalar rows or mismatched metadata
                                 record = {"value": raw}
+                            return json_compatible(record)
 
-                            processed_rows.append(json_compatible(record))
+                        # Chunked fetch: stream through cursor keeping only what we need.
+                        # For small results (<=threshold) we keep everything.
+                        # For large results we keep first N + last N rows without loading
+                        # the entire result set into memory.
+                        keep_first = RESULT_KEEP_FIRST_ROWS
+                        keep_last = RESULT_KEEP_LAST_ROWS
+                        chunk_size = 2000
+                        head_rows: list[dict[str, Any]] = []
+                        tail_buffer: list[dict[str, Any]] = []
+                        total_fetched = 0
+                        size_sample_bytes = 0
+                        size_sample_count = 0
+                        needs_truncation = False
 
-                        result_box["rows"] = processed_rows
-                        result_box["rowcount"] = len(processed_rows)
+                        while True:
+                            chunk = cursor.fetchmany(chunk_size)
+                            if not chunk:
+                                break
+                            for raw in chunk:
+                                row = _process_raw_row(raw)
+                                total_fetched += 1
+
+                                if total_fetched <= keep_first:
+                                    head_rows.append(row)
+                                    # Sample size from head rows for estimation
+                                    if total_fetched <= 50:
+                                        size_sample_bytes += len(json.dumps(row, ensure_ascii=False, default=str))
+                                        size_sample_count += 1
+                                elif total_fetched == keep_first + 1:
+                                    # We've exceeded head capacity — switch to tail buffer mode
+                                    needs_truncation = True
+                                    tail_buffer.append(row)
+                                else:
+                                    tail_buffer.append(row)
+                                    # Keep tail buffer bounded to save memory
+                                    if len(tail_buffer) > keep_last:
+                                        # Sample a mid-stream row for better size estimation
+                                        if size_sample_count < 100:
+                                            evicted = tail_buffer.pop(0)
+                                            size_sample_bytes += len(
+                                                json.dumps(evicted, ensure_ascii=False, default=str)
+                                            )
+                                            size_sample_count += 1
+                                        else:
+                                            tail_buffer.pop(0)
+
                         result_box["columns"] = column_names
 
-                        # Smart truncation for large outputs to prevent context window overflow
-                        if len(processed_rows) > RESULT_TRUNCATION_THRESHOLD:
-                            # Sample from start, middle, and end for more representative size estimate
-                            n = len(processed_rows)
-                            sample_indices = (
-                                list(range(min(50, n)))
-                                + list(range(n // 2, min(n // 2 + 25, n)))
-                                + list(range(max(n - 25, 0), n))
-                            )
-                            seen: set[int] = set()
-                            sample_rows_for_est = []
-                            for idx in sample_indices:
-                                if idx not in seen:
-                                    seen.add(idx)
-                                    sample_rows_for_est.append(processed_rows[idx])
-                            sample_size = len(json.dumps(sample_rows_for_est))
-                            estimated_total_size = sample_size * (n / len(sample_rows_for_est))
+                        if not needs_truncation:
+                            # Small result: all rows fit in head_rows
+                            result_box["rows"] = head_rows
+                            result_box["rowcount"] = total_fetched
+                        else:
+                            # Large result: assemble truncated view
+                            avg_row_bytes = size_sample_bytes / max(size_sample_count, 1)
+                            estimated_total_mb = (avg_row_bytes * total_fetched) / (1024 * 1024)
 
-                            # If estimated output is too large, truncate with metadata
-                            size_limit_bytes = RESULT_SIZE_LIMIT_MB * 1024 * 1024
-                            if estimated_total_size > size_limit_bytes:
-                                original_count = len(processed_rows)
-                                truncated_rows = processed_rows[:RESULT_KEEP_FIRST_ROWS]
-                                last_rows = processed_rows[-RESULT_KEEP_LAST_ROWS:]
-
-                                result_box["rows"] = [
-                                    *truncated_rows,
-                                    {"__truncated__": True, "__message__": "Large result set truncated"},
-                                    *last_rows,
-                                ]
-                                result_box["truncated"] = True
-                                result_box["original_rowcount"] = original_count
-                                result_box["returned_rowcount"] = len(result_box["rows"])
-                                result_box["truncation_info"] = {
-                                    "original_size_mb": round(estimated_total_size / (1024 * 1024), 2),
-                                    "truncated_for_context_window": True,
-                                    "export_suggestions": [
-                                        "Consider using LIMIT clause in your query",
-                                        "Export to CSV/Parquet: use warehouse with more memory",
-                                        "Add WHERE clause to filter data early",
-                                    ],
-                                }
+                            result_box["rows"] = [
+                                *head_rows,
+                                {"__truncated__": True, "__message__": "Large result set truncated"},
+                                *tail_buffer[-keep_last:],
+                            ]
+                            result_box["rowcount"] = total_fetched
+                            result_box["truncated"] = True
+                            result_box["original_rowcount"] = total_fetched
+                            result_box["returned_rowcount"] = len(result_box["rows"])
+                            result_box["truncation_info"] = {
+                                "original_size_mb": round(estimated_total_mb, 2),
+                                "truncated_for_context_window": True,
+                                "rows_kept": f"first {len(head_rows)} + last {len(tail_buffer[-keep_last:])}",
+                                "export_suggestions": [
+                                    "Use output_format='csv' or 'jsonl' for complete results as a file",
+                                    "Add LIMIT clause to reduce result size",
+                                    "Add WHERE clause to filter data early",
+                                ],
+                            }
                     else:
                         # DML/DDL: no result set, use rowcount from cursor if available
                         rc = getattr(cursor, "rowcount", 0)
@@ -2543,5 +2652,12 @@ class ExecuteQueryTool(MCPTool):
                     ),
                     "examples": ["minimal", "summary", "full", "schema_only", "sample"],
                 },
+                "dry_run": boolean_schema(
+                    "If true, run EXPLAIN on the statement instead of executing it. "
+                    "Returns the query plan without reading or writing any data. "
+                    "Useful for validating SQL, estimating cost, and inspecting execution strategy.",
+                    default=False,
+                    examples=[True, False],
+                ),
             },
         }

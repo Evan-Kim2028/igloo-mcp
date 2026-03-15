@@ -93,12 +93,21 @@ class MCPValidationError(MCPToolError):
 
     Attributes:
         validation_errors: List of specific validation error messages
+
+    Standard error_code values:
+        VALIDATION_ERROR: Generic validation failure (default)
+        INVALID_SQL: SQL statement failed validation or permission check
+        INVALID_PARAMETER: Parameter value out of range or wrong type
+        STATEMENT_TOO_LONG: SQL exceeds maximum length
+        PROFILE_INVALID: Snowflake profile validation failed
+        CIRCUIT_BREAKER_OPEN: Query blocked by circuit breaker
     """
 
     def __init__(
         self,
         message: str,
         *,
+        error_code: str = "VALIDATION_ERROR",
         validation_errors: list[str] | None = None,
         hints: list[str] | None = None,
         context: dict[str, Any] | None = None,
@@ -108,6 +117,7 @@ class MCPValidationError(MCPToolError):
 
         Args:
             message: Human-readable error message
+            error_code: Machine-readable error code for programmatic handling
             validation_errors: List of specific validation error messages
             hints: Optional list of actionable suggestions
             context: Optional additional context data
@@ -115,7 +125,7 @@ class MCPValidationError(MCPToolError):
         """
         super().__init__(
             message,
-            error_code="VALIDATION_ERROR",
+            error_code=error_code,
             hints=hints,
             context=context,
             verbose=verbose,
@@ -144,12 +154,23 @@ class MCPExecutionError(MCPToolError):
     Attributes:
         operation: Name of the operation that failed
         original_error: Optional original exception that caused this error
+
+    Standard error_code values:
+        EXECUTION_ERROR: Generic execution failure (default)
+        QUERY_TIMEOUT: Query exceeded timeout and was cancelled
+        CONNECTION_FAILED: Could not connect to Snowflake
+        PERMISSION_DENIED: Insufficient privileges for the operation
+        OBJECT_NOT_FOUND: Referenced table/view/schema does not exist
+        SYNTAX_ERROR: SQL syntax error detected by Snowflake
+        CIRCUIT_BREAKER_OPEN: Query blocked by circuit breaker
+        EXPORT_FAILED: Failed to write query results to file
     """
 
     def __init__(
         self,
         message: str,
         *,
+        error_code: str = "EXECUTION_ERROR",
         operation: str | None = None,
         original_error: Exception | None = None,
         hints: list[str] | None = None,
@@ -160,6 +181,7 @@ class MCPExecutionError(MCPToolError):
 
         Args:
             message: Human-readable error message
+            error_code: Machine-readable error code for programmatic handling
             operation: Name of the operation that failed
             original_error: Optional original exception that caused this error
             hints: Optional list of actionable suggestions
@@ -168,7 +190,7 @@ class MCPExecutionError(MCPToolError):
         """
         super().__init__(
             message,
-            error_code="EXECUTION_ERROR",
+            error_code=error_code,
             hints=hints,
             context=context,
             verbose=verbose,
