@@ -52,6 +52,11 @@ class CircuitBreaker:
         The lock is held only for state checks and transitions, NOT during
         the actual function execution.  This avoids blocking other threads
         for the duration of potentially slow Snowflake queries.
+
+        Note: In HALF_OPEN state, multiple threads may execute concurrently
+        before the first completes and transitions the state. This is an
+        intentional trade-off to avoid serializing all requests behind the
+        lock during slow Snowflake calls.
         """
         with self._lock:
             if self.state == CircuitState.OPEN:

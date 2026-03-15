@@ -207,21 +207,33 @@ class ParallelQueryExecutor:
                 for object_name, query in queries.items()
             }
 
-            for future in as_completed(
-                future_to_object,
-                timeout=self.config.timeout_seconds,
-            ):
-                object_name = future_to_object[future]
-                try:
-                    results[object_name] = future.result()
-                except Exception:
-                    logger.exception("Unexpected error for %s", object_name)
-                    results[object_name] = QueryResult(
-                        object_name=object_name,
-                        query=queries[object_name],
-                        success=False,
-                        error="Unexpected error during parallel execution",
-                    )
+            try:
+                for future in as_completed(
+                    future_to_object,
+                    timeout=self.config.timeout_seconds,
+                ):
+                    object_name = future_to_object[future]
+                    try:
+                        results[object_name] = future.result()
+                    except Exception:
+                        logger.exception("Unexpected error for %s", object_name)
+                        results[object_name] = QueryResult(
+                            object_name=object_name,
+                            query=queries[object_name],
+                            success=False,
+                            error="Unexpected error during parallel execution",
+                        )
+            except TimeoutError:
+                # Some futures didn't complete in time — record them as timed out
+                for future, object_name in future_to_object.items():
+                    if object_name not in results:
+                        future.cancel()
+                        results[object_name] = QueryResult(
+                            object_name=object_name,
+                            query=queries[object_name],
+                            success=False,
+                            error=f"Query timed out after {self.config.timeout_seconds}s",
+                        )
 
         self._last_wall_time = time.monotonic() - wall_start
         return results
@@ -283,21 +295,32 @@ class ParallelQueryExecutor:
                 for object_name, query in queries.items()
             }
 
-            for future in as_completed(
-                future_to_object,
-                timeout=self.config.timeout_seconds,
-            ):
-                object_name = future_to_object[future]
-                try:
-                    results[object_name] = future.result()
-                except Exception:
-                    logger.exception("Unexpected error for %s", object_name)
-                    results[object_name] = QueryResult(
-                        object_name=object_name,
-                        query=queries[object_name],
-                        success=False,
-                        error="Unexpected error during parallel execution",
-                    )
+            try:
+                for future in as_completed(
+                    future_to_object,
+                    timeout=self.config.timeout_seconds,
+                ):
+                    object_name = future_to_object[future]
+                    try:
+                        results[object_name] = future.result()
+                    except Exception:
+                        logger.exception("Unexpected error for %s", object_name)
+                        results[object_name] = QueryResult(
+                            object_name=object_name,
+                            query=queries[object_name],
+                            success=False,
+                            error="Unexpected error during parallel execution",
+                        )
+            except TimeoutError:
+                for future, object_name in future_to_object.items():
+                    if object_name not in results:
+                        future.cancel()
+                        results[object_name] = QueryResult(
+                            object_name=object_name,
+                            query=queries[object_name],
+                            success=False,
+                            error=f"Query timed out after {self.config.timeout_seconds}s",
+                        )
 
         self._last_wall_time = time.monotonic() - wall_start
         return results
@@ -387,6 +410,11 @@ def create_object_queries(
 
     Returns:
         Dict mapping object names to SQL queries
+
+    Warning:
+        Both ``object_names`` and ``base_query_template`` must come from
+        trusted sources.  The template is interpolated via ``str.format()``
+        and is not safe against arbitrary user input.
     """
     return {obj: base_query_template.format(object=obj.replace("'", "''")) for obj in object_names}
 
