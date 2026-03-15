@@ -794,7 +794,21 @@ class ExecuteQueryTool(MCPTool):
 
         if "insufficient privileges" in combined or "access denied" in combined or "permission denied" in combined:
             return "PERMISSION_DENIED"
-        if "object does not exist" in combined or "does not exist or not authorized" in combined:
+        if any(
+            kw in combined
+            for kw in (
+                "object does not exist",
+                "does not exist or not authorized",
+                "unknown table",
+                "unknown schema",
+                "unknown database",
+                "unknown function",
+                "table does not exist",
+                "view does not exist",
+                "schema does not exist",
+                "database does not exist",
+            )
+        ):
             return "OBJECT_NOT_FOUND"
         if "syntax error" in combined or "sql compilation error" in combined or "invalid identifier" in combined:
             return "SYNTAX_ERROR"
@@ -2004,22 +2018,38 @@ class ExecuteQueryTool(MCPTool):
             # Strip trailing semicolons/whitespace — EXPLAIN doesn't accept them
             clean_stmt = statement.rstrip().rstrip(";").rstrip()
             explain_stmt = f"EXPLAIN USING JSON {clean_stmt}"
-            result = await self._execute_impl(
-                statement=explain_stmt,
-                warehouse=warehouse,
-                database=database,
-                schema=schema,
-                role=role,
-                timeout_seconds=coerced_timeout,
-                verbose_errors=verbose_errors,
-                reason=f"[dry_run] {reason}" if reason else "[dry_run]",
-                normalized_insight=None,
-                result_mode="full",
-                output_format=OUTPUT_FORMAT_INLINE,
-                ctx=ctx,
-                validate_profile=False,
-                validate_statement=False,
-            )
+            try:
+                result = await self._execute_impl(
+                    statement=explain_stmt,
+                    warehouse=warehouse,
+                    database=database,
+                    schema=schema,
+                    role=role,
+                    timeout_seconds=coerced_timeout,
+                    verbose_errors=verbose_errors,
+                    reason=f"[dry_run] {reason}" if reason else "[dry_run]",
+                    normalized_insight=None,
+                    result_mode="full",
+                    output_format=OUTPUT_FORMAT_INLINE,
+                    ctx=ctx,
+                    validate_profile=False,
+                    validate_statement=False,
+                )
+            except MCPExecutionError as exc:
+                # Rewrite error to reference the original statement, not the EXPLAIN wrapper
+                raise MCPExecutionError(
+                    f"Dry-run EXPLAIN failed: {exc.message}",
+                    error_code=exc.error_code or "EXECUTION_ERROR",
+                    operation="execute_query_dry_run",
+                    original_error=exc.original_error,
+                    hints=[
+                        "The statement likely has a syntax error or references missing objects",
+                        "Fix the SQL and retry with dry_run=true before executing",
+                        *(exc.hints or []),
+                    ],
+                    context={"original_statement": statement[:STATEMENT_PREVIEW_LENGTH]},
+                    verbose=verbose_errors,
+                ) from exc
             # Parse the JSON plan from the EXPLAIN output
             plan = None
             rows = result.get("rows") or []
