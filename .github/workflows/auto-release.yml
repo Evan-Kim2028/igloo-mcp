@@ -10,6 +10,7 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       issues: write
       pull-requests: write
@@ -96,16 +97,33 @@ jobs:
             --notes "${{ steps.release_notes.notes }}" \
             --verify-tag
 
+      - name: Trigger PyPI publish workflow
+        if: steps.check_tag.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run release.yml \
+            --ref main \
+            -f tag="${{ steps.version.outputs.tag }}"
+
       - name: Comment on PR
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          COMMENT="🎉 **Release ${{ steps.version.outputs.tag }} Created!**
+          if [ "${{ steps.check_tag.outputs.exists }}" = "false" ]; then
+            COMMENT="🎉 **Release ${{ steps.version.outputs.tag }} Created!**
 
           - ✅ Tag created and pushed
           - ✅ GitHub release published
-          - ✅ PyPI publish triggered (see [release workflow](https://github.com/${{ github.repository }}/actions/workflows/release.yml))
+          - ✅ PyPI publish requested (see [release workflow](https://github.com/${{ github.repository }}/actions/workflows/release.yml))
           "
+          else
+            COMMENT="ℹ️ **Release ${{ steps.version.outputs.tag }} already existed**
+
+          - ℹ️ Tag already existed, so no new GitHub release was created
+          - ℹ️ No new PyPI publish was requested automatically
+          "
+          fi
 
           if [ -n "${{ steps.extract_issues.outputs.issues }}" ]; then
             COMMENT="$COMMENT
