@@ -13,7 +13,7 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -42,7 +42,7 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -65,7 +65,7 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -98,10 +98,23 @@ jobs:
             --critical-modules "mcp/tools" "service_layer" "sql_validation.py"
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-          flags: unittests
-          fail_ci_if_error: false  # Don't fail CI if codecov upload fails (token may not be configured)
-          verbose: true
+        continue-on-error: true  # Don't fail CI if Codecov upload fails (token may not be configured)
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          curl https://keybase.io/codecovsecurity/pgp_keys.asc | gpg --no-default-keyring --keyring trustedkeys.gpg --import
+          curl -Os https://cli.codecov.io/latest/linux/codecov
+          curl -Os https://cli.codecov.io/latest/linux/codecov.SHA256SUM
+          curl -Os https://cli.codecov.io/latest/linux/codecov.SHA256SUM.sig
+          gpg --verify codecov.SHA256SUM.sig codecov.SHA256SUM
+          shasum -a 256 -c codecov.SHA256SUM
+          chmod +x codecov
+
+          token_args=()
+          if [ -n "${CODECOV_TOKEN:-}" ]; then
+            token_args=(-t "$CODECOV_TOKEN")
+          else
+            echo "CODECOV_TOKEN is not configured; attempting tokenless upload."
+          fi
+
+          ./codecov --verbose upload-process --disable-search -f coverage.xml -F unittests "${token_args[@]}"

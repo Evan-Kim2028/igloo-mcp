@@ -37,7 +37,7 @@ jobs:
 
           echo "tag=$TARGET_TAG" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ steps.target.outputs.tag }}
 
