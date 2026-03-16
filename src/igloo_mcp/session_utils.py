@@ -100,9 +100,7 @@ def validate_session_lock(service: SnowflakeServiceProtocol) -> bool:
     try:
         lock = getattr(service, _LOCK_ATTR, None)
         return (
-            lock is not None
-            and callable(getattr(lock, "acquire", None))
-            and callable(getattr(lock, "release", None))
+            lock is not None and callable(getattr(lock, "acquire", None)) and callable(getattr(lock, "release", None))
         )
     except (AttributeError, TypeError):
         return False
