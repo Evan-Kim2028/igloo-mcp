@@ -174,18 +174,20 @@ class SectionChange(BaseModel):
 
 
 # Known top-level keys in ProposedChanges for detecting unrecognized input
-_PROPOSED_CHANGES_RECOGNIZED_KEYS: frozenset[str] = frozenset({
-    "schema_version",
-    "insights_to_add",
-    "insights_to_modify",
-    "insights_to_remove",
-    "sections_to_add",
-    "sections_to_modify",
-    "sections_to_remove",
-    "title_change",
-    "metadata_updates",
-    "status_change",
-})
+_PROPOSED_CHANGES_RECOGNIZED_KEYS: frozenset[str] = frozenset(
+    {
+        "schema_version",
+        "insights_to_add",
+        "insights_to_modify",
+        "insights_to_remove",
+        "sections_to_add",
+        "sections_to_modify",
+        "sections_to_remove",
+        "title_change",
+        "metadata_updates",
+        "status_change",
+    }
+)
 
 # Common misspellings / alternative key names that LLMs tend to generate
 _PROPOSED_CHANGES_KNOWN_ALIASES: dict[str, str] = {
@@ -231,7 +233,7 @@ class ProposedChanges(BaseModel):
         Returns a list of warning strings. Empty list means no issues.
         Call this BEFORE constructing ProposedChanges to catch LLM formatting errors.
         """
-        warnings = []
+        warnings: list[str] = []
         unrecognized = set(raw_input.keys()) - _PROPOSED_CHANGES_RECOGNIZED_KEYS
         if not unrecognized:
             return warnings

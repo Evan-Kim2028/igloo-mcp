@@ -12,6 +12,7 @@ import os
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,10 @@ except ImportError:  # pragma: no cover
 
 import contextlib
 
+from igloo_mcp.auth import (
+    AuthProviderReliability,
+    get_service_provider_spec,
+)
 from igloo_mcp.cache import QueryResultCache
 from igloo_mcp.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from igloo_mcp.config import Config
@@ -178,6 +183,12 @@ SUPPORTED_OUTPUT_FORMATS = (
 QUERY_CIRCUIT_BREAKER_ENABLED_ENV = "IGLOO_MCP_CIRCUIT_BREAKER_ENABLED"
 QUERY_CIRCUIT_BREAKER_FAILURE_THRESHOLD_ENV = "IGLOO_MCP_CIRCUIT_BREAKER_FAILURE_THRESHOLD"
 QUERY_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_ENV = "IGLOO_MCP_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS"
+QUERY_RETRY_ENABLED_ENV = "IGLOO_MCP_QUERY_RETRY_ENABLED"
+QUERY_RETRY_MAX_ATTEMPTS_ENV = "IGLOO_MCP_QUERY_RETRY_MAX_ATTEMPTS"
+QUERY_RETRY_INITIAL_BACKOFF_ENV = "IGLOO_MCP_QUERY_RETRY_INITIAL_BACKOFF_SECONDS"
+QUERY_RETRY_BACKOFF_MULTIPLIER_ENV = "IGLOO_MCP_QUERY_RETRY_BACKOFF_MULTIPLIER"
+QUERY_RETRY_MAX_BACKOFF_ENV = "IGLOO_MCP_QUERY_RETRY_MAX_BACKOFF_SECONDS"
+QUERY_CANCEL_GRACE_SECONDS_ENV = "IGLOO_MCP_QUERY_CANCEL_GRACE_SECONDS"
 
 DEFAULT_QUERY_CIRCUIT_BREAKER_ENABLED = True
 DEFAULT_QUERY_CIRCUIT_BREAKER_FAILURE_THRESHOLD = 5
@@ -214,6 +225,16 @@ NON_CONNECTIVITY_ERROR_KEYWORDS = (
     "permission denied",
     "invalid argument",
 )
+RETRY_SAFE_STATEMENT_TYPES = frozenset({"select", "show", "describe", "use"})
+
+
+@dataclass(frozen=True)
+class QueryRetryPolicy:
+    enabled: bool
+    max_attempts: int
+    initial_backoff_seconds: float
+    backoff_multiplier: float
+    max_backoff_seconds: float
 
 
 def _build_hint(rowcount: int, sample_size: int) -> str | None:
@@ -488,6 +509,8 @@ class ExecuteQueryTool(MCPTool):
         """
         self.config = config
         self.snowflake_service = snowflake_service
+        self._provider_spec = get_service_provider_spec(snowflake_service)
+        self._provider_reliability: AuthProviderReliability = self._provider_spec.reliability
         self.query_service = query_service
         self.health_monitor = health_monitor
         # Optional JSONL query history (enabled via IGLOO_MCP_QUERY_HISTORY)
@@ -505,6 +528,12 @@ class ExecuteQueryTool(MCPTool):
         if not os.environ.get("IGLOO_MCP_CACHE_MODE") and not os.environ.get("IGLOO_MCP_CACHE_ROOT"):
             self._cache_enabled = False
             self._cache_mode = "disabled"
+        self._retry_policy = self._init_retry_policy()
+        self._timeout_cancel_grace_seconds = _read_float_env(
+            QUERY_CANCEL_GRACE_SECONDS_ENV,
+            self._provider_reliability.cancel_grace_seconds,
+            minimum=0.0,
+        )
         self._query_circuit_breaker = self._init_query_circuit_breaker()
 
     @property
@@ -540,18 +569,23 @@ class ExecuteQueryTool(MCPTool):
         return None, warnings
 
     def _init_query_circuit_breaker(self) -> CircuitBreaker | None:
+        if not self._provider_spec.capabilities.supports_circuit_breaker:
+            return None
+
         enabled = _read_bool_env(QUERY_CIRCUIT_BREAKER_ENABLED_ENV, DEFAULT_QUERY_CIRCUIT_BREAKER_ENABLED)
         if not enabled:
             return None
 
         failure_threshold = _read_int_env(
             QUERY_CIRCUIT_BREAKER_FAILURE_THRESHOLD_ENV,
-            DEFAULT_QUERY_CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+            self._provider_reliability.circuit_breaker_failure_threshold
+            or DEFAULT_QUERY_CIRCUIT_BREAKER_FAILURE_THRESHOLD,
             minimum=1,
         )
         recovery_timeout = _read_float_env(
             QUERY_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_ENV,
-            DEFAULT_QUERY_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS,
+            self._provider_reliability.circuit_breaker_recovery_timeout_seconds
+            or DEFAULT_QUERY_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS,
             minimum=1.0,
         )
         return CircuitBreaker(
@@ -561,12 +595,87 @@ class ExecuteQueryTool(MCPTool):
             )
         )
 
+    def _init_retry_policy(self) -> QueryRetryPolicy:
+        capabilities = self._provider_spec.capabilities
+        provider_reliability = self._provider_reliability
+
+        default_max_attempts = max(1, int(provider_reliability.retry_attempts))
+        default_retry_enabled = capabilities.supports_retry_handling and default_max_attempts > 1
+        retry_enabled = _read_bool_env(QUERY_RETRY_ENABLED_ENV, default_retry_enabled)
+        max_attempts = _read_int_env(
+            QUERY_RETRY_MAX_ATTEMPTS_ENV,
+            default_max_attempts,
+            minimum=1,
+        )
+        initial_backoff = _read_float_env(
+            QUERY_RETRY_INITIAL_BACKOFF_ENV,
+            provider_reliability.retry_initial_backoff_seconds,
+            minimum=0.0,
+        )
+        backoff_multiplier = _read_float_env(
+            QUERY_RETRY_BACKOFF_MULTIPLIER_ENV,
+            provider_reliability.retry_backoff_multiplier,
+            minimum=1.0,
+        )
+        max_backoff = _read_float_env(
+            QUERY_RETRY_MAX_BACKOFF_ENV,
+            provider_reliability.retry_max_backoff_seconds,
+            minimum=0.0,
+        )
+
+        if max_backoff < initial_backoff:
+            max_backoff = initial_backoff
+
+        if not capabilities.supports_retry_handling or not retry_enabled:
+            return QueryRetryPolicy(
+                enabled=False,
+                max_attempts=1,
+                initial_backoff_seconds=0.0,
+                backoff_multiplier=1.0,
+                max_backoff_seconds=0.0,
+            )
+
+        return QueryRetryPolicy(
+            enabled=True,
+            max_attempts=max_attempts,
+            initial_backoff_seconds=initial_backoff,
+            backoff_multiplier=backoff_multiplier,
+            max_backoff_seconds=max_backoff,
+        )
+
+    def _compute_retry_delay_seconds(self, retry_index: int) -> float:
+        if not self._retry_policy.enabled:
+            return 0.0
+        exponent = max(0, retry_index - 1)
+        base = self._retry_policy.initial_backoff_seconds
+        delay = base * (self._retry_policy.backoff_multiplier**exponent)
+        return min(self._retry_policy.max_backoff_seconds, delay)
+
     def get_circuit_breaker_status(self) -> dict[str, Any]:
         """Expose execute_query circuit breaker status for diagnostics."""
         if self._query_circuit_breaker is None:
-            return {"enabled": False, "state": "disabled"}
+            return {
+                "enabled": False,
+                "state": "disabled",
+                "provider": self._provider_spec.mode,
+                "retry_policy": {
+                    "enabled": self._retry_policy.enabled,
+                    "max_attempts": self._retry_policy.max_attempts,
+                    "initial_backoff_seconds": self._retry_policy.initial_backoff_seconds,
+                    "backoff_multiplier": self._retry_policy.backoff_multiplier,
+                    "max_backoff_seconds": self._retry_policy.max_backoff_seconds,
+                },
+            }
         status = self._query_circuit_breaker.get_status()
         status["enabled"] = True
+        status["provider"] = self._provider_spec.mode
+        status["retry_policy"] = {
+            "enabled": self._retry_policy.enabled,
+            "max_attempts": self._retry_policy.max_attempts,
+            "initial_backoff_seconds": self._retry_policy.initial_backoff_seconds,
+            "backoff_multiplier": self._retry_policy.backoff_multiplier,
+            "max_backoff_seconds": self._retry_policy.max_backoff_seconds,
+        }
         return status
 
     def _ensure_circuit_allows_query(self, *, timeout: int, overrides: dict[str, Any]) -> None:
@@ -626,6 +735,76 @@ class ExecuteQueryTool(MCPTool):
             return True
 
         return any(keyword in message for message in messages for keyword in CONNECTIVITY_ERROR_KEYWORDS)
+
+    def _classify_failure(self, error: BaseException) -> dict[str, Any]:
+        chain = self._iter_exception_chain(error)
+        messages = [str(exc).lower() for exc in chain if str(exc)]
+        provider_non_retryable = tuple(kw.lower() for kw in self._provider_reliability.non_retryable_error_keywords)
+        provider_retryable = tuple(kw.lower() for kw in self._provider_reliability.retryable_error_keywords)
+
+        def _contains_any(keywords: tuple[str, ...]) -> bool:
+            return any(keyword in message for message in messages for keyword in keywords)
+
+        if _contains_any(provider_non_retryable):
+            category = "authorization"
+            if not _contains_any(("access denied", "permission denied", "not authorized", "insufficient privileges")):
+                category = "sql_or_validation"
+            return {
+                "category": category,
+                "retryable": False,
+                "connectivity": False,
+            }
+
+        if self._is_connectivity_failure(error):
+            return {
+                "category": "connectivity",
+                "retryable": True,
+                "connectivity": True,
+            }
+
+        if _contains_any(provider_retryable):
+            return {
+                "category": "transient",
+                "retryable": True,
+                "connectivity": False,
+            }
+
+        return {
+            "category": "unknown",
+            "retryable": False,
+            "connectivity": False,
+        }
+
+    @staticmethod
+    def _is_retry_safe_statement_type(statement_type: str | None) -> bool:
+        canonical = (statement_type or "").replace("_", "").strip().lower()
+        return canonical in RETRY_SAFE_STATEMENT_TYPES
+
+    def _should_retry_failure(
+        self,
+        *,
+        classification: dict[str, Any],
+        attempt_number: int,
+        retry_enabled: bool,
+        max_attempts: int,
+    ) -> bool:
+        if not retry_enabled:
+            return False
+        if attempt_number >= max_attempts:
+            return False
+        return bool(classification.get("retryable"))
+
+    def _invalidate_provider_connection(self, classification: dict[str, Any]) -> None:
+        """Best-effort reset for providers that hold persistent connector sessions."""
+        if not classification.get("connectivity"):
+            return
+        invalidate = getattr(self.snowflake_service, "invalidate_connection", None)
+        if not callable(invalidate):
+            return
+        try:
+            invalidate()
+        except Exception:
+            logger.debug("Failed to invalidate provider connection after connectivity failure", exc_info=True)
 
     def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Path | None:
         if self._artifact_root is None:
@@ -850,6 +1029,9 @@ class ExecuteQueryTool(MCPTool):
         return warnings
 
     async def _ensure_profile_health(self) -> None:
+        if not self._provider_spec.capabilities.supports_profile_validation:
+            return
+
         if not self.health_monitor:
             return
 
@@ -877,7 +1059,7 @@ class ExecuteQueryTool(MCPTool):
             ],
         )
 
-    def _enforce_sql_permissions(self, statement: str) -> None:
+    def _enforce_sql_permissions(self, statement: str) -> str:
         allow_list = self.config.sql_permissions.get_allow_list()
         disallow_list = self.config.sql_permissions.get_disallow_list()
 
@@ -896,6 +1078,7 @@ class ExecuteQueryTool(MCPTool):
                     "Use SELECT statements for read-only queries",
                 ],
             )
+        return stmt_type
 
     def _ensure_default_insights(self, result: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
         key_metrics = result.get("key_metrics")
@@ -1099,6 +1282,8 @@ class ExecuteQueryTool(MCPTool):
         if validate_profile:
             await self._ensure_profile_health()
 
+        statement_type = "Unknown"
+
         if validate_statement:
             # Validate SQL statement length
             if len(statement) > MAX_SQL_STATEMENT_LENGTH:
@@ -1110,7 +1295,15 @@ class ExecuteQueryTool(MCPTool):
                         "Use CTEs or views to simplify complex queries",
                     ],
                 )
-            self._enforce_sql_permissions(statement)
+            statement_type = self._enforce_sql_permissions(statement)
+
+        retry_safe_statement = self._is_retry_safe_statement_type(statement_type)
+        retry_enabled = self._retry_policy.enabled and retry_safe_statement
+        retry_max_attempts = self._retry_policy.max_attempts if retry_enabled else 1
+        if self._retry_policy.enabled and not retry_safe_statement:
+            self._transient_audit_warnings.append(
+                "Automatic retries are disabled for non-read-only statements to avoid duplicate side effects."
+            )
 
         # Prepare session context overrides
         overrides_input = {
@@ -1303,20 +1496,66 @@ class ExecuteQueryTool(MCPTool):
             return _apply_result_mode(result, result_mode, full_token_estimate=full_token_estimate)
 
         # Execute query with session context management
-
-        self._ensure_circuit_allows_query(timeout=timeout, overrides=overrides)
+        retry_attempts_used = 0
+        retry_categories: list[str] = []
 
         try:
-            result = await anyio.to_thread.run_sync(  # type: ignore[arg-type]
-                self._execute_query_sync,
-                statement,
-                overrides,
-                timeout,
-                reason,
-            )
+            for attempt_number in range(1, retry_max_attempts + 1):
+                retry_attempts_used = max(0, attempt_number - 1)
+                self._ensure_circuit_allows_query(timeout=timeout, overrides=overrides)
+                try:
+                    result = await anyio.to_thread.run_sync(  # type: ignore[arg-type]
+                        self._execute_query_sync,
+                        statement,
+                        overrides,
+                        timeout,
+                        reason,
+                    )
+                    break
+                except TimeoutError:
+                    # Do not retry local timeout cancellations to avoid duplicate work.
+                    raise
+                except Exception as exc:
+                    classification = self._classify_failure(exc)
+                    retry_categories.append(str(classification.get("category", "unknown")))
+                    self._invalidate_provider_connection(classification)
+                    if not self._should_retry_failure(
+                        classification=classification,
+                        attempt_number=attempt_number,
+                        retry_enabled=retry_enabled,
+                        max_attempts=retry_max_attempts,
+                    ):
+                        raise
+
+                    delay_seconds = self._compute_retry_delay_seconds(attempt_number)
+                    self._transient_audit_warnings.append(
+                        "Retrying query after "
+                        f"{classification.get('category', 'transient')} failure "
+                        f"(attempt {attempt_number}/{retry_max_attempts}, "
+                        f"backoff {round(delay_seconds, 3)}s)."
+                    )
+                    logger.warning(
+                        "execute_query retrying after %s failure (attempt %s/%s, backoff %.3fs)",
+                        classification.get("category", "transient"),
+                        attempt_number,
+                        retry_max_attempts,
+                        delay_seconds,
+                    )
+                    if delay_seconds > 0:
+                        await anyio.sleep(delay_seconds)
+            else:  # pragma: no cover - defensive; loop exits via break or raise
+                raise RuntimeError("execute_query retry loop exhausted unexpectedly")
 
             if self._query_circuit_breaker is not None:
                 self._query_circuit_breaker.record_success()
+
+            result["retry"] = {
+                "enabled": retry_enabled,
+                "max_attempts": retry_max_attempts,
+                "attempts_used": retry_attempts_used + 1,
+                "retries_used": retry_attempts_used,
+                "categories": retry_categories,
+            }
 
             key_metrics, derived_insights = self._ensure_default_insights(result)
 
@@ -1486,6 +1725,13 @@ class ExecuteQueryTool(MCPTool):
                 "database": overrides.get("database"),
                 "schema": overrides.get("schema"),
                 "role": overrides.get("role"),
+                "provider": self._provider_spec.mode,
+                "retry": {
+                    "enabled": retry_enabled,
+                    "max_attempts": retry_max_attempts,
+                    "retries_used": retry_attempts_used,
+                    "categories": retry_categories,
+                },
             }
             timeout_error = wrap_timeout_error(
                 timeout_seconds=timeout,
@@ -1497,9 +1743,15 @@ class ExecuteQueryTool(MCPTool):
                 self.health_monitor.record_error(str(timeout_error))
             self._collect_audit_warnings()
             raise timeout_error
+        except MCPExecutionError as e:
+            if self.health_monitor:
+                self.health_monitor.record_error(f"Query execution failed: {str(e)[:200]}")
+            self._collect_audit_warnings()
+            raise
         except Exception as e:  # Broad catch-all for any query execution failure
             error_message = str(e)
-            connectivity_failure = self._is_connectivity_failure(e)
+            failure_classification = self._classify_failure(e)
+            connectivity_failure = bool(failure_classification.get("connectivity"))
             circuit_status: dict[str, Any] | None = None
 
             if connectivity_failure and self._query_circuit_breaker is not None:
@@ -1547,12 +1799,24 @@ class ExecuteQueryTool(MCPTool):
                 "schema": overrides.get("schema"),
                 "role": overrides.get("role"),
                 "statement_preview": statement[:STATEMENT_PREVIEW_LENGTH],
+                "provider": self._provider_spec.mode,
+                "failure_category": failure_classification.get("category", "unknown"),
+                "retry": {
+                    "enabled": retry_enabled,
+                    "max_attempts": retry_max_attempts,
+                    "retries_used": retry_attempts_used,
+                    "categories": retry_categories,
+                },
             }
             hints = [
                 "Check SQL syntax and table names",
                 "Verify database/schema context",
                 "Check permissions for the objects referenced",
             ]
+            if retry_attempts_used > 0:
+                hints.append(
+                    f"Retried {retry_attempts_used} time(s) before failing (max_attempts={retry_max_attempts})."
+                )
             if circuit_status is not None:
                 context["circuit_breaker"] = circuit_status
                 hints.append(
@@ -2050,17 +2314,22 @@ class ExecuteQueryTool(MCPTool):
 
             finished = done.wait(timeout)
             if not finished:
-                # Local timeout: cancel the running statement server-side
-                try:
-                    cursor.cancel()
-                except (AttributeError, TypeError):
-                    # Best-effort. If cancel fails, we still time out.
-                    pass
+                cancel_supported = self._provider_spec.capabilities.supports_timeout_cancellation
+                # Local timeout: cancel the running statement server-side when supported.
+                if cancel_supported:
+                    try:
+                        cursor.cancel()
+                    except (AttributeError, TypeError):
+                        # Best-effort. If cancel fails, we still time out.
+                        pass
 
-                # Give a short grace period for cancellation to propagate
-                done.wait(5)
+                # Give a short grace period for cancellation to propagate.
+                done.wait(self._timeout_cancel_grace_seconds)
                 # Signal timeout to caller (will be caught and wrapped above)
-                raise TimeoutError(f"Query execution exceeded timeout ({timeout}s) and was cancelled")
+                timeout_message = f"Query execution exceeded timeout ({timeout}s)"
+                if cancel_supported:
+                    timeout_message += " and was cancelled"
+                raise TimeoutError(timeout_message)
 
             # Worker finished: process result
             if result_box["error"] is not None:

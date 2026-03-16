@@ -62,6 +62,7 @@ class TestExecuteQueryResponseSchema:
                 "duration_ms",
                 "insights",
                 "key_metrics",
+                "retry",
                 "rowcount",
                 "rows",
                 "session_context",

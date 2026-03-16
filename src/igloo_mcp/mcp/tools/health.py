@@ -12,6 +12,7 @@ from typing import Any
 
 import anyio
 
+from igloo_mcp.auth import get_service_provider_spec
 from igloo_mcp.config import Config
 from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.profile_utils import (
@@ -60,6 +61,7 @@ class HealthCheckTool(MCPTool):
         """
         self.config = config
         self.snowflake_service = snowflake_service
+        self._provider_spec = get_service_provider_spec(snowflake_service)
         self.health_monitor = health_monitor
         self.resource_manager = resource_manager
         self.query_circuit_breaker_status_provider = query_circuit_breaker_status_provider
@@ -367,6 +369,13 @@ class HealthCheckTool(MCPTool):
 
     async def _check_profile(self) -> dict[str, Any]:
         """Validate profile configuration."""
+        if not self._provider_spec.capabilities.supports_profile_validation:
+            return {
+                "status": "skipped",
+                "mode": self._provider_spec.mode,
+                "message": "Profile validation is not used for this auth provider.",
+            }
+
         profile = self.config.snowflake.profile
 
         try:

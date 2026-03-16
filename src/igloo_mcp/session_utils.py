@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
+from types import TracebackType
 from typing import Any, Protocol
 
 _LOCK_ATTR = "_snowcli_session_lock"
@@ -18,6 +19,21 @@ class CursorProtocol(Protocol):
     def execute(self, query: str) -> None: ...
 
     def fetchone(self) -> dict[str, Any] | tuple | None: ...
+
+
+class SessionLockProtocol(Protocol):
+    def acquire(self, blocking: bool = True, timeout: float = -1) -> bool: ...
+
+    def release(self) -> None: ...
+
+    def __enter__(self) -> Any: ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool | None: ...
 
 
 @dataclass(frozen=True)
@@ -36,7 +52,7 @@ class SessionSnapshot(SessionContext):
     pass
 
 
-def ensure_session_lock(service: SnowflakeServiceProtocol) -> threading.Lock:
+def ensure_session_lock(service: SnowflakeServiceProtocol) -> SessionLockProtocol:
     """Get or create a session lock with defensive error handling.
 
     Args:
@@ -58,7 +74,9 @@ def ensure_session_lock(service: SnowflakeServiceProtocol) -> threading.Lock:
     try:
         lock = getattr(service, _LOCK_ATTR, None)
         if lock is None:
-            lock = threading.Lock()
+            # Use an RLock so callers can safely nest `ensure_session_lock()`
+            # with service implementations that also guard `get_connection()`.
+            lock = threading.RLock()
             setattr(service, _LOCK_ATTR, lock)
         return lock
     except AttributeError as e:
@@ -81,9 +99,9 @@ def validate_session_lock(service: SnowflakeServiceProtocol) -> bool:
 
     try:
         lock = getattr(service, _LOCK_ATTR, None)
-        # Use duck typing instead of isinstance since threading.Lock is a factory function
-        # Check that the lock has the required Lock protocol methods
-        return lock is not None and isinstance(lock, type(threading.Lock()))
+        return (
+            lock is not None and callable(getattr(lock, "acquire", None)) and callable(getattr(lock, "release", None))
+        )
     except (AttributeError, TypeError):
         return False
 

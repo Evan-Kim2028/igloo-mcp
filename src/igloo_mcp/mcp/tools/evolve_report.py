@@ -262,9 +262,7 @@ class EvolveReportTool(MCPTool):
         # Only check when the caller actually provided a non-empty dict — empty {} is
         # the legitimate fallback trigger and should not be flagged.
         unrecognized_warnings = (
-            ProposedChanges.check_for_unrecognized_keys(proposed_changes)
-            if proposed_changes
-            else []
+            ProposedChanges.check_for_unrecognized_keys(proposed_changes) if proposed_changes else []
         )
 
         if not proposed_changes:

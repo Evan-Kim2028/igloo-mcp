@@ -34,9 +34,6 @@ except ImportError:  # Fall back to the implementation bundled with python-sdk
         get_logger,
     )
 
-from mcp_server_snowflake.server import (  # type: ignore[import-untyped]
-    SnowflakeService,
-)
 from mcp_server_snowflake.server import (
     create_lifespan as create_snowflake_lifespan,  # type: ignore[import-untyped]
 )
@@ -45,6 +42,15 @@ from mcp_server_snowflake.utils import (  # type: ignore[import-untyped]
     warn_deprecated_params,
 )
 
+from .auth import (
+    AUTH_MODE_ENV,
+    AUTH_MODE_SNOWFLAKE_LABS,
+    SUPPORTED_AUTH_MODES,
+    attach_provider_runtime_metadata,
+    create_keypair_lifespan,
+    get_auth_provider_spec,
+    resolve_effective_auth_mode,
+)
 from .config import Config, ConfigError, apply_config_overrides, get_config, load_config
 from .context import create_service_context
 
@@ -294,7 +300,7 @@ def _execute_query_sync(
 
 def register_igloo_mcp(
     server: FastMCP,
-    snowflake_service: SnowflakeService,
+    snowflake_service: Any,
     *,
     enable_cli_bridge: bool = False,
 ) -> None:
@@ -1218,6 +1224,18 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
         )
 
     parser.add_argument(
+        "--auth-mode",
+        required=False,
+        choices=list(SUPPORTED_AUTH_MODES),
+        default=os.environ.get(AUTH_MODE_ENV, AUTH_MODE_SNOWFLAKE_LABS),
+        help=(
+            "Authentication provider mode. "
+            "'snowflake-labs' uses upstream service/profile flow (default), "
+            "'keypair' uses direct connector keypair auth, "
+            "'auto' selects keypair when keypair credentials are present."
+        ),
+    )
+    parser.add_argument(
         "--service-config-file",
         required=False,
         help="Path to Snowflake MCP service configuration YAML (optional for advanced users)",
@@ -1278,6 +1296,11 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
     args = parser.parse_args(argv)
 
+    if getattr(args, "auth_mode", None) not in SUPPORTED_AUTH_MODES:
+        parser.error(
+            f"argument --auth-mode: invalid choice: '{args.auth_mode}' (choose from {', '.join(SUPPORTED_AUTH_MODES)})"
+        )
+
     # Mirror CLI behaviour for env overrides
     if not getattr(args, "service_config_file", None):
         args.service_config_file = os.environ.get("SERVICE_CONFIG_FILE")
@@ -1286,8 +1309,15 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def create_combined_lifespan(args: argparse.Namespace):
-    # Create a temporary config file if none is provided
-    if not getattr(args, "service_config_file", None):
+    effective_auth_mode = getattr(args, "_effective_auth_mode", None) or resolve_effective_auth_mode(args)
+    provider_spec = get_auth_provider_spec(effective_auth_mode)
+
+    # Create a temporary config file only for the upstream snowflake-labs provider.
+    if (
+        provider_spec.capabilities.supports_profile_validation
+        and provider_spec.mode == AUTH_MODE_SNOWFLAKE_LABS
+        and not getattr(args, "service_config_file", None)
+    ):
         import tempfile
 
         import yaml  # type: ignore[import-untyped]
@@ -1305,7 +1335,11 @@ def create_combined_lifespan(args: argparse.Namespace):
             os.close(temp_fd)
             raise
 
-    snowflake_lifespan = create_snowflake_lifespan(args)
+    if provider_spec.mode == AUTH_MODE_SNOWFLAKE_LABS:
+        # Keep symbol usage explicit so tests can monkeypatch this factory directly.
+        snowflake_lifespan = create_snowflake_lifespan(args)
+    else:
+        snowflake_lifespan = create_keypair_lifespan(args)
 
     @asynccontextmanager
     async def lifespan(server: FastMCP):
@@ -1317,25 +1351,27 @@ def create_combined_lifespan(args: argparse.Namespace):
         # Initialize resource manager with health monitor
         _resource_manager = MCPResourceManager(health_monitor=_health_monitor)
 
-        # Perform early profile validation
-        try:
-            config = get_config()
-            if config.snowflake.profile:
-                profile_health = await anyio.to_thread.run_sync(
-                    _health_monitor.get_profile_health,
-                    config.snowflake.profile,
-                    True,  # force_refresh
-                )
-                if not profile_health.is_valid:
-                    logger.warning(f"Profile validation issue detected: {profile_health.validation_error}")
-                    _health_monitor.record_error(f"Profile validation failed: {profile_health.validation_error}")
-                else:
-                    logger.info(f"✓ Profile health check passed for: {profile_health.profile_name}")
-        except Exception as e:
-            logger.warning(f"Early profile validation failed: {e}")
-            _health_monitor.record_error(f"Early profile validation failed: {e}")
+        # Perform early profile validation for profile-based auth only.
+        if provider_spec.capabilities.supports_profile_validation:
+            try:
+                config = get_config()
+                if config.snowflake.profile:
+                    profile_health = await anyio.to_thread.run_sync(
+                        _health_monitor.get_profile_health,
+                        config.snowflake.profile,
+                        True,  # force_refresh
+                    )
+                    if not profile_health.is_valid:
+                        logger.warning(f"Profile validation issue detected: {profile_health.validation_error}")
+                        _health_monitor.record_error(f"Profile validation failed: {profile_health.validation_error}")
+                    else:
+                        logger.info(f"✓ Profile health check passed for: {profile_health.profile_name}")
+            except Exception as e:
+                logger.warning(f"Early profile validation failed: {e}")
+                _health_monitor.record_error(f"Early profile validation failed: {e}")
 
         async with snowflake_lifespan(server) as snowflake_service:
+            resolved_provider_spec = attach_provider_runtime_metadata(snowflake_service, mode=provider_spec.mode)
             # Test Snowflake connection during startup
             try:
                 connection_health = await anyio.to_thread.run_sync(
@@ -1349,10 +1385,11 @@ def create_combined_lifespan(args: argparse.Namespace):
                 logger.warning(f"Connection health check failed: {e}")
                 _health_monitor.record_error(f"Connection health check failed: {e}")
 
-            # Patch upstream middleware to only apply SQL validation to execute_query
-            # The upstream server's initialize_middleware adds CheckQueryType middleware
-            # that validates ALL tool calls. We need to ensure it only validates execute_query.
-            _patch_sql_validation_middleware(server)
+            # Patch upstream middleware only when using the snowflake-labs provider.
+            if resolved_provider_spec.capabilities.supports_sql_validation_middleware_patch:
+                # The upstream server's initialize_middleware adds CheckQueryType middleware
+                # that validates ALL tool calls. We need to ensure it only validates execute_query.
+                _patch_sql_validation_middleware(server)
 
             register_igloo_mcp(
                 server,
@@ -1376,48 +1413,59 @@ def main(argv: list[str] | None = None) -> None:
     warn_deprecated_params()
     configure_logging(level=args.log_level)
     _apply_config_overrides(args)
-
-    # Validate Snowflake profile configuration before starting server
     try:
-        # Use the enhanced validation function
-        resolved_profile = validate_and_resolve_profile()
+        effective_auth_mode = resolve_effective_auth_mode(args)
+    except ValueError as e:
+        logger.error("❌ Invalid auth mode configuration: %s", e)
+        raise SystemExit(2) from e
+    args._effective_auth_mode = effective_auth_mode  # type: ignore[attr-defined]
+    provider_spec = get_auth_provider_spec(effective_auth_mode)
+    logger.info("Selected auth mode: %s", provider_spec.mode)
 
-        logger.info(f"✓ Snowflake profile validation successful: {resolved_profile}")
+    if provider_spec.capabilities.supports_profile_validation:
+        # Validate Snowflake profile configuration before starting server.
+        try:
+            # Use the enhanced validation function
+            resolved_profile = validate_and_resolve_profile()
 
-        # Set the validated profile in environment for snowflake-labs-mcp
-        os.environ["SNOWFLAKE_PROFILE"] = resolved_profile
-        os.environ["SNOWFLAKE_DEFAULT_CONNECTION_NAME"] = resolved_profile
+            logger.info(f"✓ Snowflake profile validation successful: {resolved_profile}")
 
-        # Update config with validated profile
-        apply_config_overrides(snowflake={"profile": resolved_profile})
+            # Set the validated profile in environment for snowflake-labs-mcp
+            os.environ["SNOWFLAKE_PROFILE"] = resolved_profile
+            os.environ["SNOWFLAKE_DEFAULT_CONNECTION_NAME"] = resolved_profile
 
-        # Log profile summary for debugging
-        summary = get_profile_summary()
-        logger.debug(f"Profile summary: {summary}")
+            # Update config with validated profile
+            apply_config_overrides(snowflake={"profile": resolved_profile})
 
-    except ProfileValidationError as e:
-        logger.error("❌ Snowflake profile validation failed")
-        logger.error(f"Error: {e}")
+            # Log profile summary for debugging
+            summary = get_profile_summary()
+            logger.debug(f"Profile summary: {summary}")
 
-        # Provide helpful next steps
-        if e.available_profiles:
-            logger.error(f"Available profiles: {', '.join(e.available_profiles)}")
-            logger.error("To fix this issue:")
-            logger.error("1. Set SNOWFLAKE_PROFILE environment variable to one of the available profiles")
-            logger.error("2. Or pass --profile <profile_name> when starting the server")
-            logger.error("3. Or run 'snow connection add' to create a new profile")
-        else:
-            logger.error("No Snowflake profiles found.")
-            logger.error("Please run 'snow connection add' to create a profile first.")
+        except ProfileValidationError as e:
+            logger.error("❌ Snowflake profile validation failed")
+            logger.error(f"Error: {e}")
 
-        if e.config_path:
-            logger.error(f"Expected config file at: {e.config_path}")
+            # Provide helpful next steps
+            if e.available_profiles:
+                logger.error(f"Available profiles: {', '.join(e.available_profiles)}")
+                logger.error("To fix this issue:")
+                logger.error("1. Set SNOWFLAKE_PROFILE environment variable to one of the available profiles")
+                logger.error("2. Or pass --profile <profile_name> when starting the server")
+                logger.error("3. Or run 'snow connection add' to create a new profile")
+            else:
+                logger.error("No Snowflake profiles found.")
+                logger.error("Please run 'snow connection add' to create a profile first.")
 
-        # Exit with clear error code
-        raise SystemExit(1) from e
-    except Exception as e:
-        logger.error(f"❌ Unexpected error during profile validation: {e}")
-        raise SystemExit(1) from e
+            if e.config_path:
+                logger.error(f"Expected config file at: {e.config_path}")
+
+            # Exit with clear error code
+            raise SystemExit(1) from e
+        except Exception as e:
+            logger.error(f"❌ Unexpected error during profile validation: {e}")
+            raise SystemExit(1) from e
+    else:
+        logger.info("Skipping Snowflake profile validation (auth_mode=%s).", provider_spec.mode)
 
     server = FastMCP(
         args.name,
