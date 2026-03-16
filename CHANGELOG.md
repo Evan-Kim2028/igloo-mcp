@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-15
+
+### Provider Auth and Release Hardening
+
+### ✨ Added
+
+- Added keypair-auth Snowflake provider support with persistent connector sessions, provider-specific retry policy defaults, and circuit-breaker diagnostics.
+- Added FastMCP compatibility shims plus expanded execute-query coverage for timeout handling, retry behavior, query-service fallbacks, and parallel timeout execution.
+- Added deterministic cache artifact baselines so golden-fixture validation runs as a real assertion in CI.
+
+### 🐛 Bug Fixes
+
+- Restored `execute_query` constructor compatibility for existing callers and preserved validated statement types so safe read-only retries still execute after upfront validation.
+- Fixed `execute_query` full-result truncation, file-export handling, and health/remediation payload regressions introduced by the broader refactor.
+- Fixed `search_report` and `evolve_report` published schemas to match their live parameters, including field selection and response verbosity controls.
+
+### 🧪 Testing
+
+- Removed avoidable non-Snowflake skips by activating schema-validation, SQL-validation, insight-removal, post-query-insight snapshot, and cache golden-fixture tests.
+- Full non-Snowflake validation now passes with `1264 passed, 1 xfailed, 1 xpassed`, plus lint, import-lint, `mypy`, and critical coverage checks.
+
 ## [0.4.3] - 2026-02-06
 
 ### ✨ Added
