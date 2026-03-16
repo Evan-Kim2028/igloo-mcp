@@ -360,16 +360,21 @@ class TestQueryHistoryDisabledSentinels:
     """Test disabled sentinel handling."""
 
     @pytest.mark.parametrize("sentinel", [None, "", "disabled", "off", "false", "0"])
-    def test_disabled_sentinels(self, sentinel):
-        """Various sentinels disable history."""
-        # Act
+    def test_disabled_sentinels(self, monkeypatch, sentinel):
+        """Various env sentinels disable history via from_env()."""
+        # Arrange
         if sentinel is None:
+            monkeypatch.delenv("IGLOO_MCP_QUERY_HISTORY", raising=False)
             history = QueryHistory(path=None)
         else:
-            history = QueryHistory(path=Path(sentinel) if sentinel else None)
+            monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", sentinel)
+            history = QueryHistory.from_env()
 
         # Assert
-        # Should not raise on record
+        if sentinel is None:
+            assert history.disabled is False
+        else:
+            assert history.disabled is True
         history.record({"execution_id": "test"})
 
 

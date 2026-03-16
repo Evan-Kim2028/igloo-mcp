@@ -335,6 +335,19 @@ class SearchReportTool(MCPTool):
                     "default": 20,
                     "examples": [5, 10, 20],
                 },
+                "fields": {
+                    "type": "array",
+                    "description": "Optional list of fields to return. Defaults to the full report summary payload.",
+                    "items": {"type": "string"},
+                    "examples": [
+                        ["report_id", "title"],
+                        ["report_id", "title", "updated_at"],
+                    ],
+                },
+                "request_id": {
+                    "type": "string",
+                    "description": "Optional request correlation ID for tracing.",
+                },
             },
         }
 

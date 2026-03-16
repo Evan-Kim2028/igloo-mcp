@@ -148,7 +148,7 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 # Markers for test categorization
 markers = [
-    "requires_snowflake: marks tests requiring live Snowflake connection (skipped unless --snowflake)",
+    "requires_snowflake: marks tests requiring live Snowflake connection (deselected unless --snowflake)",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks integration tests (cross-component)",
     "system: marks system tests (end-to-end workflows)",

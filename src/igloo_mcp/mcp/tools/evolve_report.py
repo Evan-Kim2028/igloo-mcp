@@ -1834,6 +1834,18 @@ class EvolveReportTool(MCPTool):
                     "description": "Optional status change for the report",
                     "enum": ["active", "archived", "deleted"],
                 },
+                "response_mode": {
+                    "type": "string",
+                    "description": "Response verbosity level for token efficiency.",
+                    "enum": ["minimal", "standard", "full"],
+                    "default": "standard",
+                },
+                "response_detail": {
+                    "type": "string",
+                    "description": "Deprecated alias for response_mode. Use response_mode instead.",
+                    "enum": ["minimal", "standard", "full"],
+                    "default": "standard",
+                },
                 "request_id": {
                     "type": "string",
                     "description": "Optional request correlation ID for tracing (auto-generated if not provided)",

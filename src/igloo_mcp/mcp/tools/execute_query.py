@@ -1390,13 +1390,14 @@ class ExecuteQueryTool(MCPTool):
         sql_sha_override: str | None = None,
         validate_profile: bool = True,
         validate_statement: bool = True,
+        statement_type_override: str | None = None,
     ) -> dict[str, Any]:
         """Internal execute_query implementation shared by sync + async flows."""
 
         if validate_profile:
             await self._ensure_profile_health()
 
-        statement_type = "Unknown"
+        statement_type = statement_type_override or "Unknown"
 
         if validate_statement:
             # Validate SQL statement length
@@ -2062,7 +2063,7 @@ class ExecuteQueryTool(MCPTool):
 
         # Validate profile + SQL up front so async paths fail fast.
         await self._ensure_profile_health()
-        self._enforce_sql_permissions(statement)
+        validated_statement_type = self._enforce_sql_permissions(statement)
 
         # Dry-run mode: wrap in EXPLAIN USING JSON and return the query plan
         if dry_run:
@@ -2085,6 +2086,7 @@ class ExecuteQueryTool(MCPTool):
                     ctx=ctx,
                     validate_profile=False,
                     validate_statement=False,
+                    statement_type_override="Explain",
                 )
             except MCPExecutionError as exc:
                 # Rewrite error to reference the original statement, not the EXPLAIN wrapper
@@ -2144,6 +2146,7 @@ class ExecuteQueryTool(MCPTool):
             ctx=ctx,
             validate_profile=False,
             validate_statement=False,
+            statement_type_override=validated_statement_type,
         )
 
     def _execute_query_sync(

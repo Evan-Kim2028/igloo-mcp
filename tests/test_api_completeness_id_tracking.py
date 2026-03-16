@@ -8,6 +8,7 @@ you should return X in the response.
 from __future__ import annotations
 
 import tempfile
+import uuid
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -50,6 +51,43 @@ def create_tool(config, report_service):
 def evolve_tool(config, report_service):
     """Create evolve_report tool instance."""
     return EvolveReportTool(config, report_service)
+
+
+def _create_report_with_seeded_insights(report_service: ReportService) -> str:
+    """Create a report that includes inline insights for removal tests."""
+    return report_service.create_report(
+        title="Test Report",
+        template="empty",
+        actor="test",
+        initial_sections=[
+            {
+                "section_id": str(uuid.uuid4()),
+                "title": "Findings",
+                "order": 0,
+                "content": "Seeded findings",
+                "insights": [
+                    {
+                        "insight_id": str(uuid.uuid4()),
+                        "summary": "Seeded insight one",
+                        "importance": 8,
+                        "citations": [],
+                    },
+                    {
+                        "insight_id": str(uuid.uuid4()),
+                        "summary": "Seeded insight two",
+                        "importance": 7,
+                        "citations": [],
+                    },
+                ],
+            },
+            {
+                "section_id": str(uuid.uuid4()),
+                "title": "Recommendations",
+                "order": 1,
+                "content": "Seeded recommendations",
+            },
+        ],
+    )
 
 
 class TestCreateReportIdTracking:
@@ -165,20 +203,11 @@ class TestEvolveReportIdTracking:
     @pytest.mark.asyncio
     async def test_insight_ids_removed(self, evolve_tool, report_service):
         """Test that insight_ids_removed is populated when insights are removed."""
-        # Create report with insights
-        report_id = report_service.create_report(
-            title="Test Report",
-            template="deep_dive",
-            actor="test",
-        )
+        report_id = _create_report_with_seeded_insights(report_service)
 
         # Get current insights
         outline = report_service.get_report_outline(report_id)
         initial_insights = [i.insight_id for i in outline.insights]
-
-        # Skip if template has no insights
-        if len(initial_insights) == 0:
-            pytest.skip("Template has no insights to test")
 
         # Evolve to remove some insights
         proposed_changes = {
@@ -353,19 +382,11 @@ class TestAuditTrailIdTracking:
     @pytest.mark.asyncio
     async def test_audit_includes_insight_ids_removed(self, evolve_tool, report_service):
         """Test that audit trail includes insight_ids_removed field."""
-        # Create report with insights
-        report_id = report_service.create_report(
-            title="Test Report",
-            template="deep_dive",
-            actor="test",
-        )
+        report_id = _create_report_with_seeded_insights(report_service)
 
         # Get current insights
         outline = report_service.get_report_outline(report_id)
         initial_insights = [i.insight_id for i in outline.insights]
-
-        if len(initial_insights) == 0:
-            pytest.skip("Template has no insights to test")
 
         # Evolve to remove insights
         changes = {

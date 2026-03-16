@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from igloo_mcp.config import SQLPermissions
 from igloo_mcp.sql_validation import (
     extract_table_name,
@@ -138,7 +136,6 @@ class TestGenerateSQLAlternatives:
 class TestValidateSQLStatement:
     """Test SQL statement validation."""
 
-    @pytest.mark.skip(reason="Upstream validate_sql_type behavior needs investigation")
     def test_allowed_select_statement(self):
         """Test that SELECT is allowed when in allow list."""
         sql = "SELECT * FROM users"
@@ -221,7 +218,6 @@ class TestValidateSQLStatement:
         assert error_msg is not None
         assert "Snowflake returned 'Command'" in error_msg
 
-    @pytest.mark.skip(reason="Upstream validate_sql_type behavior needs investigation")
     def test_allowed_insert_statement(self):
         """Test that INSERT is allowed when in allow list."""
         sql = "INSERT INTO users (name) VALUES ('Alice')"

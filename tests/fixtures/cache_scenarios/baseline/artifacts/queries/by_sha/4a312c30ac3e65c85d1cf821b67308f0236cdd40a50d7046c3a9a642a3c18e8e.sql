@@ -1,0 +1,1 @@
+SELECT month, total_revenue FROM fixture_source
