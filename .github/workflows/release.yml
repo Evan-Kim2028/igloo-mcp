@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish (for example, v0.5.0)
+        required: true
+        type: string
 
 jobs:
   publish:
@@ -15,7 +21,25 @@ jobs:
       contents: read
 
     steps:
+      - name: Resolve release target
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TARGET_TAG="${{ inputs.tag }}"
+          else
+            TARGET_TAG="${{ github.ref_name }}"
+          fi
+
+          if [ -z "$TARGET_TAG" ] || ! echo "$TARGET_TAG" | grep -Eq '^v[0-9]'; then
+            echo "Expected a version tag like v0.5.0, got: ${TARGET_TAG:-<empty>}" >&2
+            exit 1
+          fi
+
+          echo "tag=$TARGET_TAG" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.tag }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
