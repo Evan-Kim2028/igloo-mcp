@@ -193,10 +193,9 @@ class ParallelQueryExecutor:
 
         results: dict[str, QueryResult] = {}
         wall_start = time.monotonic()
-
-        with ThreadPoolExecutor(
-            max_workers=self.config.max_concurrent_queries,
-        ) as executor:
+        executor = ThreadPoolExecutor(max_workers=self.config.max_concurrent_queries)
+        timed_out = False
+        try:
             future_to_object = {
                 executor.submit(
                     self._execute_single_query,
@@ -224,6 +223,7 @@ class ParallelQueryExecutor:
                             error="Unexpected error during parallel execution",
                         )
             except TimeoutError:
+                timed_out = True
                 # Some futures didn't complete in time — record them as timed out
                 for future, object_name in future_to_object.items():
                     if object_name not in results:
@@ -234,6 +234,8 @@ class ParallelQueryExecutor:
                             success=False,
                             error=f"Query timed out after {self.config.timeout_seconds}s",
                         )
+        finally:
+            executor.shutdown(wait=not timed_out, cancel_futures=True)
 
         self._last_wall_time = time.monotonic() - wall_start
         return results
@@ -281,10 +283,9 @@ class ParallelQueryExecutor:
         cli = SnowCLI()
         results: dict[str, QueryResult] = {}
         wall_start = time.monotonic()
-
-        with ThreadPoolExecutor(
-            max_workers=self.config.max_concurrent_queries,
-        ) as executor:
+        executor = ThreadPoolExecutor(max_workers=self.config.max_concurrent_queries)
+        timed_out = False
+        try:
             future_to_object = {
                 executor.submit(
                     self._execute_single_query,
@@ -312,6 +313,7 @@ class ParallelQueryExecutor:
                             error="Unexpected error during parallel execution",
                         )
             except TimeoutError:
+                timed_out = True
                 for future, object_name in future_to_object.items():
                     if object_name not in results:
                         future.cancel()
@@ -321,6 +323,8 @@ class ParallelQueryExecutor:
                             success=False,
                             error=f"Query timed out after {self.config.timeout_seconds}s",
                         )
+        finally:
+            executor.shutdown(wait=not timed_out, cancel_futures=True)
 
         self._last_wall_time = time.monotonic() - wall_start
         return results

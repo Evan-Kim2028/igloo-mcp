@@ -34,6 +34,8 @@ from igloo_mcp.constants import (
     MIN_QUERY_TIMEOUT_SECONDS,
     RESULT_KEEP_FIRST_ROWS,
     RESULT_KEEP_LAST_ROWS,
+    RESULT_SIZE_LIMIT_MB,
+    RESULT_TRUNCATION_THRESHOLD,
     STATEMENT_PREVIEW_LENGTH,
 )
 from igloo_mcp.logging import (
@@ -54,6 +56,7 @@ from igloo_mcp.path_utils import (
     resolve_artifact_root,
 )
 from igloo_mcp.post_query_insights import build_default_insights
+from igloo_mcp.service_layer import QueryService
 from igloo_mcp.session_utils import (
     apply_session_context,
     ensure_session_lock,
@@ -507,7 +510,7 @@ class ExecuteQueryTool(MCPTool):
         self,
         config: Config,
         snowflake_service: Any,
-        *,
+        query_service: QueryService | None = None,
         health_monitor: MCPHealthMonitor | None = None,
     ):
         """Initialize execute query tool.
@@ -515,6 +518,8 @@ class ExecuteQueryTool(MCPTool):
         Args:
             config: Application configuration
             snowflake_service: Snowflake service instance from mcp-server-snowflake
+            query_service: Optional legacy service-layer dependency retained for
+                backwards-compatible construction by existing callers and tests
             health_monitor: Optional health monitoring instance
         """
         self.config = config
@@ -2358,15 +2363,16 @@ class ExecuteQueryTool(MCPTool):
                                 record = {"value": raw}
                             return json_compatible(record)
 
-                        # Chunked fetch: stream through cursor keeping only what we need.
-                        # For small results (<=threshold) we keep everything.
-                        # For large results we keep first N + last N rows without loading
-                        # the entire result set into memory.
+                        # Chunked fetch: keep full results for ordinary-sized payloads,
+                        # but switch to first/last row truncation when the result both
+                        # exceeds the row threshold and would overflow the size budget.
                         from collections import deque
 
                         keep_first = RESULT_KEEP_FIRST_ROWS
                         keep_last = RESULT_KEEP_LAST_ROWS
+                        size_limit_bytes = RESULT_SIZE_LIMIT_MB * 1024 * 1024
                         chunk_size = 2000
+                        full_rows: list[dict[str, Any]] = []
                         head_rows: list[dict[str, Any]] = []
                         tail_buffer: deque[dict[str, Any]] = deque(maxlen=keep_last)
                         total_fetched = 0
@@ -2374,42 +2380,59 @@ class ExecuteQueryTool(MCPTool):
                         size_sample_count = 0
                         needs_truncation = False
 
-                        while True:
-                            chunk = cursor.fetchmany(chunk_size)
-                            if not chunk:
-                                break
+                        def _estimated_total_size_bytes() -> float:
+                            if size_sample_count == 0:
+                                return 0.0
+                            return (size_sample_bytes / size_sample_count) * total_fetched
+
+                        def _iter_chunks() -> Any:
+                            fetchmany = getattr(cursor, "fetchmany", None)
+                            if callable(fetchmany):
+                                while True:
+                                    chunk = fetchmany(chunk_size)
+                                    if not chunk:
+                                        break
+                                    yield chunk
+                                return
+
+                            fetchall = getattr(cursor, "fetchall", None)
+                            if not callable(fetchall):
+                                raise AttributeError("Cursor does not support fetchmany() or fetchall()")
+                            yield fetchall()
+
+                        for chunk in _iter_chunks():
                             for raw in chunk:
                                 row = _process_raw_row(raw)
                                 total_fetched += 1
+                                if size_sample_count < 100:
+                                    size_sample_bytes += len(json.dumps(row, ensure_ascii=False, default=str))
+                                    size_sample_count += 1
 
-                                if total_fetched <= keep_first:
-                                    head_rows.append(row)
-                                    # Sample size from head rows for estimation
-                                    if total_fetched <= 50:
-                                        size_sample_bytes += len(json.dumps(row, ensure_ascii=False, default=str))
-                                        size_sample_count += 1
-                                else:
-                                    # We've exceeded head capacity — switch to tail buffer mode
+                                if needs_truncation:
+                                    if len(head_rows) < keep_first:
+                                        head_rows.append(row)
+                                    else:
+                                        tail_buffer.append(row)
+                                    continue
+
+                                full_rows.append(row)
+                                if (
+                                    total_fetched > RESULT_TRUNCATION_THRESHOLD
+                                    and _estimated_total_size_bytes() > size_limit_bytes
+                                ):
                                     needs_truncation = True
-                                    # Sample rows being evicted for size estimation
-                                    if len(tail_buffer) == keep_last and size_sample_count < 100:
-                                        evicted = tail_buffer[0]
-                                        size_sample_bytes += len(json.dumps(evicted, ensure_ascii=False, default=str))
-                                        size_sample_count += 1
-                                    # deque(maxlen) auto-evicts oldest in O(1)
-                                    tail_buffer.append(row)
+                                    head_rows = full_rows[:keep_first]
+                                    if keep_last > 0:
+                                        tail_start = max(len(head_rows), len(full_rows) - keep_last)
+                                        tail_buffer.extend(full_rows[tail_start:])
+                                    full_rows = []
 
                         result_box["columns"] = column_names
 
                         if not needs_truncation:
-                            # Small result: all rows fit in head_rows
-                            result_box["rows"] = head_rows
+                            result_box["rows"] = full_rows
                             result_box["rowcount"] = total_fetched
                         else:
-                            # Large result: assemble truncated view
-                            avg_row_bytes = size_sample_bytes / max(size_sample_count, 1)
-                            estimated_total_mb = (avg_row_bytes * total_fetched) / (1024 * 1024)
-
                             tail_rows = list(tail_buffer)
                             result_box["rows"] = [
                                 *head_rows,
@@ -2419,9 +2442,9 @@ class ExecuteQueryTool(MCPTool):
                             result_box["rowcount"] = total_fetched
                             result_box["truncated"] = True
                             result_box["original_rowcount"] = total_fetched
-                            result_box["returned_rowcount"] = len(head_rows) + len(tail_rows)
+                            result_box["returned_rowcount"] = len(result_box["rows"])
                             result_box["truncation_info"] = {
-                                "original_size_mb": round(estimated_total_mb, 2),
+                                "original_size_mb": round(_estimated_total_size_bytes() / (1024 * 1024), 2),
                                 "truncated_for_context_window": True,
                                 "rows_kept": f"first {len(head_rows)} + last {len(tail_rows)}",
                                 "export_suggestions": [
