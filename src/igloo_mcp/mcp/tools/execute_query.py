@@ -794,6 +794,18 @@ class ExecuteQueryTool(MCPTool):
             return False
         return bool(classification.get("retryable"))
 
+    def _invalidate_provider_connection(self, classification: dict[str, Any]) -> None:
+        """Best-effort reset for providers that hold persistent connector sessions."""
+        if not classification.get("connectivity"):
+            return
+        invalidate = getattr(self.snowflake_service, "invalidate_connection", None)
+        if not callable(invalidate):
+            return
+        try:
+            invalidate()
+        except Exception:
+            logger.debug("Failed to invalidate provider connection after connectivity failure", exc_info=True)
+
     def _persist_sql_artifact(self, sql_sha256: str, statement: str) -> Path | None:
         if self._artifact_root is None:
             self._transient_audit_warnings.append("SQL artifact root is unavailable; statement text was not persisted.")
@@ -1506,6 +1518,7 @@ class ExecuteQueryTool(MCPTool):
                 except Exception as exc:
                     classification = self._classify_failure(exc)
                     retry_categories.append(str(classification.get("category", "unknown")))
+                    self._invalidate_provider_connection(classification)
                     if not self._should_retry_failure(
                         classification=classification,
                         attempt_number=attempt_number,

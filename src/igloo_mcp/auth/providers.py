@@ -22,6 +22,8 @@ from mcp_server_snowflake.server import (  # type: ignore[import-untyped]
 )
 from snowflake.connector import DictCursor, connect
 
+from igloo_mcp.session_utils import ensure_session_lock
+
 try:
     from fastmcp import FastMCP
     from fastmcp.utilities.logging import get_logger
@@ -350,6 +352,17 @@ class KeyPairSnowflakeService:
             self.connection = self._get_persistent_connection(session_parameters=session_parameters)
             return self.connection
 
+    def invalidate_connection(self) -> None:
+        """Drop the current connector session so the next use reconnects cleanly."""
+        with self._lock:
+            conn = self.connection
+            self.connection = None
+        if conn is not None:
+            try:
+                conn.close()
+            except (AttributeError, RuntimeError):  # pragma: no cover - best effort cleanup
+                logger.debug("Failed to close invalidated keypair connection cleanly", exc_info=True)
+
     @contextmanager
     def get_connection(
         self,
@@ -357,12 +370,14 @@ class KeyPairSnowflakeService:
         use_dict_cursor: bool = False,
         session_parameters: dict[str, Any] | None = None,
     ):
-        connection = self._ensure_connection(session_parameters=session_parameters)
-        cursor = connection.cursor(DictCursor) if use_dict_cursor else connection.cursor()
-        try:
-            yield connection, cursor
-        finally:
-            cursor.close()
+        session_lock = ensure_session_lock(self)
+        with session_lock:
+            connection = self._ensure_connection(session_parameters=session_parameters)
+            cursor = connection.cursor(DictCursor) if use_dict_cursor else connection.cursor()
+            try:
+                yield connection, cursor
+            finally:
+                cursor.close()
 
     def get_api_headers(self) -> dict[str, str]:
         token = getattr(getattr(self.connection, "rest", None), "token", None)
@@ -384,14 +399,7 @@ class KeyPairSnowflakeService:
         return f"{account}.snowflakecomputing.com" if account else ""
 
     def close(self) -> None:
-        with self._lock:
-            conn = self.connection
-            self.connection = None
-            if conn is not None:
-                try:
-                    conn.close()
-                except (AttributeError, RuntimeError):  # pragma: no cover - best effort cleanup
-                    logger.debug("Failed to close keypair connection cleanly", exc_info=True)
+        self.invalidate_connection()
 
 
 def create_keypair_lifespan(args: argparse.Namespace):

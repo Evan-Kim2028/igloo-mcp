@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import threading
+from unittest.mock import Mock
 
 import pytest
 
@@ -9,12 +11,14 @@ from igloo_mcp.auth.providers import (
     AUTH_MODE_KEYPAIR,
     AUTH_MODE_SNOWFLAKE_LABS,
     AuthProviderSpec,
+    KeyPairSnowflakeService,
     _build_keypair_connection_params,
     attach_provider_runtime_metadata,
     get_auth_provider_spec,
     get_service_provider_spec,
     resolve_effective_auth_mode,
 )
+from igloo_mcp.session_utils import ensure_session_lock
 
 
 def _args(**overrides):
@@ -141,3 +145,41 @@ def test_get_service_provider_spec_uses_existing_provider_spec():
     attached = attach_provider_runtime_metadata(service, mode=AUTH_MODE_SNOWFLAKE_LABS)
     resolved = get_service_provider_spec(service)
     assert resolved is attached
+
+
+def test_keypair_service_get_connection_respects_shared_session_lock():
+    class DummyConnection:
+        def __init__(self):
+            self.cursor_instance = Mock()
+
+        def cursor(self, *args, **kwargs):
+            return self.cursor_instance
+
+    service = KeyPairSnowflakeService.__new__(KeyPairSnowflakeService)
+    service.auth_mode = AUTH_MODE_KEYPAIR
+    service.provider_spec = get_auth_provider_spec(AUTH_MODE_KEYPAIR)
+    service.provider_capabilities = service.provider_spec.capabilities
+    service.provider_reliability = service.provider_spec.reliability
+    service.connection_params = {}
+    service.transport = "stdio"
+    service.endpoint = "/mcp"
+    service.query_tag = {}
+    service.tag_major_version = 1
+    service.tag_minor_version = 0
+    service._lock = threading.RLock()
+    service.connection = DummyConnection()
+    service._ensure_connection = lambda session_parameters=None: service.connection
+
+    session_lock = ensure_session_lock(service)
+    completed = threading.Event()
+
+    def nested_use() -> None:
+        with session_lock, service.get_connection():
+            completed.set()
+
+    worker = threading.Thread(target=nested_use)
+    worker.start()
+    worker.join(timeout=1)
+
+    assert completed.is_set() is True
+    assert worker.is_alive() is False
