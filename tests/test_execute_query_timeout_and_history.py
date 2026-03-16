@@ -255,6 +255,44 @@ async def test_large_result_triggers_truncation(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_mid_sized_full_result_is_not_truncated(tmp_path, monkeypatch):
+    history_path = tmp_path / "history.jsonl"
+    artifact_root = tmp_path / "artifacts"
+    cache_root = tmp_path / "cache"
+
+    monkeypatch.setenv("IGLOO_MCP_QUERY_HISTORY", str(history_path))
+    monkeypatch.setenv("IGLOO_MCP_ARTIFACT_ROOT", str(artifact_root))
+    monkeypatch.setenv("IGLOO_MCP_CACHE_ROOT", str(cache_root))
+
+    cfg = Config(snowflake=SnowflakeConfig(profile="test"))
+    mock_rows = [{"idx": i, "payload": "ok"} for i in range(1, 601)]
+
+    service = FakeSnowflakeService(
+        [
+            FakeQueryPlan(
+                statement="SELECT MID",
+                rows=mock_rows,
+                rowcount=len(mock_rows),
+                duration=0.01,
+                sfqid="MID_QID",
+            )
+        ]
+    )
+    tool = ExecuteQueryTool(cfg, service, QueryService(context=None))
+
+    result = await tool.execute(
+        statement="SELECT MID",
+        reason="Return all mid-sized rows",
+        response_mode="full",
+    )
+
+    assert result["rowcount"] == len(mock_rows)
+    assert result.get("truncated") is not True
+    assert result.get("returned_rowcount") is None
+    assert result["rows"] == mock_rows
+
+
+@pytest.mark.asyncio
 async def test_timeout_error_message_prioritizes_catalog_filtering(tmp_path, monkeypatch):
     """Test that timeout error messages prioritize catalog-based filtering before timeout increases."""
     history_path = tmp_path / "history.jsonl"

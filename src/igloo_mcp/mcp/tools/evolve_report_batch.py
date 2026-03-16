@@ -55,19 +55,14 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any
-
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    from mcp.server.fastmcp.utilities.logging import get_logger
-
 from datetime import UTC
+from typing import Any
 
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.changes_schema import ProposedChanges
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
 from igloo_mcp.living_reports.service import ReportService
+from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.exceptions import (
     MCPSelectorError,
     MCPValidationError,

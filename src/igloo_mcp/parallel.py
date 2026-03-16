@@ -13,15 +13,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from .config import get_config
-from .snow_cli import SnowCLI
+from .snow_cli import SnowCLI, SnowCLIError
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Suppress verbose Snowflake connector logging
-logging.getLogger("snowflake.connector").setLevel(logging.WARNING)
-logging.getLogger("snowflake.connector.connection").setLevel(logging.WARNING)
 
 
 @dataclass
@@ -86,26 +80,15 @@ class ParallelQueryConfig:
 
 
 class ParallelQueryExecutor:
-    """
-    Execute multiple Snowflake queries in parallel.
+    """Execute multiple Snowflake queries in parallel.
 
-    Optimized for JSON object retrieval with:
-    - Configurable concurrency limits
-    - Progress tracking and error handling
-    - Result aggregation and formatting
+    Uses ThreadPoolExecutor with configurable concurrency, progress tracking,
+    and result aggregation.
     """
 
     def __init__(self, config: ParallelQueryConfig | None = None):
         self.config = config or ParallelQueryConfig.from_global_config()
-
-    def _create_context_overrides(self) -> dict[str, Any]:
-        cfg = get_config().snowflake
-        return {
-            "warehouse": cfg.warehouse,
-            "database": cfg.database,
-            "schema": cfg.schema,
-            "role": cfg.role,
-        }
+        self._last_wall_time: float = 0.0
 
     def _execute_single_query(
         self,
@@ -113,12 +96,11 @@ class ParallelQueryExecutor:
         object_name: str,
         cli: SnowCLI,
     ) -> QueryResult:
-        """Execute a single query via Snowflake CLI and return results."""
+        """Execute a single query via Snowflake CLI with retries."""
         start_time = time.time()
 
         for attempt in range(self.config.retry_attempts + 1):
             try:
-                # Execute via Snow CLI; default to CSV for easy parsing
                 out = cli.run_query(
                     query,
                     output_format="csv",
@@ -141,7 +123,13 @@ class ParallelQueryExecutor:
 
                 execution_time = time.time() - start_time
 
-                result = QueryResult(
+                logger.info(
+                    "%s: %d rows in %.2fs",
+                    object_name,
+                    len(rows),
+                    execution_time,
+                )
+                return QueryResult(
                     object_name=object_name,
                     query=query,
                     success=True,
@@ -151,49 +139,48 @@ class ParallelQueryExecutor:
                     row_count=len(rows),
                 )
 
-                logger.info(
-                    f"✅ {object_name}: {len(rows)} rows in {execution_time:.2f}s",
-                )
-                return result
-
-            except Exception as e:
+            except (SnowCLIError, OSError, TimeoutError) as e:
                 execution_time = time.time() - start_time
                 error_msg = f"Attempt {attempt + 1}: {e!s}"
 
                 if attempt < self.config.retry_attempts:
                     logger.warning(
-                        f"⚠️  {object_name} failed ({error_msg}), retrying in {self.config.retry_delay}s...",
+                        "%s failed (%s), retrying in %.1fs...",
+                        object_name,
+                        error_msg,
+                        self.config.retry_delay,
                     )
                     time.sleep(self.config.retry_delay)
                 else:
-                    logger.exception(
-                        f"❌ {object_name} failed after {attempt + 1} attempts: {error_msg}",
+                    logger.error(
+                        "%s failed after %d attempts: %s",
+                        object_name,
+                        attempt + 1,
+                        error_msg,
                     )
-                return QueryResult(
-                    object_name=object_name,
-                    query=query,
-                    success=False,
-                    error=error_msg,
-                    execution_time=execution_time,
-                )
+                    return QueryResult(
+                        object_name=object_name,
+                        query=query,
+                        success=False,
+                        error=error_msg,
+                        execution_time=execution_time,
+                    )
 
-        fallback_error_msg = "Query execution ended without producing a result after exhausting retries."
-        execution_time = time.time() - start_time
-        return QueryResult(
+        # Unreachable: loop always returns on success or final failure.
+        # Satisfy type checker / defensive guard.
+        return QueryResult(  # pragma: no cover
             object_name=object_name,
             query=query,
             success=False,
-            error=fallback_error_msg,
-            execution_time=execution_time,
-            row_count=0,
+            error="Exhausted retries without producing a result.",
+            execution_time=time.time() - start_time,
         )
 
     async def execute_queries_async(
         self,
         queries: dict[str, str],
     ) -> dict[str, QueryResult]:
-        """
-        Execute multiple queries in parallel using asyncio.
+        """Execute multiple queries in parallel using a thread pool.
 
         Args:
             queries: Dict mapping object names to SQL queries
@@ -202,49 +189,56 @@ class ParallelQueryExecutor:
             Dict mapping object names to QueryResult objects
         """
         cli = SnowCLI()
-        logger.info("🔗 Using Snowflake CLI for parallel execution...")
+        logger.info("Executing %d queries in parallel...", len(queries))
 
+        results: dict[str, QueryResult] = {}
+        wall_start = time.monotonic()
+        executor = ThreadPoolExecutor(max_workers=self.config.max_concurrent_queries)
+        timed_out = False
         try:
-            # Execute queries in parallel using ThreadPoolExecutor
-            results: dict[str, QueryResult] = {}
-            logger.info(f"⚡ Executing {len(queries)} queries in parallel...")
+            future_to_object = {
+                executor.submit(
+                    self._execute_single_query,
+                    query,
+                    object_name,
+                    cli,
+                ): object_name
+                for object_name, query in queries.items()
+            }
 
-            with ThreadPoolExecutor(
-                max_workers=self.config.max_concurrent_queries,
-            ) as executor:
-                # Submit all queries
-                future_to_object = {
-                    executor.submit(
-                        self._execute_single_query,
-                        query,
-                        object_name,
-                        cli,
-                    ): object_name
-                    for object_name, query in queries.items()
-                }
-
-                # Process completed queries
+            try:
                 for future in as_completed(
                     future_to_object,
                     timeout=self.config.timeout_seconds,
                 ):
                     object_name = future_to_object[future]
                     try:
-                        result = future.result()
-                        results[object_name] = result
-                    except Exception as e:
-                        logger.exception(f"Unexpected error for {object_name}: {e}")
+                        results[object_name] = future.result()
+                    except Exception:
+                        logger.exception("Unexpected error for %s", object_name)
                         results[object_name] = QueryResult(
                             object_name=object_name,
                             query=queries[object_name],
                             success=False,
-                            error=f"Unexpected error: {e!s}",
+                            error="Unexpected error during parallel execution",
                         )
-
-            return results
-
+            except TimeoutError:
+                timed_out = True
+                # Some futures didn't complete in time — record them as timed out
+                for future, object_name in future_to_object.items():
+                    if object_name not in results:
+                        future.cancel()
+                        results[object_name] = QueryResult(
+                            object_name=object_name,
+                            query=queries[object_name],
+                            success=False,
+                            error=f"Query timed out after {self.config.timeout_seconds}s",
+                        )
         finally:
-            pass
+            executor.shutdown(wait=not timed_out, cancel_futures=True)
+
+        self._last_wall_time = time.monotonic() - wall_start
+        return results
 
     def execute_single_query(
         self,
@@ -267,16 +261,73 @@ class ParallelQueryExecutor:
         self,
         queries: dict[str, str],
     ) -> dict[str, QueryResult]:
-        """
-        Synchronous wrapper for execute_queries_async.
+        """Synchronous wrapper for execute_queries_async.
 
-        Args:
-            queries: Dict mapping object names to SQL queries
-
-        Returns:
-            Dict mapping object names to QueryResult objects
+        Safe to call from non-async code. If an event loop is already running
+        (e.g. inside an MCP handler), uses run_in_executor pattern instead.
         """
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            # Already inside an async context — run synchronously via the thread pool
+            # directly instead of nesting asyncio.run() which would raise RuntimeError.
+            return self._execute_queries_sync(queries)
+
         return asyncio.run(self.execute_queries_async(queries))
+
+    def _execute_queries_sync(self, queries: dict[str, str]) -> dict[str, QueryResult]:
+        """Pure synchronous parallel execution (no asyncio)."""
+        cli = SnowCLI()
+        results: dict[str, QueryResult] = {}
+        wall_start = time.monotonic()
+        executor = ThreadPoolExecutor(max_workers=self.config.max_concurrent_queries)
+        timed_out = False
+        try:
+            future_to_object = {
+                executor.submit(
+                    self._execute_single_query,
+                    query,
+                    object_name,
+                    cli,
+                ): object_name
+                for object_name, query in queries.items()
+            }
+
+            try:
+                for future in as_completed(
+                    future_to_object,
+                    timeout=self.config.timeout_seconds,
+                ):
+                    object_name = future_to_object[future]
+                    try:
+                        results[object_name] = future.result()
+                    except Exception:
+                        logger.exception("Unexpected error for %s", object_name)
+                        results[object_name] = QueryResult(
+                            object_name=object_name,
+                            query=queries[object_name],
+                            success=False,
+                            error="Unexpected error during parallel execution",
+                        )
+            except TimeoutError:
+                timed_out = True
+                for future, object_name in future_to_object.items():
+                    if object_name not in results:
+                        future.cancel()
+                        results[object_name] = QueryResult(
+                            object_name=object_name,
+                            query=queries[object_name],
+                            success=False,
+                            error=f"Query timed out after {self.config.timeout_seconds}s",
+                        )
+        finally:
+            executor.shutdown(wait=not timed_out, cancel_futures=True)
+
+        self._last_wall_time = time.monotonic() - wall_start
+        return results
 
     def get_execution_summary(self, results: dict[str, QueryResult]) -> dict[str, Any]:
         """Generate a summary of query execution results."""
@@ -285,12 +336,12 @@ class ParallelQueryExecutor:
         failed_queries = total_queries - successful_queries
 
         total_rows = sum(r.row_count for r in results.values() if r.success)
-        total_execution_time = sum(r.execution_time for r in results.values())
-        avg_execution_time = total_execution_time / total_queries if total_queries > 0 else 0
-
-        # Calculate parallelization efficiency
         sequential_time = sum(r.execution_time for r in results.values())
-        parallel_efficiency = sequential_time / total_execution_time if total_execution_time > 0 else 1.0
+        avg_execution_time = sequential_time / total_queries if total_queries > 0 else 0
+
+        # Wall time is the actual elapsed time; sequential_time / wall_time = speedup factor
+        wall_time = self._last_wall_time or sequential_time
+        parallel_efficiency = sequential_time / wall_time if wall_time > 0 else 1.0
 
         return {
             "total_queries": total_queries,
@@ -298,9 +349,10 @@ class ParallelQueryExecutor:
             "failed_queries": failed_queries,
             "success_rate": (successful_queries / total_queries * 100 if total_queries > 0 else 0),
             "total_rows_retrieved": total_rows,
-            "total_execution_time": total_execution_time,
+            "total_execution_time": sequential_time,
+            "wall_time": round(wall_time, 3),
             "avg_execution_time_per_query": avg_execution_time,
-            "parallel_efficiency": parallel_efficiency,
+            "parallel_efficiency": round(parallel_efficiency, 2),
             "failed_objects": [name for name, result in results.items() if not result.success],
         }
 
@@ -313,8 +365,7 @@ def query_multiple_objects(
     max_concurrent: int | None = None,
     timeout_seconds: int | None = None,
 ) -> dict[str, QueryResult]:
-    """
-    Convenience function to query multiple objects in parallel.
+    """Convenience function to query multiple objects in parallel.
 
     Args:
         object_queries: Dict mapping object names to SQL queries
@@ -326,29 +377,26 @@ def query_multiple_objects(
     """
     config = ParallelQueryConfig.from_global_config()
 
-    # Override defaults if provided
     if max_concurrent is not None:
         config.max_concurrent_queries = max_concurrent
     if timeout_seconds is not None:
         config.timeout_seconds = timeout_seconds
 
     executor = ParallelQueryExecutor(config)
-
     results = executor.execute_queries(object_queries)
 
-    # Print summary
     summary = executor.get_execution_summary(results)
-    print("\n📊 Query Summary:")
-    print(
-        f"   ✅ Successful: {summary['successful_queries']}/{summary['total_queries']}",
+    logger.info(
+        "Query summary: %d/%d succeeded (%.1f%%), %d rows, %.2fs wall, %.2fx speedup",
+        summary["successful_queries"],
+        summary["total_queries"],
+        summary["success_rate"],
+        summary["total_rows_retrieved"],
+        summary["wall_time"],
+        summary["parallel_efficiency"],
     )
-    print(f"   📈 Success Rate: {summary['success_rate']:.1f}%")
-    print(f"   📋 Total Rows: {summary['total_rows_retrieved']:,}")
-    print(f"   ⏱️  Total Time: {summary['total_execution_time']:.2f}s")
-    print(f"   🚀 Parallel Efficiency: {summary['parallel_efficiency']:.2f}x")
-
     if summary["failed_objects"]:
-        print(f"   ❌ Failed Objects: {', '.join(summary['failed_objects'])}")
+        logger.warning("Failed objects: %s", ", ".join(summary["failed_objects"]))
 
     return results
 
@@ -357,22 +405,26 @@ def create_object_queries(
     object_names: list[str],
     base_query_template: str = "SELECT * FROM object_parquet2 WHERE type = '{object}' LIMIT 100",
 ) -> dict[str, str]:
-    """
-    Create queries for multiple objects using a template.
+    """Create queries for multiple objects using a template.
 
     Args:
         object_names: List of object names to query
-        base_query_template: SQL template with {object} placeholder
+        base_query_template: SQL template with {object} placeholder.
+            Values are single-quote escaped to prevent SQL injection.
 
     Returns:
         Dict mapping object names to SQL queries
+
+    Warning:
+        Both ``object_names`` and ``base_query_template`` must come from
+        trusted sources.  The template is interpolated via ``str.format()``
+        and is not safe against arbitrary user input.
     """
-    return {obj: base_query_template.format(object=obj) for obj in object_names}
+    return {obj: base_query_template.format(object=obj.replace("'", "''")) for obj in object_names}
 
 
 # Example usage and testing
 if __name__ == "__main__":
-    # Example: Query multiple object types in parallel
     objects_to_query = [
         "0x1::coin::CoinInfo",
         "0x1::account::Account",
@@ -381,20 +433,17 @@ if __name__ == "__main__":
         "0x3::staking_pool::StakingPool",
     ]
 
-    # Create queries using template
     queries = create_object_queries(objects_to_query)
 
-    # Execute queries in parallel
-    print("🚀 Starting parallel query execution...")
+    print("Starting parallel query execution...")
     results = query_multiple_objects(queries, max_concurrent=3)
 
-    # Process results
     for obj_name, result in results.items():
         if result.success:
-            print(f"\n✅ {obj_name}:")
+            print(f"\n{obj_name}:")
             print(f"   Rows: {result.row_count}")
             print(
                 f"   JSON objects: {len(result.json_data) if result.json_data else 0}",
             )
         else:
-            print(f"\n❌ {obj_name}: {result.error}")
+            print(f"\n{obj_name}: {result.error}")

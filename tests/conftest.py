@@ -15,7 +15,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers",
-        "requires_snowflake: mark test to require live Snowflake (skipped unless --snowflake)",
+        "requires_snowflake: mark test to require live Snowflake (deselected unless --snowflake)",
     )
     config.addinivalue_line(
         "markers",
@@ -54,10 +54,16 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if config.getoption("--snowflake"):
         return
-    skip_marker = pytest.mark.skip(reason="requires --snowflake to run")
+    selected: list[pytest.Item] = []
+    deselected: list[pytest.Item] = []
     for item in items:
         if "requires_snowflake" in item.keywords:
-            item.add_marker(skip_marker)
+            deselected.append(item)
+        else:
+            selected.append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+        items[:] = selected
 
 
 # =============================================================================

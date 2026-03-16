@@ -14,6 +14,7 @@ import anyio
 
 from igloo_mcp.auth import get_service_provider_spec
 from igloo_mcp.config import Config
+from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.profile_utils import (
     ProfileValidationError,
@@ -23,11 +24,6 @@ from igloo_mcp.profile_utils import (
 
 from .base import MCPTool, ensure_request_id, tool_error_handler
 from .schema_utils import boolean_schema
-
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    from mcp.server.fastmcp.utilities.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -243,8 +239,11 @@ class HealthCheckTool(MCPTool):
             # Catalog health remediation
             catalog_health = results.get("catalog", {}).get("status", "unknown")
             catalog_age_days = results.get("catalog", {}).get("age_days")
-            catalog_exists = results.get("catalog", {}).get("exists")
-            if catalog_health != "healthy":
+            catalog_exists = results.get("catalog", {}).get(
+                "has_catalog",
+                results.get("catalog", {}).get("exists"),
+            )
+            if catalog_health not in {"available", "unknown"}:
                 if catalog_age_days and catalog_age_days > 7:
                     remediation["catalog"] = (
                         f"Catalog is {catalog_age_days} days old. "
@@ -252,10 +251,12 @@ class HealthCheckTool(MCPTool):
                     )
                 elif not catalog_exists:
                     remediation["catalog"] = "No catalog found. Run build_catalog to enable offline object search"
+            elif catalog_exists is False:
+                remediation["catalog"] = "No catalog found. Run build_catalog to enable offline object search"
 
             # Snowflake connection remediation
             snowflake_health = results.get("connection", {}).get("status", "unknown")
-            if snowflake_health != "healthy":
+            if snowflake_health != "connected":
                 remediation["snowflake"] = (
                     "Snowflake connection failed. Run test_connection for detailed diagnostics, "
                     "or check SNOWFLAKE_PROFILE environment variable"
@@ -263,8 +264,8 @@ class HealthCheckTool(MCPTool):
 
             # Profile health remediation
             profile_health = results.get("profile", {}).get("status", "unknown")
-            profile_name = results.get("profile", {}).get("name")
-            if profile_health != "healthy":
+            profile_name = results.get("profile", {}).get("profile")
+            if profile_health in {"invalid", "error"}:
                 remediation["profile"] = (
                     f"Profile '{profile_name}' configuration issues detected. "
                     "Check ~/.snowflake/config.toml or run test_connection"
@@ -477,10 +478,12 @@ class HealthCheckTool(MCPTool):
 
         try:
             resources = self.resource_manager.list_resources()
+            has_catalog = len(resources) > 0 if resources else False
             return {
                 "status": "available",
                 "resource_count": len(resources) if resources else 0,
-                "has_catalog": len(resources) > 0 if resources else False,
+                "has_catalog": has_catalog,
+                "exists": has_catalog,
             }
         except Exception as e:
             return {

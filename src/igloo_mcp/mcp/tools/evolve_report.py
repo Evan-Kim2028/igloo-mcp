@@ -50,11 +50,6 @@ from typing import Any
 
 from pydantic import ValidationError
 
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    from mcp.server.fastmcp.utilities.logging import get_logger
-
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.changes_schema import (
     CURRENT_CHANGES_SCHEMA_VERSION,
@@ -65,6 +60,7 @@ from igloo_mcp.living_reports.models import Insight, Outline, Section
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
 from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.living_reports.templates import render_section_template
+from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.error_utils import wrap_validation_error
 from igloo_mcp.mcp.exceptions import (
     MCPExecutionError,
@@ -1837,6 +1833,18 @@ class EvolveReportTool(MCPTool):
                     "type": "string",
                     "description": "Optional status change for the report",
                     "enum": ["active", "archived", "deleted"],
+                },
+                "response_mode": {
+                    "type": "string",
+                    "description": "Response verbosity level for token efficiency.",
+                    "enum": ["minimal", "standard", "full"],
+                    "default": "standard",
+                },
+                "response_detail": {
+                    "type": "string",
+                    "description": "Deprecated alias for response_mode. Use response_mode instead.",
+                    "enum": ["minimal", "standard", "full"],
+                    "default": "standard",
                 },
                 "request_id": {
                     "type": "string",

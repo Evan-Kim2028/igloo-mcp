@@ -12,17 +12,13 @@ from typing import Any
 from igloo_mcp.config import Config
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
 from igloo_mcp.living_reports.service import ReportService
+from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.exceptions import (
     MCPExecutionError,
     MCPSelectorError,
 )
 from igloo_mcp.mcp.tools.base import MCPTool, ensure_request_id, tool_error_handler
 from igloo_mcp.mcp.validation_helpers import validate_response_mode
-
-try:
-    from fastmcp.utilities.logging import get_logger
-except ImportError:
-    from mcp.server.fastmcp.utilities.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -189,6 +185,7 @@ class GetReportTool(MCPTool):
             self.report_service.index.rebuild_from_filesystem()
             selector = ReportSelector(self.report_service.index)
             report_id = selector.resolve(report_selector, strict=False)
+            selector_duration = (time.time() - selector_start) * 1000
         except SelectorResolutionError as e:
             selector_duration = (time.time() - selector_start) * 1000
             error_dict = e.to_dict()
@@ -296,7 +293,7 @@ class GetReportTool(MCPTool):
             response["duration_ms"] = round(total_duration, 2)
         else:
             response["timing"] = {
-                "selector_duration_ms": round((time.time() - selector_start) * 1000, 2),
+                "selector_duration_ms": round(selector_duration, 2),
                 "retrieval_duration_ms": round(retrieval_duration, 2),
                 "total_duration_ms": round(total_duration, 2),
             }

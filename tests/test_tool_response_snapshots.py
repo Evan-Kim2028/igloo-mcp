@@ -13,6 +13,7 @@ from inline_snapshot import snapshot
 
 from igloo_mcp.config import Config, SnowflakeConfig
 from igloo_mcp.living_reports.service import ReportService
+from igloo_mcp.logging.query_history import normalize_insight
 from igloo_mcp.mcp.tools.create_report import CreateReportTool
 from igloo_mcp.mcp.tools.execute_query import ExecuteQueryTool
 from igloo_mcp.service_layer.query_service import QueryService
@@ -276,11 +277,15 @@ class TestPostQueryInsightSchema:
     """Snapshot tests for post_query_insight structure."""
 
     def test_structured_insight_format(self):
-        """Verify structured post_query_insight has stable schema."""
-        # PostQueryInsight class was removed - skip this test
-        pytest.skip("PostQueryInsight class no longer exists")
-
-        insight_dict = {}
+        """Verify normalized post_query_insight payload has stable schema."""
+        insight_dict = normalize_insight(
+            {
+                "summary": "Revenue growth of 23% MoM",
+                "key_metrics": ["revenue_up_23pct", "new_customers_450"],
+                "business_impact": "Positive trend indicating market expansion",
+                "follow_up_needed": True,
+            }
+        )
 
         # Verify structure
         assert set(insight_dict.keys()) == snapshot(
