@@ -414,6 +414,14 @@ class TestGracefulStartupFallback:
             result = _attempt_profile_fallback(["dev", "prod"])
             assert result == "dev"
 
+    def test_attempt_profile_fallback_skips_failed(self, mock_config_with_profiles):
+        """Test fallback skips the profile that originally failed."""
+        with mock_config_with_profiles(["dev", "prod"], default="dev"):
+            from igloo_mcp.mcp_server import _attempt_profile_fallback
+
+            result = _attempt_profile_fallback(["dev", "prod"], failed_profile="dev")
+            assert result == "prod"
+
     def test_attempt_profile_fallback_no_profiles(self):
         """Test fallback with no available profiles."""
         from igloo_mcp.mcp_server import _attempt_profile_fallback

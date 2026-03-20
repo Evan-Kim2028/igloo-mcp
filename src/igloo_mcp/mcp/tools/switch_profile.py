@@ -138,6 +138,11 @@ class SwitchProfileTool(MCPTool):
             "active_profile": profile_name,
             "details": details,
             "request_id": request_id,
+            "note": (
+                "Profile config and environment updated. "
+                "Existing Snowflake connections may still use the previous profile "
+                "until the server is restarted."
+            ),
         }
 
         # Optionally validate the new connection

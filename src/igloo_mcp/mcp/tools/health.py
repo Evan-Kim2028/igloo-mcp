@@ -13,7 +13,7 @@ from typing import Any
 import anyio
 
 from igloo_mcp.auth import get_service_provider_spec
-from igloo_mcp.config import Config
+from igloo_mcp.config import Config, get_config
 from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.profile_utils import (
@@ -319,7 +319,8 @@ class HealthCheckTool(MCPTool):
 
     async def _test_connection(self) -> dict[str, Any]:
         """Test basic Snowflake connectivity."""
-        profile_name = self.config.snowflake.profile
+        # Read current config (not self.config) so switch_profile changes are reflected
+        profile_name = get_config().snowflake.profile
         profile_meta = get_profile_details(profile_name)
         try:
             result = await anyio.to_thread.run_sync(self._test_connection_sync)
@@ -394,7 +395,7 @@ class HealthCheckTool(MCPTool):
                 "message": "Profile validation is not used for this auth provider.",
             }
 
-        profile = self.config.snowflake.profile
+        profile = get_config().snowflake.profile
 
         try:
             # Validate profile

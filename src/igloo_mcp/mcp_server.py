@@ -1148,6 +1148,7 @@ def register_igloo_mcp(
             Field(
                 description="Setup topic: general (default), sso, keypair, multi_env, troubleshooting",
                 default=None,
+                pattern="^(general|sso|keypair|multi_env|troubleshooting)$",
             ),
         ] = None,
         request_id: Annotated[
@@ -1527,11 +1528,15 @@ def create_combined_lifespan(args: argparse.Namespace):
     return lifespan
 
 
-def _attempt_profile_fallback(available_profiles: list[str] | None) -> str | None:
+def _attempt_profile_fallback(
+    available_profiles: list[str] | None,
+    failed_profile: str | None = None,
+) -> str | None:
     """Try to find a usable fallback profile from available profiles.
 
     Args:
         available_profiles: Profiles reported as available by the validation error.
+        failed_profile: Profile that originally failed (will be skipped).
 
     Returns:
         A validated fallback profile name, or None if no fallback is possible.
@@ -1544,6 +1549,8 @@ def _attempt_profile_fallback(available_profiles: list[str] | None) -> str | Non
         return None
 
     for candidate in available_profiles:
+        if candidate == failed_profile:
+            continue
         try:
             validate_profile(candidate)
             return candidate
@@ -1596,8 +1603,8 @@ def main(argv: list[str] | None = None) -> None:
         except ProfileValidationError as e:
             logger.warning("⚠ Snowflake profile validation failed: %s", e)
 
-            # Attempt graceful fallback to another available profile
-            fallback_profile = _attempt_profile_fallback(e.available_profiles)
+            # Attempt graceful fallback to another available profile (skip the one that failed)
+            fallback_profile = _attempt_profile_fallback(e.available_profiles, failed_profile=e.profile_name)
             if fallback_profile:
                 logger.info(f"↪ Falling back to available profile: {fallback_profile}")
                 os.environ["SNOWFLAKE_PROFILE"] = fallback_profile
