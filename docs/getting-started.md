@@ -33,7 +33,7 @@ snow connection add --connection-name my-profile --account <account>.<region> --
 {
   "mcpServers": {
     "igloo-mcp": {
-      "command": "igloo-mcp",
+      "command": "igloo_mcp",
       "args": ["--profile", "my-profile"]
     }
   }
@@ -77,16 +77,16 @@ This verifies your server, profile authentication, and catalog status in one cal
 
 ## Available MCP Tools
 
-Igloo MCP provides **14 focused tools** organized by workflow. See [API Tools Index](api/TOOLS_INDEX.md) for complete workflow documentation.
+Igloo MCP provides **16 focused tools** organized by workflow. See [API Tools Index](api/TOOLS_INDEX.md) for complete workflow documentation.
 
 ### 🔍 Data Discovery
-- `test_connection`, `execute_query`, `build_catalog`, `search_catalog`, `build_dependency_graph`
+- `test_connection`, `execute_query`, `build_catalog`, `search_catalog`, `get_catalog_summary`, `build_dependency_graph`
 
 ### 📊 Living Reports
-- `create_report`, `search_report`, `get_report`, `get_report_schema`, `evolve_report`, `evolve_report_batch`, `render_report`
+- `create_report`, `search_report`, `get_report`, `get_report_schema`, `evolve_report`, `evolve_report_batch`, `render_report`, `validate_report`, `search_citations`
 
 ### 🏥 Health & Diagnostics
-- `health_check`, `get_catalog_summary`
+- `health_check`
 
 **View complete workflows**: [API Tools Index](api/TOOLS_INDEX.md)
 
@@ -173,7 +173,7 @@ For configuration options including multiple profiles, environment variables, an
 
 ## Administrative CLI Tools
 
-igloo-mcp includes administrative CLI tools for power users and system administrators. The primary interface for development work is through MCP tools in your AI assistant. See the [Administrative Operations](docs/index.md#administrative-operations) section for CLI usage details.
+igloo-mcp includes administrative CLI tools for power users and system administrators. The primary interface for development work is through MCP tools in your AI assistant. See the [Documentation Index](index.md) for CLI usage details.
 
 ---
 

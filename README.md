@@ -41,7 +41,7 @@ Add to `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "igloo-mcp": {
-      "command": "igloo-mcp",
+      "command": "igloo_mcp",
       "args": ["--profile", "quickstart"]
     }
   }
@@ -55,7 +55,7 @@ Restart Cursor and ask: *"Preview the customers table"*
 Run from terminal:
 
 ```bash
-claude mcp add igloo-mcp --scope user -- igloo-mcp --profile quickstart
+claude mcp add --scope user --transport stdio igloo-mcp -- igloo_mcp --profile quickstart
 ```
 
 Or add to `~/.claude.json` manually:
@@ -64,7 +64,8 @@ Or add to `~/.claude.json` manually:
 {
   "mcpServers": {
     "igloo-mcp": {
-      "command": "igloo-mcp",
+      "type": "stdio",
+      "command": "igloo_mcp",
       "args": ["--profile", "quickstart"]
     }
   }
@@ -72,6 +73,8 @@ Or add to `~/.claude.json` manually:
 ```
 
 Restart Claude Code and ask: *"Show me the schema for my database"*
+
+> **Note**: The executable is `igloo_mcp` (underscore), not `igloo-mcp` (dash).
 
 **Full setup guide**: [docs/installation.md](./docs/installation.md)
 

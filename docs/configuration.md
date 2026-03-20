@@ -23,9 +23,8 @@
  export SNOWFLAKE_ROLE=my-role
 
 # Output directories
-export SNOWCLI_CATALOG_DIR=./data_catalogue
-export SNOWCLI_LINEAGE_DIR=./lineage_data
-export SNOWCLI_DEPENDENCY_DIR=./dependencies
+export IGLOO_MCP_CATALOG_ROOT=./data_catalogue
+export IGLOO_MCP_DEPENDENCY_DIR=./dependencies
 
 # Query history & cache (all optional - defaults provided)
 export IGLOO_MCP_QUERY_HISTORY=~/workspace/logs/doc.jsonl   # Optional: JSONL history path (default: ~/.igloo_mcp/logs/doc.jsonl for global scope, or <repo>/logs/doc.jsonl for repo scope)
@@ -128,12 +127,12 @@ export IGLOO_MCP_RESULT_TRUNCATION_THRESHOLD=5000
 
  ```bash
  # Start MCP server with specific profile
- igloo-mcp --profile prod-profile
+ igloo_mcp --profile prod-profile
 
  # Set environment variables for MCP session
  export SNOWFLAKE_WAREHOUSE=LARGE_WH
  export SNOWFLAKE_DATABASE=PROD_DB
- igloo-mcp
+ igloo_mcp
  ```
 
  ### 4. Python API Configuration

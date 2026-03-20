@@ -133,7 +133,7 @@ class TestDocumentationAccuracy:
         mcp_config = {
             "mcpServers": {
                 "igloo-mcp": {
-                    "command": "igloo-mcp",
+                    "command": "igloo_mcp",
                     "args": ["--profile", "quickstart"],
                     "env": {"SNOWFLAKE_PROFILE": "quickstart"},
                 }
@@ -143,7 +143,7 @@ class TestDocumentationAccuracy:
         # Verify the structure is correct
         assert "mcpServers" in mcp_config
         assert "igloo-mcp" in mcp_config["mcpServers"]
-        assert mcp_config["mcpServers"]["igloo-mcp"]["command"] == "igloo-mcp"
+        assert mcp_config["mcpServers"]["igloo-mcp"]["command"] == "igloo_mcp"
         assert "--profile" in mcp_config["mcpServers"]["igloo-mcp"]["args"]
         assert "SNOWFLAKE_PROFILE" in mcp_config["mcpServers"]["igloo-mcp"]["env"]
 

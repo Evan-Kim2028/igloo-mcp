@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "igloo-mcp": {
-      "command": "igloo-mcp",
+      "command": "igloo_mcp",
       "args": [
         "--profile",
         "your-profile-name"
