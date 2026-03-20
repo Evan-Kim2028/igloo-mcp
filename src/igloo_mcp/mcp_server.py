@@ -69,10 +69,13 @@ from .mcp.tools import (
     GetReportSchemaTool,
     GetReportTool,
     HealthCheckTool,
+    ListProfilesTool,
+    ProfileSetupGuideTool,
     RenderReportTool,
     SearchCatalogTool,
     SearchCitationsTool,
     SearchReportTool,
+    SwitchProfileTool,
     ValidateReportTool,
 )
 from .mcp.validation_helpers import format_pydantic_validation_error
@@ -83,8 +86,10 @@ from .mcp_resources import MCPResourceManager
 from .path_utils import resolve_artifact_root
 from .profile_utils import (
     ProfileValidationError,
+    get_available_profiles,
     get_profile_summary,
     validate_and_resolve_profile,
+    validate_profile,
 )
 from .service_layer import CatalogService, DependencyService
 from .session_utils import (
@@ -117,6 +122,9 @@ NON_SQL_TOOLS = {
     "search_catalog",
     "test_connection",
     "health_check",
+    "list_profiles",
+    "switch_profile",
+    "profile_setup_guide",
 }
 
 
@@ -331,6 +339,9 @@ def register_igloo_mcp(
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
     build_dependency_graph_inst = BuildDependencyGraphTool(dependency_service)
     test_connection_inst = ConnectionTestTool(config, snowflake_service)
+    list_profiles_inst = ListProfilesTool(config)
+    switch_profile_inst = SwitchProfileTool(config, snowflake_service)
+    profile_setup_guide_inst = ProfileSetupGuideTool(config)
     circuit_breaker_provider = getattr(
         execute_query_inst,
         "get_circuit_breaker_status",
@@ -1079,6 +1090,80 @@ def register_igloo_mcp(
             request_id=request_id,
         )
 
+    @server.tool(name="list_profiles", description="List available Snowflake connection profiles")
+    async def list_profiles_tool(
+        include_details: Annotated[
+            bool,
+            Field(
+                description="Include connection details (account, warehouse, database, role) for each profile",
+                default=True,
+            ),
+        ] = True,
+        request_id: Annotated[
+            str | None,
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
+    ) -> dict[str, Any]:
+        """List available Snowflake profiles - delegates to ListProfilesTool."""
+        return await list_profiles_inst.execute(
+            include_details=include_details,
+            request_id=request_id,
+        )
+
+    @server.tool(name="switch_profile", description="Switch active Snowflake profile mid-session")
+    async def switch_profile_tool(
+        profile_name: Annotated[
+            str,
+            Field(description="Name of the Snowflake profile to switch to (use list_profiles to see available)"),
+        ],
+        validate_connection: Annotated[
+            bool,
+            Field(
+                description="Test the connection after switching",
+                default=True,
+            ),
+        ] = True,
+        request_id: Annotated[
+            str | None,
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Switch active Snowflake profile - delegates to SwitchProfileTool."""
+        return await switch_profile_inst.execute(
+            profile_name=profile_name,
+            validate_connection=validate_connection,
+            request_id=request_id,
+        )
+
+    @server.tool(name="profile_setup_guide", description="Get setup guidance for Snowflake profiles")
+    async def profile_setup_guide_tool(
+        topic: Annotated[
+            str | None,
+            Field(
+                description="Setup topic: general (default), sso, keypair, multi_env, troubleshooting",
+                default=None,
+            ),
+        ] = None,
+        request_id: Annotated[
+            str | None,
+            Field(
+                description="Optional request correlation ID for tracing",
+                default=None,
+            ),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Profile setup guidance - delegates to ProfileSetupGuideTool."""
+        return await profile_setup_guide_inst.execute(
+            topic=topic,
+            request_id=request_id,
+        )
+
     @server.tool(name="get_catalog_summary", description="Read catalog summary JSON")
     async def get_catalog_summary_tool(
         catalog_dir: Annotated[
@@ -1442,6 +1527,32 @@ def create_combined_lifespan(args: argparse.Namespace):
     return lifespan
 
 
+def _attempt_profile_fallback(available_profiles: list[str] | None) -> str | None:
+    """Try to find a usable fallback profile from available profiles.
+
+    Args:
+        available_profiles: Profiles reported as available by the validation error.
+
+    Returns:
+        A validated fallback profile name, or None if no fallback is possible.
+    """
+    if not available_profiles:
+        # Re-read from config in case error context was stale
+        available_profiles = sorted(get_available_profiles())
+
+    if not available_profiles:
+        return None
+
+    for candidate in available_profiles:
+        try:
+            validate_profile(candidate)
+            return candidate
+        except Exception:
+            continue
+
+    return None
+
+
 def main(argv: list[str] | None = None) -> None:
     """Main entry point for MCP server.
 
@@ -1483,25 +1594,32 @@ def main(argv: list[str] | None = None) -> None:
             logger.debug(f"Profile summary: {summary}")
 
         except ProfileValidationError as e:
-            logger.error("❌ Snowflake profile validation failed")
-            logger.error(f"Error: {e}")
+            logger.warning("⚠ Snowflake profile validation failed: %s", e)
 
-            # Provide helpful next steps
-            if e.available_profiles:
-                logger.error(f"Available profiles: {', '.join(e.available_profiles)}")
-                logger.error("To fix this issue:")
-                logger.error("1. Set SNOWFLAKE_PROFILE environment variable to one of the available profiles")
-                logger.error("2. Or pass --profile <profile_name> when starting the server")
-                logger.error("3. Or run 'snow connection add' to create a new profile")
+            # Attempt graceful fallback to another available profile
+            fallback_profile = _attempt_profile_fallback(e.available_profiles)
+            if fallback_profile:
+                logger.info(f"↪ Falling back to available profile: {fallback_profile}")
+                os.environ["SNOWFLAKE_PROFILE"] = fallback_profile
+                os.environ["SNOWFLAKE_DEFAULT_CONNECTION_NAME"] = fallback_profile
+                apply_config_overrides(snowflake={"profile": fallback_profile})
+                resolved_profile = fallback_profile
             else:
-                logger.error("No Snowflake profiles found.")
-                logger.error("Please run 'snow connection add' to create a profile first.")
+                # No fallback possible — exit with guidance
+                if e.available_profiles:
+                    logger.error(f"Available profiles: {', '.join(e.available_profiles)}")
+                    logger.error("To fix this issue:")
+                    logger.error("1. Set SNOWFLAKE_PROFILE environment variable to one of the available profiles")
+                    logger.error("2. Or pass --profile <profile_name> when starting the server")
+                    logger.error("3. Or run 'snow connection add' to create a new profile")
+                else:
+                    logger.error("No Snowflake profiles found.")
+                    logger.error("Please run 'snow connection add' to create a profile first.")
 
-            if e.config_path:
-                logger.error(f"Expected config file at: {e.config_path}")
+                if e.config_path:
+                    logger.error(f"Expected config file at: {e.config_path}")
 
-            # Exit with clear error code
-            raise SystemExit(1) from e
+                raise SystemExit(1) from e
         except Exception as e:
             logger.error(f"❌ Unexpected error during profile validation: {e}")
             raise SystemExit(1) from e

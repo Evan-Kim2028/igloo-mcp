@@ -114,7 +114,7 @@ def test_build_keypair_connection_params_uses_file_and_defaults_authenticator(tm
 def test_get_auth_provider_spec_returns_capability_matrix():
     keypair = get_auth_provider_spec(AUTH_MODE_KEYPAIR)
     assert keypair.mode == AUTH_MODE_KEYPAIR
-    assert keypair.capabilities.supports_profile_validation is False
+    assert keypair.capabilities.supports_profile_validation is True
     assert keypair.capabilities.supports_retry_handling is True
     assert keypair.reliability.retry_attempts >= 1
 

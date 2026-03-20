@@ -18,6 +18,7 @@ from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.profile_utils import (
     ProfileValidationError,
+    get_profile_details,
     get_profile_summary,
     validate_and_resolve_profile,
 )
@@ -318,24 +319,40 @@ class HealthCheckTool(MCPTool):
 
     async def _test_connection(self) -> dict[str, Any]:
         """Test basic Snowflake connectivity."""
+        profile_name = self.config.snowflake.profile
+        profile_meta = get_profile_details(profile_name)
         try:
             result = await anyio.to_thread.run_sync(self._test_connection_sync)
-            return {
+            response: dict[str, Any] = {
                 "status": "connected",
                 "connected": True,
-                "profile": self.config.snowflake.profile,
+                "profile": profile_name,
                 "warehouse": result.get("warehouse"),
                 "database": result.get("database"),
                 "schema": result.get("schema"),
                 "role": result.get("role"),
             }
+            if profile_meta:
+                response["profile_config"] = {
+                    "account": profile_meta.get("account"),
+                    "authenticator": profile_meta.get("authenticator"),
+                    "user": profile_meta.get("user"),
+                }
+            return response
         except Exception as e:
-            return {
+            response = {
                 "status": "error",
                 "connected": False,
-                "profile": self.config.snowflake.profile,
+                "profile": profile_name,
                 "error": str(e),
             }
+            if profile_meta:
+                response["profile_config"] = {
+                    "account": profile_meta.get("account"),
+                    "authenticator": profile_meta.get("authenticator"),
+                    "user": profile_meta.get("user"),
+                }
+            return response
 
     def _test_connection_sync(self) -> dict[str, Any]:
         """Test connection synchronously."""
