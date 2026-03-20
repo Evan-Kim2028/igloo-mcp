@@ -96,11 +96,7 @@ class ValidateReportTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Validate Living Report quality before publishing. "
-            "Checks for missing citations, empty sections, orphaned insights, "
-            "and other common issues. Use fix_mode=True to auto-fix where possible."
-        )
+        return "Validate report quality: citations, empty sections, orphaned insights, stale content."
 
     @property
     def category(self) -> str:

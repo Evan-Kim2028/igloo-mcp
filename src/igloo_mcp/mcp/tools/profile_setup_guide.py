@@ -33,11 +33,7 @@ class ProfileSetupGuideTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Get step-by-step guidance for setting up Snowflake profiles. "
-            "Analyzes your current configuration and provides tailored instructions. "
-            "Use when you need help creating, configuring, or troubleshooting profiles."
-        )
+        return "Get setup guidance for Snowflake profiles, tailored to current config state."
 
     @property
     def category(self) -> str:
@@ -103,8 +99,6 @@ class ProfileSetupGuideTool(MCPTool):
         result = {
             "current_state": state,
             "guide": guide,
-            "config_path": str(config_path),
-            "request_id": request_id,
         }
 
         logger.info(
@@ -450,12 +444,8 @@ class ProfileSetupGuideTool(MCPTool):
             "properties": {
                 "topic": {
                     "type": "string",
-                    "description": "Setup topic: general (default), sso, keypair, multi_env, troubleshooting",
+                    "description": "general, sso, keypair, multi_env, or troubleshooting",
                     "enum": ["general", "sso", "keypair", "multi_env", "troubleshooting"],
-                },
-                "request_id": {
-                    "type": "string",
-                    "description": "Optional request correlation ID for tracing",
                 },
             },
         }

@@ -1283,12 +1283,7 @@ class ExecuteQueryTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Execute SQL queries against Snowflake with safety guardrails. "
-            "Use for data exploration, validation, and analysis—always capture execution_id for citations. "
-            "Start with response_mode='schema_only' for structure discovery, 'summary' for validation, "
-            "'full' only for final data export."
-        )
+        return "Run SQL on Snowflake and return results."
 
     @property
     def category(self) -> str:

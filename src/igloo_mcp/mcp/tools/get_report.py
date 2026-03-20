@@ -42,11 +42,7 @@ class GetReportTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Read a report's structure or content with progressive disclosure. "
-            "Use BEFORE evolve_report to understand current state and obtain IDs for modifications. "
-            "Start with response_mode='minimal' (IDs only), drill down with 'standard' or 'full' only when needed."
-        )
+        return "Read a report's structure and content. Modes: summary, sections, insights, full."
 
     @property
     def category(self) -> str:

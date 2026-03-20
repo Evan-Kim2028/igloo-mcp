@@ -35,11 +35,7 @@ class SwitchProfileTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Switch the active Snowflake connection profile without restarting. "
-            "Use list_profiles first to see available profiles. "
-            "Validates the new profile exists before switching."
-        )
+        return "Switch active Snowflake profile mid-session. Validates before switching."
 
     @property
     def category(self) -> str:
@@ -205,16 +201,12 @@ class SwitchProfileTool(MCPTool):
             "properties": {
                 "profile_name": {
                     "type": "string",
-                    "description": "Name of the Snowflake profile to switch to (use list_profiles to see available)",
+                    "description": "Profile name (see list_profiles)",
                 },
                 "validate_connection": {
                     "type": "boolean",
-                    "description": "Test the connection after switching (default: true)",
+                    "description": "Test connection after switch",
                     "default": True,
-                },
-                "request_id": {
-                    "type": "string",
-                    "description": "Optional request correlation ID for tracing",
                 },
             },
         }

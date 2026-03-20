@@ -42,11 +42,7 @@ class RenderReportTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Export a report to shareable formats (HTML, PDF, Markdown)—the 'finals week study guide'. "
-            "Use AFTER report is complete and reviewed. "
-            "Use dry_run=True to preview, include_preview=True for inline content sampling."
-        )
+        return "Export report to HTML, PDF, or Markdown. Use dry_run=True to preview."
 
     @property
     def category(self) -> str:

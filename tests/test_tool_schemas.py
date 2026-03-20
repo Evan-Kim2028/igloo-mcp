@@ -210,8 +210,8 @@ def test_test_connection_schema(base_config: Config) -> None:
 
     schema = tool.get_parameter_schema()
     _validate_schema(schema)
-    # Allow optional request_id passthrough
-    assert "request_id" in schema["properties"]
+    # request_id removed for token efficiency — schema should be valid but empty properties
+    assert schema["type"] == "object"
 
     assert tool.category == "diagnostics"
     assert {"connection", "health"}.issubset(set(tool.tags))

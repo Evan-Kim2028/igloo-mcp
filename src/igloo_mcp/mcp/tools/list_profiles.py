@@ -33,11 +33,7 @@ class ListProfilesTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "List all available Snowflake connection profiles. "
-            "Shows which profile is active, which is default, and connection details "
-            "(account, warehouse, database, role). Use to discover profiles before switching."
-        )
+        return "List available Snowflake connection profiles with active/default status and details."
 
     @property
     def category(self) -> str:
@@ -116,8 +112,6 @@ class ListProfilesTool(MCPTool):
             "default_profile": default_profile,
             "profile_count": len(available),
             "profiles": profiles,
-            "config_path": str(config_path),
-            "request_id": request_id,
         }
 
         logger.info(
@@ -138,12 +132,8 @@ class ListProfilesTool(MCPTool):
             "properties": {
                 "include_details": {
                     "type": "boolean",
-                    "description": "Include connection details (account, warehouse, database, role) for each profile",
+                    "description": "Include account/warehouse/role details",
                     "default": True,
-                },
-                "request_id": {
-                    "type": "string",
-                    "description": "Optional request correlation ID for tracing",
                 },
             },
         }

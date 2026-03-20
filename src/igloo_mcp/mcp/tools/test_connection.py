@@ -44,11 +44,7 @@ class ConnectionTestTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Validate Snowflake authentication quickly. "
-            "Use when health_check shows connection issues. "
-            "Lightweight alternative to full health_check."
-        )
+        return "Validate Snowflake connectivity. Lightweight alternative to health_check."
 
     @property
     def category(self) -> str:
@@ -103,9 +99,5 @@ class ConnectionTestTool(MCPTool):
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "request_id": {
-                    "type": "string",
-                    "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
-                },
             },
         }

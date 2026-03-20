@@ -43,11 +43,7 @@ class GetReportSchemaTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Discover valid report structures and get copy-paste examples. "
-            "Use when unsure how to structure proposed_changes for evolve_report. "
-            "format='examples' provides ready-to-use templates."
-        )
+        return "Get JSON schema for report operations. Use format='examples' for templates."
 
     @property
     def category(self) -> str:

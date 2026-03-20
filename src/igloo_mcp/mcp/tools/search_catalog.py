@@ -51,11 +51,7 @@ class SearchCatalogTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Search offline catalog for tables/columns without querying Snowflake. "
-            "Use for rapid schema discovery BEFORE writing queries. "
-            "Combine name_contains and column_contains for targeted searches."
-        )
+        return "Search local catalog for tables and columns without querying Snowflake."
 
     @property
     def category(self) -> str:

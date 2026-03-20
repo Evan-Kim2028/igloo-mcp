@@ -69,11 +69,7 @@ class HealthCheckTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Check server, Snowflake connection, and catalog health. "
-            "Use at session start or when queries fail unexpectedly. "
-            "Use response_mode='minimal' for quick status, 'full' for diagnostics."
-        )
+        return "Check server, connection, and catalog health. Use response_mode='minimal' for quick status."
 
     @property
     def category(self) -> str:
@@ -208,28 +204,18 @@ class HealthCheckTool(MCPTool):
             # Minimal response - just statuses
             return {
                 "status": overall_status,
-                "request_id": request_id,
                 "components": {
                     "snowflake": snowflake_health,
                     "catalog": catalog_health,
                     "profile": profile_health,
                     "query_circuit_breaker": results.get("query_circuit_breaker", {}).get("state", "unavailable"),
                 },
-                "timestamp": datetime.now(UTC).isoformat(),
-                "timing": {
-                    "total_duration_ms": round(total_duration, 2),
-                },
             }
 
         # Standard and full modes
         response = {
             "status": overall_status,
-            "request_id": request_id,
             "checks": results,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "timing": {
-                "total_duration_ms": round(total_duration, 2),
-            },
         }
 
         # Add remediation for standard and full modes
@@ -418,15 +404,11 @@ class HealthCheckTool(MCPTool):
                 "status": "valid",
                 "profile": resolved_profile,
                 "config": {
-                    "config_path": str(summary.config_path),
-                    "config_exists": summary.config_exists,
                     "available_profiles": summary.available_profiles,
                     "default_profile": summary.default_profile,
-                    "current_profile": summary.current_profile,
                     "profile_count": summary.profile_count,
                 },
                 "authentication": auth_info,
-                "warnings": [],
             }
 
         except ProfileValidationError as e:
@@ -638,23 +620,16 @@ class HealthCheckTool(MCPTool):
             "additionalProperties": False,
             "properties": {
                 "include_cortex": boolean_schema(
-                    "Check Cortex AI services availability",
+                    "Check Cortex availability",
                     default=True,
-                    examples=[True, False],
                 ),
                 "include_profile": boolean_schema(
-                    "Validate profile configuration and authenticator",
+                    "Check profile config",
                     default=True,
-                    examples=[True, False],
                 ),
                 "include_catalog": boolean_schema(
-                    "Check catalog resource availability via resource manager",
+                    "Check catalog health",
                     default=False,
-                    examples=[True, False],
                 ),
-                "request_id": {
-                    "type": "string",
-                    "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
-                },
             },
         }
