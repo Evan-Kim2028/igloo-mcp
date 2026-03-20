@@ -73,6 +73,7 @@ from .mcp.tools import (
     SearchCatalogTool,
     SearchCitationsTool,
     SearchReportTool,
+    ValidateReportTool,
 )
 from .mcp.validation_helpers import format_pydantic_validation_error
 from .mcp_health import (
@@ -355,6 +356,7 @@ def register_igloo_mcp(
     get_report_inst = GetReportTool(config, report_service)
     get_report_schema_inst = GetReportSchemaTool(config)
     search_citations_inst = SearchCitationsTool(config, report_service)
+    validate_report_inst = ValidateReportTool(config, report_service)
 
     @server.tool(name="execute_query", description="Execute a SQL query against Snowflake")
     async def execute_query_tool(
@@ -891,6 +893,46 @@ def register_igloo_mcp(
             execution_id=execution_id,
             limit=limit,
             group_by=group_by,
+        )
+
+    @server.tool(
+        name="validate_report",
+        description="Validate Living Report quality: citations, empty sections, orphaned insights, stale content",
+    )
+    async def validate_report_tool(
+        report_selector: Annotated[str, Field(description="Report ID or title to validate")],
+        checks: Annotated[
+            list[str] | None,
+            Field(
+                description=(
+                    "Checks to run. Use ['all'] for all checks. "
+                    "Available: chart_references, citations, duplicate_orders, "
+                    "empty_sections, insight_importance, orphaned_insights, "
+                    "section_titles, stale_content"
+                ),
+                default=None,
+            ),
+        ] = None,
+        stale_threshold_days: Annotated[
+            int,
+            Field(description="Threshold in days for stale content check (default: 30)", default=30, ge=1),
+        ] = 30,
+        fix_mode: Annotated[
+            bool,
+            Field(description="Auto-fix issues where possible (default: false)", default=False),
+        ] = False,
+        request_id: Annotated[
+            str | None,
+            Field(description="Optional request correlation ID for tracing", default=None),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Validate report quality - delegates to ValidateReportTool."""
+        return await validate_report_inst.execute(
+            report_selector=report_selector,
+            checks=checks,
+            stale_threshold_days=stale_threshold_days,
+            fix_mode=fix_mode,
+            request_id=request_id,
         )
 
     @server.tool(name="build_catalog", description="Build Snowflake catalog metadata")

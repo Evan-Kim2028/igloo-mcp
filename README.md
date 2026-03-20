@@ -30,7 +30,7 @@ Create auditable, evolving business reports with `create_report`, modify them sa
 uv pip install igloo-mcp
 
 # Configure Snowflake connection (uses Snowflake CLI)
-snow connection add --name quickstart --account <account> --user <user> --authenticator externalbrowser --warehouse <warehouse>
+snow connection add --connection-name quickstart --account <account> --user <user> --authenticator externalbrowser --warehouse <warehouse>
 ```
 
 ### Cursor Setup
@@ -96,6 +96,7 @@ Restart Claude Code and ask: *"Show me the schema for my database"*
 | `search_report` | Find reports by title or tags |
 | `search_citations` | Search citations by source type or provider |
 | `get_report_schema` | Discover valid structures and section templates at runtime |
+| `validate_report` | Quality checks: citations, empty sections, stale content |
 
 ### 🏥 Health & Diagnostics
 | Tool | Description |
@@ -103,7 +104,7 @@ Restart Claude Code and ask: *"Show me the schema for my database"*
 | `test_connection` | Validate Snowflake authentication |
 | `health_check` | Monitor server, profile, and catalog status |
 
-**View all 15 tools**: [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md)
+**View all 16 tools**: [docs/api/TOOLS_INDEX.md](./docs/api/TOOLS_INDEX.md)
 
 ## When to Use Igloo MCP
 

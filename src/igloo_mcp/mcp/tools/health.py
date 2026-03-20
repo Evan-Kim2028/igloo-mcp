@@ -477,13 +477,13 @@ class HealthCheckTool(MCPTool):
             }
 
         try:
-            resources = self.resource_manager.list_resources()
-            has_catalog = len(resources) > 0 if resources else False
+            availability = self.resource_manager.check_catalog_dependency()
+            has_catalog = availability.state.value == "available"
             return {
-                "status": "available",
-                "resource_count": len(resources) if resources else 0,
+                "status": availability.state.value,
                 "has_catalog": has_catalog,
                 "exists": has_catalog,
+                "reason": availability.reason,
             }
         except Exception as e:
             return {
