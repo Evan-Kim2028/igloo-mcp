@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from igloo_mcp.config import Config, SnowflakeConfig
-from igloo_mcp.living_reports.models import DatasetSource, Insight, Section
+from igloo_mcp.living_reports.models import Citation, DatasetSource, Insight, Section
 from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.exceptions import MCPSelectorError, MCPValidationError
 from igloo_mcp.mcp.tools.validate_report import (
@@ -190,6 +190,7 @@ class TestValidateReportToolProperties:
         assert "checks" in schema["properties"]
         assert "stale_threshold_days" in schema["properties"]
         assert "fix_mode" in schema["properties"]
+        assert "validate_document_paths" in schema["properties"]
 
         # Required fields
         assert "report_selector" in schema["required"]
@@ -278,7 +279,7 @@ class TestCitationsCheck:
 
         check_result = result["checks"]["citations"]
         assert check_result["status"] == CHECK_ERROR
-        assert "missing citations" in check_result["message"].lower()
+        assert "citation issues" in check_result["message"].lower()
         assert len(check_result["details"]) >= 1
 
     async def test_citations_check_passes_with_citations(self, validate_tool, report_service):
@@ -302,6 +303,128 @@ class TestCitationsCheck:
         )
 
         assert result["checks"]["citations"]["status"] == CHECK_PASS
+
+    async def test_citations_check_fails_incomplete_url_citation(self, validate_tool, report_service):
+        """URL citations without a URL should fail completeness validation."""
+        report_id = report_service.create_report(title="URL Report", template="empty")
+        outline = report_service.get_report_outline(report_id)
+
+        insight = Insight(
+            insight_id=str(uuid.uuid4()),
+            summary="Insight sourced from a web page",
+            importance=8,
+            status="active",
+            citations=[Citation(source="url", description="Missing link")],
+        )
+        outline.insights.append(insight)
+        report_service.update_report_outline(report_id, outline, actor="test")
+
+        result = await validate_tool.execute(
+            report_selector=report_id,
+            checks=["citations"],
+        )
+
+        details = result["checks"]["citations"]["details"]
+        assert result["checks"]["citations"]["status"] == CHECK_ERROR
+        assert any(detail["issue"] == "url citations require url" for detail in details)
+
+    async def test_citations_check_fails_observation_without_description(self, validate_tool, report_service):
+        """Observation citations should require a description."""
+        report_id = report_service.create_report(title="Observation Report", template="empty")
+        outline = report_service.get_report_outline(report_id)
+
+        insight = Insight(
+            insight_id=str(uuid.uuid4()),
+            summary="Observed anomaly",
+            importance=6,
+            status="active",
+            citations=[Citation(source="observation")],
+        )
+        outline.insights.append(insight)
+        report_service.update_report_outline(report_id, outline, actor="test")
+
+        result = await validate_tool.execute(
+            report_selector=report_id,
+            checks=["citations"],
+        )
+
+        details = result["checks"]["citations"]["details"]
+        assert result["checks"]["citations"]["status"] == CHECK_ERROR
+        assert any(detail["issue"] == "observation citations require description" for detail in details)
+
+    async def test_citations_check_fails_query_without_identifier(self, validate_tool, report_service):
+        """Query citations need at least one query identifier."""
+        report_id = report_service.create_report(title="Query Report", template="empty")
+        outline = report_service.get_report_outline(report_id)
+
+        insight = Insight(
+            insight_id=str(uuid.uuid4()),
+            summary="Query-backed insight missing query identifiers",
+            importance=8,
+            status="active",
+            citations=[Citation(source="query", provider="snowflake")],
+        )
+        outline.insights.append(insight)
+        report_service.update_report_outline(report_id, outline, actor="test")
+
+        result = await validate_tool.execute(
+            report_selector=report_id,
+            checks=["citations"],
+        )
+
+        details = result["checks"]["citations"]["details"]
+        assert result["checks"]["citations"]["status"] == CHECK_ERROR
+        assert any(
+            detail["issue"] == "query citations require execution_id, query_id, sql_sha256, or cache_manifest"
+            for detail in details
+        )
+
+    async def test_citations_check_document_paths_are_optional(self, validate_tool, report_service):
+        """Document citations should not require path existence unless explicitly requested."""
+        report_id = report_service.create_report(title="Document Report", template="empty")
+        outline = report_service.get_report_outline(report_id)
+
+        insight = Insight(
+            insight_id=str(uuid.uuid4()),
+            summary="Insight backed by a local document",
+            importance=7,
+            status="active",
+            citations=[Citation(source="document", path="research/briefing.pdf")],
+        )
+        outline.insights.append(insight)
+        report_service.update_report_outline(report_id, outline, actor="test")
+
+        result = await validate_tool.execute(
+            report_selector=report_id,
+            checks=["citations"],
+        )
+
+        assert result["checks"]["citations"]["status"] == CHECK_PASS
+
+    async def test_citations_check_document_paths_can_be_validated(self, validate_tool, report_service):
+        """Document citations should surface missing files when enabled."""
+        report_id = report_service.create_report(title="Document Report", template="empty")
+        outline = report_service.get_report_outline(report_id)
+
+        insight = Insight(
+            insight_id=str(uuid.uuid4()),
+            summary="Insight backed by a missing local document",
+            importance=7,
+            status="active",
+            citations=[Citation(source="document", path="research/briefing.pdf")],
+        )
+        outline.insights.append(insight)
+        report_service.update_report_outline(report_id, outline, actor="test")
+
+        result = await validate_tool.execute(
+            report_selector=report_id,
+            checks=["citations"],
+            validate_document_paths=True,
+        )
+
+        details = result["checks"]["citations"]["details"]
+        assert result["checks"]["citations"]["status"] == CHECK_ERROR
+        assert any(detail["issue"] == "document path does not exist: research/briefing.pdf" for detail in details)
 
 
 @pytest.mark.asyncio

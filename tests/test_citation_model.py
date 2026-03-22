@@ -1,5 +1,7 @@
 """Tests for Citation model and migration shim."""
 
+from pathlib import Path
+
 import pytest
 
 from igloo_mcp.living_reports.models import Citation, DatasetSource, Insight
@@ -74,12 +76,43 @@ class TestCitationModel:
         with pytest.raises(Exception):  # Pydantic ValidationError
             Citation(source="invalid_type")
 
+    def test_invalid_url_scheme_raises_error(self):
+        """URL citations should reject non-http schemes."""
+        with pytest.raises(Exception):  # Pydantic ValidationError
+            Citation(source="url", url="ftp://example.com/report")
+
     def test_citation_with_optional_fields(self):
         """Test citation with minimal required fields."""
         citation = Citation(source="observation")
         assert citation.source == "observation"
         assert citation.provider is None
         assert citation.description is None
+
+    def test_query_citation_completeness_requires_identifier(self):
+        """Query citations should reference a concrete query artifact."""
+        citation = Citation(source="query", provider="snowflake")
+        assert citation.completeness_errors() == [
+            "query citations require execution_id, query_id, sql_sha256, or cache_manifest"
+        ]
+
+    def test_api_citation_completeness_requires_provider(self):
+        """API citations should identify the provider."""
+        citation = Citation(source="api", endpoint="/coins/bitcoin")
+        assert citation.completeness_errors() == ["api citations require provider"]
+
+    def test_observation_citation_completeness_requires_description(self):
+        """Observation citations should say what was observed."""
+        citation = Citation(source="observation")
+        assert citation.completeness_errors() == ["observation citations require description"]
+
+    def test_document_citation_completeness_optionally_checks_path(self, tmp_path: Path):
+        """Document path existence checks should be opt-in."""
+        citation = Citation(source="document", path="research/whitepaper.pdf")
+
+        assert citation.completeness_errors() == []
+        assert citation.completeness_errors(validate_document_paths=True, base_dir=tmp_path) == [
+            "document path does not exist: research/whitepaper.pdf"
+        ]
 
 
 class TestMigrationShim:

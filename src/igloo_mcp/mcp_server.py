@@ -763,6 +763,10 @@ def register_igloo_mcp(
             bool,
             Field(description="Auto-fix issues where possible", default=False),
         ] = False,
+        validate_document_paths: Annotated[
+            bool,
+            Field(description="Require document citations to point to an existing file", default=False),
+        ] = False,
     ) -> dict[str, Any]:
         """Validate report quality - delegates to ValidateReportTool."""
         return await validate_report_inst.execute(
@@ -770,6 +774,7 @@ def register_igloo_mcp(
             checks=checks,
             stale_threshold_days=stale_threshold_days,
             fix_mode=fix_mode,
+            validate_document_paths=validate_document_paths,
         )
 
     @server.tool(name="build_catalog", description="Build Snowflake catalog metadata")

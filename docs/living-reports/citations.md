@@ -209,6 +209,15 @@ evolve_report(
 }
 ```
 
+## Validation Rules
+
+- `url` citations must use a valid `http://` or `https://` URL.
+- `query` citations should include at least one concrete identifier: `execution_id`, `query_id`, `sql_sha256`, or `cache_manifest`.
+- `api` citations should include `provider`.
+- `observation` citations should include `description`.
+- `document` citations should include `path`.
+- `validate_report(validate_document_paths=True)` also checks that document paths resolve to an existing file. Relative paths are evaluated from the report directory.
+
 ## Migration from supporting_queries
 
 Igloo MCP automatically migrates legacy `supporting_queries` to `citations`:

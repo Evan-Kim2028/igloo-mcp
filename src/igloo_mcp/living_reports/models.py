@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -156,6 +158,64 @@ class Citation(BaseModel):
         default=None,
         description="ISO 8601 timestamp when observation was made",
     )
+
+    @field_validator("url")
+    @classmethod
+    def _validate_url(cls, v: str | None) -> str | None:
+        """Require http/https URLs when a URL is provided."""
+        if v is None:
+            return None
+        candidate = v.strip()
+        parsed = urlparse(candidate)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("url must be a valid http or https URL")
+        return candidate
+
+    @field_validator("path")
+    @classmethod
+    def _normalize_path(cls, v: str | None) -> str | None:
+        """Reject empty or malformed document paths."""
+        if v is None:
+            return None
+        candidate = v.strip()
+        if not candidate:
+            raise ValueError("path must not be empty")
+        if "\x00" in candidate:
+            raise ValueError("path must not contain null bytes")
+        return candidate
+
+    def completeness_errors(
+        self,
+        *,
+        validate_document_paths: bool = False,
+        base_dir: Path | None = None,
+    ) -> list[str]:
+        """Return source-specific completeness issues for the citation."""
+        issues: list[str] = []
+
+        if self.source == "query":
+            if not any((self.execution_id, self.query_id, self.sql_sha256, self.cache_manifest)):
+                issues.append("query citations require execution_id, query_id, sql_sha256, or cache_manifest")
+        elif self.source == "api":
+            if not self.provider:
+                issues.append("api citations require provider")
+        elif self.source == "url":
+            if not self.url:
+                issues.append("url citations require url")
+        elif self.source == "observation":
+            if not self.description:
+                issues.append("observation citations require description")
+        elif self.source == "document":
+            if not self.path:
+                issues.append("document citations require path")
+            elif validate_document_paths:
+                path = Path(self.path).expanduser()
+                if not path.is_absolute() and base_dir is not None:
+                    path = base_dir / path
+                if not path.is_file():
+                    issues.append(f"document path does not exist: {self.path}")
+
+        return issues
 
 
 class ResolvedDataset(BaseModel):

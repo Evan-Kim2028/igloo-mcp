@@ -146,6 +146,7 @@ def _register_with_wrapper_stubs(monkeypatch: pytest.MonkeyPatch):
     health_mock = AsyncMock(return_value={"status": "healthy"})
     catalog_summary_mock = AsyncMock(return_value={"status": "success"})
     search_catalog_mock = AsyncMock(return_value={"status": "success"})
+    validate_report_mock = AsyncMock(return_value={"status": "valid"})
 
     monkeypatch.setattr(
         "igloo_mcp.mcp_server.ExecuteQueryTool",
@@ -162,6 +163,10 @@ def _register_with_wrapper_stubs(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         "igloo_mcp.mcp_server.SearchCatalogTool",
         lambda *args, **kwargs: SimpleNamespace(execute=search_catalog_mock),
+    )
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.ValidateReportTool",
+        lambda *args, **kwargs: SimpleNamespace(execute=validate_report_mock),
     )
 
     dummy_tool = SimpleNamespace(execute=AsyncMock(return_value={"status": "ok"}))
@@ -192,6 +197,7 @@ def _register_with_wrapper_stubs(monkeypatch: pytest.MonkeyPatch):
         "health_check": health_mock,
         "get_catalog_summary": catalog_summary_mock,
         "search_catalog": search_catalog_mock,
+        "validate_report": validate_report_mock,
     }
 
 
@@ -391,6 +397,25 @@ async def test_search_catalog_wrapper_passes_search_all_databases(monkeypatch: p
     assert kwargs["response_mode"] == "compact"
     assert kwargs["search_all_databases"] is True
     assert kwargs["limit"] == 10
+
+
+@pytest.mark.asyncio
+async def test_validate_report_wrapper_passes_document_path_flag(monkeypatch: pytest.MonkeyPatch):
+    server, mocks = _register_with_wrapper_stubs(monkeypatch)
+    tool = server.tools["validate_report"]
+
+    await tool(
+        report_selector="Quarterly report",
+        checks=["citations"],
+        validate_document_paths=True,
+        fix_mode=False,
+    )
+
+    kwargs = mocks["validate_report"].await_args.kwargs
+    assert kwargs["report_selector"] == "Quarterly report"
+    assert kwargs["checks"] == ["citations"]
+    assert kwargs["validate_document_paths"] is True
+    assert kwargs["fix_mode"] is False
 
 
 def test_register_igloo_mcp_sets_up_context(monkeypatch):

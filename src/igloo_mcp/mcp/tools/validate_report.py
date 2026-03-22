@@ -170,6 +170,11 @@ class ValidateReportTool(MCPTool):
                     "description": "Auto-fix issues where possible",
                     "default": False,
                 },
+                "validate_document_paths": {
+                    "type": "boolean",
+                    "description": "When true, document citations must point to an existing file",
+                    "default": False,
+                },
                 "request_id": {
                     "type": "string",
                     "description": "Optional request correlation ID for tracing",
@@ -184,6 +189,7 @@ class ValidateReportTool(MCPTool):
         checks: list[str] | None = None,
         stale_threshold_days: int = 30,
         fix_mode: bool = False,
+        validate_document_paths: bool = False,
         request_id: str | None = None,
     ) -> dict[str, Any]:
         """Execute report validation.
@@ -193,6 +199,7 @@ class ValidateReportTool(MCPTool):
             checks: List of checks to run (default: all)
             stale_threshold_days: Threshold for stale content (default: 30 days)
             fix_mode: Auto-fix issues where possible
+            validate_document_paths: When true, require document citation paths to exist
             request_id: Optional request correlation ID
 
         Returns:
@@ -226,6 +233,7 @@ class ValidateReportTool(MCPTool):
                 "report_selector": report_selector,
                 "checks": checks_to_run,
                 "fix_mode": fix_mode,
+                "validate_document_paths": validate_document_paths,
                 "request_id": request_id,
             },
         )
@@ -262,7 +270,14 @@ class ValidateReportTool(MCPTool):
         fixes_applied = []
 
         for check_name in checks_to_run:
-            result, fixed = self._run_check(check_name, outline, report_dir, stale_threshold_days, fix_mode)
+            result, fixed = self._run_check(
+                check_name,
+                outline,
+                report_dir,
+                stale_threshold_days,
+                fix_mode,
+                validate_document_paths,
+            )
             check_results[check_name] = result.to_dict()
             if fixed:
                 fixes_applied.append(check_name)
@@ -329,6 +344,7 @@ class ValidateReportTool(MCPTool):
         report_dir: Path,
         stale_threshold_days: int,
         fix_mode: bool,
+        validate_document_paths: bool,
     ) -> tuple[CheckResult, bool]:
         """Run a single check and optionally fix issues.
 
@@ -336,7 +352,7 @@ class ValidateReportTool(MCPTool):
             Tuple of (CheckResult, was_fixed)
         """
         if check_name == "citations":
-            return self._check_citations(outline, fix_mode)
+            return self._check_citations(outline, fix_mode, report_dir, validate_document_paths)
         elif check_name == "empty_sections":
             return self._check_empty_sections(outline, fix_mode)
         elif check_name == "orphaned_insights":
@@ -354,28 +370,50 @@ class ValidateReportTool(MCPTool):
         else:
             return CheckResult(CHECK_PASS, f"Unknown check: {check_name}"), False
 
-    def _check_citations(self, outline: Outline, fix_mode: bool) -> tuple[CheckResult, bool]:
+    def _check_citations(
+        self,
+        outline: Outline,
+        fix_mode: bool,
+        report_dir: Path,
+        validate_document_paths: bool,
+    ) -> tuple[CheckResult, bool]:
         """Check that all insights have valid citations."""
-        missing_citations = []
+        citation_issues = []
 
         for insight in outline.insights:
             has_citations = bool(insight.citations) or bool(insight.supporting_queries)
             if not has_citations:
-                missing_citations.append(
+                citation_issues.append(
                     {
                         "insight_id": insight.insight_id,
                         "summary": insight.summary[:100] + "..." if len(insight.summary) > 100 else insight.summary,
                         "issue": "No citations or supporting queries",
                     }
                 )
+                continue
 
-        if not missing_citations:
+            for idx, citation in enumerate(insight.citations, start=1):
+                issues = citation.completeness_errors(
+                    validate_document_paths=validate_document_paths,
+                    base_dir=report_dir,
+                )
+                for issue in issues:
+                    detail: dict[str, Any] = {
+                        "insight_id": insight.insight_id,
+                        "summary": insight.summary[:100] + "..." if len(insight.summary) > 100 else insight.summary,
+                        "citation_index": idx,
+                        "source": citation.source,
+                        "issue": issue,
+                    }
+                    citation_issues.append(detail)
+
+        if not citation_issues:
             return CheckResult(CHECK_PASS, "All insights have citations"), False
 
         return CheckResult(
             CHECK_ERROR,
-            f"{len(missing_citations)} insights missing citations",
-            details=missing_citations,
+            f"{len(citation_issues)} citation issues found",
+            details=citation_issues,
             fix_available=False,
         ), False
 
