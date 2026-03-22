@@ -172,6 +172,32 @@ def _command_report_render(args: argparse.Namespace) -> int:
         return 1
 
 
+def _command_report_export(args: argparse.Namespace) -> int:
+    """Export report to a portable ZIP bundle."""
+    try:
+        service = ReportService()
+        result = service.export_report(
+            report_id=args.selector,
+            output_path=args.output,
+            include_audit=not args.no_audit,
+            include_assets=not args.no_assets,
+            actor="cli",
+        )
+
+        print("✓ Report exported successfully")
+        print(f"  Report: {result['report_id']}")
+        print(f"  Bundle: {result['output']['output_path']}")
+        print(f"  Files: {result['bundle']['file_count']}")
+        if result["warnings"]:
+            print("  Warnings:")
+            for warning in result["warnings"]:
+                print(f"   - {warning}")
+        return 0
+    except Exception as e:
+        print(f"❌ Failed to export report: {e}", file=sys.stderr)
+        return 1
+
+
 def _command_report_revert(args: argparse.Namespace) -> int:
     """Revert report to previous state."""
     try:
@@ -413,6 +439,26 @@ def build_parser() -> argparse.ArgumentParser:
         help='Additional Quarto options as JSON string (e.g., \'{"toc": true, "theme": "default"}\')',
     )
     render_parser.set_defaults(func=_command_report_render)
+
+    # report export
+    export_parser = report_sub.add_parser("export", help="Export report to portable ZIP bundle")
+    export_parser.add_argument("selector", help="Report ID or title")
+    export_parser.add_argument(
+        "--output",
+        default=None,
+        help="Optional destination ZIP path or existing directory",
+    )
+    export_parser.add_argument(
+        "--no-audit",
+        action="store_true",
+        help="Exclude audit.jsonl from the bundle",
+    )
+    export_parser.add_argument(
+        "--no-assets",
+        action="store_true",
+        help="Exclude report_files/ assets from the bundle",
+    )
+    export_parser.set_defaults(func=_command_report_export)
 
     # report revert
     revert_parser = report_sub.add_parser("revert", help="Revert report to previous state")

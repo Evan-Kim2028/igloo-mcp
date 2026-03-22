@@ -530,7 +530,10 @@ class AuditEvent(BaseModel):
     action_type: str = Field(
         ...,
         description="Type of action performed",
-        pattern=r"^(create|evolve|revert|rename|tag_update|render|manual_edit_detected|backup|status_change|fork|synthesize|archive|delete)$",
+        pattern=(
+            r"^(create|evolve|revert|rename|tag_update|render|export|manual_edit_detected|"
+            r"backup|status_change|fork|synthesize|archive|delete)$"
+        ),
     )
     request_id: str | None = Field(
         default=None,

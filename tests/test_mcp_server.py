@@ -111,6 +111,7 @@ def _register_with_stub_execute(
         "BuildCatalogTool",
         "BuildDependencyGraphTool",
         "ConnectionTestTool",
+        "ExportReportTool",
         "HealthCheckTool",
         "GetCatalogSummaryTool",
         "SearchCatalogTool",
@@ -146,6 +147,7 @@ def _register_with_wrapper_stubs(monkeypatch: pytest.MonkeyPatch):
     health_mock = AsyncMock(return_value={"status": "healthy"})
     catalog_summary_mock = AsyncMock(return_value={"status": "success"})
     search_catalog_mock = AsyncMock(return_value={"status": "success"})
+    export_report_mock = AsyncMock(return_value={"status": "success"})
 
     monkeypatch.setattr(
         "igloo_mcp.mcp_server.ExecuteQueryTool",
@@ -162,6 +164,10 @@ def _register_with_wrapper_stubs(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         "igloo_mcp.mcp_server.SearchCatalogTool",
         lambda *args, **kwargs: SimpleNamespace(execute=search_catalog_mock),
+    )
+    monkeypatch.setattr(
+        "igloo_mcp.mcp_server.ExportReportTool",
+        lambda *args, **kwargs: SimpleNamespace(execute=export_report_mock),
     )
 
     dummy_tool = SimpleNamespace(execute=AsyncMock(return_value={"status": "ok"}))
@@ -192,6 +198,7 @@ def _register_with_wrapper_stubs(monkeypatch: pytest.MonkeyPatch):
         "health_check": health_mock,
         "get_catalog_summary": catalog_summary_mock,
         "search_catalog": search_catalog_mock,
+        "export_report": export_report_mock,
     }
 
 
@@ -358,6 +365,25 @@ async def test_health_check_wrapper_passes_response_controls(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
+async def test_export_report_wrapper_passes_bundle_flags(monkeypatch: pytest.MonkeyPatch):
+    server, mocks = _register_with_wrapper_stubs(monkeypatch)
+    tool = server.tools["export_report"]
+
+    await tool(
+        report_selector="Quarterly Report",
+        output_path="./artifacts/report.zip",
+        include_audit=False,
+        include_assets=True,
+    )
+
+    kwargs = mocks["export_report"].await_args.kwargs
+    assert kwargs["report_selector"] == "Quarterly Report"
+    assert kwargs["output_path"] == "./artifacts/report.zip"
+    assert kwargs["include_audit"] is False
+    assert kwargs["include_assets"] is True
+
+
+@pytest.mark.asyncio
 async def test_get_catalog_summary_wrapper_passes_response_mode(monkeypatch: pytest.MonkeyPatch):
     server, mocks = _register_with_wrapper_stubs(monkeypatch)
     tool = server.tools["get_catalog_summary"]
@@ -462,6 +488,7 @@ def test_register_igloo_mcp_wires_health_tool_breaker_provider(monkeypatch: pyte
         "BuildCatalogTool",
         "BuildDependencyGraphTool",
         "ConnectionTestTool",
+        "ExportReportTool",
         "GetCatalogSummaryTool",
         "SearchCatalogTool",
         "CreateReportTool",

@@ -13,6 +13,7 @@ import json
 import logging
 import uuid
 import webbrowser
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -1306,6 +1307,119 @@ class ReportService:
                 webbrowser.open(f"file://{result.output_paths[0]}")
 
         return response
+
+    def export_report(
+        self,
+        report_id: str,
+        output_path: str | Path | None = None,
+        include_audit: bool = True,
+        include_assets: bool = True,
+        actor: str = "cli",
+    ) -> dict[str, Any]:
+        """Export a living report into a portable ZIP bundle."""
+        resolved_id = self.resolve_report_selector(report_id)
+        storage = self.global_storage.get_report_storage(resolved_id)
+        report_dir = storage.report_dir
+
+        if actor not in {"cli", "agent", "human"}:
+            actor = "cli"
+
+        target_path = (
+            Path(output_path).expanduser() if output_path else self.reports_root / "exports" / f"{resolved_id}.zip"
+        )
+        if target_path.exists() and target_path.is_dir():
+            target_path = target_path / f"{resolved_id}.zip"
+        target_path = target_path.resolve()
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+        warnings: list[str] = []
+        manifest_files: list[str] = ["manifest.json", "outline.json"]
+
+        with storage.lock():
+            outline = storage.load_outline()
+            outline_bytes = storage.outline_path.read_bytes()
+
+            audit_bytes: bytes | None = None
+            audit_event_count = 0
+            if include_audit and storage.audit_path.exists():
+                audit_bytes = storage.audit_path.read_bytes()
+                audit_event_count = len(storage.load_audit_events())
+                manifest_files.append("audit.jsonl")
+
+            asset_entries: list[tuple[Path, str]] = []
+            report_files_dir = report_dir / "report_files"
+            if include_assets and report_files_dir.exists():
+                for asset_path in sorted(path for path in report_files_dir.rglob("*") if path.is_file()):
+                    if asset_path.is_symlink():
+                        warnings.append(f"Skipped symlinked asset: {asset_path.relative_to(report_dir)}")
+                        continue
+                    relative_path = asset_path.relative_to(report_dir).as_posix()
+                    asset_entries.append((asset_path, relative_path))
+                    manifest_files.append(relative_path)
+
+            outline_sha256 = hashlib.sha256(outline_bytes).hexdigest()
+            manifest = {
+                "bundle_version": 1,
+                "exported_at": datetime.datetime.now(datetime.UTC).isoformat(),
+                "report_id": resolved_id,
+                "title": outline.title,
+                "outline_version": outline.outline_version,
+                "include_audit": include_audit,
+                "include_assets": include_assets,
+                "audit_event_count": audit_event_count,
+                "asset_count": len(asset_entries),
+                "outline_sha256": outline_sha256,
+                "files": manifest_files,
+            }
+
+            with zipfile.ZipFile(target_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+                bundle.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
+                bundle.writestr("outline.json", outline_bytes)
+                if audit_bytes is not None:
+                    bundle.writestr("audit.jsonl", audit_bytes)
+                for asset_path, relative_path in asset_entries:
+                    bundle.write(asset_path, arcname=relative_path)
+
+        bundle_size_bytes = target_path.stat().st_size
+        audit_event = AuditEvent(
+            action_id=str(uuid.uuid4()),
+            report_id=resolved_id,
+            ts=datetime.datetime.now(datetime.UTC).isoformat(),
+            actor=actor,
+            action_type="export",
+            payload={
+                "output_path": str(target_path),
+                "bundle_size_bytes": bundle_size_bytes,
+                "include_audit": include_audit,
+                "include_assets": include_assets,
+                "bundle_file_count": len(manifest_files),
+                "outline_sha256": outline_sha256,
+            },
+        )
+        with storage.lock():
+            storage.append_audit_event(audit_event)
+
+        return {
+            "status": "success",
+            "report_id": resolved_id,
+            "title": outline.title,
+            "output": {
+                "output_path": str(target_path),
+            },
+            "bundle": {
+                "bundle_version": manifest["bundle_version"],
+                "file_count": len(manifest_files),
+                "files": manifest_files,
+                "include_audit": include_audit,
+                "include_assets": include_assets,
+                "audit_event_count": audit_event_count,
+                "asset_count": len(asset_entries),
+                "size_bytes": bundle_size_bytes,
+                "outline_sha256": outline_sha256,
+            },
+            "warnings": warnings,
+            "audit_action_id": audit_event.action_id,
+        }
 
     def _generate_preview(self, output_path: str, max_chars: int = 2000) -> str | None:
         """Generate a truncated preview of the rendered output.

@@ -65,6 +65,7 @@ from .mcp.tools import (
     EvolveReportBatchTool,
     EvolveReportTool,
     ExecuteQueryTool,
+    ExportReportTool,
     GetCatalogSummaryTool,
     GetReportSchemaTool,
     GetReportTool,
@@ -112,6 +113,7 @@ _catalog_service: CatalogService | None = None
 NON_SQL_TOOLS = {
     "create_report",
     "evolve_report",
+    "export_report",
     "render_report",
     "search_report",
     "get_report",
@@ -362,6 +364,7 @@ def register_igloo_mcp(
     create_report_inst = CreateReportTool(config, report_service)
     evolve_report_inst = EvolveReportTool(config, report_service)
     evolve_report_batch_inst = EvolveReportBatchTool(config, report_service)
+    export_report_inst = ExportReportTool(config, report_service)
     render_report_inst = RenderReportTool(config, report_service)
     search_report_inst = SearchReportTool(config, report_service)
     get_report_inst = GetReportTool(config, report_service)
@@ -525,6 +528,33 @@ def register_igloo_mcp(
             operations=operations,
             dry_run=dry_run,
             response_detail=response_detail,
+        )
+
+    @server.tool(
+        name="export_report",
+        description="Export a living report as a ZIP bundle",
+    )
+    async def export_report_tool(
+        report_selector: Annotated[str, Field(description="Report ID or title")],
+        output_path: Annotated[
+            str | None,
+            Field(description="Optional destination ZIP path or existing directory", default=None),
+        ] = None,
+        include_audit: Annotated[
+            bool,
+            Field(description="Include audit.jsonl in the bundle", default=True),
+        ] = True,
+        include_assets: Annotated[
+            bool,
+            Field(description="Include report_files/ assets in the bundle", default=True),
+        ] = True,
+    ) -> dict[str, Any]:
+        """Export report - delegates to ExportReportTool."""
+        return await export_report_inst.execute(
+            report_selector=report_selector,
+            output_path=output_path,
+            include_audit=include_audit,
+            include_assets=include_assets,
         )
 
     @server.tool(

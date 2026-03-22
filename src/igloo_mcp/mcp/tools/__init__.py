@@ -20,6 +20,7 @@ from .create_report import CreateReportTool
 from .evolve_report import EvolveReportTool
 from .evolve_report_batch import EvolveReportBatchTool
 from .execute_query import ExecuteQueryTool
+from .export_report import ExportReportTool
 from .get_catalog_summary import GetCatalogSummaryTool
 from .get_report import GetReportTool
 from .get_report_schema import GetReportSchemaTool
@@ -42,6 +43,7 @@ __all__ = [
     "EvolveReportBatchTool",
     "EvolveReportTool",
     "ExecuteQueryTool",
+    "ExportReportTool",
     "GetCatalogSummaryTool",
     "GetReportSchemaTool",
     "GetReportTool",

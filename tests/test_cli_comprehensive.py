@@ -16,6 +16,7 @@ from igloo_mcp.cli import (
     _command_query_optimize,
     _command_report_create,
     _command_report_evolve,
+    _command_report_export,
 )
 
 
@@ -252,6 +253,53 @@ class TestCLIReportEvolve:
             assert result == 0
 
 
+class TestCLIReportExport:
+    """Test report export CLI command."""
+
+    def test_report_export_success(self, capsys):
+        """Export report prints bundle path and file count."""
+        with patch("igloo_mcp.cli.ReportService") as mock_service:
+            mock_service.return_value.export_report.return_value = {
+                "status": "success",
+                "report_id": "rpt_123",
+                "output": {"output_path": "/tmp/rpt_123.zip"},
+                "bundle": {"file_count": 4},
+                "warnings": [],
+            }
+
+            args = argparse.Namespace(
+                selector="rpt_123",
+                output=None,
+                no_audit=False,
+                no_assets=False,
+            )
+
+            result = _command_report_export(args)
+
+            assert result == 0
+            captured = capsys.readouterr()
+            assert "/tmp/rpt_123.zip" in captured.out
+            assert "Files: 4" in captured.out
+
+    def test_report_export_error_handling(self, capsys):
+        """Export report surfaces service errors."""
+        with patch("igloo_mcp.cli.ReportService") as mock_service:
+            mock_service.return_value.export_report.side_effect = RuntimeError("disk full")
+
+            args = argparse.Namespace(
+                selector="rpt_123",
+                output="/tmp/out.zip",
+                no_audit=True,
+                no_assets=True,
+            )
+
+            result = _command_report_export(args)
+
+            assert result == 1
+            captured = capsys.readouterr()
+            assert "disk full" in captured.err
+
+
 class TestCLIArgumentParsing:
     """Test CLI argument parsing."""
 
@@ -262,6 +310,7 @@ class TestCLIArgumentParsing:
         assert callable(_command_query_optimize)
         assert callable(_command_report_create)
         assert callable(_command_report_evolve)
+        assert callable(_command_report_export)
 
 
 class TestCLIOutputFormatting:
