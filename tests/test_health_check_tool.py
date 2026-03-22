@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import json
+import os
 import sys
 import types
+import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from igloo_mcp.config import Config
+from igloo_mcp.living_reports.models import IndexEntry
+from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.tools.health import HealthCheckTool
 from igloo_mcp.mcp_health import HealthStatus
 from igloo_mcp.profile_utils import ProfileValidationError
@@ -128,6 +134,10 @@ class SummaryStub:
         self.current_profile = "DEFAULT"
         self.profile_count = 1
         self.current_profile_authenticator = "externalbrowser"
+
+
+def _patch_reports_root(monkeypatch: pytest.MonkeyPatch, reports_root: Path) -> None:
+    monkeypatch.setattr("igloo_mcp.path_utils.resolve_reports_root", lambda *args, **kwargs: reports_root)
 
 
 @pytest.mark.asyncio
@@ -342,6 +352,161 @@ async def test_health_check_includes_query_circuit_breaker_status() -> None:
     assert full["checks"]["query_circuit_breaker"] == breaker_status
     assert full["diagnostics"]["query_circuit_breaker"] == breaker_status
     assert "query_circuit_breaker" in full.get("remediation", {})
+
+
+@pytest.mark.asyncio
+async def test_health_check_reports_health_happy_path(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    config = Config.from_env()
+    service = StubSnowflakeService()
+    reports_root = tmp_path / "reports"
+    report_service = ReportService(reports_root)
+    report_id = report_service.create_report("Healthy Report")
+    storage = report_service.global_storage.get_report_storage(report_id)
+
+    outline = storage.load_outline()
+    outline.metadata["attachments"] = [{"path": "report_files/kept.png"}]
+    storage._save_outline_atomic(outline)
+
+    report_files_dir = storage.report_dir / "report_files"
+    report_files_dir.mkdir(parents=True, exist_ok=True)
+    (report_files_dir / "kept.png").write_text("ok", encoding="utf-8")
+
+    _patch_reports_root(monkeypatch, reports_root)
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.shutil.disk_usage",
+        lambda _path: types.SimpleNamespace(total=1000, free=600),
+    )
+
+    tool = HealthCheckTool(
+        config=config,
+        snowflake_service=service,
+    )
+
+    minimal = await tool.execute(
+        response_mode="minimal",
+        include_profile=False,
+        include_cortex=False,
+        include_catalog=False,
+        include_reports_health=True,
+    )
+    assert minimal["components"]["reports"] == "healthy"
+
+    full = await tool.execute(
+        response_mode="full",
+        include_profile=False,
+        include_cortex=False,
+        include_catalog=False,
+        include_reports_health=True,
+    )
+    reports = full["checks"]["reports"]
+
+    assert full["status"] == "healthy"
+    assert reports["status"] == "healthy"
+    assert reports["initialized"] is True
+    assert reports["total_reports"] == 1
+    assert reports["index_entries"] == 1
+    assert reports["corrupted_index_lines"] == []
+    assert reports["orphaned_index_entries"] == []
+    assert reports["missing_index_entries"] == []
+    assert reports["corrupted_audit_logs"] == []
+    assert reports["orphaned_assets"] == []
+    assert reports["warnings"] == []
+    assert reports["total_audit_events"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_health_check_reports_health_detects_storage_issues(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config = Config.from_env()
+    service = StubSnowflakeService()
+    reports_root = tmp_path / "reports"
+    report_service = ReportService(reports_root)
+
+    indexed_report_id = report_service.create_report("Indexed Report")
+    missing_index_report_id = report_service.create_report("Missing Index Report")
+
+    indexed_storage = report_service.global_storage.get_report_storage(indexed_report_id)
+    outline = indexed_storage.load_outline()
+    outline.metadata["attachments"] = [{"path": "report_files/kept.png"}]
+    indexed_storage._save_outline_atomic(outline)
+
+    report_files_dir = indexed_storage.report_dir / "report_files"
+    report_files_dir.mkdir(parents=True, exist_ok=True)
+    (report_files_dir / "kept.png").write_text("ok", encoding="utf-8")
+    (report_files_dir / "orphan.png").write_text("orphan", encoding="utf-8")
+
+    with indexed_storage.audit_path.open("a", encoding="utf-8") as handle:
+        handle.write("{not valid json}\n")
+
+    old_backup = indexed_storage.backups_dir / "stale.bak"
+    old_backup.write_text("old backup", encoding="utf-8")
+    stale_timestamp = (datetime.now(UTC) - timedelta(days=HealthCheckTool.REPORT_BACKUP_RETENTION_DAYS + 5)).timestamp()
+    os.utime(old_backup, (stale_timestamp, stale_timestamp))
+
+    orphan_report_id = str(uuid.uuid4())
+    index_entries = [
+        IndexEntry(
+            report_id=indexed_report_id,
+            current_title="Indexed Report",
+            created_at=datetime.now(UTC).isoformat(),
+            updated_at=datetime.now(UTC).isoformat(),
+            tags=[],
+            status="active",
+            path=f"by_id/{indexed_report_id}",
+        ),
+        IndexEntry(
+            report_id=orphan_report_id,
+            current_title="Orphaned Entry",
+            created_at=datetime.now(UTC).isoformat(),
+            updated_at=datetime.now(UTC).isoformat(),
+            tags=[],
+            status="active",
+            path=f"by_id/{orphan_report_id}",
+        ),
+    ]
+    index_path = reports_root / "index.jsonl"
+    with index_path.open("w", encoding="utf-8") as handle:
+        for entry in index_entries:
+            handle.write(json.dumps(entry.model_dump()) + "\n")
+        handle.write("{broken index line}\n")
+
+    _patch_reports_root(monkeypatch, reports_root)
+    monkeypatch.setattr(
+        "igloo_mcp.mcp.tools.health.shutil.disk_usage",
+        lambda _path: types.SimpleNamespace(total=1000, free=40),
+    )
+
+    tool = HealthCheckTool(
+        config=config,
+        snowflake_service=service,
+    )
+
+    result = await tool.execute(
+        response_mode="full",
+        include_profile=False,
+        include_cortex=False,
+        include_catalog=False,
+        include_reports_health=True,
+    )
+    reports = result["checks"]["reports"]
+
+    assert result["status"] == "unhealthy"
+    assert reports["status"] == "unhealthy"
+    assert reports["total_reports"] == 2
+    assert reports["index_entries"] == 2
+    assert len(reports["corrupted_index_lines"]) == 1
+    assert reports["orphaned_index_entries"] == [orphan_report_id]
+    assert reports["missing_index_entries"] == [missing_index_report_id]
+    assert len(reports["corrupted_audit_logs"]) == 1
+    assert reports["corrupted_audit_logs"][0]["report_id"] == indexed_report_id
+    assert reports["orphaned_assets"] == [f"{indexed_report_id}/report_files/orphan.png"]
+    assert reports["old_backups"][0]["path"] == f"{indexed_report_id}/backups/stale.bak"
+    assert reports["disk_usage"]["used_percent"] == 96.0
+    assert any("orphaned report asset" in warning for warning in reports["warnings"])
+    assert any("backup file" in warning for warning in reports["warnings"])
+    assert any("Disk usage" in warning for warning in reports["warnings"])
+    assert "reports" in result.get("remediation", {})
 
 
 @pytest.mark.asyncio
