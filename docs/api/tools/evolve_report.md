@@ -158,6 +158,25 @@ When modifying insights or sections, you can now update only specific fields. Fi
 
 **Important**: At least one field besides the ID must be provided for modifications.
 
+### URL Citation Shorthand
+
+Insight payloads also accept `citation_url` and `citation_description` as shorthand for a URL citation. This is normalized before validation, so URL-backed insights satisfy the citation requirement without hand-building the `citations` array.
+
+**Example: Adding an insight with shorthand**
+
+```json
+{
+  "insights_to_add": [
+    {
+      "summary": "Official roadmap confirms Q3 launch window",
+      "importance": 8,
+      "citation_url": "https://example.com/roadmap",
+      "citation_description": "Official roadmap update"
+    }
+  ]
+}
+```
+
 ### Atomic Add-and-Link
 
 You can now create insights inline within section additions, automatically linking them to the section. This enables atomic operations where insights and sections are created together.

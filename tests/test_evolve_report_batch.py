@@ -378,6 +378,30 @@ class TestEvolveReportBatchOperations:
         assert result["batch_info"]["operations_summary"][OP_ADD_INSIGHT] == 2
         assert result["batch_info"]["operations_summary"][OP_ADD_SECTION] == 1
 
+    @pytest.mark.asyncio
+    async def test_add_single_insight_with_url_citation_shorthand(self, batch_tool, test_report_id, report_service):
+        """Batch operations should accept citation_url shorthand."""
+        result = await batch_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add single sourced insight",
+            operations=[
+                {
+                    "type": OP_ADD_INSIGHT,
+                    "summary": "Launch date confirmed in official post",
+                    "importance": 8,
+                    "citation_url": "https://example.com/post",
+                    "citation_description": "Official launch post",
+                },
+            ],
+        )
+
+        assert result["status"] == "success"
+
+        outline = report_service.get_report_outline(test_report_id)
+        assert len(outline.insights) == 1
+        assert outline.insights[0].citations[0].source == "url"
+        assert outline.insights[0].citations[0].url == "https://example.com/post"
+
 
 class TestOperationsToProposedChanges:
     """Test the _operations_to_proposed_changes conversion."""
@@ -395,6 +419,29 @@ class TestOperationsToProposedChanges:
         assert changes["insights_to_add"][0]["importance"] == 5
         # Auto-generated ID should be present
         assert "insight_id" in changes["insights_to_add"][0]
+
+    def test_add_insight_conversion_expands_citation_url_shorthand(self, batch_tool):
+        """citation_url shorthand should be normalized during conversion."""
+        operations = [
+            {
+                "type": OP_ADD_INSIGHT,
+                "summary": "Test",
+                "importance": 5,
+                "citation_url": "https://example.com/source",
+                "citation_description": "Source link",
+            },
+        ]
+
+        changes = batch_tool._operations_to_proposed_changes(operations)
+
+        assert changes["insights_to_add"][0]["citations"] == [
+            {
+                "source": "url",
+                "url": "https://example.com/source",
+                "description": "Source link",
+            }
+        ]
+        assert "citation_url" not in changes["insights_to_add"][0]
 
     def test_add_section_conversion(self, batch_tool):
         """Test add_section operation is converted correctly."""

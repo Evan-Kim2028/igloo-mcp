@@ -56,7 +56,7 @@ from igloo_mcp.living_reports.changes_schema import (
     ProposedChanges,
     SectionChange,
 )
-from igloo_mcp.living_reports.models import Insight, Outline, Section
+from igloo_mcp.living_reports.models import Citation, Insight, Outline, Section
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
 from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.living_reports.templates import render_section_template
@@ -383,6 +383,8 @@ class EvolveReportTool(MCPTool):
                     "request_id": request_id,
                     "error_type": "schema_validation",
                 }
+
+            proposed_changes = changes_obj.model_dump(exclude_none=True)
 
             # Fail early if input had unrecognized keys AND resulted in no operations
             # This catches the case where an LLM sends e.g. {"sections": [...]} instead of {"sections_to_add": [...]}
@@ -762,24 +764,7 @@ class EvolveReportTool(MCPTool):
             # Validate insights_to_add
             for insight_data in changes.get("insights_to_add", []):
                 insight_id = insight_data.get("insight_id", "unknown")
-                supporting_queries = insight_data.get("citations") or insight_data.get("supporting_queries", [])
-
-                if not supporting_queries or len(supporting_queries) == 0:
-                    issues.append(
-                        f"All insights require citations for reproducibility. Insight '{insight_id}' "
-                        "missing supporting_queries[0] with execution_id. "
-                        "Use execute_query() first to get an execution_id, "
-                        "then include it in citations. "
-                        "To disable validation (not recommended): "
-                        "set skip_citation_validation=True in constraints"
-                    )
-                elif not supporting_queries[0].get("execution_id"):
-                    issues.append(
-                        f"All insights require citations. Insight '{insight_id}' "
-                        "missing execution_id in citations[0]. "
-                        "Use execute_query() first to get an execution_id, "
-                        "then include it in citations"
-                    )
+                issues.extend(self._validate_insight_citations(insight_data, insight_id))
 
             # Validate insights_to_modify
             for modify_data in changes.get("insights_to_modify", []):
@@ -810,43 +795,113 @@ class EvolveReportTool(MCPTool):
 
                 if current_insight:
                     # Check if supporting_queries is being modified
-                    if "supporting_queries" in modify_data:
-                        supporting_queries = modify_data.get("citations") or modify_data.get("supporting_queries", [])
-                        if not supporting_queries or len(supporting_queries) == 0:
-                            issues.append(
-                                f"All insights require citations. Insight '{insight_id}' "
-                                "missing supporting_queries[0] with execution_id. "
-                                "Use execute_query() first to get an execution_id, "
-                                "then include it in citations. "
-                                "To disable validation (not recommended): "
-                                "set skip_citation_validation=True in constraints"
-                            )
-                        elif not supporting_queries[0].get("execution_id"):
-                            issues.append(
-                                f"All insights require citations. Insight '{insight_id}' "
-                                "missing execution_id in citations[0]. "
-                                "Use execute_query() first to get an execution_id, "
-                                "then include it in citations"
-                            )
+                    if "supporting_queries" in modify_data or "citations" in modify_data:
+                        issues.extend(self._validate_insight_citations(modify_data, insight_id))
                     # If not modifying supporting_queries, check current value
                     elif not current_insight.supporting_queries and not current_insight.citations:
                         issues.append(
-                            f"All insights require citations. Insight '{insight_id}' "
-                            "missing supporting_queries[0] with execution_id. "
-                            "Use execute_query() first to get an execution_id, "
-                            "then include it in citations. "
+                            f"All insights require citations. Insight '{insight_id}' has no citations. "
+                            "Add a query, URL, API, observation, or document citation. "
                             "To disable validation (not recommended): "
                             "set skip_citation_validation=True in constraints"
                         )
-                    elif (
-                        current_insight.supporting_queries and not current_insight.supporting_queries[0].execution_id
-                    ) or (current_insight.citations and not current_insight.citations[0].execution_id):
-                        issues.append(
-                            f"All insights require citations. Insight '{insight_id}' "
-                            "missing execution_id in citations[0]. "
-                            "Use execute_query() first to get an execution_id, "
-                            "then include it in citations"
+                    else:
+                        issues.extend(
+                            self._validate_insight_citations(
+                                {
+                                    "citations": [
+                                        citation.model_dump(exclude_none=True) for citation in current_insight.citations
+                                    ],
+                                    "supporting_queries": [
+                                        query.model_dump(exclude_none=True)
+                                        for query in current_insight.supporting_queries
+                                    ],
+                                },
+                                insight_id,
+                            )
                         )
+
+        return issues
+
+    def _validate_insight_citations(self, insight_data: dict[str, Any], insight_id: str) -> list[str]:
+        """Validate citations on a pending insight add/modify payload."""
+        citations = insight_data.get("citations") or []
+        supporting_queries = insight_data.get("supporting_queries") or []
+
+        if not citations and not supporting_queries:
+            return [
+                f"All insights require citations. Insight '{insight_id}' has no citations. "
+                "Add a query, URL, API, observation, or document citation. "
+                "To disable validation (not recommended): "
+                "set skip_citation_validation=True in constraints"
+            ]
+
+        issues: list[str] = []
+
+        for idx, citation_data in enumerate(citations):
+            if not isinstance(citation_data, dict):
+                issues.append(
+                    f"Insight '{insight_id}' citations[{idx}] must be an object, got {type(citation_data).__name__}"
+                )
+                continue
+
+            try:
+                citation = Citation(**citation_data)
+            except ValidationError as exc:
+                issues.append(
+                    f"Insight '{insight_id}' citations[{idx}] is invalid: "
+                    f"{'; '.join(self._format_pydantic_errors(exc.errors()))}"
+                )
+                continue
+
+            for issue in self._citation_completeness_errors(citation):
+                issues.append(f"Insight '{insight_id}' citations[{idx}] {issue}")
+
+        for idx, query_ref in enumerate(supporting_queries):
+            if not isinstance(query_ref, dict):
+                issues.append(
+                    f"Insight '{insight_id}' supporting_queries[{idx}] must be an object, "
+                    f"got {type(query_ref).__name__}"
+                )
+                continue
+
+            if not any(query_ref.get(field) for field in ("execution_id", "sql_sha256", "cache_manifest")):
+                issues.append(
+                    f"Insight '{insight_id}' supporting_queries[{idx}] requires execution_id, "
+                    "sql_sha256, or cache_manifest"
+                )
+
+        return issues
+
+    @staticmethod
+    def _format_pydantic_errors(errors: list[Any]) -> list[str]:
+        """Flatten pydantic validation errors into concise strings."""
+        messages: list[str] = []
+        for error in errors:
+            location = ".".join(str(part) for part in error.get("loc", ()))
+            message = str(error.get("msg", "validation error"))
+            messages.append(f"{location}: {message}" if location else message)
+        return messages
+
+    @staticmethod
+    def _citation_completeness_errors(citation: Citation) -> list[str]:
+        """Return source-specific completeness issues for evolve_report validation."""
+        issues: list[str] = []
+
+        if citation.source == "query":
+            if not any((citation.execution_id, citation.query_id, citation.sql_sha256, citation.cache_manifest)):
+                issues.append("query citations require execution_id, query_id, sql_sha256, or cache_manifest")
+        elif citation.source == "api":
+            if not citation.provider:
+                issues.append("api citations require provider")
+        elif citation.source == "url":
+            if not citation.url:
+                issues.append("url citations require url")
+        elif citation.source == "observation":
+            if not citation.description:
+                issues.append("observation citations require description")
+        elif citation.source == "document" and not citation.path:
+            issues.append("document citations require path")
 
         return issues
 

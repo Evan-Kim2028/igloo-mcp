@@ -13,6 +13,82 @@ MERGE_MODE_MERGE = "merge"
 MERGE_MODE_APPEND = "append"
 MERGE_MODE_PREPEND = "prepend"
 
+_QUERY_CITATION_KEYS = frozenset({"execution_id", "query_id", "sql_sha256", "cache_manifest"})
+
+
+def _normalize_citation_dict(citation: dict[str, Any]) -> dict[str, Any]:
+    """Backfill source for legacy query-style citations when possible."""
+    normalized = dict(citation)
+    if not normalized.get("source") and any(normalized.get(key) for key in _QUERY_CITATION_KEYS):
+        normalized["source"] = "query"
+    return normalized
+
+
+def normalize_insight_citation_shorthand(insight: dict[str, Any]) -> dict[str, Any]:
+    """Expand shorthand citation fields on an insight payload."""
+    normalized = dict(insight)
+
+    existing_citations = normalized.get("citations")
+    if existing_citations is not None:
+        if not isinstance(existing_citations, list):
+            raise ValueError("citations must be a list")
+        normalized["citations"] = [
+            _normalize_citation_dict(citation) if isinstance(citation, dict) else citation
+            for citation in existing_citations
+        ]
+
+    citation_url = normalized.pop("citation_url", None)
+    citation_description = normalized.pop("citation_description", None)
+
+    if citation_description is not None and citation_url is None:
+        raise ValueError("citation_description requires citation_url")
+
+    if citation_url is not None:
+        citations = list(normalized.get("citations") or [])
+        url_citation: dict[str, Any] = {
+            "source": "url",
+            "url": citation_url,
+        }
+        if citation_description is not None:
+            url_citation["description"] = citation_description
+        citations.append(url_citation)
+        normalized["citations"] = citations
+
+    return normalized
+
+
+def normalize_proposed_changes_citation_shorthand(changes: dict[str, Any]) -> dict[str, Any]:
+    """Normalize citation shorthand across all insight-bearing change payloads."""
+    normalized = dict(changes)
+
+    for key in ("insights_to_add", "insights_to_modify"):
+        if isinstance(normalized.get(key), list):
+            normalized[key] = [
+                normalize_insight_citation_shorthand(change) if isinstance(change, dict) else change
+                for change in normalized[key]
+            ]
+
+    for key in ("sections_to_add", "sections_to_modify"):
+        sections = normalized.get(key)
+        if not isinstance(sections, list):
+            continue
+        normalized_sections: list[Any] = []
+        for section in sections:
+            if not isinstance(section, dict):
+                normalized_sections.append(section)
+                continue
+            section_data = dict(section)
+            inline_insights = section_data.get("insights")
+            if isinstance(inline_insights, list):
+                section_data["insights"] = [
+                    normalize_insight_citation_shorthand(insight) if isinstance(insight, dict) else insight
+                    for insight in inline_insights
+                ]
+            normalized_sections.append(section_data)
+        normalized[key] = normalized_sections
+
+    return normalized
+
 
 class ValidationErrorDetail(BaseModel):
     """Structured validation error with field path, value, and context."""
@@ -82,8 +158,10 @@ class InsightChange(BaseModel):
     @classmethod
     def generate_uuid_if_missing(cls, data: Any) -> Any:
         """Auto-generate UUID if insight_id is None or missing."""
-        if isinstance(data, dict) and data.get("insight_id") is None:
-            data["insight_id"] = str(uuid.uuid4())
+        if isinstance(data, dict):
+            data = normalize_insight_citation_shorthand(data)
+            if data.get("insight_id") is None:
+                data["insight_id"] = str(uuid.uuid4())
         return data
 
     @field_validator("insight_id")
@@ -146,8 +224,16 @@ class SectionChange(BaseModel):
     @classmethod
     def generate_uuid_if_missing(cls, data: Any) -> Any:
         """Auto-generate UUID if section_id is None or missing."""
-        if isinstance(data, dict) and data.get("section_id") is None:
-            data["section_id"] = str(uuid.uuid4())
+        if isinstance(data, dict):
+            data = dict(data)
+            inline_insights = data.get("insights")
+            if isinstance(inline_insights, list):
+                data["insights"] = [
+                    normalize_insight_citation_shorthand(insight) if isinstance(insight, dict) else insight
+                    for insight in inline_insights
+                ]
+            if data.get("section_id") is None:
+                data["section_id"] = str(uuid.uuid4())
         return data
 
     @model_validator(mode="after")

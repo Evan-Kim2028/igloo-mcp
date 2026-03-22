@@ -74,6 +74,23 @@ evolve_report(
 )
 ```
 
+### URL Citation Shorthand
+
+```python
+evolve_report(
+    report_selector="Market Research",
+    instruction="Add insight from official announcement",
+    proposed_changes={
+        "insights_to_add": [{
+            "summary": "Monad TGE announced for Q1 2025",
+            "importance": 8,
+            "citation_url": "https://monad.xyz/blog/tge-announcement",
+            "citation_description": "Official blog post confirming TGE timeline"
+        }]
+    }
+)
+```
+
 ### API Citation (External Data)
 
 ```python
@@ -275,6 +292,31 @@ Igloo MCP automatically migrates legacy `supporting_queries` to `citations`:
 {
     "source": "observation",
     "description": "Common knowledge in the industry"
+}
+```
+
+**Shorthand is also supported in report evolution tools**:
+
+```python
+{
+    "summary": "Competitor confirmed launch timing",
+    "importance": 7,
+    "citation_url": "https://competitor.com/blog/launch",
+    "citation_description": "Official launch blog post"
+}
+```
+
+This expands automatically into:
+
+```python
+{
+    "summary": "Competitor confirmed launch timing",
+    "importance": 7,
+    "citations": [{
+        "source": "url",
+        "url": "https://competitor.com/blog/launch",
+        "description": "Official launch blog post"
+    }]
 }
 ```
 

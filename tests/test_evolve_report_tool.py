@@ -123,6 +123,52 @@ class TestEvolveReportToolIntegration:
         after_outline = report_service.get_report_outline(test_report_id)
         assert len(after_outline.sections) == initial_section_count
 
+    async def test_evolve_report_accepts_url_citation_shorthand(self, evolve_tool, test_report_id, report_service):
+        """citation_url shorthand should create a usable URL citation."""
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add sourced insight",
+            proposed_changes={
+                "insights_to_add": [
+                    {
+                        "summary": "Official roadmap confirms Q3 launch window",
+                        "importance": 8,
+                        "citation_url": "https://example.com/roadmap",
+                        "citation_description": "Official roadmap update",
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "success"
+        outline = report_service.get_report_outline(test_report_id)
+        assert len(outline.insights) == 1
+        assert outline.insights[0].citations[0].source == "url"
+        assert outline.insights[0].citations[0].url == "https://example.com/roadmap"
+        assert outline.insights[0].citations[0].description == "Official roadmap update"
+
+    async def test_evolve_report_rejects_orphaned_citation_description(self, evolve_tool, test_report_id):
+        """citation_description without citation_url should fail schema validation."""
+        result = await evolve_tool.execute(
+            report_selector=test_report_id,
+            instruction="Add sourced insight",
+            proposed_changes={
+                "insights_to_add": [
+                    {
+                        "summary": "Official roadmap confirms Q3 launch window",
+                        "importance": 8,
+                        "citation_description": "Official roadmap update",
+                    }
+                ]
+            },
+        )
+
+        assert result["status"] == "validation_failed"
+        assert any(
+            "citation_description requires citation_url" in error.get("message", "")
+            for error in result["validation_errors"]
+        )
+
     async def test_evolve_report_selector_error_invalid_report_id(self, evolve_tool):
         """Test selector error: non-existent report ID."""
         fake_id = f"rpt_{uuid.uuid4()}"

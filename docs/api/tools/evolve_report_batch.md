@@ -35,6 +35,7 @@ Each operation is an object with a `type` field and type-specific parameters:
 - `importance` (required): 1-10 importance score
 - `citations` (optional): Array of citation objects with `execution_id`, `sql_sha256`, or `cache_manifest`
 - `supporting_queries` (optional): Alias for citations (backward compatibility)
+- `citation_url` / `citation_description` (optional): Shorthand for adding a single URL citation
 
 **`modify_insight`**: Modify existing insight
 - `insight_id` (required): UUID of insight to modify
@@ -173,6 +174,24 @@ result = evolve_report_batch(
 
 print(f"Added {result['summary']['insights_added']} insights")
 print(f"Added {result['summary']['sections_added']} sections")
+```
+
+### Add Insight with URL Citation Shorthand
+
+```python
+result = evolve_report_batch(
+    report_selector="Q1 Sales Analysis",
+    instruction="Add sourced market insight",
+    operations=[
+        {
+            "type": "add_insight",
+            "summary": "Official roadmap confirms Q3 launch window",
+            "importance": 8,
+            "citation_url": "https://example.com/roadmap",
+            "citation_description": "Official roadmap update"
+        }
+    ]
+)
 ```
 
 ### Update Existing Report Atomically

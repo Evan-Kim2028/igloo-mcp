@@ -55,6 +55,34 @@ def test_insight_change_schema():
     assert change.status == "active"
 
 
+def test_insight_change_accepts_url_citation_shorthand():
+    """citation_url shorthand should expand into a URL citation."""
+    change = InsightChange(
+        importance=8,
+        summary="Research finding",
+        citation_url="https://example.com/report",
+        citation_description="Reference article",
+    )
+
+    assert change.citations == [
+        {
+            "source": "url",
+            "url": "https://example.com/report",
+            "description": "Reference article",
+        }
+    ]
+
+
+def test_insight_change_rejects_orphaned_citation_description():
+    """citation_description without citation_url should fail fast."""
+    with pytest.raises(ValueError, match="citation_description requires citation_url"):
+        InsightChange(
+            importance=8,
+            summary="Research finding",
+            citation_description="Reference article",
+        )
+
+
 def test_section_change_schema():
     """Test SectionChange schema validation."""
     section_id = str(uuid.uuid4())
@@ -72,6 +100,35 @@ def test_section_change_schema():
     assert change.order == 5
     assert change.notes == "Section notes"
     assert len(change.insight_ids_to_add) == 1
+
+
+def test_section_change_normalizes_inline_insight_citation_shorthand():
+    """Inline section insights should also support citation_url shorthand."""
+    change = SectionChange(
+        title="Research",
+        insights=[
+            {
+                "summary": "Protocol launched a new feature",
+                "importance": 7,
+                "citation_url": "https://example.com/launch",
+                "citation_description": "Launch post",
+            }
+        ],
+    )
+
+    assert change.insights == [
+        {
+            "summary": "Protocol launched a new feature",
+            "importance": 7,
+            "citations": [
+                {
+                    "source": "url",
+                    "url": "https://example.com/launch",
+                    "description": "Launch post",
+                }
+            ],
+        }
+    ]
 
 
 def test_validate_against_outline():

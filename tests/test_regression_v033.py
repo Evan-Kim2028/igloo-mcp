@@ -52,7 +52,7 @@ class TestBug89CitationEnforcement:
         validation_errors = result.get("validation_issues") or result.get("validation_errors", [])
         error_text = " ".join(str(e).lower() for e in validation_errors)
         assert "citation" in error_text
-        assert "execution_id" in error_text
+        assert "no citations" in error_text
 
     @pytest.mark.asyncio
     async def test_citation_enforcement_for_analyst_template(self, tmp_path: Path):

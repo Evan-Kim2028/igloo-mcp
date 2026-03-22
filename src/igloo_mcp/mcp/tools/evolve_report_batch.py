@@ -13,14 +13,14 @@ EXAMPLE USAGE:
                 "insight_id": "uuid-1",
                 "summary": "Enterprise revenue grew 45% YoY",
                 "importance": 9,
-                "citations": [{"execution_id": "exec-123"}]
+                "citations": [{"source": "query", "execution_id": "exec-123"}]
             },
             {
                 "type": "add_insight",
                 "insight_id": "uuid-2",
                 "summary": "SMB segment showed 12% improvement",
                 "importance": 7,
-                "citations": [{"execution_id": "exec-124"}]
+                "citations": [{"source": "query", "execution_id": "exec-124"}]
             },
             {
                 "type": "add_section",
@@ -59,7 +59,10 @@ from datetime import UTC
 from typing import Any
 
 from igloo_mcp.config import Config
-from igloo_mcp.living_reports.changes_schema import ProposedChanges
+from igloo_mcp.living_reports.changes_schema import (
+    ProposedChanges,
+    normalize_proposed_changes_citation_shorthand,
+)
 from igloo_mcp.living_reports.selector import ReportSelector, SelectorResolutionError
 from igloo_mcp.living_reports.service import ReportService
 from igloo_mcp.mcp.compat import get_logger
@@ -192,7 +195,7 @@ class EvolveReportBatchTool(MCPTool):
                             "type": "add_insight",
                             "summary": "Enterprise grew 45% YoY",
                             "importance": 9,
-                            "citations": [{"execution_id": "exec-1"}],
+                            "citations": [{"source": "query", "execution_id": "exec-1"}],
                         },
                         {
                             "type": "add_section",
@@ -296,7 +299,7 @@ class EvolveReportBatchTool(MCPTool):
                         "type": "add_insight",
                         "summary": "Enterprise grew 45% YoY",
                         "importance": 9,
-                        "citations": [{"execution_id": "exec-123"}]
+                        "citations": [{"source": "query", "execution_id": "exec-123"}]
                     },
                     {
                         "type": "add_section",
@@ -404,7 +407,13 @@ class EvolveReportBatchTool(MCPTool):
             ) from e
 
         # Convert operations to ProposedChanges format
-        proposed_changes = self._operations_to_proposed_changes(operations)
+        try:
+            proposed_changes = self._operations_to_proposed_changes(operations)
+        except ValueError as e:
+            raise MCPValidationError(
+                f"Failed to parse operations: {e}",
+                validation_errors=[str(e)],
+            ) from e
 
         # Create and validate ProposedChanges
         try:
@@ -671,7 +680,7 @@ class EvolveReportBatchTool(MCPTool):
             elif op_type == OP_UPDATE_METADATA:
                 changes["metadata_updates"].update(op_data.get("metadata", {}))
 
-        return changes
+        return normalize_proposed_changes_citation_shorthand(changes)
 
     def _summarize_operations(self, operations: list[dict[str, Any]]) -> dict[str, int]:
         """Create a summary count of operations by type.
