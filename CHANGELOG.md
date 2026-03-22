@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-03-22
+
+### Health Check Follow-up
+
+### ✨ Added
+
+- Added optional `include_reports_health` support to `health_check` so Living Reports storage can be audited alongside connection, profile, and catalog diagnostics.
+- Added read-only reports health diagnostics for index integrity, audit log corruption, orphaned `report_files/` assets, stale backups, and disk-pressure warnings.
+
+### 📝 Documentation
+
+- Documented the new `checks.reports` payload fields and example response in the `health_check` tool reference.
+
+### 🧪 Testing
+
+- Added targeted coverage for healthy and degraded Living Reports storage scenarios plus wrapper/schema assertions for the new health flag.
+
 ## [0.5.0] - 2026-03-15
 
 ### Provider Auth and Release Hardening
