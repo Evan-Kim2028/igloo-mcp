@@ -286,7 +286,7 @@ class HealthCheckTool(MCPTool):
             breaker_state = results.get("query_circuit_breaker", {}).get("state")
             if breaker_state == "open":
                 retry_after = results.get("query_circuit_breaker", {}).get("time_until_retry_seconds")
-                if isinstance(retry_after, (int, float)):
+                if isinstance(retry_after, int | float):
                     remediation["query_circuit_breaker"] = (
                         f"execute_query circuit breaker is open. Retry in ~{round(float(retry_after), 2)}s "
                         "or resolve Snowflake connectivity issues."
