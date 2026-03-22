@@ -4,7 +4,7 @@
 
 ## Overview
 
-Igloo MCP provides **14 focused tools** organized by workflow. Each workflow shows how tools work together to accomplish common tasks.
+Igloo MCP provides **16 focused tools** organized by workflow. Each workflow shows how tools work together to accomplish common tasks.
 
 ## Workflows
 
@@ -67,6 +67,8 @@ Check system health, validate configuration, and monitor catalog status.
 | `evolve_report` | Analytics | Modify reports | [Details](tools/evolve_report.md) |
 | `evolve_report_batch` | Analytics | Batch operations | [Details](tools/evolve_report_batch.md) |
 | `render_report` | Analytics | Export formats | [Details](tools/render_report.md) |
+| `validate_report` | Analytics | Quality checks | [Details](tools/validate_report.md) |
+| `search_citations` | Analytics | Citation search | [Details](tools/search_citations.md) |
 | `health_check` | Monitoring | System health | [Details](tools/health_check.md) |
 | `get_catalog_summary` | Monitoring | Catalog stats | [Details](tools/get_catalog_summary.md) |
 

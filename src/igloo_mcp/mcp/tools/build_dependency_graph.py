@@ -42,11 +42,7 @@ class BuildDependencyGraphTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Visualize table lineage and dependencies. "
-            "Use after catalog is built to understand data flow. "
-            "Returns DOT format for graph visualization."
-        )
+        return "Build object dependency graph. Returns json or dot format."
 
     @property
     def category(self) -> str:

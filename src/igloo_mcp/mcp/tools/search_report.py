@@ -41,11 +41,7 @@ class SearchReportTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Find existing reports by title or tags. "
-            "Use BEFORE create_report to avoid duplicates, or to locate a report for evolution. "
-            "Use fields=['report_id', 'title'] for minimal token usage."
-        )
+        return "Find living reports by title, tags, or ID."
 
     @property
     def category(self) -> str:

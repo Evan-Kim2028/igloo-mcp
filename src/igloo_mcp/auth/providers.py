@@ -126,7 +126,7 @@ AUTH_PROVIDER_SPECS: dict[str, AuthProviderSpec] = {
     AUTH_MODE_KEYPAIR: AuthProviderSpec(
         mode=AUTH_MODE_KEYPAIR,
         capabilities=AuthProviderCapabilities(
-            supports_profile_validation=False,
+            supports_profile_validation=True,
             supports_sql_validation_middleware_patch=False,
             supports_timeout_cancellation=True,
             supports_retry_handling=True,

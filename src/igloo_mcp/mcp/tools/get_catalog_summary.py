@@ -43,11 +43,7 @@ class GetCatalogSummaryTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Get catalog statistics and coverage information. "
-            "Use to verify catalog is up-to-date before searching. "
-            "Use response_mode='minimal' for quick checks."
-        )
+        return "Read catalog summary statistics and coverage."
 
     @property
     def category(self) -> str:

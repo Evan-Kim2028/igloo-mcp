@@ -69,10 +69,14 @@ from .mcp.tools import (
     GetReportSchemaTool,
     GetReportTool,
     HealthCheckTool,
+    ListProfilesTool,
+    ProfileSetupGuideTool,
     RenderReportTool,
     SearchCatalogTool,
     SearchCitationsTool,
     SearchReportTool,
+    SwitchProfileTool,
+    ValidateReportTool,
 )
 from .mcp.validation_helpers import format_pydantic_validation_error
 from .mcp_health import (
@@ -82,8 +86,10 @@ from .mcp_resources import MCPResourceManager
 from .path_utils import resolve_artifact_root
 from .profile_utils import (
     ProfileValidationError,
+    get_available_profiles,
     get_profile_summary,
     validate_and_resolve_profile,
+    validate_profile,
 )
 from .service_layer import CatalogService, DependencyService
 from .session_utils import (
@@ -116,6 +122,9 @@ NON_SQL_TOOLS = {
     "search_catalog",
     "test_connection",
     "health_check",
+    "list_profiles",
+    "switch_profile",
+    "profile_setup_guide",
 }
 
 
@@ -330,6 +339,9 @@ def register_igloo_mcp(
     build_catalog_inst = BuildCatalogTool(config, catalog_service)
     build_dependency_graph_inst = BuildDependencyGraphTool(dependency_service)
     test_connection_inst = ConnectionTestTool(config, snowflake_service)
+    list_profiles_inst = ListProfilesTool(config)
+    switch_profile_inst = SwitchProfileTool(config, snowflake_service)
+    profile_setup_guide_inst = ProfileSetupGuideTool(config)
     circuit_breaker_provider = getattr(
         execute_query_inst,
         "get_circuit_breaker_status",
@@ -355,17 +367,15 @@ def register_igloo_mcp(
     get_report_inst = GetReportTool(config, report_service)
     get_report_schema_inst = GetReportSchemaTool(config)
     search_citations_inst = SearchCitationsTool(config, report_service)
+    validate_report_inst = ValidateReportTool(config, report_service)
 
-    @server.tool(name="execute_query", description="Execute a SQL query against Snowflake")
+    @server.tool(name="execute_query", description="Run SQL on Snowflake and return results")
     async def execute_query_tool(
         statement: Annotated[str, Field(description="SQL statement to execute")],
         reason: Annotated[
             str,
             Field(
-                description=(
-                    "Short reason for executing this query. Stored in Snowflake QUERY_TAG "
-                    "and local history; avoid sensitive info."
-                ),
+                description="Why this query is being run (stored in QUERY_TAG and history)",
                 min_length=5,
             ),
         ],
@@ -376,56 +386,42 @@ def register_igloo_mcp(
         timeout_seconds: Annotated[
             int | str | None,
             Field(
-                description=(
-                    "Query timeout in seconds (default: 30s from config). "
-                    "Accepts either an integer or a numeric string. "
-                    "Must resolve to a value between 1 and 3600. "
-                    "Range defaults can be overridden with "
-                    "IGLOO_MCP_MAX_QUERY_TIMEOUT_SECONDS environment variable."
-                ),
+                description="Timeout in seconds (1-3600, default: 30)",
                 default=None,
             ),
         ] = None,
         verbose_errors: Annotated[
             bool,
             Field(
-                description="Include detailed optimization hints in error messages (default: false for compact errors)",
+                description="Include optimization hints in errors",
                 default=False,
             ),
         ] = False,
         output_format: Annotated[
             str | None,
             Field(
-                description="Result delivery mode: inline (default), csv, json, or jsonl file output.",
+                description="Output: inline (default), csv, json, or jsonl",
                 default=None,
             ),
         ] = None,
         post_query_insight: Annotated[
             dict[str, Any] | str | None,
             Field(
-                description=(
-                    "Optional insights or key findings from query results. Metadata-only; no extra compute. "
-                    "Can be a summary string or structured JSON with key metrics and business impact."
-                ),
+                description="Optional findings summary (metadata-only, no extra compute)",
                 default=None,
             ),
         ] = None,
         response_mode: Annotated[
             str | None,
             Field(
-                description=(
-                    "Preferred verbosity control. Options: minimal, summary, schema_only, sample, full. "
-                    "Use minimal/summary for token efficiency."
-                ),
+                description="Verbosity: minimal, summary, schema_only, sample, full",
                 default=None,
             ),
         ] = None,
         result_mode: Annotated[
             str | None,
             Field(
-                description=(
-                    "DEPRECATED alias for response_mode. Options: minimal, summary, schema_only, sample, full."
-                ),
+                description="DEPRECATED: use response_mode",
                 default=None,
             ),
         ] = None,
@@ -472,37 +468,20 @@ def register_igloo_mcp(
             # This catch-all is a safety net for unexpected errors
             raise
 
-    @server.tool(name="evolve_report", description="Evolve a living report with LLM assistance")
+    @server.tool(name="evolve_report", description="Add insights or sections to a living report")
     async def evolve_report_tool(
-        report_selector: Annotated[str, Field(description="Report ID or title to evolve")],
-        instruction: Annotated[
-            str,
-            Field(description="Natural language evolution instruction for audit trail"),
-        ],
-        proposed_changes: Annotated[
-            dict[str, Any],
-            Field(description="Structured changes generated by LLM based on instruction and current outline"),
-        ],
-        constraints: Annotated[
-            dict[str, Any] | None,
-            Field(description="Optional evolution constraints", default=None),
-        ] = None,
-        dry_run: Annotated[bool, Field(description="Validate without applying changes", default=False)] = False,
+        report_selector: Annotated[str, Field(description="Report ID or title")],
+        instruction: Annotated[str, Field(description="Evolution instruction for audit trail")],
+        proposed_changes: Annotated[dict[str, Any], Field(description="Structured changes to apply")],
+        constraints: Annotated[dict[str, Any] | None, Field(description="Evolution constraints", default=None)] = None,
+        dry_run: Annotated[bool, Field(description="Validate only", default=False)] = False,
         status_change: Annotated[
             str | None,
-            Field(
-                description="Optional status change for the report",
-                default=None,
-                pattern="^(active|archived|deleted)$",
-            ),
+            Field(description="active, archived, or deleted", default=None, pattern="^(active|archived|deleted)$"),
         ] = None,
         response_detail: Annotated[
             str,
-            Field(
-                description="Response verbosity level for token efficiency",
-                default="standard",
-                pattern="^(minimal|standard|full)$",
-            ),
+            Field(description="minimal, standard, or full", default="standard", pattern="^(minimal|standard|full)$"),
         ] = "standard",
     ) -> dict[str, Any]:
         """Evolve report - delegates to EvolveReportTool."""
@@ -518,35 +497,25 @@ def register_igloo_mcp(
 
     @server.tool(
         name="evolve_report_batch",
-        description="Perform multiple report evolution operations atomically",
+        description="Batch multiple report changes atomically",
     )
     async def evolve_report_batch_tool(
-        report_selector: Annotated[str, Field(description="Report ID or title to evolve")],
-        instruction: Annotated[
-            str,
-            Field(description="Natural language description of batch operation for audit trail"),
-        ],
+        report_selector: Annotated[str, Field(description="Report ID or title")],
+        instruction: Annotated[str, Field(description="Batch operation description for audit trail")],
         operations: Annotated[
             list[dict[str, Any]],
             Field(
                 description=(
-                    "List of operations to perform atomically. Each operation has a 'type' field "
-                    "(add_insight, modify_insight, remove_insight, add_section, modify_section, "
-                    "remove_section, update_title, update_metadata, attach_chart) and type-specific fields."
+                    "Operations list. Each has 'type' (add_insight, modify_insight, "
+                    "remove_insight, add_section, modify_section, remove_section, "
+                    "update_title, update_metadata, attach_chart) plus type-specific fields"
                 )
             ),
         ],
-        dry_run: Annotated[
-            bool,
-            Field(description="Validate without applying changes", default=False),
-        ] = False,
+        dry_run: Annotated[bool, Field(description="Validate only", default=False)] = False,
         response_detail: Annotated[
             str,
-            Field(
-                description="Response verbosity level",
-                default="standard",
-                pattern="^(minimal|standard|full)$",
-            ),
+            Field(description="minimal, standard, or full", default="standard", pattern="^(minimal|standard|full)$"),
         ] = "standard",
     ) -> dict[str, Any]:
         """Batch evolve report - delegates to EvolveReportBatchTool."""
@@ -560,46 +529,29 @@ def register_igloo_mcp(
 
     @server.tool(
         name="render_report",
-        description="Render a living report to human-readable formats (HTML, PDF, etc.) using Quarto",
+        description="Export report to HTML, PDF, or Markdown",
     )
     async def render_report_tool(
-        report_selector: Annotated[str, Field(description="Report ID or title to render")],
+        report_selector: Annotated[str, Field(description="Report ID or title")],
         format: Annotated[
             str,
             Field(
-                description="Output format. Use 'html_standalone' for self-contained HTML without Quarto.",
+                description="html, pdf, markdown, docx, or html_standalone",
                 default="html",
                 pattern="^(html|pdf|markdown|docx|html_standalone)$",
             ),
         ] = "html",
         regenerate_outline_view: Annotated[
             bool,
-            Field(description="Whether to regenerate QMD from outline", default=True),
+            Field(description="Regenerate QMD from outline", default=True),
         ] = True,
-        include_preview: Annotated[
-            bool,
-            Field(description="Include truncated preview in response", default=False),
-        ] = False,
+        include_preview: Annotated[bool, Field(description="Include preview in response", default=False)] = False,
         preview_max_chars: Annotated[
             int,
-            Field(
-                description="Maximum characters for preview truncation (default 2000)",
-                default=2000,
-                ge=100,
-                le=10000,
-            ),
+            Field(description="Preview char limit", default=2000, ge=100, le=10000),
         ] = 2000,
-        dry_run: Annotated[
-            bool,
-            Field(
-                description="If True, only generate QMD file without running Quarto",
-                default=False,
-            ),
-        ] = False,
-        options: Annotated[
-            dict[str, Any] | None,
-            Field(description="Additional Quarto options", default=None),
-        ] = None,
+        dry_run: Annotated[bool, Field(description="Generate QMD only, skip Quarto", default=False)] = False,
+        options: Annotated[dict[str, Any] | None, Field(description="Quarto options", default=None)] = None,
     ) -> dict[str, Any]:
         """Render report - delegates to RenderReportTool."""
         return await render_report_inst.execute(
@@ -614,38 +566,20 @@ def register_igloo_mcp(
 
     @server.tool(
         name="create_report",
-        description="Create a new living report with optional template and tags",
+        description="Create a new living report",
     )
     async def create_report_tool(
-        title: Annotated[str, Field(description="Human-readable title for the report")],
+        title: Annotated[str, Field(description="Report title")],
         template: Annotated[
             str,
             Field(
-                description=(
-                    "Report template to use. Defaults to 'default' if not specified. "
-                    "Available templates: default (exec summary, analysis, recommendations), "
-                    "deep_dive (overview, methodology, findings, recommendations), "
-                    "analyst_v1 (blockchain analysis with "
-                    "citation enforcement), empty (no sections)."
-                ),
+                description="default, deep_dive, analyst_v1, or empty",
                 default="default",
                 pattern="^(default|deep_dive|analyst_v1|empty)$",
             ),
         ] = "default",
-        tags: Annotated[
-            list[str] | None,
-            Field(
-                description="Optional tags for categorization and filtering",
-                default=None,
-            ),
-        ] = None,
-        description: Annotated[
-            str | None,
-            Field(
-                description="Optional description of the report (stored in metadata)",
-                default=None,
-            ),
-        ] = None,
+        tags: Annotated[list[str] | None, Field(description="Tags for filtering", default=None)] = None,
+        description: Annotated[str | None, Field(description="Report description", default=None)] = None,
     ) -> dict[str, Any]:
         """Create report - delegates to CreateReportTool.
 
@@ -664,52 +598,24 @@ def register_igloo_mcp(
 
     @server.tool(
         name="search_report",
-        description="Search for living reports with intelligent fallback behavior",
+        description="Find living reports by title, tags, or ID",
     )
     async def search_report_tool(
         title: Annotated[
             str | None,
-            Field(
-                description="Search for reports by title (exact or partial match, case-insensitive)",
-                default=None,
-            ),
+            Field(description="Title search (partial, case-insensitive)", default=None),
         ] = None,
-        tags: Annotated[
-            list[str] | None,
-            Field(
-                description="Filter reports by tags (reports must have all specified tags)",
-                default=None,
-            ),
-        ] = None,
-        report_id: Annotated[
-            str | None,
-            Field(description="Exact report ID to search for", default=None),
-        ] = None,
+        tags: Annotated[list[str] | None, Field(description="Filter by tags (AND)", default=None)] = None,
+        report_id: Annotated[str | None, Field(description="Exact report ID", default=None)] = None,
         status: Annotated[
             str | None,
-            Field(
-                description="Filter by report status",
-                default="active",
-                pattern="^(active|archived|deleted)$",
-            ),
+            Field(description="active, archived, or deleted", default="active", pattern="^(active|archived|deleted)$"),
         ] = "active",
-        limit: Annotated[
-            int,
-            Field(
-                description="Maximum number of results to return",
-                default=20,
-                ge=1,
-                le=50,
-            ),
-        ] = 20,
+        limit: Annotated[int, Field(description="Max results", default=20, ge=1, le=50)] = 20,
         fields: Annotated[
             list[str] | None,
             Field(
-                description=(
-                    "Optional list of fields to return (default: all fields). "
-                    "Valid fields: report_id, title, created_at, updated_at, "
-                    "tags, status, path"
-                ),
+                description="Fields to return (report_id, title, created_at, updated_at, tags, status, path)",
                 default=None,
             ),
         ] = None,
@@ -726,79 +632,32 @@ def register_igloo_mcp(
 
     @server.tool(
         name="get_report",
-        description="Get the structure and content of a living report with selective retrieval",
+        description="Read a report's structure and content",
     )
     async def get_report_tool(
-        report_selector: Annotated[str, Field(description="Report ID or title to retrieve")],
+        report_selector: Annotated[str, Field(description="Report ID or title")],
         mode: Annotated[
             str,
             Field(
-                description="Retrieval mode for token efficiency",
+                description="summary, sections, insights, or full",
                 default="summary",
                 pattern="^(summary|sections|insights|full)$",
             ),
         ] = "summary",
-        section_ids: Annotated[
-            list[str] | None,
-            Field(
-                description="Filter to specific section IDs (mode='sections' or mode='insights')",
-                default=None,
-            ),
-        ] = None,
+        section_ids: Annotated[list[str] | None, Field(description="Filter by section IDs", default=None)] = None,
         section_titles: Annotated[
             list[str] | None,
-            Field(
-                description="Filter to sections matching titles (fuzzy, case-insensitive)",
-                default=None,
-            ),
+            Field(description="Filter by section titles (fuzzy)", default=None),
         ] = None,
-        insight_ids: Annotated[
-            list[str] | None,
-            Field(
-                description="Filter to specific insight IDs (mode='insights')",
-                default=None,
-            ),
-        ] = None,
+        insight_ids: Annotated[list[str] | None, Field(description="Filter by insight IDs", default=None)] = None,
         min_importance: Annotated[
             int | None,
-            Field(
-                description="Filter insights with importance >= this value (mode='insights')",
-                default=None,
-                ge=0,
-                le=10,
-            ),
+            Field(description="Min importance filter", default=None, ge=0, le=10),
         ] = None,
-        limit: Annotated[
-            int,
-            Field(
-                description="Maximum items to return (default 50, max 100)",
-                default=50,
-                ge=1,
-                le=100,
-            ),
-        ] = 50,
-        offset: Annotated[
-            int,
-            Field(
-                description="Skip first N items (pagination, default 0)",
-                default=0,
-                ge=0,
-            ),
-        ] = 0,
-        include_content: Annotated[
-            bool,
-            Field(
-                description="Include section prose content (mode='sections' or mode='full')",
-                default=False,
-            ),
-        ] = False,
-        include_audit: Annotated[
-            bool,
-            Field(
-                description="Include recent audit events (mode='summary' or mode='full')",
-                default=False,
-            ),
-        ] = False,
+        limit: Annotated[int, Field(description="Max items", default=50, ge=1, le=100)] = 50,
+        offset: Annotated[int, Field(description="Pagination offset", default=0, ge=0)] = 0,
+        include_content: Annotated[bool, Field(description="Include prose content", default=False)] = False,
+        include_audit: Annotated[bool, Field(description="Include audit events", default=False)] = False,
     ) -> dict[str, Any]:
         """Get report - delegates to GetReportTool."""
         return await get_report_inst.execute(
@@ -816,13 +675,13 @@ def register_igloo_mcp(
 
     @server.tool(
         name="get_report_schema",
-        description="Get JSON schema for Living Reports operations - self-documentinging API",
+        description="Get JSON schema for report operations",
     )
     async def get_report_schema_tool(
         schema_type: Annotated[
             str,
             Field(
-                description="What schema to return",
+                description="proposed_changes, insight, section, outline, or all",
                 default="proposed_changes",
                 pattern="^(proposed_changes|insight|section|outline|all)$",
             ),
@@ -830,7 +689,7 @@ def register_igloo_mcp(
         format: Annotated[
             str,
             Field(
-                description="Output format for schema",
+                description="json_schema, examples, or compact",
                 default="json_schema",
                 pattern="^(json_schema|examples|compact)$",
             ),
@@ -844,42 +703,28 @@ def register_igloo_mcp(
 
     @server.tool(
         name="search_citations",
-        description="Search citations across all living reports by source type, provider, URL, etc.",
+        description="Search citations across reports by source, provider, or URL",
     )
     async def search_citations_tool(
         source_type: Annotated[
             str | None,
             Field(
-                description="Filter by source type (query, api, url, observation, document)",
+                description="query, api, url, observation, or document",
                 default=None,
                 pattern="^(query|api|url|observation|document)$",
             ),
         ] = None,
-        provider: Annotated[
-            str | None,
-            Field(description="Filter by provider (snowflake, allium, defillama, etc.)", default=None),
-        ] = None,
-        url_contains: Annotated[
-            str | None,
-            Field(description="Substring search in URL field (case-insensitive)", default=None),
-        ] = None,
+        provider: Annotated[str | None, Field(description="Provider filter", default=None)] = None,
+        url_contains: Annotated[str | None, Field(description="URL substring filter", default=None)] = None,
         description_contains: Annotated[
             str | None,
-            Field(description="Substring search in description field (case-insensitive)", default=None),
+            Field(description="Description substring filter", default=None),
         ] = None,
-        execution_id: Annotated[
-            str | None,
-            Field(description="Exact match on execution_id (for query sources)", default=None),
-        ] = None,
-        limit: Annotated[
-            int,
-            Field(description="Maximum results to return (default: 50, max: 200)", default=50, ge=1, le=200),
-        ] = 50,
+        execution_id: Annotated[str | None, Field(description="Exact execution_id match", default=None)] = None,
+        limit: Annotated[int, Field(description="Max results", default=50, ge=1, le=200)] = 50,
         group_by: Annotated[
             str | None,
-            Field(
-                description="Group results by field (source or provider)", default=None, pattern="^(source|provider)$"
-            ),
+            Field(description="Group by source or provider", default=None, pattern="^(source|provider)$"),
         ] = None,
     ) -> dict[str, Any]:
         """Search citations across all reports - delegates to SearchCitationsTool."""
@@ -893,35 +738,53 @@ def register_igloo_mcp(
             group_by=group_by,
         )
 
-    @server.tool(name="build_catalog", description="Build Snowflake catalog metadata")
-    async def build_catalog_tool(
-        output_dir: Annotated[
-            str,
-            Field(description="Catalog output directory", default="./data_catalogue"),
-        ] = "./data_catalogue",
-        database: Annotated[
-            str | None,
-            Field(description="Specific database to introspect", default=None),
-        ] = None,
-        account: Annotated[bool, Field(description="Include entire account", default=False)] = False,
-        format: Annotated[str, Field(description="Output format (json/jsonl)", default="json")] = "json",
-        include_ddl: Annotated[bool, Field(description="Include object DDL", default=True)] = True,
-        timeout_seconds: Annotated[
-            int | str | None,
+    @server.tool(
+        name="validate_report",
+        description="Validate report quality before publishing",
+    )
+    async def validate_report_tool(
+        report_selector: Annotated[str, Field(description="Report ID or title")],
+        checks: Annotated[
+            list[str] | None,
             Field(
                 description=(
-                    "Optional timeout for catalog build in seconds. "
-                    "Falls back to IGLOO_MCP_TOOL_TIMEOUT_SECONDS or 60s default."
+                    "Checks to run (['all'] for all). Options: chart_references, citations, "
+                    "duplicate_orders, empty_sections, insight_importance, orphaned_insights, "
+                    "section_titles, stale_content"
                 ),
                 default=None,
             ),
         ] = None,
-        request_id: Annotated[
-            str | None,
-            Field(
-                description="Optional request correlation ID for tracing",
-                default=None,
-            ),
+        stale_threshold_days: Annotated[
+            int,
+            Field(description="Days threshold for stale check", default=30, ge=1),
+        ] = 30,
+        fix_mode: Annotated[
+            bool,
+            Field(description="Auto-fix issues where possible", default=False),
+        ] = False,
+    ) -> dict[str, Any]:
+        """Validate report quality - delegates to ValidateReportTool."""
+        return await validate_report_inst.execute(
+            report_selector=report_selector,
+            checks=checks,
+            stale_threshold_days=stale_threshold_days,
+            fix_mode=fix_mode,
+        )
+
+    @server.tool(name="build_catalog", description="Build Snowflake catalog metadata")
+    async def build_catalog_tool(
+        output_dir: Annotated[
+            str,
+            Field(description="Output directory", default="./data_catalogue"),
+        ] = "./data_catalogue",
+        database: Annotated[str | None, Field(description="Database to introspect", default=None)] = None,
+        account: Annotated[bool, Field(description="Include entire account", default=False)] = False,
+        format: Annotated[str, Field(description="json or jsonl", default="json")] = "json",
+        include_ddl: Annotated[bool, Field(description="Include DDL", default=True)] = True,
+        timeout_seconds: Annotated[
+            int | str | None,
+            Field(description="Timeout in seconds", default=None),
         ] = None,
     ) -> dict[str, Any]:
         """Build catalog metadata - delegates to BuildCatalogTool."""
@@ -932,31 +795,17 @@ def register_igloo_mcp(
             format=format,
             include_ddl=include_ddl,
             timeout_seconds=timeout_seconds,
-            request_id=request_id,
         )
 
     @server.tool(name="build_dependency_graph", description="Build object dependency graph")
     async def build_dependency_graph_tool(
-        database: Annotated[str | None, Field(description="Specific database", default=None)] = None,
-        schema: Annotated[str | None, Field(description="Specific schema", default=None)] = None,
-        account: Annotated[bool, Field(description="Include account-level metadata", default=False)] = False,
-        format: Annotated[str, Field(description="Output format (json/dot)", default="json")] = "json",
+        database: Annotated[str | None, Field(description="Database filter", default=None)] = None,
+        schema: Annotated[str | None, Field(description="Schema filter", default=None)] = None,
+        account: Annotated[bool, Field(description="Include account-level", default=False)] = False,
+        format: Annotated[str, Field(description="json or dot", default="json")] = "json",
         timeout_seconds: Annotated[
             int | str | None,
-            Field(
-                description=(
-                    "Optional timeout for dependency graph build in seconds. "
-                    "Falls back to IGLOO_MCP_TOOL_TIMEOUT_SECONDS or 60s default."
-                ),
-                default=None,
-            ),
-        ] = None,
-        request_id: Annotated[
-            str | None,
-            Field(
-                description="Optional request correlation ID for tracing",
-                default=None,
-            ),
+            Field(description="Timeout in seconds", default=None),
         ] = None,
     ) -> dict[str, Any]:
         """Build dependency graph - delegates to BuildDependencyGraphTool."""
@@ -966,66 +815,26 @@ def register_igloo_mcp(
             account=account,
             format=format,
             timeout_seconds=timeout_seconds,
-            request_id=request_id,
         )
 
     @server.tool(name="test_connection", description="Validate Snowflake connectivity")
-    async def test_connection_tool(
-        request_id: Annotated[
-            str | None,
-            Field(
-                description="Optional request correlation ID for tracing",
-                default=None,
-            ),
-        ] = None,
-    ) -> dict[str, Any]:
+    async def test_connection_tool() -> dict[str, Any]:
         """Test Snowflake connection - delegates to TestConnectionTool."""
-        return await test_connection_inst.execute(request_id=request_id)
+        return await test_connection_inst.execute()
 
-    @server.tool(name="health_check", description="Get comprehensive health status")
+    @server.tool(name="health_check", description="Get server and connection health status")
     async def health_check_tool(
         response_mode: Annotated[
             str | None,
-            Field(
-                description="Response verbosity: minimal (default), standard, or full.",
-                default=None,
-            ),
+            Field(description="minimal (default), standard, or full", default=None),
         ] = None,
         detail_level: Annotated[
             str | None,
-            Field(
-                description="DEPRECATED alias for response_mode.",
-                default=None,
-            ),
+            Field(description="DEPRECATED: use response_mode", default=None),
         ] = None,
-        include_cortex: Annotated[
-            bool,
-            Field(
-                description="Include Cortex availability checks.",
-                default=True,
-            ),
-        ] = True,
-        include_profile: Annotated[
-            bool,
-            Field(
-                description="Include Snowflake profile validation checks.",
-                default=True,
-            ),
-        ] = True,
-        include_catalog: Annotated[
-            bool,
-            Field(
-                description="Include catalog health checks.",
-                default=False,
-            ),
-        ] = False,
-        request_id: Annotated[
-            str | None,
-            Field(
-                description="Optional request correlation ID for tracing",
-                default=None,
-            ),
-        ] = None,
+        include_cortex: Annotated[bool, Field(description="Check Cortex availability", default=True)] = True,
+        include_profile: Annotated[bool, Field(description="Check profile config", default=True)] = True,
+        include_catalog: Annotated[bool, Field(description="Check catalog health", default=False)] = False,
     ) -> dict[str, Any]:
         """Get health status - delegates to HealthCheckTool."""
         return await health_check_inst.execute(
@@ -1034,10 +843,47 @@ def register_igloo_mcp(
             include_cortex=include_cortex,
             include_profile=include_profile,
             include_catalog=include_catalog,
-            request_id=request_id,
         )
 
-    @server.tool(name="get_catalog_summary", description="Read catalog summary JSON")
+    @server.tool(name="list_profiles", description="List available Snowflake connection profiles")
+    async def list_profiles_tool(
+        include_details: Annotated[
+            bool,
+            Field(description="Include account/warehouse/role details", default=True),
+        ] = True,
+    ) -> dict[str, Any]:
+        """List available Snowflake profiles - delegates to ListProfilesTool."""
+        return await list_profiles_inst.execute(include_details=include_details)
+
+    @server.tool(name="switch_profile", description="Switch active Snowflake profile mid-session")
+    async def switch_profile_tool(
+        profile_name: Annotated[str, Field(description="Profile name (see list_profiles)")],
+        validate_connection: Annotated[
+            bool,
+            Field(description="Test connection after switch", default=True),
+        ] = True,
+    ) -> dict[str, Any]:
+        """Switch active Snowflake profile - delegates to SwitchProfileTool."""
+        return await switch_profile_inst.execute(
+            profile_name=profile_name,
+            validate_connection=validate_connection,
+        )
+
+    @server.tool(name="profile_setup_guide", description="Get setup guidance for Snowflake profiles")
+    async def profile_setup_guide_tool(
+        topic: Annotated[
+            str | None,
+            Field(
+                description="general, sso, keypair, multi_env, or troubleshooting",
+                default=None,
+                pattern="^(general|sso|keypair|multi_env|troubleshooting)$",
+            ),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Profile setup guidance - delegates to ProfileSetupGuideTool."""
+        return await profile_setup_guide_inst.execute(topic=topic)
+
+    @server.tool(name="get_catalog_summary", description="Read catalog summary statistics")
     async def get_catalog_summary_tool(
         catalog_dir: Annotated[
             str,
@@ -1045,102 +891,40 @@ def register_igloo_mcp(
         ] = "./data_catalogue",
         response_mode: Annotated[
             str | None,
-            Field(
-                description="Response verbosity: minimal, standard (default), or full.",
-                default=None,
-            ),
+            Field(description="minimal, standard, or full", default=None),
         ] = None,
-        mode: Annotated[
-            str | None,
-            Field(
-                description="DEPRECATED alias for response_mode.",
-                default=None,
-            ),
-        ] = None,
-        request_id: Annotated[
-            str | None,
-            Field(
-                description="Optional request correlation ID for tracing",
-                default=None,
-            ),
-        ] = None,
+        mode: Annotated[str | None, Field(description="DEPRECATED: use response_mode", default=None)] = None,
     ) -> dict[str, Any]:
         """Get catalog summary - delegates to GetCatalogSummaryTool."""
         return await get_catalog_summary_inst.execute(
             catalog_dir=catalog_dir,
             response_mode=response_mode,
             mode=mode,
-            request_id=request_id,
         )
 
-    @server.tool(name="search_catalog", description="Search locally built catalog artifacts")
+    @server.tool(name="search_catalog", description="Search local catalog for tables and columns")
     async def search_catalog_tool(
         catalog_dir: Annotated[
             str,
-            Field(
-                description="Directory containing catalog artifacts (catalog.json or catalog.jsonl).",
-                default="./data_catalogue",
-            ),
+            Field(description="Catalog directory", default="./data_catalogue"),
         ] = "./data_catalogue",
         response_mode: Annotated[
             str,
-            Field(
-                description=(
-                    "Response verbosity: 'compact' (default), 'standard', or 'full'. "
-                    "Use compact for token-efficient discovery."
-                ),
-                default="compact",
-            ),
+            Field(description="compact (default), standard, or full", default="compact"),
         ] = "compact",
-        object_types: Annotated[
-            list[str] | None,
-            Field(description="Optional list of object types to include", default=None),
-        ] = None,
-        database: Annotated[
-            str | None,
-            Field(description="Filter results to a specific database", default=None),
-        ] = None,
-        schema: Annotated[
-            str | None,
-            Field(description="Filter results to a specific schema", default=None),
-        ] = None,
+        object_types: Annotated[list[str] | None, Field(description="Object type filter", default=None)] = None,
+        database: Annotated[str | None, Field(description="Database filter", default=None)] = None,
+        schema: Annotated[str | None, Field(description="Schema filter", default=None)] = None,
         name_contains: Annotated[
             str | None,
-            Field(
-                description="Substring search on object name (case-insensitive)",
-                default=None,
-            ),
+            Field(description="Object name substring (case-insensitive)", default=None),
         ] = None,
         column_contains: Annotated[
             str | None,
-            Field(
-                description="Substring search on column name (case-insensitive)",
-                default=None,
-            ),
+            Field(description="Column name substring (case-insensitive)", default=None),
         ] = None,
-        search_all_databases: Annotated[
-            bool,
-            Field(
-                description="If true and catalog_dir is default, search all unified catalog databases.",
-                default=False,
-            ),
-        ] = False,
-        limit: Annotated[
-            int,
-            Field(
-                description="Maximum number of results to return",
-                ge=1,
-                le=500,
-                default=20,
-            ),
-        ] = 20,
-        request_id: Annotated[
-            str | None,
-            Field(
-                description="Optional request correlation ID for tracing",
-                default=None,
-            ),
-        ] = None,
+        search_all_databases: Annotated[bool, Field(description="Search all catalog databases", default=False)] = False,
+        limit: Annotated[int, Field(description="Max results", ge=1, le=500, default=20)] = 20,
     ) -> dict[str, Any]:
         return await search_catalog_inst.execute(
             catalog_dir=catalog_dir,
@@ -1152,7 +936,6 @@ def register_igloo_mcp(
             column_contains=column_contains,
             search_all_databases=search_all_databases,
             limit=limit,
-            request_id=request_id,
         )
 
     @server.resource(
@@ -1400,6 +1183,38 @@ def create_combined_lifespan(args: argparse.Namespace):
     return lifespan
 
 
+def _attempt_profile_fallback(
+    available_profiles: list[str] | None,
+    failed_profile: str | None = None,
+) -> str | None:
+    """Try to find a usable fallback profile from available profiles.
+
+    Args:
+        available_profiles: Profiles reported as available by the validation error.
+        failed_profile: Profile that originally failed (will be skipped).
+
+    Returns:
+        A validated fallback profile name, or None if no fallback is possible.
+    """
+    if not available_profiles:
+        # Re-read from config in case error context was stale
+        available_profiles = sorted(get_available_profiles())
+
+    if not available_profiles:
+        return None
+
+    for candidate in available_profiles:
+        if candidate == failed_profile:
+            continue
+        try:
+            validate_profile(candidate)
+            return candidate
+        except ProfileValidationError:
+            continue
+
+    return None
+
+
 def main(argv: list[str] | None = None) -> None:
     """Main entry point for MCP server.
 
@@ -1441,25 +1256,32 @@ def main(argv: list[str] | None = None) -> None:
             logger.debug(f"Profile summary: {summary}")
 
         except ProfileValidationError as e:
-            logger.error("❌ Snowflake profile validation failed")
-            logger.error(f"Error: {e}")
+            logger.warning("⚠ Snowflake profile validation failed: %s", e)
 
-            # Provide helpful next steps
-            if e.available_profiles:
-                logger.error(f"Available profiles: {', '.join(e.available_profiles)}")
-                logger.error("To fix this issue:")
-                logger.error("1. Set SNOWFLAKE_PROFILE environment variable to one of the available profiles")
-                logger.error("2. Or pass --profile <profile_name> when starting the server")
-                logger.error("3. Or run 'snow connection add' to create a new profile")
+            # Attempt graceful fallback to another available profile (skip the one that failed)
+            fallback_profile = _attempt_profile_fallback(e.available_profiles, failed_profile=e.profile_name)
+            if fallback_profile:
+                logger.info(f"↪ Falling back to available profile: {fallback_profile}")
+                os.environ["SNOWFLAKE_PROFILE"] = fallback_profile
+                os.environ["SNOWFLAKE_DEFAULT_CONNECTION_NAME"] = fallback_profile
+                apply_config_overrides(snowflake={"profile": fallback_profile})
+                resolved_profile = fallback_profile
             else:
-                logger.error("No Snowflake profiles found.")
-                logger.error("Please run 'snow connection add' to create a profile first.")
+                # No fallback possible — exit with guidance
+                if e.available_profiles:
+                    logger.error(f"Available profiles: {', '.join(e.available_profiles)}")
+                    logger.error("To fix this issue:")
+                    logger.error("1. Set SNOWFLAKE_PROFILE environment variable to one of the available profiles")
+                    logger.error("2. Or pass --profile <profile_name> when starting the server")
+                    logger.error("3. Or run 'snow connection add' to create a new profile")
+                else:
+                    logger.error("No Snowflake profiles found.")
+                    logger.error("Please run 'snow connection add' to create a profile first.")
 
-            if e.config_path:
-                logger.error(f"Expected config file at: {e.config_path}")
+                if e.config_path:
+                    logger.error(f"Expected config file at: {e.config_path}")
 
-            # Exit with clear error code
-            raise SystemExit(1) from e
+                raise SystemExit(1) from e
         except Exception as e:
             logger.error(f"❌ Unexpected error during profile validation: {e}")
             raise SystemExit(1) from e

@@ -30,11 +30,6 @@ For example, asking "What tables are in my database?" triggers the AI to use the
 1. **Install Igloo MCP**: All MCP functionality is included by default:
    ```bash
    # Standard installation (includes MCP server)
-   pip install igloo-mcp
-   ```
-
-   Or with uv:
-   ```bash
    uv pip install igloo-mcp
    ```
 
@@ -65,7 +60,7 @@ The MCP server starts automatically when your AI assistant connects. Simply conf
 **For Manual Testing** (Advanced):
 
 ```bash
-igloo-mcp
+igloo_mcp
 ```
 
 This starts the server in stdio mode, which is useful for debugging but not needed for normal AI assistant usage. Press `Ctrl+C` to stop the server.

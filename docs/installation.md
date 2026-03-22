@@ -46,7 +46,7 @@ Config file: `~/.cursor/mcp.json`
 {
   "mcpServers": {
     "igloo-mcp": {
-      "command": "igloo-mcp",
+      "command": "igloo_mcp",
       "args": ["--profile", "my-profile"],
       "env": {"SNOWFLAKE_PROFILE": "my-profile"}
     }
@@ -117,15 +117,13 @@ Alternatively, add to `~/.claude.json` under the `mcpServers` section:
 - ✅ `type: "stdio"` is required for local MCP servers
 - ✅ Global config: `~/.claude.json`, NOT `~/.config/claude-code/mcp.json`
 
-See [Claude Code MCP documentation](https://code.claude.com/docs/en/mcp) for more details.
-
 ### Codex / Other MCP clients
 Most MCP clients accept a similar block under a client‑specific config file (path varies). Use:
 ```json
 {
   "mcpServers": {
     "igloo-mcp": {
-      "command": "igloo-mcp",
+      "command": "igloo_mcp",
       "args": ["--profile", "my-profile"],
       "env": {"SNOWFLAKE_PROFILE": "my-profile"}
     }
@@ -138,7 +136,7 @@ Refer to your client’s documentation for the exact config location.
 
 Server help:
 ```bash
-igloo-mcp --profile my-profile --help
+igloo_mcp --profile my-profile --help
 ```
 
 Optional connectivity check from your assistant: run `test_connection` or `execute_query` with `SELECT CURRENT_ROLE(), CURRENT_WAREHOUSE()`.

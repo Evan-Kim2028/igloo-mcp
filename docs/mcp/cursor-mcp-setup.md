@@ -42,12 +42,8 @@ Edit your Cursor MCP configuration file at `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "igloo-mcp": {
-      "command": "uv",
+      "command": "igloo_mcp",
       "args": [
-        "--directory",
-        "/path/to/igloo-mcp",
-        "run",
-        "igloo-mcp",
         "--profile",
         "cursor-profile"
       ],
@@ -64,12 +60,8 @@ Edit your Cursor MCP configuration file at `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "igloo-mcp": {
-      "command": "uv",
+      "command": "igloo_mcp",
       "args": [
-        "--directory",
-        "/path/to/igloo-mcp",
-        "run",
-        "igloo-mcp",
         "--profile",
         "cursor-profile"
       ],
@@ -85,10 +77,10 @@ Edit your Cursor MCP configuration file at `~/.cursor/mcp.json`:
 ```
 
 **Important**:
-- Replace `/path/to/igloo-mcp` with the actual path to your igloo-mcp installation directory
+- The executable is `igloo_mcp` (underscore), not `igloo-mcp` (dash)
 - **All environment variables except `SNOWFLAKE_PROFILE` are optional** - igloo-mcp provides sensible defaults
 - If you omit the history/artifact/report paths, they default to `~/.igloo-mcp/logs/...` (global scope) or `<repo>/logs/...` (repo scope)
-- Each MCP server instance maintains separate storage to avoid conflicts. Reports, query history, and artifacts are all stored together in the instance-specific directory
+- Each MCP server instance maintains separate storage to avoid conflicts
 
 ## Step 3: Restart Cursor
 
@@ -137,7 +129,7 @@ Once connected, you can use these MCP tools through Cursor:
 ### "MCP tools not showing up"
 
 **Solution**:
-1. Verify igloo-mcp is installed: `which igloo-mcp`
+1. Verify igloo-mcp is installed: `which igloo_mcp`
 2. Check MCP config JSON syntax is valid
 3. **Restart Cursor completely**
 4. Check Cursor logs for errors
@@ -168,12 +160,8 @@ You can configure multiple Snowflake profiles for different environments:
 {
   "mcpServers": {
     "igloo-dev": {
-      "command": "uv",
+      "command": "igloo_mcp",
       "args": [
-        "--directory",
-        "/path/to/igloo-mcp",
-        "run",
-        "igloo-mcp",
         "--profile",
         "dev"
       ],
@@ -185,12 +173,8 @@ You can configure multiple Snowflake profiles for different environments:
       }
     },
     "igloo-prod": {
-      "command": "uv",
+      "command": "igloo_mcp",
       "args": [
-        "--directory",
-        "/path/to/igloo-mcp",
-        "run",
-        "igloo-mcp",
         "--profile",
         "prod"
       ],

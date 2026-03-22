@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import cast
 
 import sqlglot
 from sqlglot import exp
@@ -52,7 +53,8 @@ def extract_query_objects(sql: str) -> list[dict[str, str | None]]:
     except (ValueError, TypeError, AttributeError, SyntaxError, KeyError):
         return objects
 
-    for expression in parsed:
+    for raw_expression in parsed:
+        expression = cast(exp.Expression | None, raw_expression)
         for table in _iter_tables(expression):
             name = table.name
             if not name:

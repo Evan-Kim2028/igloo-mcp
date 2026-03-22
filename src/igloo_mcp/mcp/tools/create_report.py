@@ -45,13 +45,7 @@ class CreateReportTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Initialize a new living report for accumulating insights over time. "
-            "Use AFTER running queries and gathering initial findings—the report is your "
-            "'notebook' for consolidating discoveries. "
-            "All templates include citation support. Use 'default' for standard reports, "
-            "'deep_dive' for detailed technical analysis, or 'analyst_v1' for blockchain analysis."
-        )
+        return "Create a new living report. Templates: default, deep_dive, analyst_v1, empty."
 
     @property
     def category(self) -> str:

@@ -268,13 +268,11 @@ class TestHealthRequestIdTiming:
     """Test request_id and timing for health tool."""
 
     @pytest.mark.asyncio
-    async def test_auto_generated_request_id(self, mock_config):
-        """Test that request_id is auto-generated when not provided."""
-        # Create mock snowflake service
+    async def test_minimal_mode_compact_response(self, mock_config):
+        """Test that minimal mode returns compact response without request_id or timing."""
         mock_sf_service = Mock()
         tool = HealthCheckTool(mock_config, mock_sf_service)
 
-        # Mock the connection test
         async def mock_test_connection():
             return {
                 "status": "connected",
@@ -284,15 +282,17 @@ class TestHealthRequestIdTiming:
 
         tool._test_connection = mock_test_connection
 
-        # Disable optional checks that require additional mocking
         result = await tool.execute(include_profile=False, include_cortex=False, include_catalog=False)
 
-        assert "request_id" in result
-        assert UUID4_PATTERN.match(result["request_id"])
+        # Minimal mode omits request_id and timing for token efficiency
+        assert "status" in result
+        assert "components" in result
+        assert "request_id" not in result
+        assert "timing" not in result
 
     @pytest.mark.asyncio
-    async def test_custom_request_id_passthrough(self, mock_config):
-        """Test that custom request_id is preserved."""
+    async def test_standard_mode_includes_checks(self, mock_config):
+        """Test that standard mode includes full checks."""
         mock_sf_service = Mock()
         tool = HealthCheckTool(mock_config, mock_sf_service)
 
@@ -305,42 +305,15 @@ class TestHealthRequestIdTiming:
 
         tool._test_connection = mock_test_connection
 
-        custom_id = "health-request-999"
         result = await tool.execute(
-            request_id=custom_id,
+            response_mode="standard",
             include_profile=False,
             include_cortex=False,
             include_catalog=False,
         )
 
-        assert result["request_id"] == custom_id
-
-    @pytest.mark.asyncio
-    async def test_timing_structure_simple(self, mock_config):
-        """Test timing metrics for health check (simple operation)."""
-        mock_sf_service = Mock()
-        tool = HealthCheckTool(mock_config, mock_sf_service)
-
-        async def mock_test_connection():
-            return {
-                "status": "connected",
-                "connected": True,
-                "profile": "test",
-            }
-
-        tool._test_connection = mock_test_connection
-
-        start = time.time()
-        result = await tool.execute(include_profile=False, include_cortex=False, include_catalog=False)
-        elapsed = (time.time() - start) * 1000
-
-        assert "timing" in result
-        timing = result["timing"]
-
-        # Simple operation: only total_duration_ms
-        assert "total_duration_ms" in timing
-        assert timing["total_duration_ms"] > 0
-        assert timing["total_duration_ms"] <= elapsed + 100
+        assert "status" in result
+        assert "checks" in result
 
 
 class TestRequestIdFormat:

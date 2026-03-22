@@ -223,7 +223,8 @@ def test_main_happy_path(monkeypatch: pytest.MonkeyPatch):
     assert __import__("os").environ["SNOWFLAKE_DEFAULT_CONNECTION_NAME"] == "DEV"
 
 
-def test_main_keypair_mode_skips_profile_validation(monkeypatch: pytest.MonkeyPatch):
+def test_main_keypair_mode_runs_profile_validation(monkeypatch: pytest.MonkeyPatch):
+    """Keypair mode now runs profile validation (unified with snowflake-labs)."""
     module = __import__("igloo_mcp.mcp_server", fromlist=[""])
     args = SimpleNamespace(
         log_level="INFO",
@@ -237,10 +238,15 @@ def test_main_keypair_mode_skips_profile_validation(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("igloo_mcp.mcp_server.warn_deprecated_params", lambda: None)
     monkeypatch.setattr("igloo_mcp.mcp_server.configure_logging", lambda level: None)
     monkeypatch.setattr("igloo_mcp.mcp_server._apply_config_overrides", lambda args: None)
-    monkeypatch.setattr(
-        "igloo_mcp.mcp_server.validate_and_resolve_profile",
-        lambda: (_ for _ in ()).throw(AssertionError("profile validation should not run")),
-    )
+
+    validation_calls = []
+
+    def fake_validate():
+        validation_calls.append(True)
+        return "default"
+
+    monkeypatch.setattr("igloo_mcp.mcp_server.validate_and_resolve_profile", fake_validate)
+    monkeypatch.setattr("igloo_mcp.mcp_server.get_profile_summary", lambda: SimpleNamespace(config_path="/tmp"))
 
     @asynccontextmanager
     async def fake_lifespan(server):
@@ -261,6 +267,7 @@ def test_main_keypair_mode_skips_profile_validation(monkeypatch: pytest.MonkeyPa
 
     module.main([])
     assert run_calls == [{"transport": "stdio"}]
+    assert validation_calls == [True], "Profile validation should run for keypair mode"
 
 
 def test_main_profile_validation_failure(monkeypatch: pytest.MonkeyPatch):
@@ -273,13 +280,15 @@ def test_main_profile_validation_failure(monkeypatch: pytest.MonkeyPatch):
 
     error = ProfileValidationError(
         "bad profile",
-        available_profiles=["A", "B"],
+        available_profiles=[],
         config_path="/tmp/config",
     )
     monkeypatch.setattr(
         "igloo_mcp.mcp_server.validate_and_resolve_profile",
         lambda: (_ for _ in ()).throw(error),
     )
+    # Ensure fallback also finds no profiles
+    monkeypatch.setattr("igloo_mcp.mcp_server.get_available_profiles", lambda: set())
 
     with pytest.raises(SystemExit) as exc_info:
         module.main([])

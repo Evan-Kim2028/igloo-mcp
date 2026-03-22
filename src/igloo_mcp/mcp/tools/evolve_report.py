@@ -97,12 +97,7 @@ class EvolveReportTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Add insights, sections, or content to an existing report—your primary tool for 'taking notes'. "
-            "Use AFTER execute_query to record findings with proper citations (execution_id). "
-            "Use response_mode='minimal' during iterative work, 'full' only for final review. "
-            "Think: 'I found something interesting in my data, let me record it.'"
-        )
+        return "Add insights or sections to a living report. Use after execute_query to record findings."
 
     @property
     def category(self) -> str:

@@ -100,12 +100,23 @@ class StubHealthMonitor:
         return self._system_status
 
 
+class StubResourceAvailability:
+    def __init__(self, state_value: str, reason: str | None = None):
+        self.state = types.SimpleNamespace(value=state_value)
+        self.reason = reason
+
+
 class StubResourceManager:
     def __init__(self, resources: list[str]):
         self._resources = resources
 
     def list_resources(self) -> list[str]:
         return list(self._resources)
+
+    def check_catalog_dependency(self) -> StubResourceAvailability:
+        if self._resources:
+            return StubResourceAvailability("available")
+        return StubResourceAvailability("unavailable", reason="Catalog directory not found")
 
 
 class SummaryStub:

@@ -54,8 +54,8 @@ class TestMCPServerProfileIntegration:
                 except SystemExit:
                     pytest.fail("Server startup should not fail with valid profile")
 
-    def test_server_startup_fails_with_invalid_profile(self, mock_config_with_profiles):
-        """Test server startup fails gracefully with invalid profile."""
+    def test_server_startup_falls_back_with_invalid_profile(self, mock_config_with_profiles):
+        """Test server startup falls back to available profile when requested profile is invalid."""
         with (
             mock_config_with_profiles(["dev", "prod"], default="dev"),
             patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "nonexistent"}),
@@ -63,6 +63,7 @@ class TestMCPServerProfileIntegration:
             from igloo_mcp.mcp_server import main
 
             with (
+                patch("igloo_mcp.mcp_server.FastMCP") as mock_fastmcp,
                 patch("igloo_mcp.mcp_server.parse_arguments") as mock_args,
                 patch("igloo_mcp.mcp_server.configure_logging"),
             ):
@@ -74,12 +75,14 @@ class TestMCPServerProfileIntegration:
                     instructions="test",
                     transport="stdio",
                 )
+                mock_server = Mock()
+                mock_fastmcp.return_value = mock_server
 
-                # Should raise SystemExit with code 1
-                with pytest.raises(SystemExit) as exc_info:
-                    main()
+                # Should NOT raise SystemExit — falls back to "dev"
+                main()
 
-                assert exc_info.value.code == 1
+                # Verify fallback profile was applied
+                assert os.environ.get("SNOWFLAKE_PROFILE") == "dev"
 
     def test_server_startup_fails_with_no_profiles(self, mock_empty_config):
         """Test server startup fails when no profiles exist."""
@@ -183,8 +186,8 @@ class TestErrorLogging:
     """Test error logging and user experience."""
 
     @patch("igloo_mcp.mcp_server.logger")
-    def test_validation_error_logging(self, mock_logger, mock_config_with_profiles):
-        """Test that validation errors are logged with helpful information."""
+    def test_validation_fallback_logging(self, mock_logger, mock_config_with_profiles):
+        """Test that validation fallback is logged with helpful information."""
         with (
             mock_config_with_profiles(["dev", "prod"], default="dev"),
             patch.dict(os.environ, {"SNOWFLAKE_PROFILE": "invalid"}),
@@ -192,6 +195,7 @@ class TestErrorLogging:
             from igloo_mcp.mcp_server import main
 
             with (
+                patch("igloo_mcp.mcp_server.FastMCP") as mock_fastmcp,
                 patch("igloo_mcp.mcp_server.parse_arguments") as mock_args,
                 patch("igloo_mcp.mcp_server.configure_logging"),
             ):
@@ -203,14 +207,17 @@ class TestErrorLogging:
                     instructions="test",
                     transport="stdio",
                 )
+                mock_server = Mock()
+                mock_fastmcp.return_value = mock_server
 
-                with pytest.raises(SystemExit):
-                    main()
+                # Should succeed via fallback (dev/prod are available)
+                main()
 
-                # Verify helpful error messages were logged
-                logged_calls = [call.args[0] for call in mock_logger.error.call_args_list]
-                assert any("profile validation failed" in call.lower() for call in logged_calls)
-                assert any("available profiles" in call.lower() for call in logged_calls)
+                # Verify fallback was logged
+                logged_warnings = [str(call) for call in mock_logger.warning.call_args_list]
+                assert any("profile validation failed" in call.lower() for call in logged_warnings)
+                logged_infos = [str(call) for call in mock_logger.info.call_args_list]
+                assert any("falling back" in call.lower() for call in logged_infos)
 
     @patch("igloo_mcp.mcp_server.logger")
     def test_no_profiles_error_logging(self, mock_logger, mock_empty_config):

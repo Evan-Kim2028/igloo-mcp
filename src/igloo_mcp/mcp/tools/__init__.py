@@ -24,10 +24,13 @@ from .get_catalog_summary import GetCatalogSummaryTool
 from .get_report import GetReportTool
 from .get_report_schema import GetReportSchemaTool
 from .health import HealthCheckTool
+from .list_profiles import ListProfilesTool
+from .profile_setup_guide import ProfileSetupGuideTool
 from .render_report import RenderReportTool
 from .search_catalog import SearchCatalogTool
 from .search_citations import SearchCitationsTool
 from .search_report import SearchReportTool
+from .switch_profile import SwitchProfileTool
 from .test_connection import ConnectionTestTool
 from .validate_report import ValidateReportTool
 
@@ -43,11 +46,14 @@ __all__ = [
     "GetReportSchemaTool",
     "GetReportTool",
     "HealthCheckTool",
+    "ListProfilesTool",
     "MCPTool",
     "MCPToolSchema",
+    "ProfileSetupGuideTool",
     "RenderReportTool",
     "SearchCatalogTool",
     "SearchCitationsTool",
     "SearchReportTool",
+    "SwitchProfileTool",
     "ValidateReportTool",
 ]

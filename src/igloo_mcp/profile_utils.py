@@ -284,6 +284,60 @@ def get_profile_summary() -> ProfileSummary:
     )
 
 
+def get_profile_details(profile_name: str) -> dict[str, Any]:
+    """Get connection details for a specific profile from config.toml.
+
+    Returns sanitized profile metadata (account, warehouse, database, schema,
+    role, authenticator) without exposing secrets like passwords or private keys.
+
+    Args:
+        profile_name: Name of the profile to look up.
+
+    Returns:
+        Dictionary of safe connection properties, empty dict if not found.
+    """
+    config_path = get_snowflake_config_path()
+    if not config_path.exists():
+        return {}
+
+    try:
+        mtime = config_path.stat().st_mtime
+        config_data = _load_snowflake_config(config_path, mtime)
+        connections = config_data.get("connections", {})
+        entry = connections.get(profile_name, {})
+        if not isinstance(entry, dict):
+            return {}
+
+        # Only expose non-secret fields
+        safe_keys = ("account", "warehouse", "database", "schema", "role", "authenticator", "user", "region")
+        return {k: v for k, v in entry.items() if k in safe_keys and v is not None}
+    except (FileNotFoundError, PermissionError, KeyError, tomllib.TOMLDecodeError):
+        return {}
+
+
+def get_all_profile_details() -> dict[str, dict[str, Any]]:
+    """Get connection details for all profiles from config.toml.
+
+    Returns:
+        Mapping of profile name to sanitized connection properties.
+    """
+    profiles = get_available_profiles()
+    return {name: get_profile_details(name) for name in sorted(profiles)}
+
+
+def get_config_file_mtime() -> float | None:
+    """Get modification time of the Snowflake config file.
+
+    Returns:
+        File mtime as float, or None if file doesn't exist.
+    """
+    config_path = get_snowflake_config_path()
+    try:
+        return config_path.stat().st_mtime if config_path.exists() else None
+    except OSError:
+        return None
+
+
 def validate_and_resolve_profile() -> str:
     """Validate and resolve the active Snowflake profile using precedence rules.
 

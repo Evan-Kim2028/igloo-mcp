@@ -7,6 +7,7 @@ for blocked operations like DELETE, DROP, and TRUNCATE.
 from __future__ import annotations
 
 import time
+from typing import cast
 
 # Import upstream validation from snowflake-labs-mcp
 from mcp_server_snowflake.query_manager.tools import (
@@ -260,7 +261,11 @@ def validate_sql_statement(
 
     if HAS_SQLGLOT:
         try:
-            parsed_expressions = [e for e in sqlglot.parse(statement, dialect="snowflake") if e is not None]
+            parsed_expressions = [
+                cast(exp.Expression, expression)
+                for expression in sqlglot.parse(statement, dialect="snowflake")
+                if expression is not None
+            ]
         except Exception:
             parsed_expressions = []
 
@@ -443,9 +448,12 @@ def _is_select_like_statement(statement: str, parsed: exp.Expression | None = No
 
     if parsed is None:
         try:
-            parsed = sqlglot.parse_one(statement, dialect="snowflake")
+            parsed_candidate = sqlglot.parse_one(statement, dialect="snowflake")
         except Exception:
             return False
+        if parsed_candidate is None:
+            return False
+        parsed = cast(exp.Expression, parsed_candidate)
 
     def is_select_like(node: exp.Expression | None) -> bool:
         if node is None:
@@ -545,6 +553,7 @@ def _is_select_like_statement(statement: str, parsed: exp.Expression | None = No
     if not contains_keywords:
         return True
 
+    assert parsed is not None
     has_set_operation = isinstance(parsed, exp.SetOperation)
     if not has_set_operation:
         has_set_operation = any(isinstance(node, exp.SetOperation) for node in parsed.walk())

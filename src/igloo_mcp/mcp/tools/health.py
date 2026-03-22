@@ -7,17 +7,17 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import Any
 
 import anyio
 
 from igloo_mcp.auth import get_service_provider_spec
-from igloo_mcp.config import Config
+from igloo_mcp.config import Config, get_config
 from igloo_mcp.mcp.compat import get_logger
 from igloo_mcp.mcp.validation_helpers import validate_response_mode
 from igloo_mcp.profile_utils import (
     ProfileValidationError,
+    get_profile_details,
     get_profile_summary,
     validate_and_resolve_profile,
 )
@@ -68,11 +68,7 @@ class HealthCheckTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Check server, Snowflake connection, and catalog health. "
-            "Use at session start or when queries fail unexpectedly. "
-            "Use response_mode='minimal' for quick status, 'full' for diagnostics."
-        )
+        return "Check server, connection, and catalog health. Use response_mode='minimal' for quick status."
 
     @property
     def category(self) -> str:
@@ -207,28 +203,18 @@ class HealthCheckTool(MCPTool):
             # Minimal response - just statuses
             return {
                 "status": overall_status,
-                "request_id": request_id,
                 "components": {
                     "snowflake": snowflake_health,
                     "catalog": catalog_health,
                     "profile": profile_health,
                     "query_circuit_breaker": results.get("query_circuit_breaker", {}).get("state", "unavailable"),
                 },
-                "timestamp": datetime.now(UTC).isoformat(),
-                "timing": {
-                    "total_duration_ms": round(total_duration, 2),
-                },
             }
 
         # Standard and full modes
         response = {
             "status": overall_status,
-            "request_id": request_id,
             "checks": results,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "timing": {
-                "total_duration_ms": round(total_duration, 2),
-            },
         }
 
         # Add remediation for standard and full modes
@@ -318,24 +304,41 @@ class HealthCheckTool(MCPTool):
 
     async def _test_connection(self) -> dict[str, Any]:
         """Test basic Snowflake connectivity."""
+        # Read current config (not self.config) so switch_profile changes are reflected
+        profile_name = get_config().snowflake.profile
+        profile_meta = get_profile_details(profile_name)
         try:
             result = await anyio.to_thread.run_sync(self._test_connection_sync)
-            return {
+            response: dict[str, Any] = {
                 "status": "connected",
                 "connected": True,
-                "profile": self.config.snowflake.profile,
+                "profile": profile_name,
                 "warehouse": result.get("warehouse"),
                 "database": result.get("database"),
                 "schema": result.get("schema"),
                 "role": result.get("role"),
             }
+            if profile_meta:
+                response["profile_config"] = {
+                    "account": profile_meta.get("account"),
+                    "authenticator": profile_meta.get("authenticator"),
+                    "user": profile_meta.get("user"),
+                }
+            return response
         except Exception as e:
-            return {
+            response = {
                 "status": "error",
                 "connected": False,
-                "profile": self.config.snowflake.profile,
+                "profile": profile_name,
                 "error": str(e),
             }
+            if profile_meta:
+                response["profile_config"] = {
+                    "account": profile_meta.get("account"),
+                    "authenticator": profile_meta.get("authenticator"),
+                    "user": profile_meta.get("user"),
+                }
+            return response
 
     def _test_connection_sync(self) -> dict[str, Any]:
         """Test connection synchronously."""
@@ -377,7 +380,7 @@ class HealthCheckTool(MCPTool):
                 "message": "Profile validation is not used for this auth provider.",
             }
 
-        profile = self.config.snowflake.profile
+        profile = get_config().snowflake.profile
 
         try:
             # Validate profile
@@ -400,15 +403,11 @@ class HealthCheckTool(MCPTool):
                 "status": "valid",
                 "profile": resolved_profile,
                 "config": {
-                    "config_path": str(summary.config_path),
-                    "config_exists": summary.config_exists,
                     "available_profiles": summary.available_profiles,
                     "default_profile": summary.default_profile,
-                    "current_profile": summary.current_profile,
                     "profile_count": summary.profile_count,
                 },
                 "authentication": auth_info,
-                "warnings": [],
             }
 
         except ProfileValidationError as e:
@@ -477,13 +476,13 @@ class HealthCheckTool(MCPTool):
             }
 
         try:
-            resources = self.resource_manager.list_resources()
-            has_catalog = len(resources) > 0 if resources else False
+            availability = self.resource_manager.check_catalog_dependency()
+            has_catalog = availability.state.value == "available"
             return {
-                "status": "available",
-                "resource_count": len(resources) if resources else 0,
+                "status": availability.state.value,
                 "has_catalog": has_catalog,
                 "exists": has_catalog,
+                "reason": availability.reason,
             }
         except Exception as e:
             return {
@@ -620,23 +619,16 @@ class HealthCheckTool(MCPTool):
             "additionalProperties": False,
             "properties": {
                 "include_cortex": boolean_schema(
-                    "Check Cortex AI services availability",
+                    "Check Cortex availability",
                     default=True,
-                    examples=[True, False],
                 ),
                 "include_profile": boolean_schema(
-                    "Validate profile configuration and authenticator",
+                    "Check profile config",
                     default=True,
-                    examples=[True, False],
                 ),
                 "include_catalog": boolean_schema(
-                    "Check catalog resource availability via resource manager",
+                    "Check catalog health",
                     default=False,
-                    examples=[True, False],
                 ),
-                "request_id": {
-                    "type": "string",
-                    "description": "Optional request correlation ID for tracing (auto-generated if not provided)",
-                },
             },
         }

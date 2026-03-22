@@ -7,6 +7,7 @@ that follows MCP protocol standards.
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -19,6 +20,7 @@ except ImportError:
 
 from .error_handling import ProfileConfigurationError
 from .profile_utils import (
+    get_config_file_mtime,
     get_profile_summary,
     get_snowflake_config_path,
     validate_profile,
@@ -179,6 +181,8 @@ class MCPHealthMonitor:
         self.last_error: str | None = None
         self.cached_profile_health: ProfileHealthStatus | None = None
         self.cache_ttl = 30.0  # Cache profile health for 30 seconds
+        self._last_config_mtime: float | None = get_config_file_mtime()
+        self._config_mtime_lock = threading.Lock()
 
     def record_error(self, error: str) -> None:
         """Record an error for health metrics."""
@@ -186,9 +190,34 @@ class MCPHealthMonitor:
         self.last_error = error
         logger.error(f"MCP Health Monitor recorded error: {error}")
 
+    def has_config_changed(self) -> bool:
+        """Check if the Snowflake config file has been modified since last check.
+
+        Thread-safe: uses a lock to prevent concurrent check-then-update races.
+
+        Returns:
+            True if the config file mtime has changed, False otherwise.
+        """
+        current_mtime = get_config_file_mtime()
+        with self._config_mtime_lock:
+            if current_mtime != self._last_config_mtime:
+                logger.info(
+                    "Snowflake config file change detected (mtime: %s -> %s)",
+                    self._last_config_mtime,
+                    current_mtime,
+                )
+                self._last_config_mtime = current_mtime
+                return True
+            return False
+
     def get_profile_health(self, profile_name: str | None = None, force_refresh: bool = False) -> ProfileHealthStatus:
         """Get current profile health status with caching."""
         now = time.time()
+
+        # Auto-invalidate cache if config file has changed on disk
+        if not force_refresh and self.has_config_changed():
+            force_refresh = True
+            logger.info("Config change detected — forcing profile health refresh")
 
         # Use cached result if available and not expired
         if (

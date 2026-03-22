@@ -54,11 +54,7 @@ class BuildCatalogTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return (
-            "Export Snowflake metadata to local catalog for fast offline search. "
-            "Run ONCE per database, then use search_catalog for discovery. "
-            "Use include_ddl=True for complete schema details."
-        )
+        return "Build Snowflake catalog metadata for offline search."
 
     @property
     def category(self) -> str:

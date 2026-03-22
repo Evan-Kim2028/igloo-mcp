@@ -345,7 +345,6 @@ async def test_health_check_wrapper_passes_response_controls(monkeypatch: pytest
         include_cortex=False,
         include_profile=False,
         include_catalog=True,
-        request_id="req-health",
     )
 
     kwargs = mocks["health_check"].await_args.kwargs
@@ -354,7 +353,6 @@ async def test_health_check_wrapper_passes_response_controls(monkeypatch: pytest
     assert kwargs["include_cortex"] is False
     assert kwargs["include_profile"] is False
     assert kwargs["include_catalog"] is True
-    assert kwargs["request_id"] == "req-health"
 
 
 @pytest.mark.asyncio
@@ -366,14 +364,12 @@ async def test_get_catalog_summary_wrapper_passes_response_mode(monkeypatch: pyt
         catalog_dir="./data_catalogue",
         response_mode="full",
         mode="standard",
-        request_id="req-summary",
     )
 
     kwargs = mocks["get_catalog_summary"].await_args.kwargs
     assert kwargs["catalog_dir"] == "./data_catalogue"
     assert kwargs["response_mode"] == "full"
     assert kwargs["mode"] == "standard"
-    assert kwargs["request_id"] == "req-summary"
 
 
 @pytest.mark.asyncio
@@ -386,7 +382,6 @@ async def test_search_catalog_wrapper_passes_search_all_databases(monkeypatch: p
         response_mode="compact",
         search_all_databases=True,
         limit=10,
-        request_id="req-search",
     )
 
     kwargs = mocks["search_catalog"].await_args.kwargs
@@ -394,7 +389,6 @@ async def test_search_catalog_wrapper_passes_search_all_databases(monkeypatch: p
     assert kwargs["response_mode"] == "compact"
     assert kwargs["search_all_databases"] is True
     assert kwargs["limit"] == 10
-    assert kwargs["request_id"] == "req-search"
 
 
 def test_register_igloo_mcp_sets_up_context(monkeypatch):

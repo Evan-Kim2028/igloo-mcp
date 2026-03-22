@@ -41,8 +41,8 @@ class TestCreateReportTool:
     def test_tool_properties(self, tool):
         """Test tool properties."""
         assert tool.name == "create_report"
-        assert "Initialize a new living report" in tool.description
-        assert "template" in tool.description
+        assert "report" in tool.description.lower()
+        assert "template" in tool.description.lower()
         assert tool.category == "reports"
         assert "reports" in tool.tags
         assert "creation" in tool.tags
