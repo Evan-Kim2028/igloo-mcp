@@ -201,7 +201,11 @@ class MCPHealthMonitor:
         current_mtime = get_config_file_mtime()
         with self._config_mtime_lock:
             if current_mtime != self._last_config_mtime:
-                logger.info("Snowflake config file change detected (mtime: %s -> %s)", self._last_config_mtime, current_mtime)
+                logger.info(
+                    "Snowflake config file change detected (mtime: %s -> %s)",
+                    self._last_config_mtime,
+                    current_mtime,
+                )
                 self._last_config_mtime = current_mtime
                 return True
             return False

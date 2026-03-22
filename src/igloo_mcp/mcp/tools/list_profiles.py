@@ -83,7 +83,6 @@ class ListProfilesTool(MCPTool):
         active_profile = config.snowflake.profile
         default_profile = profile_utils.get_default_profile()
         available = sorted(profile_utils.get_available_profiles())
-        config_path = profile_utils.get_snowflake_config_path()
 
         profiles: list[dict[str, Any]] = []
 
@@ -101,11 +100,13 @@ class ListProfilesTool(MCPTool):
                 profiles.append(entry)
         else:
             for name in available:
-                profiles.append({
-                    "name": name,
-                    "is_active": name == active_profile,
-                    "is_default": name == default_profile,
-                })
+                profiles.append(
+                    {
+                        "name": name,
+                        "is_active": name == active_profile,
+                        "is_default": name == default_profile,
+                    }
+                )
 
         result: dict[str, Any] = {
             "active_profile": active_profile,

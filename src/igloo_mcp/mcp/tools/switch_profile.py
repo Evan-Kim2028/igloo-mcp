@@ -12,6 +12,7 @@ from typing import Any
 from igloo_mcp import profile_utils
 from igloo_mcp.config import Config, apply_config_overrides, get_config
 from igloo_mcp.mcp.compat import get_logger
+from igloo_mcp.profile_utils import ProfileValidationError
 
 from .base import MCPTool, ensure_request_id, tool_error_handler
 
@@ -112,7 +113,7 @@ class SwitchProfileTool(MCPTool):
         # Validate profile configuration
         try:
             profile_utils.validate_profile(profile_name)
-        except Exception as e:
+        except ProfileValidationError as e:
             return {
                 "status": "error",
                 "error": f"Profile '{profile_name}' validation failed: {e}",
@@ -186,7 +187,7 @@ class SwitchProfileTool(MCPTool):
                     }
 
             return await anyio.to_thread.run_sync(_test_sync)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - provider backends surface heterogeneous connection errors
             return {
                 "connected": False,
                 "error": str(e),

@@ -504,7 +504,13 @@ def register_igloo_mcp(
         instruction: Annotated[str, Field(description="Batch operation description for audit trail")],
         operations: Annotated[
             list[dict[str, Any]],
-            Field(description="Operations list. Each has 'type' (add_insight, modify_insight, remove_insight, add_section, modify_section, remove_section, update_title, update_metadata, attach_chart) plus type-specific fields"),
+            Field(
+                description=(
+                    "Operations list. Each has 'type' (add_insight, modify_insight, "
+                    "remove_insight, add_section, modify_section, remove_section, "
+                    "update_title, update_metadata, attach_chart) plus type-specific fields"
+                )
+            ),
         ],
         dry_run: Annotated[bool, Field(description="Validate only", default=False)] = False,
         response_detail: Annotated[
@@ -529,11 +535,21 @@ def register_igloo_mcp(
         report_selector: Annotated[str, Field(description="Report ID or title")],
         format: Annotated[
             str,
-            Field(description="html, pdf, markdown, docx, or html_standalone", default="html", pattern="^(html|pdf|markdown|docx|html_standalone)$"),
+            Field(
+                description="html, pdf, markdown, docx, or html_standalone",
+                default="html",
+                pattern="^(html|pdf|markdown|docx|html_standalone)$",
+            ),
         ] = "html",
-        regenerate_outline_view: Annotated[bool, Field(description="Regenerate QMD from outline", default=True)] = True,
+        regenerate_outline_view: Annotated[
+            bool,
+            Field(description="Regenerate QMD from outline", default=True),
+        ] = True,
         include_preview: Annotated[bool, Field(description="Include preview in response", default=False)] = False,
-        preview_max_chars: Annotated[int, Field(description="Preview char limit", default=2000, ge=100, le=10000)] = 2000,
+        preview_max_chars: Annotated[
+            int,
+            Field(description="Preview char limit", default=2000, ge=100, le=10000),
+        ] = 2000,
         dry_run: Annotated[bool, Field(description="Generate QMD only, skip Quarto", default=False)] = False,
         options: Annotated[dict[str, Any] | None, Field(description="Quarto options", default=None)] = None,
     ) -> dict[str, Any]:
@@ -556,7 +572,11 @@ def register_igloo_mcp(
         title: Annotated[str, Field(description="Report title")],
         template: Annotated[
             str,
-            Field(description="default, deep_dive, analyst_v1, or empty", default="default", pattern="^(default|deep_dive|analyst_v1|empty)$"),
+            Field(
+                description="default, deep_dive, analyst_v1, or empty",
+                default="default",
+                pattern="^(default|deep_dive|analyst_v1|empty)$",
+            ),
         ] = "default",
         tags: Annotated[list[str] | None, Field(description="Tags for filtering", default=None)] = None,
         description: Annotated[str | None, Field(description="Report description", default=None)] = None,
@@ -581,7 +601,10 @@ def register_igloo_mcp(
         description="Find living reports by title, tags, or ID",
     )
     async def search_report_tool(
-        title: Annotated[str | None, Field(description="Title search (partial, case-insensitive)", default=None)] = None,
+        title: Annotated[
+            str | None,
+            Field(description="Title search (partial, case-insensitive)", default=None),
+        ] = None,
         tags: Annotated[list[str] | None, Field(description="Filter by tags (AND)", default=None)] = None,
         report_id: Annotated[str | None, Field(description="Exact report ID", default=None)] = None,
         status: Annotated[
@@ -589,7 +612,13 @@ def register_igloo_mcp(
             Field(description="active, archived, or deleted", default="active", pattern="^(active|archived|deleted)$"),
         ] = "active",
         limit: Annotated[int, Field(description="Max results", default=20, ge=1, le=50)] = 20,
-        fields: Annotated[list[str] | None, Field(description="Fields to return (report_id, title, created_at, updated_at, tags, status, path)", default=None)] = None,
+        fields: Annotated[
+            list[str] | None,
+            Field(
+                description="Fields to return (report_id, title, created_at, updated_at, tags, status, path)",
+                default=None,
+            ),
+        ] = None,
     ) -> dict[str, Any]:
         """Search report - delegates to SearchReportTool."""
         return await search_report_inst.execute(
@@ -609,12 +638,22 @@ def register_igloo_mcp(
         report_selector: Annotated[str, Field(description="Report ID or title")],
         mode: Annotated[
             str,
-            Field(description="summary, sections, insights, or full", default="summary", pattern="^(summary|sections|insights|full)$"),
+            Field(
+                description="summary, sections, insights, or full",
+                default="summary",
+                pattern="^(summary|sections|insights|full)$",
+            ),
         ] = "summary",
         section_ids: Annotated[list[str] | None, Field(description="Filter by section IDs", default=None)] = None,
-        section_titles: Annotated[list[str] | None, Field(description="Filter by section titles (fuzzy)", default=None)] = None,
+        section_titles: Annotated[
+            list[str] | None,
+            Field(description="Filter by section titles (fuzzy)", default=None),
+        ] = None,
         insight_ids: Annotated[list[str] | None, Field(description="Filter by insight IDs", default=None)] = None,
-        min_importance: Annotated[int | None, Field(description="Min importance filter", default=None, ge=0, le=10)] = None,
+        min_importance: Annotated[
+            int | None,
+            Field(description="Min importance filter", default=None, ge=0, le=10),
+        ] = None,
         limit: Annotated[int, Field(description="Max items", default=50, ge=1, le=100)] = 50,
         offset: Annotated[int, Field(description="Pagination offset", default=0, ge=0)] = 0,
         include_content: Annotated[bool, Field(description="Include prose content", default=False)] = False,
@@ -641,11 +680,19 @@ def register_igloo_mcp(
     async def get_report_schema_tool(
         schema_type: Annotated[
             str,
-            Field(description="proposed_changes, insight, section, outline, or all", default="proposed_changes", pattern="^(proposed_changes|insight|section|outline|all)$"),
+            Field(
+                description="proposed_changes, insight, section, outline, or all",
+                default="proposed_changes",
+                pattern="^(proposed_changes|insight|section|outline|all)$",
+            ),
         ] = "proposed_changes",
         format: Annotated[
             str,
-            Field(description="json_schema, examples, or compact", default="json_schema", pattern="^(json_schema|examples|compact)$"),
+            Field(
+                description="json_schema, examples, or compact",
+                default="json_schema",
+                pattern="^(json_schema|examples|compact)$",
+            ),
         ] = "json_schema",
     ) -> dict[str, Any]:
         """Get report schema - delegates to GetReportSchemaTool."""
@@ -661,11 +708,18 @@ def register_igloo_mcp(
     async def search_citations_tool(
         source_type: Annotated[
             str | None,
-            Field(description="query, api, url, observation, or document", default=None, pattern="^(query|api|url|observation|document)$"),
+            Field(
+                description="query, api, url, observation, or document",
+                default=None,
+                pattern="^(query|api|url|observation|document)$",
+            ),
         ] = None,
         provider: Annotated[str | None, Field(description="Provider filter", default=None)] = None,
         url_contains: Annotated[str | None, Field(description="URL substring filter", default=None)] = None,
-        description_contains: Annotated[str | None, Field(description="Description substring filter", default=None)] = None,
+        description_contains: Annotated[
+            str | None,
+            Field(description="Description substring filter", default=None),
+        ] = None,
         execution_id: Annotated[str | None, Field(description="Exact execution_id match", default=None)] = None,
         limit: Annotated[int, Field(description="Max results", default=50, ge=1, le=200)] = 50,
         group_by: Annotated[
@@ -693,7 +747,11 @@ def register_igloo_mcp(
         checks: Annotated[
             list[str] | None,
             Field(
-                description="Checks to run (['all'] for all). Options: chart_references, citations, duplicate_orders, empty_sections, insight_importance, orphaned_insights, section_titles, stale_content",
+                description=(
+                    "Checks to run (['all'] for all). Options: chart_references, citations, "
+                    "duplicate_orders, empty_sections, insight_importance, orphaned_insights, "
+                    "section_titles, stale_content"
+                ),
                 default=None,
             ),
         ] = None,
@@ -827,7 +885,10 @@ def register_igloo_mcp(
 
     @server.tool(name="get_catalog_summary", description="Read catalog summary statistics")
     async def get_catalog_summary_tool(
-        catalog_dir: Annotated[str, Field(description="Catalog directory", default="./data_catalogue")] = "./data_catalogue",
+        catalog_dir: Annotated[
+            str,
+            Field(description="Catalog directory", default="./data_catalogue"),
+        ] = "./data_catalogue",
         response_mode: Annotated[
             str | None,
             Field(description="minimal, standard, or full", default=None),
@@ -843,7 +904,10 @@ def register_igloo_mcp(
 
     @server.tool(name="search_catalog", description="Search local catalog for tables and columns")
     async def search_catalog_tool(
-        catalog_dir: Annotated[str, Field(description="Catalog directory", default="./data_catalogue")] = "./data_catalogue",
+        catalog_dir: Annotated[
+            str,
+            Field(description="Catalog directory", default="./data_catalogue"),
+        ] = "./data_catalogue",
         response_mode: Annotated[
             str,
             Field(description="compact (default), standard, or full", default="compact"),
@@ -851,8 +915,14 @@ def register_igloo_mcp(
         object_types: Annotated[list[str] | None, Field(description="Object type filter", default=None)] = None,
         database: Annotated[str | None, Field(description="Database filter", default=None)] = None,
         schema: Annotated[str | None, Field(description="Schema filter", default=None)] = None,
-        name_contains: Annotated[str | None, Field(description="Object name substring (case-insensitive)", default=None)] = None,
-        column_contains: Annotated[str | None, Field(description="Column name substring (case-insensitive)", default=None)] = None,
+        name_contains: Annotated[
+            str | None,
+            Field(description="Object name substring (case-insensitive)", default=None),
+        ] = None,
+        column_contains: Annotated[
+            str | None,
+            Field(description="Column name substring (case-insensitive)", default=None),
+        ] = None,
         search_all_databases: Annotated[bool, Field(description="Search all catalog databases", default=False)] = False,
         limit: Annotated[int, Field(description="Max results", ge=1, le=500, default=20)] = 20,
     ) -> dict[str, Any]:
@@ -1139,7 +1209,7 @@ def _attempt_profile_fallback(
         try:
             validate_profile(candidate)
             return candidate
-        except Exception:
+        except ProfileValidationError:
             continue
 
     return None

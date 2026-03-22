@@ -238,7 +238,7 @@ class ProfileSetupGuideTool(MCPTool):
                 "steps": [
                     {
                         "step": 1,
-                        "action": f"Set default profile",
+                        "action": "Set default profile",
                         "command": f'snow connection set-default "{available_profiles[0]}"',
                     },
                 ],
@@ -301,9 +301,7 @@ class ProfileSetupGuideTool(MCPTool):
                 {
                     "step": 1,
                     "action": "Generate RSA key pair",
-                    "command": (
-                        "openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt"
-                    ),
+                    "command": ("openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt"),
                 },
                 {
                     "step": 2,
@@ -314,8 +312,7 @@ class ProfileSetupGuideTool(MCPTool):
                     "step": 3,
                     "action": "Register public key with Snowflake",
                     "command": (
-                        "-- Run in Snowflake:\n"
-                        "ALTER USER <username> SET RSA_PUBLIC_KEY='<contents of rsa_key.pub>';"
+                        "-- Run in Snowflake:\nALTER USER <username> SET RSA_PUBLIC_KEY='<contents of rsa_key.pub>';"
                     ),
                 },
                 {
@@ -336,9 +333,7 @@ class ProfileSetupGuideTool(MCPTool):
             ],
         }
 
-    def _multi_env_guide(
-        self, config_path: str, available_profiles: list[str]
-    ) -> dict[str, Any]:
+    def _multi_env_guide(self, config_path: str, available_profiles: list[str]) -> dict[str, Any]:
         """Guide for setting up multi-environment profiles."""
         return {
             "title": "Multi-Environment Profile Setup",
@@ -386,7 +381,7 @@ class ProfileSetupGuideTool(MCPTool):
                 "options": [
                     'MCP tool: switch_profile(profile_name="staging")',
                     'Environment: export SNOWFLAKE_PROFILE="prod"',
-                    'CLI flag: igloo_mcp --profile staging',
+                    "CLI flag: igloo_mcp --profile staging",
                 ],
             },
         }

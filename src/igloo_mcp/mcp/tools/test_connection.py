@@ -98,6 +98,5 @@ class ConnectionTestTool(MCPTool):
         return {
             "type": "object",
             "additionalProperties": False,
-            "properties": {
-            },
+            "properties": {},
         }
