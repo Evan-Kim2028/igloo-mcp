@@ -11,14 +11,15 @@ Get comprehensive health status for the MCP server and Snowflake connection.
 | `include_cortex` | boolean | ❌ No | true | Check Cortex AI availability |
 | `include_profile` | boolean | ❌ No | true | Validate profile configuration |
 | `include_catalog` | boolean | ❌ No | false | Check catalog resource status |
+| `include_reports_health` | boolean | ❌ No | false | Check Living Reports storage integrity, audits, and disk pressure |
 | `request_id` | string | ❌ No | auto-generated | Request correlation ID for distributed tracing (UUID4). Auto-generated if not provided. |
 
 ## Discovery Metadata
 
 - **Category:** `diagnostics`
-- **Tags:** `health`, `profile`, `cortex`, `catalog`, `diagnostics`
+- **Tags:** `health`, `profile`, `cortex`, `catalog`, `reports`, `diagnostics`
 - **Usage Examples:**
-  1. `include_cortex=true`, `include_catalog=true` to perform the full suite of checks.
+  1. `include_cortex=true`, `include_catalog=true`, `include_reports_health=true` to perform the full suite of checks.
   2. `include_cortex=false`, `include_catalog=false` for a fast profile-only validation.
 
 ## Returns
@@ -102,6 +103,43 @@ When `response_mode="full"`, the response includes a `diagnostics.storage_paths`
 ```
 
 When available, full diagnostics also include `diagnostics.query_circuit_breaker` mirroring the current `execute_query` circuit breaker status.
+
+### Living Reports Diagnostics
+
+When `include_reports_health=true`, the `checks.reports` object includes a read-only audit of the Living Reports filesystem:
+
+- `status`: `healthy`, `warning`, or `unhealthy`
+- `total_reports` and `index_entries`
+- `corrupted_index_lines`, `orphaned_index_entries`, and `missing_index_entries`
+- `total_audit_events`, `corrupted_audit_logs`, and `missing_audit_logs`
+- `total_size_bytes` / `total_size_mb` and average per-report size
+- `disk_usage.used_percent` with warnings when the underlying volume approaches capacity
+- `orphaned_assets` for files under `report_files/` that are not referenced by any report outline
+- `old_backups` for backup files older than the retention window (`backup_retention_days`, currently 30)
+
+Example:
+
+```json
+{
+  "checks": {
+    "reports": {
+      "status": "warning",
+      "total_reports": 42,
+      "index_entries": 42,
+      "orphaned_index_entries": [],
+      "missing_index_entries": [],
+      "total_audit_events": 389,
+      "total_size_mb": 156.3,
+      "disk_usage": {
+        "used_percent": 82.4
+      },
+      "orphaned_assets": [],
+      "old_backups": [],
+      "warnings": []
+    }
+  }
+}
+```
 
 **Storage Scope Modes:**
 - `global`: All data stored in `~/.igloo_mcp/` (default, persistent across projects)

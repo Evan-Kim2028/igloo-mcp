@@ -345,6 +345,7 @@ async def test_health_check_wrapper_passes_response_controls(monkeypatch: pytest
         include_cortex=False,
         include_profile=False,
         include_catalog=True,
+        include_reports_health=True,
     )
 
     kwargs = mocks["health_check"].await_args.kwargs
@@ -353,6 +354,7 @@ async def test_health_check_wrapper_passes_response_controls(monkeypatch: pytest
     assert kwargs["include_cortex"] is False
     assert kwargs["include_profile"] is False
     assert kwargs["include_catalog"] is True
+    assert kwargs["include_reports_health"] is True
 
 
 @pytest.mark.asyncio

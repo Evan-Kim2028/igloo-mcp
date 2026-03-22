@@ -230,13 +230,14 @@ def test_health_check_schema(base_config: Config) -> None:
     _validate_schema(schema)
 
     props = schema["properties"]
-    for flag in ("include_cortex", "include_profile", "include_catalog"):
+    for flag in ("include_cortex", "include_profile", "include_catalog", "include_reports_health"):
         flag_schema = props[flag]
         assert flag_schema["type"] == "boolean"
 
     assert props["include_cortex"]["default"] is True
     assert props["include_profile"]["default"] is True
     assert props["include_catalog"]["default"] is False
+    assert props["include_reports_health"]["default"] is False
 
     assert tool.category == "diagnostics"
     assert {"health", "profile"}.issubset(set(tool.tags))

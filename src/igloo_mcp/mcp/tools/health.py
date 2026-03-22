@@ -5,8 +5,11 @@ Part of v1.9.0 Phase 1 - consolidates health_check, check_profile_config, and ge
 
 from __future__ import annotations
 
+import json
+import shutil
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import anyio
@@ -36,6 +39,9 @@ class HealthCheckTool(MCPTool):
     - check_profile_config (profile validation)
     - get_resource_status (catalog availability)
     """
+
+    REPORT_BACKUP_RETENTION_DAYS = 30
+    REPORTS_DISK_WARNING_THRESHOLD_PERCENT = 90.0
 
     def __init__(
         self,
@@ -68,7 +74,7 @@ class HealthCheckTool(MCPTool):
 
     @property
     def description(self) -> str:
-        return "Check server, connection, and catalog health. Use response_mode='minimal' for quick status."
+        return "Check server, connection, catalog, and reports health. Use response_mode='minimal' for quick status."
 
     @property
     def category(self) -> str:
@@ -76,7 +82,7 @@ class HealthCheckTool(MCPTool):
 
     @property
     def tags(self) -> list[str]:
-        return ["health", "profile", "cortex", "catalog", "diagnostics"]
+        return ["health", "profile", "cortex", "catalog", "reports", "diagnostics"]
 
     @property
     def usage_examples(self) -> list[dict[str, Any]]:
@@ -86,6 +92,7 @@ class HealthCheckTool(MCPTool):
                 "parameters": {
                     "include_cortex": True,
                     "include_catalog": True,
+                    "include_reports_health": True,
                 },
             },
             {
@@ -105,6 +112,7 @@ class HealthCheckTool(MCPTool):
         include_cortex: bool = True,
         include_profile: bool = True,
         include_catalog: bool = False,
+        include_reports_health: bool = False,
         request_id: str | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
@@ -119,6 +127,7 @@ class HealthCheckTool(MCPTool):
             include_cortex: Check Cortex AI services availability
             include_profile: Validate profile configuration
             include_catalog: Check catalog availability
+            include_reports_health: Validate Living Reports storage health
             request_id: Optional request ID for tracing
 
         Returns:
@@ -143,6 +152,7 @@ class HealthCheckTool(MCPTool):
                 "include_cortex": include_cortex,
                 "include_profile": include_profile,
                 "include_catalog": include_catalog,
+                "include_reports_health": include_reports_health,
                 "request_id": request_id,
             },
         )
@@ -164,6 +174,10 @@ class HealthCheckTool(MCPTool):
         if include_catalog:
             results["catalog"] = await self._check_catalog_exists()
 
+        # Optional: Check living reports storage
+        if include_reports_health:
+            results["reports"] = await anyio.to_thread.run_sync(self._check_reports_health)
+
         # Include system health metrics if monitor available
         if self.health_monitor:
             results["system"] = self._get_system_health()
@@ -172,8 +186,10 @@ class HealthCheckTool(MCPTool):
             results["query_circuit_breaker"] = self._get_query_circuit_breaker_status()
 
         # Overall status
-        has_critical_failures = not results["connection"].get("connected", False) or (
-            include_profile and results.get("profile", {}).get("status") == "invalid"
+        has_critical_failures = (
+            not results["connection"].get("connected", False)
+            or (include_profile and results.get("profile", {}).get("status") == "invalid")
+            or (include_reports_health and results.get("reports", {}).get("status") in {"unhealthy", "error"})
         )
 
         results["overall_status"] = "unhealthy" if has_critical_failures else "healthy"
@@ -197,6 +213,7 @@ class HealthCheckTool(MCPTool):
         snowflake_health = results.get("connection", {}).get("status", "unknown")
         catalog_health = results.get("catalog", {}).get("status", "unknown")
         profile_health = results.get("profile", {}).get("status", "unknown")
+        reports_health = results.get("reports", {}).get("status", "unknown")
 
         # Build response based on response_mode
         if mode == "minimal":
@@ -207,6 +224,7 @@ class HealthCheckTool(MCPTool):
                     "snowflake": snowflake_health,
                     "catalog": catalog_health,
                     "profile": profile_health,
+                    "reports": reports_health,
                     "query_circuit_breaker": results.get("query_circuit_breaker", {}).get("state", "unavailable"),
                 },
             }
@@ -257,10 +275,18 @@ class HealthCheckTool(MCPTool):
                     "Check ~/.snowflake/config.toml or run test_connection"
                 )
 
+            reports_status = results.get("reports", {}).get("status", "unknown")
+            if reports_status in {"warning", "unhealthy", "error"}:
+                remediation["reports"] = (
+                    "Living Reports storage issues detected. Run "
+                    "health_check(include_reports_health=True, response_mode='full') "
+                    "and repair index, audit, or asset inconsistencies."
+                )
+
             breaker_state = results.get("query_circuit_breaker", {}).get("state")
             if breaker_state == "open":
                 retry_after = results.get("query_circuit_breaker", {}).get("time_until_retry_seconds")
-                if isinstance(retry_after, (int, float)):
+                if isinstance(retry_after, int | float):
                     remediation["query_circuit_breaker"] = (
                         f"execute_query circuit breaker is open. Retry in ~{round(float(retry_after), 2)}s "
                         "or resolve Snowflake connectivity issues."
@@ -490,6 +516,201 @@ class HealthCheckTool(MCPTool):
                 "error": str(e),
             }
 
+    def _check_reports_health(self) -> dict[str, Any]:
+        """Inspect Living Reports storage without mutating on-disk state."""
+        from igloo_mcp.living_reports.models import AuditEvent, IndexEntry
+        from igloo_mcp.path_utils import resolve_reports_root
+
+        def _nearest_existing_path(path):
+            current = path
+            while not current.exists() and current != current.parent:
+                current = current.parent
+            return current
+
+        def _collect_report_file_references(value: Any, found: set[str]) -> None:
+            if isinstance(value, dict):
+                for nested in value.values():
+                    _collect_report_file_references(nested, found)
+                return
+            if isinstance(value, list):
+                for nested in value:
+                    _collect_report_file_references(nested, found)
+                return
+            if not isinstance(value, str):
+                return
+
+            normalized = value.replace("\\", "/").strip()
+            if normalized.startswith("report_files/") and "/../" not in normalized and not normalized.endswith("/.."):
+                found.add(normalized)
+
+        def _directory_size_bytes(path) -> int:
+            if not path.exists():
+                return 0
+            total = 0
+            for file_path in path.rglob("*"):
+                if not file_path.is_file():
+                    continue
+                try:
+                    total += file_path.stat().st_size
+                except OSError:
+                    continue
+            return total
+
+        reports_root = resolve_reports_root()
+        by_id_dir = reports_root / "by_id"
+        index_path = reports_root / "index.jsonl"
+        initialized = reports_root.exists() or index_path.exists() or by_id_dir.exists()
+
+        report_dirs = sorted(path for path in by_id_dir.iterdir() if path.is_dir()) if by_id_dir.exists() else []
+        report_ids = {path.name for path in report_dirs}
+
+        parsed_index_entries: dict[str, Any] = {}
+        corrupted_index_lines: list[dict[str, Any]] = []
+        if index_path.exists():
+            try:
+                with index_path.open("r", encoding="utf-8") as handle:
+                    for line_number, raw_line in enumerate(handle, 1):
+                        line = raw_line.strip()
+                        if not line:
+                            continue
+                        try:
+                            entry = IndexEntry(**json.loads(line))
+                            parsed_index_entries[entry.report_id] = entry
+                        except Exception as exc:
+                            corrupted_index_lines.append({"line": line_number, "error": str(exc)})
+            except OSError as exc:
+                corrupted_index_lines.append({"line": 0, "error": str(exc)})
+
+        indexed_report_ids = set(parsed_index_entries)
+        orphaned_index_entries = sorted(indexed_report_ids - report_ids)
+        missing_index_entries = sorted(report_ids - indexed_report_ids)
+
+        total_audit_events = 0
+        corrupted_audit_logs: list[dict[str, Any]] = []
+        missing_audit_logs: list[str] = []
+        orphaned_assets: list[str] = []
+        old_backups: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        now = datetime.now(UTC)
+        backup_cutoff = now - timedelta(days=self.REPORT_BACKUP_RETENTION_DAYS)
+
+        for report_dir in report_dirs:
+            report_id = report_dir.name
+            audit_path = report_dir / "audit.jsonl"
+            outline_path = report_dir / "outline.json"
+
+            if audit_path.exists():
+                try:
+                    with audit_path.open("r", encoding="utf-8") as handle:
+                        for line_number, raw_line in enumerate(handle, 1):
+                            line = raw_line.strip()
+                            if not line:
+                                continue
+                            try:
+                                AuditEvent(**json.loads(line))
+                                total_audit_events += 1
+                            except Exception as exc:
+                                corrupted_audit_logs.append(
+                                    {"report_id": report_id, "line": line_number, "error": str(exc)}
+                                )
+                except OSError as exc:
+                    corrupted_audit_logs.append({"report_id": report_id, "line": 0, "error": str(exc)})
+            else:
+                missing_audit_logs.append(report_id)
+
+            referenced_assets: set[str] = set()
+            outline_data: Any | None = None
+            if outline_path.exists():
+                try:
+                    outline_data = json.loads(outline_path.read_text(encoding="utf-8"))
+                except Exception as exc:
+                    warnings.append(f"Unable to inspect asset references for report {report_id}: {exc}")
+            else:
+                warnings.append(f"Report {report_id} is missing outline.json")
+
+            if outline_data is not None:
+                _collect_report_file_references(outline_data, referenced_assets)
+
+            report_files_dir = report_dir / "report_files"
+            if report_files_dir.exists():
+                for asset_path in sorted(path for path in report_files_dir.rglob("*") if path.is_file()):
+                    relative_asset = asset_path.relative_to(report_dir).as_posix()
+                    if outline_data is not None and relative_asset not in referenced_assets:
+                        orphaned_assets.append(f"{report_id}/{relative_asset}")
+
+            backups_dir = report_dir / "backups"
+            if backups_dir.exists():
+                for backup_path in sorted(path for path in backups_dir.rglob("*.bak") if path.is_file()):
+                    try:
+                        modified_at = datetime.fromtimestamp(backup_path.stat().st_mtime, tz=UTC)
+                    except OSError:
+                        continue
+                    if modified_at < backup_cutoff:
+                        old_backups.append(
+                            {
+                                "path": f"{report_id}/{backup_path.relative_to(report_dir).as_posix()}",
+                                "age_days": int((now - modified_at).total_seconds() // 86400),
+                            }
+                        )
+
+        if missing_audit_logs:
+            warnings.append(f"{len(missing_audit_logs)} report(s) are missing audit.jsonl")
+        if orphaned_assets:
+            warnings.append(f"{len(orphaned_assets)} orphaned report asset(s) detected")
+        if old_backups:
+            warnings.append(
+                f"{len(old_backups)} backup file(s) exceed {self.REPORT_BACKUP_RETENTION_DAYS}-day retention"
+            )
+
+        total_size_bytes = _directory_size_bytes(reports_root)
+        total_reports = len(report_dirs)
+        average_report_size_bytes = int(total_size_bytes / total_reports) if total_reports else 0
+
+        disk_anchor = _nearest_existing_path(reports_root)
+        usage = shutil.disk_usage(disk_anchor)
+        disk_used_bytes = usage.total - usage.free
+        disk_used_percent = round((disk_used_bytes / usage.total) * 100, 2) if usage.total else 0.0
+        if disk_used_percent >= self.REPORTS_DISK_WARNING_THRESHOLD_PERCENT:
+            warnings.append(
+                f"Disk usage for {disk_anchor} is {disk_used_percent}% "
+                f"(threshold {self.REPORTS_DISK_WARNING_THRESHOLD_PERCENT:.0f}%)"
+            )
+
+        status = "healthy"
+        if corrupted_index_lines or orphaned_index_entries or missing_index_entries or corrupted_audit_logs:
+            status = "unhealthy"
+        elif warnings:
+            status = "warning"
+
+        return {
+            "status": status,
+            "initialized": initialized,
+            "reports_root": str(reports_root),
+            "total_reports": total_reports,
+            "index_exists": index_path.exists(),
+            "index_entries": len(parsed_index_entries),
+            "corrupted_index_lines": corrupted_index_lines,
+            "orphaned_index_entries": orphaned_index_entries,
+            "missing_index_entries": missing_index_entries,
+            "total_audit_events": total_audit_events,
+            "corrupted_audit_logs": corrupted_audit_logs,
+            "missing_audit_logs": missing_audit_logs,
+            "total_size_bytes": total_size_bytes,
+            "total_size_mb": round(total_size_bytes / (1024 * 1024), 2),
+            "average_report_size_bytes": average_report_size_bytes,
+            "average_report_size_mb": round(average_report_size_bytes / (1024 * 1024), 2),
+            "disk_usage": {
+                "path": str(disk_anchor),
+                "total_bytes": usage.total,
+                "free_bytes": usage.free,
+                "used_percent": disk_used_percent,
+            },
+            "orphaned_assets": orphaned_assets,
+            "backup_retention_days": self.REPORT_BACKUP_RETENTION_DAYS,
+            "old_backups": old_backups,
+            "warnings": warnings,
+        }
+
     def _get_system_health(self) -> dict[str, Any]:
         """Get system health metrics from monitor."""
         if not self.health_monitor:
@@ -628,6 +849,10 @@ class HealthCheckTool(MCPTool):
                 ),
                 "include_catalog": boolean_schema(
                     "Check catalog health",
+                    default=False,
+                ),
+                "include_reports_health": boolean_schema(
+                    "Check Living Reports storage health",
                     default=False,
                 ),
             },

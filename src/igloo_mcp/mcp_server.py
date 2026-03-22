@@ -835,6 +835,10 @@ def register_igloo_mcp(
         include_cortex: Annotated[bool, Field(description="Check Cortex availability", default=True)] = True,
         include_profile: Annotated[bool, Field(description="Check profile config", default=True)] = True,
         include_catalog: Annotated[bool, Field(description="Check catalog health", default=False)] = False,
+        include_reports_health: Annotated[
+            bool,
+            Field(description="Check Living Reports storage health", default=False),
+        ] = False,
     ) -> dict[str, Any]:
         """Get health status - delegates to HealthCheckTool."""
         return await health_check_inst.execute(
@@ -843,6 +847,7 @@ def register_igloo_mcp(
             include_cortex=include_cortex,
             include_profile=include_profile,
             include_catalog=include_catalog,
+            include_reports_health=include_reports_health,
         )
 
     @server.tool(name="list_profiles", description="List available Snowflake connection profiles")
